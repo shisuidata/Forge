@@ -1,0 +1,6 @@
+{
+  "users":       ["id", "name", "city", "created_at", "is_vip"],
+  "orders":      ["id", "user_id", "status", "total_amount", "created_at"],
+  "order_items": ["id", "order_id", "product_id", "quantity", "unit_price"],
+  "products":    ["id", "name", "category", "cost_price"]
+}

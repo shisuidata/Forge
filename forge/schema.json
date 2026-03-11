@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ForgeQuery",
+  "description": "Forge DSL: a machine-generated, deterministically compiled query format. Never written by humans.",
+  "type": "object",
+  "required": ["scan", "select"],
+  "additionalProperties": false,
+  "properties": {
+
+    "scan": {
+      "type": "string",
+      "description": "Primary table. All field refs must use table.field format when joins are present."
+    },
+
+    "joins": {
+      "type": "array",
+      "description": "All joins must declare type explicitly. No default join type exists.",
+      "items": { "$ref": "#/definitions/Join" }
+    },
+
+    "filter": {
+      "type": "array",
+      "description": "Row-level filters (compiles to WHERE). Top-level items are AND-combined.",
+      "items": { "$ref": "#/definitions/Condition" }
+    },
+
+    "group": {
+      "type": "array",
+      "description": "Group-by keys. Required if agg is present.",
+      "items": { "type": "string" }
+    },
+
+    "agg": {
+      "type": "array",
+      "description": "Aggregate expressions. count and count_all are distinct functions.",
+      "items": { "$ref": "#/definitions/Aggregation" }
+    },
+
+    "having": {
+      "type": "array",
+      "description": "Aggregate-level filters (compiles to HAVING). Top-level items are AND-combined.",
+      "items": { "$ref": "#/definitions/Condition" }
+    },
+
+    "select": {
+      "type": "array",
+      "description": "Output columns. Reference group keys, agg aliases, or raw fields (non-agg queries).",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+
+    "sort": {
+      "type": "array",
+      "description": "dir is required, no default ordering.",
+      "items": { "$ref": "#/definitions/SortKey" }
+    },
+
+    "limit": {
+      "type": "integer",
+      "minimum": 1
+    }
+
+  },
+
+  "definitions": {
+
+    "Join": {
+      "type": "object",
+      "required": ["type", "table", "on"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["inner", "left", "right", "full", "anti", "semi"],
+          "description": "anti = LEFT JOIN ... WHERE right.id IS NULL. semi = EXISTS subquery pattern."
+        },
+        "table": {
+          "type": "string"
+        },
+        "on": {
+          "type": "object",
+          "required": ["left", "right"],
+          "additionalProperties": false,
+          "description": "Equality join condition. left and right are field refs (table.field).",
+          "properties": {
+            "left":  { "type": "string" },
+            "right": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "Condition": {
+      "description": "Either a simple predicate or an OR group.",
+      "oneOf": [
+        { "$ref": "#/definitions/SimpleCondition" },
+        { "$ref": "#/definitions/OrCondition"     }
+      ]
+    },
+
+    "SimpleCondition": {
+      "type": "object",
+      "required": ["col", "op"],
+      "additionalProperties": false,
+      "properties": {
+        "col": { "type": "string" },
+        "op": {
+          "type": "string",
+          "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "in", "like", "is_null", "is_not_null", "between"]
+        },
+        "val": {
+          "description": "Scalar or array value. Use {\"$date\": \"YYYY-MM-DD\"} for date literals. Required for all ops except is_null, is_not_null, between."
+        },
+        "lo": {
+          "description": "Lower bound for between. Use {\"$date\": \"...\"} for dates."
+        },
+        "hi": {
+          "description": "Upper bound for between. Use {\"$date\": \"...\"} for dates."
+        }
+      }
+    },
+
+    "OrCondition": {
+      "type": "object",
+      "required": ["or"],
+      "additionalProperties": false,
+      "properties": {
+        "or": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SimpleCondition" },
+          "minItems": 2
+        }
+      }
+    },
+
+    "Aggregation": {
+      "description": "count_all() has no col. All others require col.",
+      "oneOf": [
+        { "$ref": "#/definitions/AggWithCol" },
+        { "$ref": "#/definitions/AggCountAll" }
+      ]
+    },
+
+    "AggWithCol": {
+      "type": "object",
+      "required": ["fn", "col", "as"],
+      "additionalProperties": false,
+      "properties": {
+        "fn": {
+          "type": "string",
+          "enum": ["count", "count_distinct", "sum", "avg", "min", "max"]
+        },
+        "col": { "type": "string" },
+        "as":  { "type": "string" }
+      }
+    },
+
+    "AggCountAll": {
+      "type": "object",
+      "required": ["fn", "as"],
+      "additionalProperties": false,
+      "description": "Compiles to COUNT(*). No col field.",
+      "properties": {
+        "fn": { "type": "string", "enum": ["count_all"] },
+        "as": { "type": "string" }
+      }
+    },
+
+    "SortKey": {
+      "type": "object",
+      "required": ["col", "dir"],
+      "additionalProperties": false,
+      "properties": {
+        "col": { "type": "string" },
+        "dir": { "type": "string", "enum": ["asc", "desc"] }
+      }
+    }
+
+  }
+}

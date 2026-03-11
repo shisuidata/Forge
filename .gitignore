@@ -1,0 +1,7 @@
+CLAUDE.md
+forge.skill.md
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
