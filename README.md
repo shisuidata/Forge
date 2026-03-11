@@ -1,43 +1,79 @@
 # Forge
 
-An Agent-Native DSL that compiles deterministically to SQL.
+**An Agent-Native DSL that compiles deterministically to SQL.**
 
-## 核心定位
+[中文文档](README_CN.md)
 
-> 让 AI 操作「意图」而不是「执行细节」
+---
 
-Forge 是一个面向 AI Agent 的查询语言，作为自然语言与 SQL 之间的防抖层：
+> Let AI operate on **intent**, not **execution details**.
+
+Forge sits between natural language and SQL as a stable, machine-generated intermediate layer:
 
 ```
-自然语言
-    ↓  LLM 生成
-  Forge DSL        ← AI 操作这一层
-    ↓  Schema 校验 + 语义校验
-    ↓  确定性编译
-  SQL（目标方言）
-    ↓  执行引擎
-   查询结果
+Natural Language
+    ↓  LLM generates
+  Forge DSL        ← AI operates here
+    ↓  Schema validation + semantic validation
+    ↓  Deterministic compilation
+  SQL (target dialect)
+    ↓  Query engine
+  Results
 ```
 
-## 解决的问题
+## Why Forge
 
-| Text-to-SQL 的痛点 | Forge 的应对 |
+| Text-to-SQL pain point | Forge's answer |
 |---|---|
-| 字段名/表名幻觉 | Schema 注册，只允许引用已知实体 |
-| JOIN 类型推断错误 | 强制显式声明，无默认值 |
-| 方言语法差异 | 编译器统一处理，DSL 无方言 |
-| 错误在执行时才发现 | 解析阶段即可校验 |
-| 业务语义歧义 | 预定义指标层，名称唯一映射 |
+| Field/table hallucinations | Schema registry — only known entities allowed |
+| Wrong JOIN type inferred | Explicit declaration required, no defaults |
+| Dialect syntax differences | Compiler handles all dialects, DSL is dialect-free |
+| Errors only caught at execution | Caught at parse/compile time |
+| Business metric ambiguity | Pre-defined metric layer with unique name mapping |
 
-## 项目结构
+## How It Works
+
+The LLM generates Forge JSON using [Structured Output](https://platform.openai.com/docs/guides/structured-outputs) — token-level constraints make it physically impossible to produce malformed queries. The compiler then translates deterministically to SQL, which a human reviews before execution.
+
+```json
+{
+  "scan": "users",
+  "joins": [{"type": "left", "table": "orders", "on": {"left": "users.id", "right": "orders.user_id"}}],
+  "group": ["users.id", "users.name"],
+  "agg":   [{"fn": "count", "col": "orders.id", "as": "order_count"}],
+  "select": ["users.name", "order_count"]
+}
+```
+
+Compiles to:
+
+```sql
+SELECT users.name, COUNT(orders.id) AS order_count
+FROM users
+LEFT JOIN orders ON users.id = orders.user_id
+GROUP BY users.id, users.name
+```
+
+## Project Structure
 
 ```
-forge/          # DSL 核心（语法、编译器）
-tests/          # 测试用例
-  text-to-sql-failures/   # AI 生成 SQL 的典型失败案例（设计靶心）
-docs/           # 设计文档
+forge/
+  schema.json     — Forge DSL format definition (JSON Schema)
+  compiler.py     — Forge JSON → SQL compiler
+  cli.py          — CLI entry point
+tests/
+  test_compiler.py
+  text-to-sql-failures/   — Real AI SQL failure cases (design targets)
+schema.registry.json      — Database schema for validation
 ```
 
-## 状态
+## Quick Start
 
-🌱 早期设计阶段
+```bash
+pip install jsonschema
+echo '{"scan":"orders","select":["orders.id","orders.status"]}' | PYTHONPATH=. python3 -m forge.cli -
+```
+
+## Status
+
+🌱 Early design stage
