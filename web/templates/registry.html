@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% set active = "registry" %}
+
+{% block title %}Registry — Forge Admin{% endblock %}
+{% block heading %}Registry{% endblock %}
+
+{% block content %}
+<!-- Tables section -->
+<section class="mb-10">
+  <h2 class="text-base font-semibold text-gray-700 mb-3">Tables</h2>
+  {% if tables %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    {% for table_name, table_info in tables.items() %}
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+      <p class="font-medium text-gray-900 mb-2">{{ table_name }}</p>
+      <div class="flex flex-wrap gap-1">
+        {% for col in table_info.columns %}
+        <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">{{ col }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-gray-400 italic">No tables synced yet.</p>
+  {% endif %}
+</section>
+
+<!-- Metrics section -->
+<section>
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">Metrics</h2>
+    <button onclick="document.getElementById('metric-modal').classList.remove('hidden')"
+            class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700 transition-colors">
+      + Add Metric
+    </button>
+  </div>
+
+  {% if metrics %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Name</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+          <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for metric_name, metric_info in metrics.items() %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3 font-mono text-sm text-gray-900">{{ metric_name }}</td>
+          <td class="px-4 py-3 text-gray-600">{{ metric_info.description }}</td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex justify-end gap-2">
+              <button
+                onclick="openEditModal('{{ metric_name }}', '{{ metric_info.description | replace("'", "\\'") }}')"
+                class="text-xs text-blue-600 hover:text-blue-800">Edit</button>
+              <button
+                onclick="deleteMetric('{{ metric_name }}')"
+                class="text-xs text-red-500 hover:text-red-700">Delete</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-400 italic">No metrics defined yet.</p>
+  {% endif %}
+</section>
+
+<!-- Add/Edit Metric Modal -->
+<div id="metric-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+    <h3 class="text-base font-semibold text-gray-900 mb-4" id="modal-title">Add Metric</h3>
+    <form method="post" action="/admin/registry/metric">
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-700 mb-1">Name</label>
+        <input id="metric-name" name="name" type="text" required
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
+               placeholder="e.g. gmv_7d" />
+      </div>
+      <div class="mb-5">
+        <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
+        <textarea id="metric-desc" name="description" rows="3" required
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  placeholder="What does this metric measure?"></textarea>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button"
+                onclick="document.getElementById('metric-modal').classList.add('hidden')"
+                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Cancel</button>
+        <button type="submit"
+                class="bg-gray-900 text-white text-sm px-4 py-2 rounded-md hover:bg-gray-700 transition-colors">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditModal(name, description) {
+  document.getElementById('modal-title').textContent = 'Edit Metric';
+  document.getElementById('metric-name').value = name;
+  document.getElementById('metric-desc').value = description;
+  document.getElementById('metric-modal').classList.remove('hidden');
+}
+
+async function deleteMetric(name) {
+  if (!confirm(`Delete metric "${name}"?`)) return;
+  const resp = await fetch(`/admin/registry/metric/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (resp.ok) window.location.reload();
+  else alert('Delete failed.');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% set active = "settings" %}
+
+{% block title %}Settings — Forge Admin{% endblock %}
+{% block heading %}Settings{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <p class="text-xs text-gray-400 mb-5">Read-only view of current runtime configuration. Edit values via environment variables or <code class="font-mono bg-gray-100 px-1 rounded">.env</code>.</p>
+
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-100 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Key</th>
+          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for key, value in settings.items() %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-5 py-3 font-medium text-gray-700 whitespace-nowrap">{{ key }}</td>
+          <td class="px-5 py-3 font-mono text-gray-600 break-all">{{ value }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

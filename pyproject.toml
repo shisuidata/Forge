@@ -8,6 +8,17 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "jsonschema>=4.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "lark-oapi>=1.3",
+    "anthropic>=0.25",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.1",
+    "psycopg2-binary>=2.9",
+    "jinja2>=3.1",
+    "aiosqlite>=0.20",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% set active = "audit" %}
+
+{% block title %}Audit Log — Forge Admin{% endblock %}
+{% block heading %}Audit Log{% endblock %}
+
+{% block content %}
+{% if records %}
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+  <table class="min-w-full divide-y divide-gray-200 text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">Time</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">User</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Query</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SQL</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for r in records %}
+      <tr class="hover:bg-gray-50 align-top">
+        <!-- Timestamp -->
+        <td class="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">
+          {{ r.timestamp[:19].replace("T", " ") if r.timestamp else "—" }}
+        </td>
+
+        <!-- User -->
+        <td class="px-4 py-3 text-gray-600 font-mono text-xs truncate max-w-0 w-36">
+          <span title="{{ r.user_id }}">{{ r.user_id[:12] }}{% if r.user_id|length > 12 %}…{% endif %}</span>
+        </td>
+
+        <!-- User message -->
+        <td class="px-4 py-3 text-gray-800 max-w-xs">
+          <span class="line-clamp-2" title="{{ r.user_message }}">{{ r.user_message }}</span>
+        </td>
+
+        <!-- SQL (truncated, expandable) -->
+        <td class="px-4 py-3 max-w-xs">
+          {% if r.sql %}
+          <div>
+            <code id="sql-short-{{ r.id }}" class="text-xs text-gray-600 font-mono block truncate max-w-xs cursor-pointer hover:text-gray-900"
+                  title="Click to expand"
+                  onclick="toggleSQL({{ r.id }})">{{ r.sql | truncate(80, True) }}</code>
+            <pre id="sql-full-{{ r.id }}" class="hidden text-xs text-gray-600 font-mono whitespace-pre-wrap break-all mt-1 bg-gray-50 rounded p-2 cursor-pointer"
+                 onclick="toggleSQL({{ r.id }})">{{ r.sql }}</pre>
+            {% if r.error_message %}
+            <p class="text-xs text-red-500 mt-1">{{ r.error_message }}</p>
+            {% endif %}
+          </div>
+          {% else %}
+            {% if r.error_message %}
+            <span class="text-xs text-red-500">{{ r.error_message }}</span>
+            {% else %}
+            <span class="text-gray-300">—</span>
+            {% endif %}
+          {% endif %}
+        </td>
+
+        <!-- Status badge -->
+        <td class="px-4 py-3">
+          {% if r.status == "pending" %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">pending</span>
+          {% elif r.status == "approved" %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">approved</span>
+          {% elif r.status == "cancelled" %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">cancelled</span>
+          {% elif r.status == "error" %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">error</span>
+          {% else %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">{{ r.status }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="mt-3 text-xs text-gray-400">Showing {{ records|length }} most recent record(s).</p>
+{% else %}
+<div class="text-center py-16 text-gray-400">
+  <p class="text-4xl mb-3">📋</p>
+  <p class="text-base">No audit records yet.</p>
+  <p class="text-xs mt-1">Records appear here after the agent handles user queries.</p>
+</div>
+{% endif %}
+
+<script>
+function toggleSQL(id) {
+  const short = document.getElementById('sql-short-' + id);
+  const full  = document.getElementById('sql-full-'  + id);
+  short.classList.toggle('hidden');
+  full.classList.toggle('hidden');
+}
+</script>
+{% endblock %}
