@@ -104,11 +104,14 @@ def build_compare_report(method_ids: list[str],
 
     labels = {mid: method_label(mid) for mid in method_ids}
 
-    # 总均分
+    # 总均分（all_scores 结构：{case_id: {method_id: sc_dict}}）
     overall: dict[str, float] = {}
     for mid in method_ids:
-        scores = all_scores.get(mid, {})
-        avgs = [sc["avg"] for sc in scores.values() if sc.get("avg") is not None]
+        avgs = [
+            sc_dict[mid]["avg"]
+            for sc_dict in all_scores.values()
+            if mid in sc_dict and sc_dict[mid].get("avg") is not None
+        ]
         overall[mid] = sum(avgs) / len(avgs) if avgs else 0.0
 
     # 编译失败率
