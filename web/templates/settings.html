@@ -1,19 +1,22 @@
 {% extends "base.html" %}
 {% set active = "settings" %}
 
-{% block title %}Settings — Forge Admin{% endblock %}
-{% block heading %}Settings{% endblock %}
+{% block title %}系统配置 — Forge 管理后台{% endblock %}
+{% block heading %}系统配置{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
-  <p class="text-xs text-gray-400 mb-5">Read-only view of current runtime configuration. Edit values via environment variables or <code class="font-mono bg-gray-100 px-1 rounded">.env</code>.</p>
+  <p class="text-xs text-gray-400 mb-5">
+    当前运行时配置（只读）。修改请通过环境变量或
+    <code class="font-mono bg-gray-100 px-1 rounded">.env</code> 文件，重启服务后生效。
+  </p>
 
   <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
     <table class="min-w-full divide-y divide-gray-100 text-sm">
       <thead class="bg-gray-50">
         <tr>
-          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Key</th>
-          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">配置项</th>
+          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">当前值</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">

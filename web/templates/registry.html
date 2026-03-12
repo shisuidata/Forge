@@ -1,20 +1,41 @@
 {% extends "base.html" %}
 {% set active = "registry" %}
-
-{% block title %}Registry — Forge Admin{% endblock %}
-{% block heading %}Registry{% endblock %}
+{% block title %}指标注册表 — Forge 管理后台{% endblock %}
+{% block heading %}指标注册表{% endblock %}
 
 {% block content %}
-<!-- Tables section -->
+
+{# ── validation feedback ───────────────────────────────────────────────────── #}
+{% if form_errors %}
+<div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+  <p class="text-sm font-semibold text-red-700 mb-2">校验未通过，请修正后重新保存：</p>
+  <ul class="list-disc list-inside space-y-1">
+    {% for e in form_errors %}<li class="text-sm text-red-600">{{ e }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% if form_warnings %}
+<div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+  <p class="text-sm font-semibold text-yellow-700 mb-2">注意：</p>
+  <ul class="list-disc list-inside space-y-1">
+    {% for w in form_warnings %}<li class="text-sm text-yellow-600">{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{# ── tables ────────────────────────────────────────────────────────────────── #}
 <section class="mb-10">
-  <h2 class="text-base font-semibold text-gray-700 mb-3">Tables</h2>
+  <h2 class="text-base font-semibold text-gray-700 mb-3">
+    Tables
+    <span class="text-xs font-normal text-gray-400 ml-1">结构层 · forge sync 自动生成</span>
+  </h2>
   {% if tables %}
   <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {% for table_name, table_info in tables.items() %}
+    {% for tname, tinfo in tables.items() %}
     <div class="bg-white rounded-lg border border-gray-200 p-4">
-      <p class="font-medium text-gray-900 mb-2">{{ table_name }}</p>
+      <p class="font-medium text-gray-900 mb-2">{{ tname }}</p>
       <div class="flex flex-wrap gap-1">
-        {% for col in table_info.columns %}
+        {% for col in tinfo.columns %}
         <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">{{ col }}</span>
         {% endfor %}
       </div>
@@ -22,43 +43,58 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="text-gray-400 italic">No tables synced yet.</p>
+  <p class="text-gray-400 italic">暂无表结构，请先运行 <code class="bg-gray-100 px-1 rounded font-mono">forge sync</code></p>
   {% endif %}
 </section>
 
-<!-- Metrics section -->
-<section>
+{# ── atomic metrics ────────────────────────────────────────────────────────── #}
+<section class="mb-10">
   <div class="flex items-center justify-between mb-3">
-    <h2 class="text-base font-semibold text-gray-700">Metrics</h2>
-    <button onclick="document.getElementById('metric-modal').classList.remove('hidden')"
+    <h2 class="text-base font-semibold text-gray-700">
+      Atomic Metrics
+      <span class="text-xs font-normal text-gray-400 ml-1">原子指标 · 直接基于字段聚合</span>
+    </h2>
+    <button onclick="openModal('atomic')"
             class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700 transition-colors">
-      + Add Metric
+      + Add Atomic
     </button>
   </div>
-
-  {% if metrics %}
+  {% if atomics %}
   <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
         <tr>
-          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Name</th>
-          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-          <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Actions</th>
+          <th class="px-4 py-3 text-left w-44">指标</th>
+          <th class="px-4 py-3 text-left w-40">度量</th>
+          <th class="px-4 py-3 text-left">定义 / 限定</th>
+          <th class="px-4 py-3 text-right w-20">操作</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
-        {% for metric_name, metric_info in metrics.items() %}
+        {% for mname, m in atomics.items() %}
         <tr class="hover:bg-gray-50">
-          <td class="px-4 py-3 font-mono text-sm text-gray-900">{{ metric_name }}</td>
-          <td class="px-4 py-3 text-gray-600">{{ metric_info.description }}</td>
+          <td class="px-4 py-3">
+            <p class="font-medium text-gray-900">{{ m.label or mname }}</p>
+            <p class="font-mono text-xs text-gray-400">{{ mname }}</p>
+          </td>
+          <td class="px-4 py-3 font-mono text-xs text-gray-600">
+            <span class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{{ m.aggregation }}</span>
+            <span class="ml-1 text-gray-500">{{ m.measure }}</span>
+          </td>
+          <td class="px-4 py-3 text-gray-600">
+            <p class="text-sm">{{ m.description }}</p>
+            {% if m.qualifiers %}
+            <p class="text-xs text-orange-600 mt-0.5">
+              ⚑ {{ m.qualifiers | join(' · ') }}
+            </p>
+            {% endif %}
+          </td>
           <td class="px-4 py-3 text-right">
             <div class="flex justify-end gap-2">
-              <button
-                onclick="openEditModal('{{ metric_name }}', '{{ metric_info.description | replace("'", "\\'") }}')"
-                class="text-xs text-blue-600 hover:text-blue-800">Edit</button>
-              <button
-                onclick="deleteMetric('{{ metric_name }}')"
-                class="text-xs text-red-500 hover:text-red-700">Delete</button>
+              <button onclick="openEditModal('atomic', '{{ mname }}', {{ m | tojson }})"
+                      class="text-xs text-blue-600 hover:text-blue-800">编辑</button>
+              <button onclick="deleteMetric('{{ mname }}')"
+                      class="text-xs text-red-500 hover:text-red-700">删除</button>
             </div>
           </td>
         </tr>
@@ -67,51 +103,266 @@
     </table>
   </div>
   {% else %}
-  <p class="text-gray-400 italic">No metrics defined yet.</p>
+  <p class="text-gray-400 italic">暂无原子指标，可通过飞书对话或点击右上角按钮添加</p>
   {% endif %}
 </section>
 
-<!-- Add/Edit Metric Modal -->
-<div id="metric-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-  <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+{# ── derivative metrics ────────────────────────────────────────────────────── #}
+<section>
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">
+      Derivative Metrics
+      <span class="text-xs font-normal text-gray-400 ml-1">衍生指标 · 原子指标的比率组合</span>
+    </h2>
+    <button onclick="openModal('derivative')"
+            class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700 transition-colors">
+      + Add Derivative
+    </button>
+  </div>
+  {% if derivatives %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left w-44">指标</th>
+          <th class="px-4 py-3 text-left">公式</th>
+          <th class="px-4 py-3 text-left">定义</th>
+          <th class="px-4 py-3 text-right w-20">操作</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for mname, m in derivatives.items() %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <p class="font-medium text-gray-900">{{ m.label or mname }}</p>
+            <p class="font-mono text-xs text-gray-400">{{ mname }}</p>
+          </td>
+          <td class="px-4 py-3 font-mono text-xs text-gray-600">
+            <span class="text-gray-700">{{ m.numerator }}</span>
+            <span class="text-gray-400 mx-1">/</span>
+            <span class="text-gray-700">{{ m.denominator }}</span>
+          </td>
+          <td class="px-4 py-3 text-gray-600">
+            <p class="text-sm">{{ m.description }}</p>
+            {% if m.notes %}
+            <p class="text-xs text-gray-400 mt-0.5 italic">{{ m.notes | truncate(80) }}</p>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex justify-end gap-2">
+              <button onclick="openEditModal('derivative', '{{ mname }}', {{ m | tojson }})"
+                      class="text-xs text-blue-600 hover:text-blue-800">编辑</button>
+              <button onclick="deleteMetric('{{ mname }}')"
+                      class="text-xs text-red-500 hover:text-red-700">删除</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-400 italic">暂无衍生指标，需先定义原子指标再组合</p>
+  {% endif %}
+</section>
+
+{# ── modal ─────────────────────────────────────────────────────────────────── #}
+<div id="metric-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-12 pb-8 overflow-y-auto">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
     <h3 class="text-base font-semibold text-gray-900 mb-4" id="modal-title">Add Metric</h3>
     <form method="post" action="/admin/registry/metric">
+      <input type="hidden" id="f-metric-class" name="metric_class" value="atomic" />
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">标识符 <span class="text-red-400">*</span></label>
+          <input id="f-name" name="name" type="text" required
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                 placeholder="order_amount" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">显示名称 <span class="text-red-400">*</span></label>
+          <input id="f-label" name="label" type="text" required
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                 placeholder="订单金额" />
+        </div>
+      </div>
+
       <div class="mb-4">
-        <label class="block text-xs font-medium text-gray-700 mb-1">Name</label>
-        <input id="metric-name" name="name" type="text" required
-               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
-               placeholder="e.g. gmv_7d" />
+        <label class="block text-xs font-medium text-gray-700 mb-1">定义 <span class="text-red-400">*</span></label>
+        <textarea id="f-description" name="description" rows="2" required
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  placeholder="指标的完整自然语言定义"></textarea>
+      </div>
+
+      {# atomic fields #}
+      <div id="atomic-fields">
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">度量字段 <span class="text-red-400">*</span></label>
+            <input id="f-measure" name="measure" type="text"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                   placeholder="orders.total_amount" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">聚合方式 <span class="text-red-400">*</span></label>
+            <select id="f-aggregation" name="aggregation"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <option value="sum">sum</option>
+              <option value="count">count</option>
+              <option value="count_distinct">count_distinct</option>
+              <option value="avg">avg</option>
+              <option value="min">min</option>
+              <option value="max">max</option>
+            </select>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-gray-700 mb-1">
+            业务限定 qualifiers <span class="text-gray-400 font-normal">（每行一条，永远生效）</span>
+          </label>
+          <textarea id="f-qualifiers" name="qualifiers" rows="2"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                    placeholder="orders.status = 'completed'"></textarea>
+        </div>
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-gray-700 mb-1">时间字段 period_col</label>
+          <input id="f-period-col" name="period_col" type="text"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                 placeholder="orders.created_at" />
+        </div>
+      </div>
+
+      {# derivative fields #}
+      <div id="derivative-fields" class="hidden">
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">分子 numerator <span class="text-red-400">*</span></label>
+            <select id="f-numerator" name="numerator"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <option value="">— 选择原子指标 —</option>
+              {% for mname, m in all_metrics.items() %}
+              {% if m.get('metric_class') == 'atomic' %}
+              <option value="{{ mname }}">{{ mname }}（{{ m.label }}）</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">分母 denominator <span class="text-red-400">*</span></label>
+            <select id="f-denominator" name="denominator"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <option value="">— 选择原子指标 —</option>
+              {% for mname, m in all_metrics.items() %}
+              {% if m.get('metric_class') == 'atomic' %}
+              <option value="{{ mname }}">{{ mname }}（{{ m.label }}）</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-gray-700 mb-1">时间字段 period_col
+            <span class="text-gray-400 font-normal">（统一应用于分子和分母）</span></label>
+          <input id="f-period-col-d" name="period_col" type="text"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                 placeholder="orders.created_at" />
+        </div>
+      </div>
+
+      {# shared optional fields #}
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-700 mb-1">
+          可用维度 dimensions <span class="text-gray-400 font-normal">（每行一个）</span>
+        </label>
+        <textarea id="f-dimensions" name="dimensions" rows="2"
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  placeholder="users.city&#10;users.is_vip"></textarea>
       </div>
       <div class="mb-5">
-        <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
-        <textarea id="metric-desc" name="description" rows="3" required
+        <label class="block text-xs font-medium text-gray-700 mb-1">
+          备注 notes
+          <span class="text-gray-400 font-normal">（衍生指标 qualifiers 不一致时必填）</span>
+        </label>
+        <textarea id="f-notes" name="notes" rows="2"
                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-                  placeholder="What does this metric measure?"></textarea>
+                  placeholder="边界说明、口径决策原因"></textarea>
       </div>
+
       <div class="flex justify-end gap-3">
-        <button type="button"
-                onclick="document.getElementById('metric-modal').classList.add('hidden')"
-                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">Cancel</button>
+        <button type="button" onclick="closeModal()"
+                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">取消</button>
         <button type="submit"
-                class="bg-gray-900 text-white text-sm px-4 py-2 rounded-md hover:bg-gray-700 transition-colors">Save</button>
+                class="bg-gray-900 text-white text-sm px-4 py-2 rounded-md hover:bg-gray-700 transition-colors">保存</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-function openEditModal(name, description) {
-  document.getElementById('modal-title').textContent = 'Edit Metric';
-  document.getElementById('metric-name').value = name;
-  document.getElementById('metric-desc').value = description;
+function openModal(metricClass) {
+  setMetricClass(metricClass);
+  document.getElementById('modal-title').textContent =
+    metricClass === 'atomic' ? 'Add Atomic Metric' : 'Add Derivative Metric';
+  ['name','label','description','measure','qualifiers','period-col','period-col-d',
+   'dimensions','notes'].forEach(id => {
+    const el = document.getElementById('f-' + id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f-aggregation').value = 'sum';
+  document.getElementById('f-numerator').value   = '';
+  document.getElementById('f-denominator').value = '';
   document.getElementById('metric-modal').classList.remove('hidden');
 }
 
-async function deleteMetric(name) {
-  if (!confirm(`Delete metric "${name}"?`)) return;
-  const resp = await fetch(`/admin/registry/metric/${encodeURIComponent(name)}`, { method: 'DELETE' });
-  if (resp.ok) window.location.reload();
-  else alert('Delete failed.');
+function openEditModal(metricClass, name, m) {
+  setMetricClass(metricClass);
+  document.getElementById('modal-title').textContent =
+    metricClass === 'atomic' ? 'Edit Atomic Metric' : 'Edit Derivative Metric';
+  document.getElementById('f-name').value        = name;
+  document.getElementById('f-label').value       = m.label || '';
+  document.getElementById('f-description').value = m.description || '';
+  document.getElementById('f-dimensions').value  = (m.dimensions || []).join('\n');
+  document.getElementById('f-notes').value       = m.notes || '';
+  if (metricClass === 'atomic') {
+    document.getElementById('f-measure').value      = m.measure || '';
+    document.getElementById('f-aggregation').value  = m.aggregation || 'sum';
+    document.getElementById('f-qualifiers').value   = (m.qualifiers || []).join('\n');
+    document.getElementById('f-period-col').value   = m.period_col || '';
+  } else {
+    document.getElementById('f-numerator').value    = m.numerator || '';
+    document.getElementById('f-denominator').value  = m.denominator || '';
+    document.getElementById('f-period-col-d').value = m.period_col || '';
+  }
+  document.getElementById('metric-modal').classList.remove('hidden');
 }
+
+function setMetricClass(mc) {
+  document.getElementById('f-metric-class').value = mc;
+  document.getElementById('atomic-fields').classList.toggle('hidden', mc !== 'atomic');
+  document.getElementById('derivative-fields').classList.toggle('hidden', mc !== 'derivative');
+  // remove duplicate period_col name to avoid conflicts
+  document.getElementById('f-period-col').name   = mc === 'atomic'      ? 'period_col' : '';
+  document.getElementById('f-period-col-d').name = mc === 'derivative'  ? 'period_col' : '';
+}
+
+function closeModal() {
+  document.getElementById('metric-modal').classList.add('hidden');
+}
+
+async function deleteMetric(name) {
+  if (!confirm('确认删除指标「' + name + '」？')) return;
+  const resp = await fetch('/admin/registry/metric/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (resp.ok) window.location.reload();
+  else alert('删除失败，请重试');
+}
+
+{% if form_data %}
+(function() {
+  const d = {{ form_data | tojson }};
+  const mc = d.metric_class || 'atomic';
+  openEditModal(mc, d.name || '', d);
+})();
+{% endif %}
 </script>
 {% endblock %}

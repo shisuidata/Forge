@@ -10,24 +10,17 @@ from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from forge.sync import run_sync
-
-
-SQLITE_URL = "sqlite:///:memory:"
-
-
-def _build_db(engine, ddl_statements: list[str]):
-    with engine.connect() as conn:
-        for stmt in ddl_statements:
-            conn.execute(text(stmt))
-        conn.commit()
+from registry.sync import run_sync
 
 
 def _make_db_url(tmp_path: Path, ddl_statements: list[str]) -> str:
     db_file = tmp_path / "test.db"
     url = f"sqlite:///{db_file}"
     engine = create_engine(url)
-    _build_db(engine, ddl_statements)
+    with engine.connect() as conn:
+        for stmt in ddl_statements:
+            conn.execute(text(stmt))
+        conn.commit()
     engine.dispose()
     return url
 
@@ -43,36 +36,26 @@ def test_sync_creates_correct_registry_structure(tmp_path):
 
     assert "tables" in result
     assert set(result["tables"].keys()) == {"users", "orders"}
-    assert result["tables"]["users"] == {"columns": ["id", "name", "city"]}
-    assert result["tables"]["orders"] == {"columns": ["id", "user_id", "status"]}
+    # columns 现在是 dict 格式，包含列元数据（低基数列自动附 enum）
+    assert set(result["tables"]["users"]["columns"].keys()) == {"id", "name", "city"}
+    assert set(result["tables"]["orders"]["columns"].keys()) == {"id", "user_id", "status"}
     assert "metrics" not in result
 
     on_disk = json.loads(registry_path.read_text())
     assert on_disk == result
 
 
-def test_sync_preserves_existing_metrics(tmp_path):
+def test_sync_only_writes_structural_layer(tmp_path):
+    """sync must not touch metrics — that's metrics.registry.yaml's job."""
     url = _make_db_url(tmp_path, [
         "CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, price REAL)",
     ])
     registry_path = tmp_path / "schema.registry.json"
-    existing = {
-        "tables": {
-            "old_table": {"columns": ["a", "b"]}
-        },
-        "metrics": {
-            "revenue": {"description": "Total revenue"},
-            "dau": {"description": "Daily active users"},
-        },
-    }
-    registry_path.write_text(json.dumps(existing))
 
     result = run_sync(url, registry_path)
 
-    assert "metrics" in result
-    assert result["metrics"] == existing["metrics"]
+    assert "metrics" not in result
     assert set(result["tables"].keys()) == {"products"}
-    assert "old_table" not in result["tables"]
 
 
 def test_sync_db_flag_overrides_config(tmp_path, monkeypatch):
@@ -88,4 +71,4 @@ def test_sync_db_flag_overrides_config(tmp_path, monkeypatch):
     result = run_sync(url, registry_path)
 
     assert "events" in result["tables"]
-    assert result["tables"]["events"] == {"columns": ["id", "name", "ts"]}
+    assert set(result["tables"]["events"]["columns"].keys()) == {"id", "name", "ts"}

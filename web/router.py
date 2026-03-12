@@ -3,25 +3,29 @@ Forge admin web UI — FastAPI router mounted at /admin.
 
 Routes
 ------
-GET  /admin                       → redirect to /admin/registry
-GET  /admin/registry              → registry overview (tables + metrics)
-POST /admin/registry/metric       → add or update a metric definition
+GET  /admin                          → redirect to /admin/registry
+GET  /admin/registry                 → registry overview (tables + metrics)
+POST /admin/registry/metric          → add or update a metric definition
 DELETE /admin/registry/metric/{name} → delete a metric
-GET  /admin/audit                 → recent audit log (last 100 entries)
-GET  /admin/settings              → current config (secrets masked)
+GET  /admin/audit                    → recent audit log (last 100 entries)
+GET  /admin/settings                 → current config (secrets masked)
 """
 from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from pathlib import Path
+from typing import Optional
 
+import yaml
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from agent import audit
 from config import cfg
+from registry.validator import validate_metric
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -29,19 +33,29 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _load_registry() -> dict:
+def _load_schema() -> dict:
+    """Load structural layer (schema.registry.json)."""
     try:
         return json.loads(cfg.REGISTRY_PATH.read_text())
     except Exception:
         return {}
 
 
-def _save_registry(data: dict) -> None:
-    cfg.REGISTRY_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+def _load_metrics() -> dict:
+    """Load semantic layer (metrics.registry.yaml)."""
+    try:
+        return yaml.safe_load(cfg.METRICS_PATH.read_text()) or {}
+    except Exception:
+        return {}
+
+
+def _save_metrics(metrics: dict) -> None:
+    cfg.METRICS_PATH.write_text(
+        yaml.dump(metrics, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    )
 
 
 def _mask_secret(value: str, visible: int = 4) -> str:
-    """Return value with all but the last *visible* characters replaced by *."""
     if not value:
         return "(not set)"
     if len(value) <= visible:
@@ -50,11 +64,14 @@ def _mask_secret(value: str, visible: int = 4) -> str:
 
 
 def _mask_db_url(url: str) -> str:
-    """Mask the password in a database URL."""
     if not url:
         return "(not set)"
-    # postgresql://user:password@host/db  →  postgresql://user:****@host/db
     return re.sub(r"(:)([^/@]+)(@)", lambda m: f"{m.group(1)}****{m.group(3)}", url)
+
+
+def _parse_lines(text: str) -> list[str]:
+    """Split textarea value into a list, stripping blank lines."""
+    return [line.strip() for line in text.splitlines() if line.strip()]
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
@@ -66,35 +83,78 @@ async def admin_root():
 
 @router.get("/registry", response_class=HTMLResponse)
 async def registry_page(request: Request):
-    reg = _load_registry()
-    tables = reg.get("tables", {})
-    metrics = reg.get("metrics", {})
+    schema  = _load_schema()
+    tables  = schema.get("tables", {})
+    metrics = _load_metrics()
+    atomics     = {k: v for k, v in metrics.items() if v.get("metric_class") == "atomic"}
+    derivatives = {k: v for k, v in metrics.items() if v.get("metric_class") == "derivative"}
     return templates.TemplateResponse(
         "registry.html",
-        {"request": request, "tables": tables, "metrics": metrics},
+        {"request": request, "tables": tables,
+         "atomics": atomics, "derivatives": derivatives, "all_metrics": metrics},
     )
 
 
-@router.post("/registry/metric", response_class=RedirectResponse)
+@router.post("/registry/metric", response_class=HTMLResponse)
 async def upsert_metric(
-    name: str = Form(...),
-    description: str = Form(...),
+    request:     Request,
+    name:        str           = Form(...),
+    label:       str           = Form(...),
+    type:        str           = Form(...),
+    description: str           = Form(...),
+    numerator:   Optional[str] = Form(default=None),
+    denominator: Optional[str] = Form(default=None),
+    filters:     Optional[str] = Form(default=None),
+    dimensions:  Optional[str] = Form(default=None),
+    notes:       Optional[str] = Form(default=None),
 ):
-    """Add or update a metric in the registry."""
-    reg = _load_registry()
-    reg.setdefault("metrics", {})[name] = {"description": description}
-    _save_registry(reg)
+    entry: dict = {
+        "label":       label,
+        "type":        type,
+        "description": description,
+    }
+    if numerator:   entry["numerator"]   = numerator
+    if denominator: entry["denominator"] = denominator
+    if filters:     entry["filters"]     = _parse_lines(filters)
+    if dimensions:  entry["dimensions"]  = _parse_lines(dimensions)
+    if notes:       entry["notes"]       = notes
+
+    # ── validate ──────────────────────────────────────────────────────────────
+    structural  = _load_schema()
+    all_metrics = _load_metrics()
+    result = validate_metric(entry, structural, metric_name=name, all_metrics=all_metrics)
+    if not result.valid:
+        tables      = structural.get("tables", {})
+        atomics     = {k: v for k, v in all_metrics.items() if v.get("metric_class") == "atomic"}
+        derivatives = {k: v for k, v in all_metrics.items() if v.get("metric_class") == "derivative"}
+        return templates.TemplateResponse(
+            "registry.html",
+            {
+                "request":       request,
+                "tables":        tables,
+                "atomics":       atomics,
+                "derivatives":   derivatives,
+                "all_metrics":   all_metrics,
+                "form_errors":   result.errors,
+                "form_warnings": result.warnings,
+                "form_data":     {"name": name, **entry},
+            },
+            status_code=422,
+        )
+
+    # ── save ──────────────────────────────────────────────────────────────────
+    entry["updated_at"] = str(date.today())
+    metrics = _load_metrics()
+    metrics[name] = entry
+    _save_metrics(metrics)
     return RedirectResponse(url="/admin/registry", status_code=303)
 
 
 @router.delete("/registry/metric/{name}")
 async def delete_metric(name: str):
-    """Delete a metric from the registry."""
-    reg = _load_registry()
-    metrics = reg.get("metrics", {})
+    metrics = _load_metrics()
     metrics.pop(name, None)
-    reg["metrics"] = metrics
-    _save_registry(reg)
+    _save_metrics(metrics)
     return {"deleted": name}
 
 
@@ -110,15 +170,16 @@ async def audit_page(request: Request):
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     settings = {
-        "LLM Provider": cfg.LLM_PROVIDER,
-        "LLM Model": cfg.LLM_MODEL,
-        "LLM API Key": _mask_secret(cfg.LLM_API_KEY),
-        "LLM Base URL": cfg.LLM_BASE_URL or "(default)",
-        "Database URL": _mask_db_url(cfg.DATABASE_URL),
-        "Registry Path": str(cfg.REGISTRY_PATH),
-        "Server Host": cfg.HOST,
-        "Server Port": str(cfg.PORT),
-        "Feishu App ID": cfg.FEISHU_APP_ID or "(not set)",
+        "LLM Provider":    cfg.LLM_PROVIDER,
+        "LLM Model":       cfg.LLM_MODEL,
+        "LLM API Key":     _mask_secret(cfg.LLM_API_KEY),
+        "LLM Base URL":    cfg.LLM_BASE_URL or "(default)",
+        "Database URL":    _mask_db_url(cfg.DATABASE_URL),
+        "Registry Path":   str(cfg.REGISTRY_PATH),
+        "Metrics Path":    str(cfg.METRICS_PATH),
+        "Server Host":     cfg.HOST,
+        "Server Port":     str(cfg.PORT),
+        "Feishu App ID":   cfg.FEISHU_APP_ID or "(not set)",
         "Feishu App Secret": _mask_secret(cfg.FEISHU_APP_SECRET),
     }
     return templates.TemplateResponse(

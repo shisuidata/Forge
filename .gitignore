@@ -5,3 +5,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 dist/
+.env
+demo/*.db
+
+tests/accuracy/results/

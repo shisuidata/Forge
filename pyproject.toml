@@ -19,6 +19,7 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "jinja2>=3.1",
     "aiosqlite>=0.20",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +30,7 @@ forge = "forge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["forge*"]
+include = ["forge*", "registry*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

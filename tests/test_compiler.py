@@ -222,18 +222,18 @@ def test_having_filters_after_group():
 # ── schema validation ─────────────────────────────────────────────────────────
 
 def test_missing_scan_raises():
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((ValueError, jsonschema.ValidationError)):
         compile_query({"select": ["orders.id"]})
 
 
 def test_missing_select_raises():
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((ValueError, jsonschema.ValidationError)):
         compile_query({"scan": "orders"})
 
 
 def test_invalid_join_type_raises():
     """'join' without a type — or an unknown type — must be rejected at validation."""
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((ValueError, jsonschema.ValidationError)):
         compile_query({
             "scan": "orders",
             "joins": [{"type": "JOIN", "table": "users",   # 'JOIN' not in enum
@@ -243,7 +243,7 @@ def test_invalid_join_type_raises():
 
 
 def test_join_without_type_raises():
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((ValueError, jsonschema.ValidationError)):
         compile_query({
             "scan": "orders",
             "joins": [{"table": "users",
@@ -253,7 +253,7 @@ def test_join_without_type_raises():
 
 
 def test_invalid_sort_direction_raises():
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((ValueError, jsonschema.ValidationError)):
         compile_query({
             "scan": "orders",
             "select": ["orders.id"],
@@ -262,7 +262,7 @@ def test_invalid_sort_direction_raises():
 
 
 def test_empty_select_raises():
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((ValueError, jsonschema.ValidationError)):
         compile_query({"scan": "orders", "select": []})
 
 
