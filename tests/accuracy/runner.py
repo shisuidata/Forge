@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -62,14 +63,24 @@ def _clean_json(raw: str) -> str:
 
 
 def _call_model(client: anthropic.Anthropic, system: str, question: str,
-                model: str, max_tokens: int = 2048) -> str:
-    msg = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": question}],
-    )
-    return _extract_text(msg.content)
+                model: str, max_tokens: int = 2048,
+                _retries: int = 5, _backoff: float = 10.0) -> str:
+    for attempt in range(_retries):
+        try:
+            msg = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": question}],
+            )
+            return _extract_text(msg.content)
+        except anthropic.InternalServerError as e:
+            if attempt < _retries - 1:
+                wait = _backoff * (2 ** attempt)
+                tqdm.write(f"  ⚠ API 500，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def run_forge(client: anthropic.Anthropic, question: str,
