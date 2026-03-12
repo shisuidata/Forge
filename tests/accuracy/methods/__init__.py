@@ -16,6 +16,7 @@ class MethodConfig:
     model: str = "MiniMax-M2.5-highspeed"
     runs: int = 5
     notes: str = ""
+    use_semantic_lib: bool = False            # 是否启用语义消歧库对问题进行预处理
 
 
 def load(method_id: str) -> MethodConfig:
@@ -37,6 +38,7 @@ def load(method_id: str) -> MethodConfig:
         model=getattr(mod, "MODEL", "MiniMax-M2.5-highspeed"),
         runs=getattr(mod, "RUNS", 5),
         notes=getattr(mod, "NOTES", ""),
+        use_semantic_lib=getattr(mod, "USE_SEMANTIC_LIB", False),
     )
 
 

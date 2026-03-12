@@ -195,9 +195,15 @@ def run_method(method_id: str, fresh: bool = False,
     call_bar = tqdm(total=len(tasks), desc="API 调用",
                     unit="call", position=1, dynamic_ncols=True)
 
+    if cfg.use_semantic_lib:
+        from semantic_lib import enrich as _enrich
+    else:
+        _enrich = lambda q: q
+
     def dispatch(task):
         case, run_idx = task
-        result = dispatch_fn(client, case["question"], cfg.system_prompt, model)
+        question = _enrich(case["question"])
+        result = dispatch_fn(client, question, cfg.system_prompt, model)
         return case, run_idx, result
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
