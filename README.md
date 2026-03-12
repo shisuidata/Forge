@@ -1,49 +1,169 @@
 # Forge
 
-**An AI data agent for data teams — query your database in natural language, get deterministic SQL.**
+**An AI data query agent — natural language in, deterministic SQL out.**
 
 [中文文档](README_CN.md)
 
 ---
 
-Forge connects to your Feishu or DingTalk workspace as a bot. Data team members ask questions in natural language; Forge generates SQL, shows it for human review, and executes it on approval.
+## The Problem with Text-to-SQL
 
-```
-User (Feishu)        → "统计每个城市 VIP 用户的平均客单价"
-Forge Agent          → generates Forge JSON via Structured Output
-Forge Compiler       → deterministic Forge JSON → SQL
-User reviews SQL     → clicks ✅ Execute
-Database             → returns results
-```
+Most text-to-SQL approaches ask an LLM to directly write SQL. This fails in predictable ways:
 
-## Why Not Just Text-to-SQL?
-
-| Problem | Forge's answer |
+| Failure mode | Example |
 |---|---|
-| Hallucinated field/table names | Schema registry — only known entities compile |
-| Wrong JOIN type (INNER vs LEFT) | Explicit type required, no default exists |
-| NOT IN fails silently with NULLs | `anti` join is the only anti-join primitive |
-| WHERE vs HAVING confusion | Separate `filter` and `having` keys, compiler enforces placement |
-| Business metric ambiguity | Registry semantic layer — define "repurchase_rate" once, use everywhere |
-| Dialect differences | Compiler handles dialects, DSL is dialect-free |
+| Hallucinated field names | `SELECT orders.amount` when the column is `total_amount` |
+| Wrong JOIN type | Uses `INNER JOIN` when the question needs a `LEFT JOIN` |
+| NOT IN silent NULL bug | `WHERE id NOT IN (subquery)` returns wrong results when subquery has NULLs |
+| WHERE vs HAVING confusion | Puts aggregate conditions in WHERE clause |
+| Business metric ambiguity | "repurchase rate" means different things to different teams |
+| SQL dialect differences | Writes PostgreSQL syntax for a SQLite database |
 
-**Forge targets generation errors** (the model knows the right approach but produces wrong syntax). Structured Output constrains generation at the token level — malformed queries are physically impossible.
+The root cause: **the LLM is generating into an unconstrained output space**. Any token is valid at any position, so any error is possible.
+
+## How Forge Works
+
+Forge inserts a structured intermediate representation between the LLM and SQL:
+
+```
+Natural Language
+      ↓
+  LLM (Structured Output)
+      ↓
+  Forge JSON  ← constrained: only registered tables/columns are valid tokens
+      ↓
+  Deterministic Compiler
+      ↓
+  SQL
+```
+
+The key insight: **LLM error rate scales with output space size**. If the model can only output valid field names (enforced at the token level via JSON Schema), an entire class of errors becomes physically impossible.
+
+### Three Defense Layers
+
+**Layer 1 — Schema constraint** (impossible to generate wrong)
+
+`schema.registry.json` defines every valid table and column. The JSON Schema for Forge DSL marks `scan`, `filter.col`, `select` etc. as strict enums. Anthropic's Structured Output enforces this at the token level — the model literally cannot generate `orders.amount` if only `orders.total_amount` exists in the registry.
+
+**Layer 2 — `_coerce` compiler fixes** (intent-correct, format-off)
+
+The model sometimes produces output that is semantically right but structurally slightly off (e.g., filter as object instead of array, missing GROUP BY field). The compiler's `_coerce()` function normalizes these before compilation. 7 such fixes have been accumulated from real failure cases.
+
+**Layer 3 — Semantic enrichment library** (runtime disambiguation)
+
+For known ambiguous query patterns, `semantic_lib.py` appends inline clarifications before the LLM call. For example: "超过5次" (more than 5 times) is annotated with the explicit reminder that this means `op: "gt"`, not `op: "gte"`. Pattern-matched, zero-latency, no extra API call.
+
+### The Compiler Guarantee
+
+Given valid Forge JSON, the compiler always produces valid SQL. Same JSON → same SQL, every time. This means:
+
+- Errors are traceable: if the SQL is wrong, the Forge JSON that produced it is logged
+- The LLM's job is reduced to semantic understanding, not SQL syntax
+- Dialect support is a compiler concern, not a prompt concern
 
 ## Architecture
 
 ```
-Feishu / DingTalk          ← user interaction (query + metric definition)
-Admin Web UI               ← data engineer: registry management, audit log, config
+Feishu / DingTalk          ← user interaction
+Admin Web UI               ← data engineer: registry, audit log, config
         ↓
 Forge Backend (FastAPI, self-hosted)
-  ├── Agent loop            ← query mode + define mode
+  ├── Agent loop            ← query mode + metric definition mode
   ├── LLM client            ← Anthropic or any OpenAI-compatible model
   ├── Forge compiler        ← Forge JSON → SQL (deterministic)
-  ├── Registry              ← schema + business metrics (grows over time)
-  └── Database connection   ← forge sync + query execution
+  ├── Registry              ← schema + business metrics
+  └── Database connection   ← sync + query execution
 ```
 
 Self-hosted. Bring your own LLM API key. Data never leaves your network.
+
+## Forge DSL
+
+Forge JSON is generated by the LLM and compiled deterministically to SQL.
+
+```json
+{
+  "scan": "orders",
+  "joins": [{"type": "inner", "table": "users", "on": {"left": "orders.user_id", "right": "users.id"}}],
+  "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+  "group":  ["users.city"],
+  "agg":    [{"fn": "avg", "col": "orders.total_amount", "as": "avg_value"}],
+  "select": ["users.city", "avg_value"],
+  "sort":   [{"col": "avg_value", "dir": "desc"}]
+}
+```
+
+Compiles to:
+
+```sql
+SELECT users.city, AVG(orders.total_amount) AS avg_value
+FROM orders
+INNER JOIN users ON orders.user_id = users.id
+WHERE orders.status = 'completed'
+GROUP BY users.city
+ORDER BY avg_value DESC
+```
+
+### DSL Capabilities
+
+| Feature | Notes |
+|---|---|
+| All JOIN types | `inner / left / right / full / anti / semi` |
+| Inequality joins | `on_multi`: array of conditions with `gt/gte/lt/lte/neq` |
+| Aggregate functions | `count / count_all / count_distinct / sum / avg / min / max` |
+| Window functions | `row_number / rank / dense_rank / lag / lead` with PARTITION BY / ORDER BY |
+| CASE WHEN | `{"case": [...], "else": ..., "as": "alias"}` |
+| Relative dates | `{"$preset": "today / this_week / this_month / this_year / last_30_days"}` |
+| CTE (multi-step) | `"with": [{"name": "cte_name", "query": {...}}]` |
+| Function expressions | `{"$expr": "STRFTIME('%Y-%m', t.col)"}` |
+| OR conditions | `{"or": [{...}, {...}]}` in filter array |
+
+## Benchmark Results
+
+Tested on 40 query cases (8 categories, difficulty 1–3) across 9 prompt versions. Each version × each case × 5 runs, scored 0–10 by LLM judge.
+
+### Version Evolution
+
+| Version | Core change | Score | Compile err | vs prev |
+|---|---|---|---|---|
+| **A** | Baseline (SQL-style DSL) | 7.63 | 3.8% | — |
+| **B** | Control: direct SQL generation | 8.38 | 0.0% | — |
+| **D** | New DSL + enum schema | 8.46 | 1.2% | +0.83 vs A |
+| **E** | Prompt refinement (HAVING alias, LIMIT, ranking) | 8.41 | 0.0% | -0.05 |
+| **F** | Semantic precision (semi→EXISTS, JOIN completeness) | 8.43 | 0.6% | +0.02 |
+| **G** | Rule robustness (quantifier semantics, positive rules) | 8.69 | 0.0% | **+0.26** |
+| **H** | New capabilities (CASE WHEN, $preset, CTE, expr) | 8.45 | 0.5% | -0.24 |
+| **I** | Stability fixes (compiler fix 7, CTE boundary) | 8.45 | 2.0% | 0.00 |
+| **J** | HAVING precision + avg-per-X pattern | 8.65 | 0.5% | **+0.20** |
+| **J+Sem** | J + semantic enrichment library | **8.82** | **0.0%** | **+0.17** |
+
+> A/D/E/F/G tested on 32 cases. H onwards tested on all 40 cases (includes new capability cases 33–40).
+
+### J+Sem vs Direct SQL (current best vs control)
+
+| Category | Cases | Direct SQL | Forge J+Sem |
+|---|---|---|---|
+| Multi-table JOIN + agg | 6 | 8.53 | **8.73** |
+| Complex filter | 4 | 9.00 | **9.25** |
+| GROUP BY + HAVING | 5 | 8.60 | **8.80** |
+| Ranking & TopN | 5 | 8.36 | **9.00** |
+| Window aggregation | 4 | 8.40 | **8.75** |
+| Time navigation | 3 | 8.40 | **9.00** |
+| ANTI/SEMI JOIN | 3 | 7.80 | **8.60** |
+| Complex composite | 2 | 7.60 | **8.00** |
+| **Overall** | **40** | **8.38** | **8.82** |
+
+Forge J+Sem outperforms direct SQL in every category. The ANTI/SEMI JOIN gap (+0.80) is the largest: direct SQL frequently produces `NOT IN` with silent NULL bugs; Forge's `anti` join primitive eliminates this error class entirely.
+
+### Engineering Lessons
+
+**Compiler fixes beat prompt fixes.** When the model's intent is correct but DSL format is slightly off, a `_coerce` fix in the compiler is more stable and has zero side effects. The most impactful single improvement in the benchmark was a compiler fix (Case 39: 3.0 → 9.0).
+
+**Positive rules beat negative rules.** "The correct approach is X" produces fewer side effects than "never do Y". Version F's "do not fabricate HAVING conditions" caused Cases 4 and 9 to regress. Version G replaced these with positive pattern examples and recovered +0.26.
+
+**New capability docs cause overfitting.** Every new capability added to the prompt risks the model over-applying it. H added CTE docs → model started using CTEs for simple aggregations. Mitigation: always pair capability docs with explicit "when NOT to use" examples.
+
+**Semantic enrichment is additive.** The semantic library adds runtime disambiguation without touching the core prompt or adding API latency. It improved J from 8.65 → 8.82, specifically fixing recurring ambiguities around `gt` vs `gte`, OR filter JSON format, and missing JOIN cases.
 
 ## Getting Started
 
@@ -75,54 +195,27 @@ forge sync
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### 5. Set Feishu webhook URL
+### 5. Set Feishu webhook
 
-In [Feishu Open Platform](https://open.feishu.cn), set the event subscription URL to:
-```
-https://your-server/webhook/feishu
-```
+In [Feishu Open Platform](https://open.feishu.cn), set the event subscription URL to `https://your-server/webhook/feishu`.
 
 See [docs/feishu-setup.md](docs/feishu-setup.md) for the full setup guide.
-
-## Forge DSL
-
-Forge JSON is generated by the LLM (never written by humans) and compiled deterministically to SQL.
-
-```json
-{
-  "scan": "orders",
-  "joins": [{"type": "left", "table": "users", "on": {"left": "orders.user_id", "right": "users.id"}}],
-  "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
-  "group":  ["users.city"],
-  "agg":    [{"fn": "avg", "col": "orders.total_amount", "as": "avg_value"}],
-  "select": ["users.city", "avg_value"],
-  "sort":   [{"col": "avg_value", "dir": "desc"}]
-}
-```
-
-Compiles to:
-
-```sql
-SELECT users.city, AVG(orders.total_amount) AS avg_value
-FROM orders
-LEFT JOIN users ON orders.user_id = users.id
-WHERE orders.status = 'completed'
-GROUP BY users.city
-ORDER BY avg_value DESC
-```
 
 ## Project Structure
 
 ```
-forge/          — compiler engine (JSON Schema + deterministic compiler)
-agent/          — agent loop, LLM client, Feishu bot, session, audit log
-web/            — admin UI (registry management, audit log, settings)
-tests/          — compiler tests + SQL failure case design targets
+forge/          — compiler engine: JSON Schema validation + deterministic SQL compiler
+agent/          — agent loop, LLM client, Feishu bot, session management, audit log
+registry/       — schema sync, metric registry, field validator
+web/            — admin UI: registry management, audit log, settings
+tests/
+  ├── accuracy/ — prompt benchmark: 40 cases × 9 methods × 5 runs
+  └── *.py      — compiler unit tests
 main.py         — FastAPI entry point
 config.py       — environment-based configuration
-docs/           — architecture, setup guides
+docs/           — architecture, DSL spec, setup guides
 ```
 
 ## Status
 
-🚧 Early development — core compiler complete, agent + Feishu bot skeleton built
+Core compiler complete. Agent, Feishu bot, registry management, and audit log functional. Current benchmark: **8.82 / 10** (Method J+Sem, 40 cases).
