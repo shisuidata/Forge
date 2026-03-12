@@ -267,14 +267,16 @@ def registry_to_context(registry: dict) -> str:
 # ── LLM 调用（tool_use 模式）────────────────────────────────────────────────
 
 def _call_tool_use(client, system: str, question: str, tools: list[dict],
-                   _retries: int = 5, _backoff: float = 10.0) -> dict:
+                   _retries: int = 5, _backoff: float = 10.0,
+                   _messages_override: list | None = None) -> dict:
     """
     调用 LLM，要求使用 generate_forge_query 工具，返回工具调用的 input dict。
     若模型返回文字（未调用工具），追加一条催促消息再重试一次。
+    _messages_override: 直接使用指定的 messages（用于编译错误回传重试）。
     """
     import anthropic
 
-    messages = [{"role": "user", "content": question}]
+    messages = _messages_override or [{"role": "user", "content": question}]
 
     for attempt in range(_retries):
         try:
@@ -291,8 +293,9 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
                     return {"ok": True, "input": block.input, "tool": block.name}
 
             # 模型返回了文字而非工具调用 → 追加催促消息，下一轮重试
+            # （_messages_override 模式下不追加，直接返回失败）
             text = next((b.text for b in msg.content if hasattr(b, "text")), "")
-            if attempt < _retries - 1:
+            if attempt < _retries - 1 and not _messages_override:
                 messages = [
                     {"role": "user", "content": question},
                     {"role": "assistant", "content": text or "(no response)"},
@@ -373,11 +376,47 @@ def run_case(client, case: dict) -> dict:
                 "forge_json": forge_json, "error": None,
                 "started_at": started_at,
                 "finished_at": datetime.now(timezone.utc).isoformat()}
-    except Exception as e:
-        return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": forge_json, "error": f"编译失败: {e}",
-                "started_at": started_at,
-                "finished_at": datetime.now(timezone.utc).isoformat()}
+    except Exception as compile_err:
+        # 编译失败 → 把错误信息回传 LLM，追加到对话让其修正，最多重试1次
+        retry_messages = [
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "retry_0",
+                 "name": "generate_forge_query", "input": forge_json}
+            ]},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "retry_0",
+                 "content": f"Compilation error: {compile_err}\nPlease fix the Forge JSON and call generate_forge_query again."}
+            ]},
+        ]
+        try:
+            retry_resp = _call_tool_use(client, system, question, tools,
+                                        _messages_override=retry_messages)
+        except Exception as e:
+            return {"instance_id": case["instance_id"], "sql": None,
+                    "forge_json": forge_json, "error": f"编译失败: {compile_err}",
+                    "started_at": started_at,
+                    "finished_at": datetime.now(timezone.utc).isoformat()}
+
+        if not retry_resp["ok"]:
+            return {"instance_id": case["instance_id"], "sql": None,
+                    "forge_json": forge_json, "error": f"编译失败: {compile_err}",
+                    "started_at": started_at,
+                    "finished_at": datetime.now(timezone.utc).isoformat()}
+
+        forge_json2 = _unwrap_forge_json(retry_resp["input"])
+        try:
+            sql = compile_query(forge_json2)
+            return {"instance_id": case["instance_id"], "sql": sql,
+                    "forge_json": forge_json2, "error": None,
+                    "started_at": started_at,
+                    "finished_at": datetime.now(timezone.utc).isoformat()}
+        except Exception as e2:
+            return {"instance_id": case["instance_id"], "sql": None,
+                    "forge_json": forge_json2,
+                    "error": f"编译失败(重试后): {e2}",
+                    "started_at": started_at,
+                    "finished_at": datetime.now(timezone.utc).isoformat()}
 
 
 # ── Token 估算 ───────────────────────────────────────────────────────────────

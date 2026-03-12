@@ -76,6 +76,8 @@ def _coerce(q: dict) -> dict:
     在 schema 校验前对常见模型输出偏差做容错修复（不改变查询语义）。
 
     修复项：
+    0. cte 存在但无顶层 scan → 自动用最后一个 CTE 名补全 scan，继承其 select
+       模型用 CTE 解复杂题时常忘记写主查询
     1. filter/having 为 dict 时自动包装为列表
        模型有时生成 "filter": {"or":[...]} 而非 "filter": [{"or":[...]}]
     2. between 条件中 val 为 [lo, hi] 数组时拆分为 lo/hi 字段
@@ -92,6 +94,19 @@ def _coerce(q: dict) -> dict:
        模型在 window + qualify 组合中有时遗漏 rank alias，导致外层 WHERE 引用未定义列
     """
     q = dict(q)  # 浅拷贝，避免修改调用方的原始对象
+
+    # 修复 0：cte 存在但无顶层 scan → 自动补全
+    if q.get("cte") and "scan" not in q:
+        last_cte = q["cte"][-1]
+        q["scan"] = last_cte["name"]
+        # 继承最后一个 CTE 的 select（若有），否则选所有输出列
+        if "select" not in q:
+            inner_select = last_cte.get("query", {}).get("select", [])
+            # 把 table.col 引用替换为用 CTE 名作前缀
+            q["select"] = [
+                f"{last_cte['name']}.{s.split('.')[-1]}" if isinstance(s, str) and "." in s else s
+                for s in inner_select
+            ] if inner_select else [f"{last_cte['name']}.*"]
 
     # 修复 1：filter/having 为 dict 时包装为列表
     for field in ("filter", "having"):
