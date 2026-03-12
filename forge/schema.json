@@ -38,14 +38,27 @@
 
     "having": {
       "type": "array",
-      "description": "Aggregate-level filters (compiles to HAVING). Top-level items are AND-combined.",
+      "description": "Aggregate-level filters (compiles to HAVING). col must reference an agg alias, not a raw expression. Top-level items are AND-combined.",
       "items": { "$ref": "#/definitions/Condition" }
     },
 
     "select": {
       "type": "array",
-      "description": "Output columns. Reference group keys, agg aliases, or raw fields (non-agg queries).",
-      "items": { "type": "string" },
+      "description": "Output columns. Can be: table.col refs, agg aliases, window aliases, or computed expressions {\"expr\":\"...\",\"as\":\"alias\"}.",
+      "items": { "$ref": "#/definitions/SelectItem" },
+      "minItems": 1
+    },
+
+    "window": {
+      "type": "array",
+      "description": "Window function expressions (OVER clause). Aliases are referenced in select, just like agg aliases.",
+      "items": { "$ref": "#/definitions/WindowExpr" }
+    },
+
+    "qualify": {
+      "type": "array",
+      "description": "Post-window filter (like HAVING but for window results). Use to implement per-group TopN: e.g. rank <= 3. Compiles to a wrapping subquery WHERE clause.",
+      "items": { "$ref": "#/definitions/SimpleCondition" },
       "minItems": 1
     },
 
@@ -57,12 +70,108 @@
 
     "limit": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "description": "Maximum rows to return. Value must come from the user's question (e.g. 'top 10' → 10)."
+    },
+
+    "offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rows to skip before applying LIMIT. Used for pagination (page 2 of 10 = offset 10)."
+    },
+
+    "explain": {
+      "type": "string",
+      "description": "LLM intent description. Not compiled. Included in error feedback to help self-correction."
+    },
+
+    "cte": {
+      "type": "array",
+      "description": "Common Table Expressions (WITH clause). Reserved for future use — not yet compiled.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name":  { "type": "string" },
+          "query": { "type": "object" }
+        }
+      }
     }
 
   },
 
   "definitions": {
+
+    "ScalarVal": {
+      "description": "A typed scalar, array, or date value.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "description": "List of values for 'in' operator.",
+          "items": { "type": ["string", "number"] }
+        },
+        {
+          "type": "object",
+          "description": "Date literal.",
+          "required": ["$date"],
+          "additionalProperties": false,
+          "properties": {
+            "$date": { "type": "string", "description": "ISO-8601 date: YYYY-MM-DD" }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Relative date preset (resolved at query time).",
+          "required": ["$preset"],
+          "additionalProperties": false,
+          "properties": {
+            "$preset": {
+              "type": "string",
+              "enum": ["today", "yesterday", "last_7_days", "last_30_days",
+                       "this_month", "last_month", "this_quarter", "this_year"]
+            }
+          }
+        }
+      ]
+    },
+
+    "BoundVal": {
+      "description": "A numeric or date value for BETWEEN lo/hi bounds.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["$date"],
+          "additionalProperties": false,
+          "properties": { "$date": { "type": "string" } }
+        }
+      ]
+    },
+
+    "SelectItem": {
+      "description": "A column reference (string) or a computed expression object.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Column reference, agg alias, or window alias."
+        },
+        {
+          "type": "object",
+          "description": "Computed expression, e.g. quantity * unit_price AS revenue.",
+          "required": ["expr", "as"],
+          "additionalProperties": false,
+          "properties": {
+            "expr": { "type": "string", "description": "Arithmetic or CASE expression, passed verbatim into SQL." },
+            "as":   { "type": "string", "description": "Output alias." }
+          }
+        }
+      ]
+    },
 
     "Join": {
       "type": "object",
@@ -78,14 +187,25 @@
           "type": "string"
         },
         "on": {
-          "type": "object",
-          "required": ["left", "right"],
-          "additionalProperties": false,
-          "description": "Equality join condition. left and right are field refs (table.field).",
-          "properties": {
-            "left":  { "type": "string" },
-            "right": { "type": "string" }
-          }
+          "description": "Join condition: single equality {left, right} or multi-condition array (inner/left/right/full only).",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["left", "right"],
+              "additionalProperties": false,
+              "description": "Equality join (most common).",
+              "properties": {
+                "left":  { "type": "string" },
+                "right": { "type": "string" }
+              }
+            },
+            {
+              "type": "array",
+              "description": "Multi-condition join (inner/left/right/full only). items are SimpleConditions AND-combined.",
+              "items": { "$ref": "#/definitions/SimpleCondition" },
+              "minItems": 2
+            }
+          ]
         }
       }
     },
@@ -108,15 +228,9 @@
           "type": "string",
           "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "in", "like", "is_null", "is_not_null", "between"]
         },
-        "val": {
-          "description": "Scalar or array value. Use {\"$date\": \"YYYY-MM-DD\"} for date literals. Required for all ops except is_null, is_not_null, between."
-        },
-        "lo": {
-          "description": "Lower bound for between. Use {\"$date\": \"...\"} for dates."
-        },
-        "hi": {
-          "description": "Upper bound for between. Use {\"$date\": \"...\"} for dates."
-        }
+        "val": { "$ref": "#/definitions/ScalarVal" },
+        "lo":  { "$ref": "#/definitions/BoundVal" },
+        "hi":  { "$ref": "#/definitions/BoundVal" }
       }
     },
 
@@ -126,6 +240,25 @@
       "additionalProperties": false,
       "properties": {
         "or": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/definitions/SimpleCondition" },
+              { "$ref": "#/definitions/AndCondition"    }
+            ]
+          },
+          "minItems": 2
+        }
+      }
+    },
+
+    "AndCondition": {
+      "type": "object",
+      "required": ["and"],
+      "additionalProperties": false,
+      "description": "AND group inside an OR. Use to express (A AND B) OR C patterns.",
+      "properties": {
+        "and": {
           "type": "array",
           "items": { "$ref": "#/definitions/SimpleCondition" },
           "minItems": 2
@@ -150,7 +283,10 @@
           "type": "string",
           "enum": ["count", "count_distinct", "sum", "avg", "min", "max"]
         },
-        "col": { "type": "string" },
+        "col": {
+          "type": "string",
+          "description": "Column reference or arithmetic expression, e.g. 'orders.amount' or 'order_items.quantity * order_items.unit_price'. The value is passed verbatim into the SQL function call."
+        },
         "as":  { "type": "string" }
       }
     },
@@ -173,6 +309,58 @@
       "properties": {
         "col": { "type": "string" },
         "dir": { "type": "string", "enum": ["asc", "desc"] }
+      }
+    },
+
+    "WindowExpr": {
+      "description": "Window function. Three variants: ranking (no col), aggregate-over (col required), navigation/lag-lead (col + optional offset/default).",
+      "oneOf": [
+        { "$ref": "#/definitions/WindowRanking" },
+        { "$ref": "#/definitions/WindowAgg"     },
+        { "$ref": "#/definitions/WindowNav"     }
+      ]
+    },
+
+    "WindowRanking": {
+      "type": "object",
+      "required": ["fn", "as"],
+      "additionalProperties": false,
+      "description": "Ranking functions — no input column. row_number: unique sequential integers (no ties). rank: tied rows get same number, next rank skips (1,1,3). dense_rank: tied rows get same number, no gap (1,1,2).",
+      "properties": {
+        "fn":        { "type": "string", "enum": ["row_number", "rank", "dense_rank"] },
+        "partition": { "type": "array",  "items": { "type": "string" } },
+        "order":     { "type": "array",  "items": { "$ref": "#/definitions/SortKey" } },
+        "as":        { "type": "string" }
+      }
+    },
+
+    "WindowAgg": {
+      "type": "object",
+      "required": ["fn", "col", "as"],
+      "additionalProperties": false,
+      "description": "Aggregate window functions: SUM/AVG/COUNT/MIN/MAX OVER (...).",
+      "properties": {
+        "fn":        { "type": "string", "enum": ["sum", "avg", "count", "min", "max"] },
+        "col":       { "type": "string" },
+        "partition": { "type": "array",  "items": { "type": "string" } },
+        "order":     { "type": "array",  "items": { "$ref": "#/definitions/SortKey" } },
+        "as":        { "type": "string" }
+      }
+    },
+
+    "WindowNav": {
+      "type": "object",
+      "required": ["fn", "col", "as"],
+      "additionalProperties": false,
+      "description": "Navigation functions: LAG / LEAD. offset defaults to 1. default is the value used when no prior/next row exists — set to a meaningful string like 'first_order' when the question asks for it, or omit for NULL.",
+      "properties": {
+        "fn":        { "type": "string", "enum": ["lag", "lead"] },
+        "col":       { "type": "string" },
+        "offset":    { "type": "integer", "minimum": 1 },
+        "default":   { "$ref": "#/definitions/ScalarVal" },
+        "partition": { "type": "array",  "items": { "type": "string" } },
+        "order":     { "type": "array",  "items": { "$ref": "#/definitions/SortKey" }, "minItems": 1 },
+        "as":        { "type": "string" }
       }
     }
 
