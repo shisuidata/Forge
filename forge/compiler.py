@@ -131,7 +131,8 @@ def _coerce(q: dict) -> dict:
         window_aliases = {w["as"] for w in q.get("window", []) if "as" in w}
         known_aliases  = agg_aliases | window_aliases
         current_group  = list(q["group"])
-        group_set      = set(current_group)
+        # group_set 只存字符串形式（用于重复检测）
+        group_set      = {g if isinstance(g, str) else g.get("as", "") for g in current_group}
         for sel_item in q.get("select", []):
             # select 可以是字符串或 expr 对象 — 只处理字符串形式
             if not isinstance(sel_item, str):
@@ -298,9 +299,13 @@ def _compile(q: dict) -> str:
     if where_parts:
         clauses.append("WHERE " + " AND ".join(where_parts))
 
-    # GROUP BY
+    # GROUP BY — 支持字符串引用和 {"expr":"...","as":"alias"} 两种形式
     if "group" in q:
-        clauses.append("GROUP BY " + ", ".join(q["group"]))
+        def _group_item(g) -> str:
+            if isinstance(g, dict) and "expr" in g:
+                return g["expr"]
+            return str(g)
+        clauses.append("GROUP BY " + ", ".join(_group_item(g) for g in q["group"]))
 
     # HAVING：聚合后的行级过滤，条件间 AND 连接
     having_parts = [_condition(c) for c in q.get("having", [])]

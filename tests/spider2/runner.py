@@ -31,6 +31,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -104,12 +105,15 @@ def load_sqlite_cases() -> list[dict]:
 _registry_cache: dict[str, dict] = {}
 _registry_lock  = threading.Lock()
 
+REGISTRY_DISK_CACHE = Path(__file__).parent / "results" / "_registry_cache"
+
 
 def get_registry(case: dict) -> dict:
     """
     优先用实际 .sqlite 文件做 run_sync（枚举采样更准确）；
     若 .sqlite 不存在，退而从 DDL.csv 解析表结构。
     对同一数据库只处理一次，后续用缓存。
+    磁盘缓存：results/_registry_cache/{db_name}.json，跨进程复用。
     """
     db_path  = case.get("_db_path", "")
     ddl_dir  = case.get("_ddl_dir", "")
@@ -122,15 +126,43 @@ def get_registry(case: dict) -> dict:
         if cache_key in _registry_cache:
             return _registry_cache[cache_key]
 
-        if db_path and Path(db_path).exists():
-            # 有真实数据库：走 forge sync（自动枚举低基数列）
+        # 磁盘缓存 key：用数据库名（避免路径含特殊字符）
+        db_name = Path(ddl_dir).name if ddl_dir else Path(db_path).stem
+        disk_cache_path = REGISTRY_DISK_CACHE / f"{db_name}.json"
+
+        if disk_cache_path.exists():
+            registry = json.loads(disk_cache_path.read_text(encoding="utf-8"))
+        elif db_path and Path(db_path).exists():
+            # 有真实数据库：走 forge sync（自动枚举低基数列），最多等 60s
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+            ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+            print(f"  {ts}  sync  {db_name} ...", flush=True)
             with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
                 tmp_path = Path(f.name)
-            registry = run_sync(f"sqlite:///{db_path}", tmp_path)
-            tmp_path.unlink(missing_ok=True)
+            t0 = time.monotonic()
+            try:
+                ex  = ThreadPoolExecutor(max_workers=1)
+                fut = ex.submit(run_sync, f"sqlite:///{db_path}", tmp_path)
+                try:
+                    registry = fut.result(timeout=60)
+                    elapsed  = time.monotonic() - t0
+                    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+                    print(f"  {ts}  sync  {db_name} done ({elapsed:.1f}s, cached)", flush=True)
+                except FuturesTimeout:
+                    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+                    print(f"  {ts}  sync  {db_name} TIMEOUT — fallback to DDL.csv", flush=True)
+                    registry = _registry_from_ddl(Path(ddl_dir)) if ddl_dir else {"tables": {}}
+                finally:
+                    ex.shutdown(wait=False)   # 不阻塞等待超时线程
+            finally:
+                tmp_path.unlink(missing_ok=True)
+            REGISTRY_DISK_CACHE.mkdir(parents=True, exist_ok=True)
+            disk_cache_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
         elif ddl_dir:
             # 无真实数据库：从 DDL.csv 解析表结构
             registry = _registry_from_ddl(Path(ddl_dir))
+            REGISTRY_DISK_CACHE.mkdir(parents=True, exist_ok=True)
+            disk_cache_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
         else:
             registry = {"tables": {}}
 
@@ -139,7 +171,11 @@ def get_registry(case: dict) -> dict:
 
 
 def _registry_from_ddl(ddl_dir: Path) -> dict:
-    """从 Spider2 DDL.csv 构建 Forge registry（无 .sqlite 文件时的回退）。"""
+    """
+    从 Spider2 DDL.csv + {table}.json 构建 Forge registry。
+    - DDL.csv  → 表名、列名
+    - {table}.json → sample_rows，推断低基数列的枚举值（≤20个唯一值视为枚举）
+    """
     import csv, re
 
     ddl_path = ddl_dir / "DDL.csv"
@@ -153,18 +189,60 @@ def _registry_from_ddl(ddl_dir: Path) -> dict:
             ddl        = row.get("DDL", "")
             if not table_name:
                 continue
-            # 从 DDL 中提取列名（匹配行首缩进 + 标识符 + 类型）
             cols = {}
             for line in ddl.splitlines():
                 m = re.match(r"^\s+([A-Za-z_]\w*)\s+\w", line)
                 if m:
                     col_name = m.group(1)
-                    # 跳过 SQLite 关键字行（PRIMARY、FOREIGN、UNIQUE、CHECK）
                     if col_name.upper() not in ("PRIMARY", "FOREIGN", "UNIQUE", "CHECK", "CONSTRAINT"):
                         cols[col_name] = {}
             tables[table_name] = {"columns": cols}
 
+    # 用样本 JSON 推断枚举值
+    _enrich_from_samples(ddl_dir, tables)
+
     return {"tables": tables}
+
+
+def _enrich_from_samples(ddl_dir: Path, tables: dict) -> None:
+    """
+    读取 ddl_dir/{table}.json 里的 sample_rows，
+    对唯一值 ≤ 20 的字符串/整数列注入枚举提示。
+    """
+    ENUM_THRESHOLD = 20
+
+    for table_name, table_info in tables.items():
+        json_path = ddl_dir / f"{table_name}.json"
+        if not json_path.exists():
+            # 尝试小写文件名
+            json_path = ddl_dir / f"{table_name.lower()}.json"
+        if not json_path.exists():
+            continue
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        rows = data.get("sample_rows", [])
+        if not rows:
+            continue
+
+        # 按列收集所有样本值
+        col_values: dict[str, set] = {}
+        for row in rows:
+            for col, val in row.items():
+                if val is None or val == "":
+                    continue
+                col_values.setdefault(col, set()).add(val)
+
+        cols = table_info.get("columns", {})
+        for col_name, vals in col_values.items():
+            if col_name not in cols:
+                continue
+            # 只对字符串或小整数且唯一值少的列注入枚举
+            if len(vals) <= ENUM_THRESHOLD and all(isinstance(v, (str, int, float)) for v in vals):
+                sorted_vals = sorted(vals, key=str)
+                cols[col_name] = {"enum": sorted_vals}
 
 
 def registry_to_context(registry: dict) -> str:
@@ -192,8 +270,11 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
                    _retries: int = 5, _backoff: float = 10.0) -> dict:
     """
     调用 LLM，要求使用 generate_forge_query 工具，返回工具调用的 input dict。
+    若模型返回文字（未调用工具），追加一条催促消息再重试一次。
     """
     import anthropic
+
+    messages = [{"role": "user", "content": question}]
 
     for attempt in range(_retries):
         try:
@@ -202,14 +283,23 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
                 max_tokens=2048,
                 system=system,
                 tools=tools,
-                tool_choice={"type": "any"},    # 强制必须调用工具
-                messages=[{"role": "user", "content": question}],
+                tool_choice={"type": "tool", "name": "generate_forge_query"},
+                messages=messages,
             )
             for block in msg.content:
                 if getattr(block, "type", None) == "tool_use":
                     return {"ok": True, "input": block.input, "tool": block.name}
-            # 模型没有调用工具（直接文字回复）
+
+            # 模型返回了文字而非工具调用 → 追加催促消息，下一轮重试
             text = next((b.text for b in msg.content if hasattr(b, "text")), "")
+            if attempt < _retries - 1:
+                messages = [
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": text or "(no response)"},
+                    {"role": "user",
+                     "content": "Please call the generate_forge_query tool to answer the question."},
+                ]
+                continue
             return {"ok": False, "error": f"模型未调用工具，文字回复：{text[:200]}"}
 
         except anthropic.InternalServerError:
@@ -221,9 +311,31 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
                 raise
 
 
+def _unwrap_forge_json(fj: dict) -> dict:
+    """
+    处理模型常见的包装错误：
+    {"explain": "...", "query": "<JSON string>"}  → 递归解包 query 字段
+    支持 query 字符串里含 CTE、多层嵌套等情况。
+    """
+    if not isinstance(fj, dict):
+        return fj
+    # 顶层有 "query" 且无 "scan" → 尝试解包
+    if "query" in fj and "scan" not in fj:
+        raw = fj["query"]
+        if isinstance(raw, str):
+            try:
+                inner = json.loads(raw)
+                if isinstance(inner, dict):
+                    return _unwrap_forge_json(inner)   # 递归，防止多层包装
+            except (json.JSONDecodeError, ValueError):
+                pass
+        elif isinstance(raw, dict):
+            return _unwrap_forge_json(raw)
+    return fj
+
+
 def run_case(client, case: dict) -> dict:
     """对单个用例完整走 Forge 管道，返回结构化结果。"""
-    from datetime import datetime, timezone
     started_at = datetime.now(timezone.utc).isoformat()
 
     question = case["question"]
@@ -254,7 +366,7 @@ def run_case(client, case: dict) -> dict:
                 "started_at": started_at,
                 "finished_at": datetime.now(timezone.utc).isoformat()}
 
-    forge_json = resp["input"]
+    forge_json = _unwrap_forge_json(resp["input"])
     try:
         sql = compile_query(forge_json)
         return {"instance_id": case["instance_id"], "sql": sql,
@@ -355,7 +467,6 @@ def main() -> None:
         print("❌ 未设置 MINIMAX_API_KEY 环境变量", file=sys.stderr)
         sys.exit(1)
 
-    from datetime import datetime, timezone
     run_ts   = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
     # 输出目录
@@ -394,25 +505,36 @@ def main() -> None:
     import anthropic
     client = anthropic.Anthropic(api_key=MINIMAX_API_KEY, base_url=MINIMAX_BASE_URL)
 
-    log_lock = threading.Lock()
-    ok_count = err_count = 0
+    log_lock   = threading.Lock()
+    ok_count   = 0
+    err_count  = 0
+    start_time = time.monotonic()
+
+    # ── 表头 ─────────────────────────────────────────────────────────────────
+    total = len(pending)
+    print(f"\n  {'TIME':>8}  {'#':>4}/{total:<4}  {'OK':>4}  {'ERR':>4}  {'ETA':>7}  INSTANCE")
+    print(f"  {'─'*8}  {'─'*9}  {'─'*4}  {'─'*4}  {'─'*7}  {'─'*24}")
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         future_map = {pool.submit(run_case, client, c): c for c in pending}
-        bar = tqdm(total=len(pending), unit="case", dynamic_ncols=True)
 
+        done_count = 0
         for future in as_completed(future_map):
-            result = future.result()
-            iid    = result["instance_id"]
+            result    = future.result()
+            iid       = result["instance_id"]
+            done_count += 1
 
             # 保存 SQL 文件
             if result["sql"]:
                 (out_dir / f"{iid}.sql").write_text(result["sql"])
-                ok_count += 1
-                status = "✓"
+                ok_count  += 1
+                status_sym = "✓"
+                status_str = "OK"
             else:
-                err_count += 1
-                status = f"✗ {str(result['error'])[:60]}"
+                err_count  += 1
+                status_sym = "✗"
+                err_short  = str(result.get("error", ""))[:50]
+                status_str = f"ERR  {err_short}"
 
             # 追加日志（主日志 + 本次 session 日志）
             with log_lock:
@@ -422,11 +544,19 @@ def main() -> None:
                 with session_path.open("a") as f:
                     f.write(line)
 
-            ts = result.get("finished_at", "")[:19].replace("T", " ")
-            bar.write(f"  [{iid}] {ts}  {status}")
-            bar.update(1)
+            # ETA
+            elapsed  = time.monotonic() - start_time
+            avg_secs = elapsed / done_count
+            remaining = avg_secs * (total - done_count)
+            if remaining >= 3600:
+                eta_str = f"{remaining/3600:.1f}h"
+            elif remaining >= 60:
+                eta_str = f"{remaining/60:.0f}m"
+            else:
+                eta_str = f"{remaining:.0f}s"
 
-        bar.close()
+            ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+            print(f"  {ts}  {done_count:>4}/{total:<4}  {ok_count:>4}  {err_count:>4}  {eta_str:>7}  {status_sym} {iid}", flush=True)
 
     _print_stats(out_dir)
 

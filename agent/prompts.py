@@ -34,6 +34,11 @@ SYSTEM = """\
 | 规则 | 说明 |
 |------|------|
 | **select 必填** | 每个 Forge JSON 都必须包含 select 字段，缺少 select 会导致编译失败 |
+| **scan 必填** | 每个 Forge JSON 都必须包含 scan 字段——即使使用了 cte，主查询也必须有 scan |
+| **select 只接受引用或 expr** | select 中每项是字符串（字段名/别名）或 `{"expr":"...","as":"..."}` 对象，绝不能放 `{"fn","col","as"}` 聚合对象 |
+| **expr 只有两个字段** | `{"expr":"...","as":"..."}` 恰好只有这两个字段，不能加 `type`、`fn` 等额外字段 |
+| **聚合函数必须在 agg 字段** | avg/sum/count 等聚合函数写在 `agg[]` 里，在 select 中只引用其别名 |
+| **join 的 table 必填** | 每个 join 对象都必须包含 `type`、`table`、`on` 三个字段，不能省略 table |
 | **filter 是数组** | filter 必须是数组 `[{...}]`，绝不能是对象 `{...}`；OR 条件放在数组元素里：`[{"or":[...]}]` |
 | **between 用 lo/hi** | 范围过滤用 `"lo": 下界, "hi": 上界`，不能用 `"val": [下界, 上界]` |
 | **select 只引用真实列** | select 中只能出现 scan/joins 表的字段、agg 别名或 window 别名，不能虚构字段名 |
@@ -110,6 +115,35 @@ LAG/LEAD **必须有 partition**，否则会跨用户取行，语义错误。
   "select": ["users.name", "orders.created_at", "orders.total_amount", "prev_amount"]
 }
 ```
+
+## CTE 用法（多步聚合）
+
+`cte` 仅用于"子查询结果需要再次 join 或 filter"的场景，不用于简单聚合。
+
+**关键**：有 `cte` 的 Forge JSON 仍然必须有顶层 `scan` 和 `select`。\
+`cte` 定义命名子查询，主查询（`scan`/`filter`/`agg`/`select`）把这些名字当表用。
+
+```json
+{
+  "cte": [
+    {
+      "name": "order_counts",
+      "query": {
+        "scan": "orders",
+        "group": ["orders.user_id"],
+        "agg": [{"fn": "count_all", "as": "order_count"}],
+        "select": ["orders.user_id", "order_count"]
+      }
+    }
+  ],
+  "scan": "order_counts",
+  "filter": [{"col": "order_count", "op": "gte", "val": 2}],
+  "select": ["order_counts.user_id", "order_count"]
+}
+```
+
+❌ 错误（只有 cte，无顶层 scan）：`{"cte": [...]}`\
+✅ 正确：`{"cte": [...], "scan": "cte名称", "select": [...]}`
 
 ## 查询澄清
 

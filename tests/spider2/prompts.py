@@ -21,6 +21,11 @@ For greetings or clarifications, reply in plain text.
 | Rule | Detail |
 |------|--------|
 | **select required** | Every Forge JSON must include a `select` field |
+| **scan always required** | Every Forge JSON must include a `scan` field — even when using `cte` |
+| **select only refs/expr** | `select` items are strings (col/alias refs) or `{"expr":"...","as":"..."}` objects — never `{"fn","col","as"}` agg objects |
+| **expr has 2 fields only** | `{"expr":"...","as":"..."}` has exactly those two fields — no `type`, no `fn` |
+| **agg fns → agg field** | All aggregate functions (avg/sum/count/etc) go in `agg[]`, referenced by alias in `select` |
+| **join table required** | Every join must have `type`, `table`, and `on` — never omit `table` |
 | **filter is array** | `filter` must be `[{...}]`, never `{...}`; OR condition: `[{"or":[...]}]` |
 | **between uses lo/hi** | `"lo": lower, "hi": upper` — no `"val"` field |
 | **select valid refs only** | Only columns from scan/joins tables, agg aliases, or window aliases |
@@ -83,20 +88,54 @@ Do not split into a CTE.
 
 ## CTE: only for multi-step aggregation
 
-Use `"with": [...]` only when a subquery result must be joined or filtered in a second step. \
-Do not use CTE for simple aggregations, filtering, or ranking.
+Use `"cte": [...]` only when a subquery result must be joined or filtered in a second step. \
+Do not use CTE for simple aggregations, filtering, or ranking — use filter/agg/window directly.
+
+**CRITICAL**: A Forge JSON with `cte` MUST still have a top-level `scan` and `select`. \
+The `cte` array defines named subqueries; the main query (`scan`/`filter`/`agg`/`select`) \
+uses those names as table references. A JSON with only `cte` and no `scan` is invalid.
 
 ```json
 {
-  "with": [{"name": "monthly_sales", "query": {
-    "scan": "orders",
-    "group": ["orders.user_id"],
-    "agg":  [{"fn": "count_all", "as": "order_count"}],
-    "select": ["orders.user_id", "order_count"]
-  }}],
-  "scan": "monthly_sales",
-  "filter": [{"col": "order_count", "op": "gte", "val": 2}],
-  "select": ["monthly_sales.user_id", "order_count"]
+  "cte": [
+    {
+      "name": "order_counts",
+      "query": {
+        "scan": "orders",
+        "group": ["orders.user_id"],
+        "agg": [{"fn": "count_all", "as": "order_count"}],
+        "select": ["orders.user_id", "order_count"]
+      }
+    },
+    {
+      "name": "active_users",
+      "query": {
+        "scan": "order_counts",
+        "filter": [{"col": "order_count", "op": "gte", "val": 2}],
+        "select": ["order_counts.user_id"]
+      }
+    }
+  ],
+  "scan": "active_users",
+  "joins": [{"type": "inner", "table": "users",
+             "on": {"left": "active_users.user_id", "right": "users.id"}}],
+  "select": ["users.name", "users.email"]
+}
+```
+
+❌ WRONG — missing top-level `scan`:
+```json
+{
+  "cte": [{"name": "stats", "query": {"scan": "orders", "select": ["orders.id"]}}]
+}
+```
+
+✅ CORRECT — `cte` + top-level `scan` + `select`:
+```json
+{
+  "cte": [{"name": "stats", "query": {"scan": "orders", "select": ["orders.id"]}}],
+  "scan": "stats",
+  "select": ["stats.id"]
 }
 ```
 """

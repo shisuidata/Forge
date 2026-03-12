@@ -406,7 +406,27 @@ def build_tool_schema(registry: dict) -> dict:
             },
             "cte": {
                 "type": "array",
-                "description": "Reserved for future CTE support. Do not use yet.",
+                "description": (
+                    "Common Table Expressions (WITH clause). Use ONLY when a subquery result "
+                    "must be joined or filtered in a second step. "
+                    "Do NOT use for simple aggregations or filtering — just use filter/agg directly. "
+                    "Do NOT use for ranking/TopN — use window + qualify instead."
+                ),
+                "items": {
+                    "type": "object",
+                    "required": ["name", "query"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "CTE name, used as scan or join table in the main query.",
+                        },
+                        "query": {
+                            "type": "object",
+                            "description": "A nested Forge query object (must have scan + select).",
+                        },
+                    },
+                },
             },
         },
     }
