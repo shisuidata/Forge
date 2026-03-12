@@ -9,3 +9,4 @@ dist/
 demo/*.db
 
 tests/accuracy/results/
+tests/spider2/data/
