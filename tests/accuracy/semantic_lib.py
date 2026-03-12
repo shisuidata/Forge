@@ -44,16 +44,29 @@ _RULES: list[Rule] = [
         note="阻止模型对主观描述词错误添加 HAVING",
     ),
 
-    # Case 10 — OR 复合过滤 filter 必须是数组格式
+    # Case 10 — OR 复合过滤 filter 必须是数组格式 + created_at 需在 SELECT 中
     Rule(
         pattern=r"名字中包含.{1,20}或者",
         annotation=(
-            "（注意：本题是 OR 复合条件，filter 必须是 JSON 数组，"
+            "（注意①：本题是 OR 复合条件，filter 必须是 JSON 数组，"
             "OR 写在数组元素内：[{\"or\": [条件A, {\"and\": [条件B1, 条件B2]}]}]，"
-            "不能输出对象格式 {\"or\": [...]}）"
+            "不能输出对象格式 {\"or\": [...]}。"
+            "注意②：OR 条件中使用了 created_at 作为过滤字段，"
+            "SELECT 中也必须包含 users.created_at，并按 ORDER BY users.created_at DESC 排列）"
         ),
         case_ids=[10],
-        note="防止 OR 条件导致 JSON 格式为对象而非数组，触发 JSON 解析失败",
+        note="防止 OR 条件 JSON 格式错误；同时补充 created_at 到 SELECT+ORDER BY",
+    ),
+
+    # Case 3 — 按商品统计时 SELECT 须包含 products.category
+    Rule(
+        pattern=r"统计每个商品.{0,20}(销售|销量|出现)",
+        annotation=(
+            "（注意：按商品统计时，SELECT 中应包含 products.category 字段，"
+            "以便按品类展示统计结果）"
+        ),
+        case_ids=[3],
+        note="防止按商品聚合时遗漏 products.category 字段",
     ),
 
     # Case 11 — "超过N次" 严格大于，op: gt，不是 gte
