@@ -10,3 +10,4 @@ demo/*.db
 
 tests/accuracy/results/
 tests/spider2/data/
+local_sqlite.zip

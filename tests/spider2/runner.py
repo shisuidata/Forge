@@ -223,14 +223,17 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
 
 def run_case(client, case: dict) -> dict:
     """对单个用例完整走 Forge 管道，返回结构化结果。"""
-    db_path  = case["_db_path"]
+    from datetime import datetime, timezone
+    started_at = datetime.now(timezone.utc).isoformat()
+
     question = case["question"]
 
     try:
         registry = get_registry(case)
     except Exception as e:
         return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": None, "error": f"registry 构建失败: {e}"}
+                "forge_json": None, "error": f"registry 构建失败: {e}",
+                "started_at": started_at, "finished_at": started_at}
 
     tools  = [{"name": "generate_forge_query",
                "description": "Generate a Forge JSON query from natural language.",
@@ -241,20 +244,28 @@ def run_case(client, case: dict) -> dict:
         resp = _call_tool_use(client, system, question, tools)
     except Exception as e:
         return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": None, "error": f"LLM 调用失败: {e}"}
+                "forge_json": None, "error": f"LLM 调用失败: {e}",
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat()}
 
     if not resp["ok"]:
         return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": None, "error": resp["error"]}
+                "forge_json": None, "error": resp["error"],
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat()}
 
     forge_json = resp["input"]
     try:
         sql = compile_query(forge_json)
         return {"instance_id": case["instance_id"], "sql": sql,
-                "forge_json": forge_json, "error": None}
+                "forge_json": forge_json, "error": None,
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": forge_json, "error": f"编译失败: {e}"}
+                "forge_json": forge_json, "error": f"编译失败: {e}",
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat()}
 
 
 # ── Token 估算 ───────────────────────────────────────────────────────────────
@@ -344,10 +355,16 @@ def main() -> None:
         print("❌ 未设置 MINIMAX_API_KEY 环境变量", file=sys.stderr)
         sys.exit(1)
 
+    from datetime import datetime, timezone
+    run_ts   = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
     # 输出目录
     out_dir = RESULTS_DIR / METHOD
     out_dir.mkdir(parents=True, exist_ok=True)
-    log_path = out_dir / "run_log.jsonl"
+    log_path     = out_dir / "run_log.jsonl"                   # 追加式主日志（断点续跑）
+    session_path = out_dir / f"session_{run_ts}.jsonl"         # 本次运行独立日志（带时间戳）
+
+    print(f"   日志：{session_path.name}")
 
     if args.fresh and log_path.exists():
         log_path.unlink()
@@ -397,12 +414,16 @@ def main() -> None:
                 err_count += 1
                 status = f"✗ {str(result['error'])[:60]}"
 
-            # 追加日志
+            # 追加日志（主日志 + 本次 session 日志）
             with log_lock:
+                line = json.dumps(result, ensure_ascii=False) + "\n"
                 with log_path.open("a") as f:
-                    f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    f.write(line)
+                with session_path.open("a") as f:
+                    f.write(line)
 
-            bar.write(f"  [{iid}] {status}")
+            ts = result.get("finished_at", "")[:19].replace("T", " ")
+            bar.write(f"  [{iid}] {ts}  {status}")
             bar.update(1)
 
         bar.close()
