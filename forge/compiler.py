@@ -88,6 +88,8 @@ def _coerce(q: dict) -> dict:
     6. having 中出现 fn 字段（内联聚合表达式）→ 替换为对应 agg alias
        模型有时生成 {"col":"orders.total_amount","fn":"avg","op":"gt","val":800}
        而非 {"col":"avg_amount","op":"gt","val":800}
+    7. qualify 引用的 window 别名未在 select 中时，自动补齐
+       模型在 window + qualify 组合中有时遗漏 rank alias，导致外层 WHERE 引用未定义列
     """
     q = dict(q)  # 浅拷贝，避免修改调用方的原始对象
 
@@ -142,6 +144,22 @@ def _coerce(q: dict) -> dict:
                 current_group.append(sel_item)
                 group_set.add(sel_item)
         q["group"] = current_group
+
+    # 修复 7：qualify 引用的 window 别名未在 select 中时，自动补齐
+    # 解决：模型使用 window + qualify 时遗漏 rank alias，导致外层 WHERE 引用未定义列。
+    # 机制：qualify 编译为 SELECT * FROM (inner_sql) WHERE alias = val，
+    #       alias 必须出现在 inner_sql 的 SELECT 中才能被外层引用。
+    if q.get("qualify") and q.get("window"):
+        win_aliases = {w["as"] for w in q.get("window", []) if "as" in w}
+        current_sel = list(q.get("select", []))
+        sel_strs = {s for s in current_sel if isinstance(s, str)}
+        for qcond in q.get("qualify", []):
+            if isinstance(qcond, dict):
+                col = qcond.get("col")
+                if col and col in win_aliases and col not in sel_strs:
+                    current_sel.append(col)
+                    sel_strs.add(col)
+        q["select"] = current_sel
 
     return q
 
