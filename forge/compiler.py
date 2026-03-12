@@ -308,11 +308,26 @@ def _compile(q: dict) -> str:
     # 用途：实现 per-group TopN，如"每个品类成本排名前3的商品"
     if "qualify" in q:
         qualify_parts = [_condition(c) for c in q["qualify"]]
-        return (
+        inner_sql = (
             f"SELECT * FROM (\n"
             + "\n".join(f"  {line}" for line in inner_sql.splitlines())
             + f"\n) AS _q\nWHERE {' AND '.join(qualify_parts)}"
         )
+
+    # CTE（WITH 子句）：多步查询，每条 CTE 递归编译其 query 字段
+    if q.get("cte"):
+        cte_parts: list[str] = []
+        for cte_item in q["cte"]:
+            cte_name = cte_item["name"]
+            try:
+                cte_sql = _compile(_coerce(cte_item["query"]))
+            except (KeyError, TypeError) as exc:
+                raise ValueError(
+                    f"CTE '{cte_name}' 内部查询格式错误：{exc}"
+                ) from exc
+            indented = "\n".join(f"  {line}" for line in cte_sql.splitlines())
+            cte_parts.append(f"{cte_name} AS (\n{indented}\n)")
+        return "WITH " + ",\n".join(cte_parts) + "\n" + inner_sql
 
     return inner_sql
 
@@ -334,7 +349,7 @@ def _select_exprs(q: dict) -> list[str]:
         agg["as"]: _agg_expr(agg) for agg in q.get("agg", [])
     }
     win_map: dict[str, str] = {
-        w["as"]: _window_expr(w) for w in q.get("window", [])
+        w["as"]: _window_expr(w, agg_map) for w in q.get("window", [])
     }
     exprs = []
     for col in q["select"]:
@@ -366,7 +381,7 @@ def _agg_expr(agg: dict) -> str:
     return f"{fn.upper()}({agg['col']})"
 
 
-def _window_expr(w: dict) -> str:
+def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
     """
     将单条窗口函数定义编译为 SQL 窗口表达式（不含 AS 子句）。
 
@@ -379,6 +394,10 @@ def _window_expr(w: dict) -> str:
         - 若有 partition → PARTITION BY col1, col2, ...
         - 若有 order    → ORDER BY col dir, ...
         - 两者均缺时输出 OVER ()，适用于全局排名场景
+
+    agg_map: 可选的聚合别名 → 原始表达式映射。ORDER BY 中若出现 agg alias，
+             自动展开为原始聚合表达式（如 total_gmv → SUM(orders.total_amount)），
+             避免 SQLite 等方言在 OVER 子句内不支持 alias 引用的问题。
     """
     fn = w["fn"]
 
@@ -404,7 +423,10 @@ def _window_expr(w: dict) -> str:
     if w.get("partition"):
         over_parts.append("PARTITION BY " + ", ".join(w["partition"]))
     if w.get("order"):
-        sort_exprs = [f"{s['col']} {s['dir'].upper()}" for s in w["order"]]
+        sort_exprs = [
+            f"{agg_map[s['col']] if agg_map and s['col'] in agg_map else s['col']} {s['dir'].upper()}"
+            for s in w["order"]
+        ]
         over_parts.append("ORDER BY " + ", ".join(sort_exprs))
 
     return f"{call} OVER ({' '.join(over_parts)})"
@@ -536,9 +558,27 @@ def _val(v: Any) -> str:
         if "$date" in v:
             return f"'{v['$date']}'"
         if "$preset" in v:
-            raise NotImplementedError(
-                f"$preset '{v['$preset']}' 需要在运行时解析为具体日期范围，"
-                "当前编译器不支持。请改用明确的 $date 值。"
+            _PRESET_MAP = {
+                "today":        "DATE('now')",
+                "yesterday":    "DATE('now','-1 day')",
+                "last_7_days":  "DATE('now','-7 days')",
+                "last_30_days": "DATE('now','-30 days')",
+                "this_month":   "DATE('now','start of month')",
+                "last_month":   "DATE('now','start of month','-1 month')",
+                "this_year":    "DATE('now','start of year')",
+            }
+            preset = v["$preset"]
+            if preset in _PRESET_MAP:
+                return _PRESET_MAP[preset]
+            if preset == "this_quarter":
+                # SQLite 无原生季度函数：((month-1)%3) 计算本月距季度起始的月数
+                return (
+                    "DATE('now','start of month',"
+                    "'-' || ((CAST(strftime('%m','now') AS INTEGER)-1)%3) || ' months')"
+                )
+            raise ValueError(
+                f"未知的 $preset 值：'{preset}'。"
+                f"合法值：{sorted(_PRESET_MAP) + ['this_quarter']}"
             )
     if isinstance(v, bool):           # 必须在 int 检测之前，因为 bool 是 int 子类
         return "TRUE" if v else "FALSE"
