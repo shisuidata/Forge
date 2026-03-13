@@ -87,14 +87,48 @@
 
     "cte": {
       "type": "array",
-      "description": "Common Table Expressions (WITH clause). Each CTE is compiled as a nested Forge query.",
+      "description": "Common Table Expressions (WITH clause). Set recursive:true on any item to emit WITH RECURSIVE.",
       "items": {
         "type": "object",
         "required": ["name", "query"],
         "additionalProperties": false,
         "properties": {
           "name":  { "type": "string", "description": "CTE name, referenced in the main query's scan or joins." },
-          "query": { "type": "object", "description": "A nested Forge query object compiled as the CTE body." }
+          "query": { "type": "object", "description": "Anchor/base Forge query for this CTE. For recursive CTEs, this is the non-recursive base case." },
+          "recursive": {
+            "type": "boolean",
+            "description": "If true, this CTE is recursive. The whole WITH clause will use WITH RECURSIVE. Requires recursive_term."
+          },
+          "recursive_term": {
+            "type": "object",
+            "description": "The recursive part. Must reference the CTE's own name via scan or joins. Combined with query via UNION ALL (default) or UNION."
+          },
+          "recursive_union": {
+            "type": "string",
+            "enum": ["union_all", "union"],
+            "description": "Set operation between base query and recursive_term. Defaults to union_all."
+          }
+        }
+      }
+    },
+
+    "union": {
+      "type": "array",
+      "description": "UNION / UNION ALL with subsequent queries. The main query is the first branch. sort/limit/offset on the main query apply to the entire UNION result.",
+      "items": {
+        "type": "object",
+        "required": ["mode", "query"],
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["union_all", "union"],
+            "description": "union_all = UNION ALL (keeps duplicates, faster). union = UNION (deduplicates)."
+          },
+          "query": {
+            "type": "object",
+            "description": "A Forge query object for this UNION branch."
+          }
         }
       }
     }
@@ -268,10 +302,11 @@
     },
 
     "Aggregation": {
-      "description": "count_all() has no col. All others require col.",
+      "description": "count_all() has no col. group_concat() has optional separator. All others require col.",
       "oneOf": [
         { "$ref": "#/definitions/AggWithCol" },
-        { "$ref": "#/definitions/AggCountAll" }
+        { "$ref": "#/definitions/AggCountAll" },
+        { "$ref": "#/definitions/AggGroupConcat" }
       ]
     },
 
@@ -300,6 +335,19 @@
       "properties": {
         "fn": { "type": "string", "enum": ["count_all"] },
         "as": { "type": "string" }
+      }
+    },
+
+    "AggGroupConcat": {
+      "type": "object",
+      "required": ["fn", "col", "as"],
+      "additionalProperties": false,
+      "description": "String aggregation: GROUP_CONCAT(col) or GROUP_CONCAT(col, separator). SQLite/MySQL syntax. separator defaults to ','.",
+      "properties": {
+        "fn":        { "type": "string", "enum": ["group_concat"] },
+        "col":       { "type": "string", "description": "Column reference to concatenate." },
+        "separator": { "type": "string", "description": "Separator string. Defaults to ',' if omitted." },
+        "as":        { "type": "string" }
       }
     },
 

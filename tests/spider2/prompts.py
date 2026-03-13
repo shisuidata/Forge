@@ -29,11 +29,14 @@ For greetings or clarifications, reply in plain text.
 | **filter is array** | `filter` must be `[{...}]`, never `{...}`; OR condition: `[{"or":[...]}]` |
 | **between uses lo/hi** | `"lo": lower, "hi": upper` — no `"val"` field |
 | **select valid refs only** | Only columns from scan/joins tables, agg aliases, or window aliases |
+| **select only asked cols** | Only project columns the question explicitly asks for — do not add unrequested columns |
 | **group matches select** | Non-aggregate select fields must appear in group |
 | **join type required** | `inner / left / right / full / anti / semi` — no default |
 | **anti join for NOT IN** | Never use NOT IN; use `anti` join to avoid NULL traps |
 | **row filter → filter** | Post-aggregate filter → `having` |
 | **count_all has no col** | All other agg functions require `col` |
+| **CASE WHEN in agg.col** | Conditional aggregation: `{"fn":"count","col":"CASE WHEN x>=2 THEN 1 END","as":"n"}` — agg.col accepts CASE expressions |
+| **no alias in expr** | `{"expr":"...","as":"..."}` cannot reference `agg` aliases from the same query. Chain through a CTE: compute the alias in a CTE, reference it in the outer query's `expr` |
 | **ranking fns: no col** | `row_number / rank / dense_rank` use fn + partition + order + as only |
 | **TopN uses limit** | "top N", "first N" → set `limit` field |
 | **per-group TopN → qualify** | Use window rank + `qualify` to filter rank <= N per group |
@@ -136,6 +139,64 @@ uses those names as table references. A JSON with only `cte` and no `scan` is in
   "cte": [{"name": "stats", "query": {"scan": "orders", "select": ["orders.id"]}}],
   "scan": "stats",
   "select": ["stats.id"]
+}
+```
+
+## Derived metric pattern (ratio / margin)
+
+When the question asks for a ratio or derived value that uses an aggregate result in a formula \
+(e.g. gross margin = (avg_price - cost) / avg_price), the aggregate alias is NOT yet available \
+in the same query's `select` expressions. Use a two-step CTE:
+
+```json
+{
+  "cte": [
+    {
+      "name": "avg_prices",
+      "query": {
+        "scan": "order_items",
+        "joins": [{"type": "inner", "table": "products",
+                   "on": {"left": "order_items.product_id", "right": "products.id"}}],
+        "group": ["products.id", "products.name", "products.cost_price"],
+        "agg": [{"fn": "avg", "col": "order_items.unit_price", "as": "avg_sell_price"}],
+        "select": ["products.id", "products.name", "products.cost_price", "avg_sell_price"]
+      }
+    }
+  ],
+  "scan": "avg_prices",
+  "select": [
+    "avg_prices.id",
+    "avg_prices.name",
+    "avg_prices.avg_sell_price",
+    {"expr": "(avg_prices.avg_sell_price - avg_prices.cost_price) / avg_prices.avg_sell_price * 100",
+     "as": "gross_margin_pct"}
+  ]
+}
+```
+
+## Conditional aggregation (ratio of counts)
+
+"Repurchase rate", "% of X that satisfy Y" → compute numerator and denominator with CASE WHEN:
+
+```json
+{
+  "cte": [
+    {
+      "name": "user_orders",
+      "query": {
+        "scan": "orders",
+        "group": ["orders.user_id"],
+        "agg": [{"fn": "count_all", "as": "order_count"}],
+        "select": ["orders.user_id", "order_count"]
+      }
+    }
+  ],
+  "scan": "user_orders",
+  "agg": [
+    {"fn": "count_all", "as": "total_users"},
+    {"fn": "count", "col": "CASE WHEN order_count >= 2 THEN 1 END", "as": "repeat_users"}
+  ],
+  "select": [{"expr": "repeat_users * 1.0 / total_users", "as": "repurchase_rate"}]
 }
 ```
 """

@@ -102,6 +102,12 @@ def _find_db_path(db_name: str, schema_dir: Path) -> Path | None:
     """
     localdb = schema_dir.parent / "spider2-localdb"
     db_lower = db_name.lower()
+    # also try normalizing hyphens → underscores for case-insensitive folder match
+    db_norm = db_lower.replace("-", "_")
+
+    def _name_matches(folder_name: str) -> bool:
+        n = folder_name.lower()
+        return n == db_lower or n == db_norm or n.replace("-", "_") == db_norm
 
     # spider2-localdb/ 下按大小写不敏感搜索
     for search_dir in (localdb, schema_dir):
@@ -113,9 +119,9 @@ def _find_db_path(db_name: str, schema_dir: Path) -> Path | None:
                 p = search_dir / f"{name}{ext}"
                 if p.exists():
                     return p
-            # 子目录
+            # 子目录（大小写 + 连字符/下划线不敏感）
             for d in search_dir.iterdir():
-                if d.is_dir() and d.name.lower() == db_lower:
+                if d.is_dir() and _name_matches(d.name):
                     for ext2 in (".sqlite", ".db", ".sqlite3"):
                         for name in (db_name, db_lower, d.name):
                             p = d / f"{name}{ext2}"

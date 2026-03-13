@@ -26,6 +26,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import csv as _csv_mod
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -56,13 +58,25 @@ DATA_DIR    = Path(__file__).parent / "data" / "spider2-lite"
 SQLITE_DIR  = DATA_DIR / "resource" / "databases" / "sqlite"   # DDL + sample JSON
 LOCALDB_DIR = DATA_DIR / "resource" / "databases" / "spider2-localdb"  # 实际 .sqlite
 JSONL_PATH  = DATA_DIR / "spider2-lite.jsonl"
-RESULTS_DIR = Path(__file__).parent / "results"
+RESULTS_DIR  = Path(__file__).parent / "results"
+GOLD_SQL_DIR = DATA_DIR / "evaluation_suite" / "gold" / "sql"
+GOLD_CSV_DIR = DATA_DIR / "evaluation_suite" / "gold" / "exec_result"
 
 MINIMAX_API_KEY  = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic")
 MINIMAX_MODEL    = os.environ.get("MINIMAX_MODEL", "MiniMax-M2.5-highspeed")
 
-METHOD = "forge_j"   # 方法标识，和 accuracy runner 保持命名一致
+# 通用 LLM 配置（优先于 MINIMAX_* 旧配置）
+# LLM_FORMAT: "anthropic"（Anthropic SDK）或 "openai"（OpenAI 兼容，如硅基流动）
+LLM_API_KEY  = os.environ.get("LLM_API_KEY",  MINIMAX_API_KEY)
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", MINIMAX_BASE_URL)
+LLM_MODEL    = os.environ.get("LLM_MODEL",    MINIMAX_MODEL)
+LLM_FORMAT   = os.environ.get("LLM_FORMAT",   "anthropic")   # "anthropic" | "openai"
+
+METHOD = os.environ.get("LLM_METHOD", "forge_j")   # 方法标识 / 输出目录名
+
+# schema token 超过此阈值时启用向量化表过滤
+SCHEMA_TOKEN_LIMIT = 4000
 
 
 # ── 数据加载 ─────────────────────────────────────────────────────────────────
@@ -264,6 +278,76 @@ def registry_to_context(registry: dict) -> str:
     return "\n".join(lines)
 
 
+# ── 向量化表过滤 ──────────────────────────────────────────────────────────────
+
+_embed_model = None
+_embed_lock  = threading.Lock()
+
+
+def _get_embed_model():
+    global _embed_model
+    if _embed_model is None:
+        with _embed_lock:
+            if _embed_model is None:
+                from sentence_transformers import SentenceTransformer
+                _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embed_model
+
+
+def filter_registry_by_question(registry: dict, question: str) -> dict:
+    """
+    当 schema token 数超过 SCHEMA_TOKEN_LIMIT 时，用向量相似度选取最相关的表。
+    策略：按预算贪心选取，保证 context 不超限，同时尽量保留高相关表。
+
+    相关度计算：embed(question) vs embed("{table}: {col1} {col2} ...")
+    """
+    tables = registry.get("tables", registry)
+    context = registry_to_context(registry)
+    if len(context) // 4 <= SCHEMA_TOKEN_LIMIT:
+        return registry   # 不超限，直接返回
+
+    model = _get_embed_model()
+
+    # 构建每张表的文本表示：表名 + 所有列名
+    table_texts = {}
+    for tname, tinfo in tables.items():
+        cols = tinfo.get("columns", tinfo) if isinstance(tinfo, dict) else tinfo
+        col_names = list(cols.keys()) if isinstance(cols, dict) else list(cols)
+        table_texts[tname] = f"{tname}: {' '.join(col_names)}"
+
+    # 向量化
+    tnames = list(table_texts.keys())
+    corpus  = [table_texts[t] for t in tnames]
+    t_vecs  = model.encode(corpus, convert_to_numpy=True, show_progress_bar=False)
+    q_vec   = model.encode([question], convert_to_numpy=True, show_progress_bar=False)[0]
+
+    # 余弦相似度
+    from numpy.linalg import norm
+    import numpy as np
+    scores = [(tnames[i], float(np.dot(q_vec, t_vecs[i]) / (norm(q_vec) * norm(t_vecs[i]) + 1e-9)))
+              for i in range(len(tnames))]
+    scores.sort(key=lambda x: x[1], reverse=True)
+
+    # 动态 TopN：按预算贪心选取
+    selected: dict = {}
+    token_budget = SCHEMA_TOKEN_LIMIT
+    for tname, score in scores:
+        tinfo = tables[tname]
+        tctx  = registry_to_context({"tables": {tname: tinfo}})
+        tokens = len(tctx) // 4
+        if token_budget - tokens >= 0:
+            selected[tname] = tinfo
+            token_budget -= tokens
+        if token_budget <= 0:
+            break
+
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    print(f"  {ts}  vec   {len(tables)}表 → {len(selected)}表 "
+          f"(budget {SCHEMA_TOKEN_LIMIT}, top: {', '.join(list(selected)[:3])}...)", flush=True)
+
+    return {"tables": selected}
+
+
 # ── LLM 调用（tool_use 模式）────────────────────────────────────────────────
 
 def _call_tool_use(client, system: str, question: str, tools: list[dict],
@@ -271,30 +355,22 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
                    _messages_override: list | None = None) -> dict:
     """
     调用 LLM，要求使用 generate_forge_query 工具，返回工具调用的 input dict。
-    若模型返回文字（未调用工具），追加一条催促消息再重试一次。
+    支持 Anthropic SDK 格式和 OpenAI 兼容格式（由 LLM_FORMAT 控制）。
     _messages_override: 直接使用指定的 messages（用于编译错误回传重试）。
     """
-    import anthropic
-
     messages = _messages_override or [{"role": "user", "content": question}]
 
     for attempt in range(_retries):
         try:
-            msg = client.messages.create(
-                model=MINIMAX_MODEL,
-                max_tokens=2048,
-                system=system,
-                tools=tools,
-                tool_choice={"type": "tool", "name": "generate_forge_query"},
-                messages=messages,
-            )
-            for block in msg.content:
-                if getattr(block, "type", None) == "tool_use":
-                    return {"ok": True, "input": block.input, "tool": block.name}
+            if LLM_FORMAT == "openai":
+                tool_input, text = _call_openai(client, system, messages, tools)
+            else:
+                tool_input, text = _call_anthropic(client, system, messages, tools)
+
+            if tool_input is not None:
+                return {"ok": True, "input": tool_input, "tool": "generate_forge_query"}
 
             # 模型返回了文字而非工具调用 → 追加催促消息，下一轮重试
-            # （_messages_override 模式下不追加，直接返回失败）
-            text = next((b.text for b in msg.content if hasattr(b, "text")), "")
             if attempt < _retries - 1 and not _messages_override:
                 messages = [
                     {"role": "user", "content": question},
@@ -305,13 +381,98 @@ def _call_tool_use(client, system: str, question: str, tools: list[dict],
                 continue
             return {"ok": False, "error": f"模型未调用工具，文字回复：{text[:200]}"}
 
-        except anthropic.InternalServerError:
-            if attempt < _retries - 1:
+        except Exception as e:
+            err_str = str(e)
+            if attempt < _retries - 1 and ("500" in err_str or "rate" in err_str.lower() or "timeout" in err_str.lower()):
                 wait = _backoff * (2 ** attempt)
-                tqdm.write(f"  ⚠ API 500，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
+                tqdm.write(f"  ⚠ API 错误({err_str[:60]})，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
                 time.sleep(wait)
             else:
                 raise
+
+
+def _call_anthropic(client, system: str, messages: list, tools: list) -> tuple[dict | None, str]:
+    """Anthropic SDK 格式调用，返回 (tool_input_dict | None, text)。"""
+    import anthropic
+    msg = client.messages.create(
+        model=LLM_MODEL,
+        max_tokens=2048,
+        system=system,
+        tools=tools,
+        tool_choice={"type": "tool", "name": "generate_forge_query"},
+        messages=messages,
+    )
+    for block in msg.content:
+        if getattr(block, "type", None) == "tool_use":
+            return block.input, ""
+    text = next((b.text for b in msg.content if hasattr(b, "text")), "")
+    return None, text
+
+
+def _call_openai(client, system: str, messages: list, tools: list) -> tuple[dict | None, str]:
+    """OpenAI 兼容格式调用（硅基流动等），返回 (tool_input_dict | None, text)。"""
+    # 将 Anthropic 格式 tool schema 转为 OpenAI function calling 格式
+    oai_tools = [{
+        "type": "function",
+        "function": {
+            "name": t["name"],
+            "description": t.get("description", ""),
+            "parameters": t.get("input_schema", t.get("parameters", {})),
+        }
+    } for t in tools]
+
+    # 将 Anthropic 格式 messages 转为 OpenAI 格式
+    # tool_result 消息需要转换
+    oai_messages = [{"role": "system", "content": system}]
+    for m in messages:
+        role = m["role"]
+        content = m["content"]
+        if isinstance(content, list):
+            # Anthropic tool_result 格式 → OpenAI tool 消息
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    oai_messages.append({
+                        "role": "tool",
+                        "tool_call_id": block["tool_use_id"],
+                        "content": block["content"],
+                    })
+                elif isinstance(block, dict) and block.get("type") == "tool_use":
+                    # assistant tool_use block → 已在下面处理
+                    pass
+            # assistant content with tool_use blocks
+            tool_uses = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
+            if tool_uses and role == "assistant":
+                oai_messages.append({
+                    "role": "assistant",
+                    "tool_calls": [{
+                        "id": tu["id"],
+                        "type": "function",
+                        "function": {"name": tu["name"], "arguments": json.dumps(tu["input"])},
+                    } for tu in tool_uses],
+                })
+        else:
+            oai_messages.append({"role": role, "content": content})
+
+    # 优先用 required（更广泛兼容），不指定具体函数名（Kimi 等不支持函数级强制）
+    tool_choice = os.environ.get("LLM_TOOL_CHOICE", "required")
+    if tool_choice == "named":
+        tool_choice = {"type": "function", "function": {"name": "generate_forge_query"}}
+    resp = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=oai_messages,
+        tools=oai_tools,
+        tool_choice=tool_choice,
+        max_tokens=2048,
+    )
+    choice = resp.choices[0]
+    if choice.message.tool_calls:
+        tc = choice.message.tool_calls[0]
+        try:
+            return json.loads(tc.function.arguments), ""
+        except json.JSONDecodeError as e:
+            return None, f"JSON decode error: {e}"
+    text = choice.message.content or ""
+    return None, text
 
 
 def _unwrap_forge_json(fj: dict) -> dict:
@@ -337,47 +498,282 @@ def _unwrap_forge_json(fj: dict) -> dict:
     return fj
 
 
+# ── EA 执行评估辅助 ───────────────────────────────────────────────────────────
+
+def _exec_sql(db_path: str, sql: str) -> tuple[list, str | None]:
+    try:
+        conn = sqlite3.connect(db_path)
+        rows = [tuple(row) for row in conn.execute(sql).fetchall()]
+        conn.close()
+        return rows, None
+    except Exception as e:
+        return [], str(e)
+
+
+def _norm_rows(rows: list) -> frozenset:
+    return frozenset(
+        tuple("NULL" if v is None else str(v).strip() for v in row)
+        for row in rows
+    )
+
+
+_eval_meta_cache: dict[str, dict] = {}
+
+def _get_eval_meta(instance_id: str) -> dict:
+    """Load Spider2 eval metadata (condition_cols, ignore_order) for an instance."""
+    global _eval_meta_cache
+    if not _eval_meta_cache:
+        eval_path = DATA_DIR / "evaluation_suite" / "gold" / "spider2lite_eval.jsonl"
+        if eval_path.exists():
+            for line in eval_path.read_text().splitlines():
+                if line.strip():
+                    try:
+                        d = json.loads(line)
+                        _eval_meta_cache[d["instance_id"]] = d
+                    except Exception:
+                        pass
+    return _eval_meta_cache.get(instance_id, {})
+
+
+def _norm_val(v: str) -> str:
+    """Normalize a cell value: try rounding floats to 4 decimal places."""
+    s = v.strip() if v is not None else "NULL"
+    try:
+        f = float(s)
+        return f"{f:.4f}"
+    except (ValueError, TypeError):
+        return s
+
+
+def _norm_rows_fuzzy(rows: list) -> frozenset:
+    """Normalize rows with fuzzy float comparison."""
+    return frozenset(
+        tuple(_norm_val(str(v)) for v in row)
+        for row in rows
+    )
+
+
+def _parse_condition_cols(condition_cols: list) -> tuple[str, list]:
+    """
+    Spider2 condition_cols 有两种格式：
+    - per_subfile: [[1], [0], [0]]  → 每个子文件各自的列索引（local 用例）
+    - flat:        [0] 或 [1, 2]   → 整数列表，过滤预测结果列（bq/sf 用例）
+    返回 ("per_subfile", [[…],…]) 或 ("flat", [int,…]) 或 ("none", [])
+    """
+    if not condition_cols:
+        return "none", []
+    if all(isinstance(c, list) for c in condition_cols):
+        return "per_subfile", condition_cols
+    # flat list of ints
+    return "flat", [int(c) for c in condition_cols if isinstance(c, int)]
+
+
+def _load_gold_csv_sets(instance_id: str) -> tuple[list[list], str | None]:
+    """
+    Load all gold CSV sub-files for an instance_id.
+    Returns list of raw data rows per sub-file (no column filtering here).
+    Spider2 gold files are named {instance_id}_a.csv, _b.csv, etc.
+    """
+    # Find all sub-CSVs: local002_a.csv, local002_b.csv, ...
+    sub_files = sorted(GOLD_CSV_DIR.glob(f"{instance_id}_*.csv"))
+    if not sub_files:
+        plain = GOLD_CSV_DIR / f"{instance_id}.csv"
+        if plain.exists():
+            sub_files = [plain]
+    if not sub_files:
+        return [], "no_gold"
+
+    result = []
+    for csv_path in sub_files:
+        with csv_path.open(newline="", encoding="utf-8") as f:
+            all_rows = list(_csv_mod.reader(f))
+        data_rows = all_rows[1:] if len(all_rows) > 1 else []
+        result.append(data_rows)
+    return result, None
+
+
+def _pred_matches_gold(pred_rows: list, gold_sub_rows: list[list],
+                       condition_cols: list) -> bool:
+    """
+    Check if predicted rows match ANY gold sub-file.
+    condition_cols 支持两种格式（由 _parse_condition_cols 解析）。
+    逻辑：对每个子文件，用相同的列过滤同时作用于 pred 和 gold，再比较。
+    """
+    fmt, cc = _parse_condition_cols(condition_cols)
+
+    for i, gold_rows in enumerate(gold_sub_rows):
+        # 确定本子文件要过滤的列
+        if fmt == "per_subfile" and i < len(cc):
+            cols = cc[i]   # list[int]
+        elif fmt == "flat":
+            cols = cc      # list[int]
+        else:
+            cols = []
+
+        if cols:
+            g_filtered = [[row[c] for c in cols if c < len(row)] for row in gold_rows]
+            p_filtered = [[row[c] for c in cols if c < len(row)] for row in pred_rows]
+            if _norm_rows_fuzzy(p_filtered) == _norm_rows_fuzzy(g_filtered):
+                return True
+        else:
+            if _norm_rows_fuzzy(pred_rows) == _norm_rows_fuzzy(gold_rows):
+                return True
+    return False
+
+
+def _ea_evaluate(instance_id: str, db_path: str, sql: str) -> dict:
+    """Execute sql on db_path and compare to gold. Returns ea_* fields."""
+    if not db_path or not Path(db_path).exists():
+        return {"ea_match": None, "ea_pred_rows": None, "ea_error": "no_db"}
+
+    pred_rows, pred_err = _exec_sql(db_path, sql)
+    if pred_err:
+        return {"ea_match": False, "ea_pred_rows": 0, "ea_error": f"exec: {pred_err[:120]}"}
+
+    # Try gold SQL first
+    gold_sql_path = GOLD_SQL_DIR / f"{instance_id}.sql"
+    if gold_sql_path.exists():
+        gold_rows, gold_err = _exec_sql(db_path, gold_sql_path.read_text().strip())
+        if gold_err:
+            return {"ea_match": None, "ea_pred_rows": len(pred_rows), "ea_error": f"gold_sql_err: {gold_err[:80]}"}
+        match = _norm_rows_fuzzy(pred_rows) == _norm_rows_fuzzy(gold_rows)
+        return {"ea_match": match, "ea_pred_rows": len(pred_rows), "ea_error": None}
+
+    # Use gold CSVs (Spider2 multi-sub-file format)
+    gold_sets, err = _load_gold_csv_sets(instance_id)
+    if err == "no_gold":
+        return {"ea_match": None, "ea_pred_rows": len(pred_rows), "ea_error": "no_gold"}
+    if err:
+        return {"ea_match": None, "ea_pred_rows": len(pred_rows), "ea_error": err}
+
+    meta = _get_eval_meta(instance_id)
+    condition_cols = meta.get("condition_cols", [])
+    match = _pred_matches_gold(pred_rows, gold_sets, condition_cols)
+    return {"ea_match": match, "ea_pred_rows": len(pred_rows), "ea_error": None}
+
+
+# ── 直接 SQL 兜底（超出 Forge DSL 能力时）────────────────────────────────────
+
+_DIRECT_SQL_TOOL = {
+    "name": "generate_sql_direct",
+    "description": (
+        "Generate a raw SQLite SQL query directly. "
+        "Use this when Forge DSL cannot express the required logic."
+    ),
+    "input_schema": {
+        "type": "object",
+        "required": ["sql"],
+        "additionalProperties": False,
+        "properties": {
+            "sql":     {"type": "string", "description": "A complete, valid SQLite SQL query."},
+            "explain": {"type": "string", "description": "Brief explanation of query logic."},
+        },
+    },
+}
+
+
+def _fallback_to_raw_sql(client, system: str, question: str, compile_error: str) -> dict:
+    """
+    超出 Forge DSL 表达能力时，让 LLM 直接生成 SQL（SQLite 方言）。
+    Returns {"ok": True, "sql": "..."} or {"ok": False, "error": "..."}.
+    """
+    fallback_msg = (
+        f"Forge DSL compilation failed: {compile_error[:200]}\n"
+        "This query may require SQL features beyond Forge DSL. "
+        "Please use the generate_sql_direct tool to write the equivalent SQLite SQL directly."
+    )
+    messages = [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fb_0", "name": "generate_forge_query", "input": {}}
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fb_0", "content": fallback_msg}
+        ]},
+    ]
+    tools = [_DIRECT_SQL_TOOL]
+    try:
+        if LLM_FORMAT == "openai":
+            tool_input, _ = _call_openai(client, system, messages, tools)
+        else:
+            import anthropic as _anthro_mod
+            msg = client.messages.create(
+                model=LLM_MODEL,
+                max_tokens=2048,
+                system=system,
+                tools=tools,
+                tool_choice={"type": "tool", "name": "generate_sql_direct"},
+                messages=messages,
+            )
+            tool_input = next(
+                (b.input for b in msg.content if getattr(b, "type", None) == "tool_use"),
+                None,
+            )
+    except Exception as e:
+        return {"ok": False, "error": f"fallback LLM error: {e}"}
+    if tool_input and tool_input.get("sql"):
+        return {"ok": True, "sql": tool_input["sql"]}
+    return {"ok": False, "error": "fallback LLM returned no SQL"}
+
+
 def run_case(client, case: dict) -> dict:
-    """对单个用例完整走 Forge 管道，返回结构化结果。"""
+    """对单个用例完整走 Forge 管道，返回结构化结果（含 EA 评估）。"""
     started_at = datetime.now(timezone.utc).isoformat()
 
-    question = case["question"]
+    question    = case["question"]
+    instance_id = case["instance_id"]
+    db_path     = case.get("_db_path") or ""
+
+    def _finish(**kw):
+        return {"instance_id": instance_id,
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                **kw}
+
+    def _success(sql, forge_json, fallback=False):
+        ea = _ea_evaluate(instance_id, db_path, sql)
+        return _finish(sql=sql, forge_json=forge_json, error=None,
+                       fallback=fallback, **ea)
+
+    def _compile_failed(forge_json, compile_err):
+        """尝试 raw SQL 兜底；失败则返回 compile error。"""
+        fb = _fallback_to_raw_sql(client, system, question, str(compile_err))
+        if fb["ok"]:
+            ea = _ea_evaluate(instance_id, db_path, fb["sql"])
+            return _finish(sql=fb["sql"], forge_json=forge_json, error=None,
+                           fallback="raw_sql", **ea)
+        return _finish(sql=None, forge_json=forge_json,
+                       error=str(compile_err), fallback=False,
+                       ea_match=None, ea_pred_rows=None, ea_error="compile_failed")
 
     try:
         registry = get_registry(case)
     except Exception as e:
-        return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": None, "error": f"registry 构建失败: {e}",
-                "started_at": started_at, "finished_at": started_at}
+        return _finish(sql=None, forge_json=None, error=f"registry 构建失败: {e}",
+                       fallback=False, ea_match=None, ea_pred_rows=None, ea_error="registry_error")
 
+    filtered = filter_registry_by_question(registry, question)
     tools  = [{"name": "generate_forge_query",
                "description": "Generate a Forge JSON query from natural language.",
-               "input_schema": build_tool_schema(registry)}]
-    system = build_system(registry_to_context(registry))
+               "input_schema": build_tool_schema(filtered)}]
+    system = build_system(registry_to_context(filtered))
 
     try:
         resp = _call_tool_use(client, system, question, tools)
     except Exception as e:
-        return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": None, "error": f"LLM 调用失败: {e}",
-                "started_at": started_at,
-                "finished_at": datetime.now(timezone.utc).isoformat()}
+        return _finish(sql=None, forge_json=None, error=f"LLM 调用失败: {e}",
+                       fallback=False, ea_match=None, ea_pred_rows=None, ea_error="llm_error")
 
     if not resp["ok"]:
-        return {"instance_id": case["instance_id"], "sql": None,
-                "forge_json": None, "error": resp["error"],
-                "started_at": started_at,
-                "finished_at": datetime.now(timezone.utc).isoformat()}
+        return _finish(sql=None, forge_json=None, error=resp["error"],
+                       fallback=False, ea_match=None, ea_pred_rows=None, ea_error="no_tool_call")
 
     forge_json = _unwrap_forge_json(resp["input"])
     try:
         sql = compile_query(forge_json)
-        return {"instance_id": case["instance_id"], "sql": sql,
-                "forge_json": forge_json, "error": None,
-                "started_at": started_at,
-                "finished_at": datetime.now(timezone.utc).isoformat()}
+        return _success(sql, forge_json)
     except Exception as compile_err:
-        # 编译失败 → 把错误信息回传 LLM，追加到对话让其修正，最多重试1次
+        # 编译失败 → 把错误回传 LLM，让其修正（最多重试 1 次）
         retry_messages = [
             {"role": "user", "content": question},
             {"role": "assistant", "content": [
@@ -392,31 +788,18 @@ def run_case(client, case: dict) -> dict:
         try:
             retry_resp = _call_tool_use(client, system, question, tools,
                                         _messages_override=retry_messages)
-        except Exception as e:
-            return {"instance_id": case["instance_id"], "sql": None,
-                    "forge_json": forge_json, "error": f"编译失败: {compile_err}",
-                    "started_at": started_at,
-                    "finished_at": datetime.now(timezone.utc).isoformat()}
+        except Exception:
+            return _compile_failed(forge_json, compile_err)
 
         if not retry_resp["ok"]:
-            return {"instance_id": case["instance_id"], "sql": None,
-                    "forge_json": forge_json, "error": f"编译失败: {compile_err}",
-                    "started_at": started_at,
-                    "finished_at": datetime.now(timezone.utc).isoformat()}
+            return _compile_failed(forge_json, compile_err)
 
         forge_json2 = _unwrap_forge_json(retry_resp["input"])
         try:
             sql = compile_query(forge_json2)
-            return {"instance_id": case["instance_id"], "sql": sql,
-                    "forge_json": forge_json2, "error": None,
-                    "started_at": started_at,
-                    "finished_at": datetime.now(timezone.utc).isoformat()}
+            return _success(sql, forge_json2)
         except Exception as e2:
-            return {"instance_id": case["instance_id"], "sql": None,
-                    "forge_json": forge_json2,
-                    "error": f"编译失败(重试后): {e2}",
-                    "started_at": started_at,
-                    "finished_at": datetime.now(timezone.utc).isoformat()}
+            return _compile_failed(forge_json2, e2)
 
 
 # ── Token 估算 ───────────────────────────────────────────────────────────────
@@ -491,7 +874,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print(f"\n🔬 Spider2-Lite SQLite 测试（Forge pipeline, tool_use 模式）")
-    print(f"   模型：{MINIMAX_MODEL}  |  并发：{args.workers}")
+    print(f"   模型：{LLM_MODEL}  |  格式：{LLM_FORMAT}  |  并发：{args.workers}")
 
     cases = load_sqlite_cases()
     if args.limit:
@@ -502,8 +885,8 @@ def main() -> None:
         estimate_tokens(cases)
         return
 
-    if not MINIMAX_API_KEY:
-        print("❌ 未设置 MINIMAX_API_KEY 环境变量", file=sys.stderr)
+    if not LLM_API_KEY:
+        print("❌ 未设置 LLM_API_KEY（或 MINIMAX_API_KEY）环境变量", file=sys.stderr)
         sys.exit(1)
 
     run_ts   = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -541,8 +924,12 @@ def main() -> None:
 
     print(f"   待执行：{len(pending)} 个  |  已完成：{len(done)} 个\n")
 
-    import anthropic
-    client = anthropic.Anthropic(api_key=MINIMAX_API_KEY, base_url=MINIMAX_BASE_URL)
+    if LLM_FORMAT == "openai":
+        from openai import OpenAI
+        client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
 
     log_lock   = threading.Lock()
     ok_count   = 0
@@ -568,12 +955,20 @@ def main() -> None:
                 (out_dir / f"{iid}.sql").write_text(result["sql"])
                 ok_count  += 1
                 status_sym = "✓"
-                status_str = "OK"
             else:
                 err_count  += 1
                 status_sym = "✗"
-                err_short  = str(result.get("error", ""))[:50]
-                status_str = f"ERR  {err_short}"
+
+            # EA 标记
+            ea_match = result.get("ea_match")
+            if ea_match is True:
+                ea_tag = " ✅EA"
+            elif ea_match is False:
+                ea_tag = " ✗EA"
+            elif result.get("fallback") == "raw_sql":
+                ea_tag = " ~FB"
+            else:
+                ea_tag = ""
 
             # 追加日志（主日志 + 本次 session 日志）
             with log_lock:
@@ -595,7 +990,7 @@ def main() -> None:
                 eta_str = f"{remaining:.0f}s"
 
             ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-            print(f"  {ts}  {done_count:>4}/{total:<4}  {ok_count:>4}  {err_count:>4}  {eta_str:>7}  {status_sym} {iid}", flush=True)
+            print(f"  {ts}  {done_count:>4}/{total:<4}  {ok_count:>4}  {err_count:>4}  {eta_str:>7}  {status_sym}{ea_tag} {iid}", flush=True)
 
     _print_stats(out_dir)
 
@@ -606,10 +1001,24 @@ def _print_stats(out_dir: Path) -> None:
         return
 
     records = [json.loads(l) for l in log_path.read_text().splitlines() if l.strip()]
-    ok  = sum(1 for r in records if not r.get("error"))
-    err = sum(1 for r in records if r.get("error"))
-    print(f"\n✅ 完成：{ok} 成功  |  {err} 失败  |  编译失败率 {err/(ok+err)*100:.1f}%")
-    print(f"   SQL 文件 → {out_dir}/")
+    total   = len(records)
+    ok      = sum(1 for r in records if not r.get("error"))
+    err     = total - ok
+    fallback_cnt = sum(1 for r in records if r.get("fallback") == "raw_sql")
+
+    # EA 统计
+    ea_pass    = sum(1 for r in records if r.get("ea_match") is True)
+    ea_fail    = sum(1 for r in records if r.get("ea_match") is False)
+    ea_no_gold = sum(1 for r in records if r.get("ea_error") == "no_gold")
+    ea_eval    = ea_pass + ea_fail   # 有 gold 且有 SQL 的用例
+
+    print(f"\n{'='*55}")
+    print(f"  总用例：{total}  |  编译成功：{ok}  |  失败：{err}"
+          + (f"  |  raw_sql兜底：{fallback_cnt}" if fallback_cnt else ""))
+    if ea_eval:
+        print(f"  EA (Execution Accuracy)：{ea_pass}/{ea_eval} = {ea_pass/ea_eval*100:.1f}%")
+    print(f"  无 gold 参考答案：{ea_no_gold}  |  编译/执行错误：{err + ea_fail - ea_fail}")
+    print(f"  SQL 文件 → {out_dir}/")
 
 
 if __name__ == "__main__":

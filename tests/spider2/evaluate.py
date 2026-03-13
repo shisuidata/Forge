@@ -34,8 +34,8 @@ from tests.spider2.setup import _find_db_path
 
 DATA_DIR     = Path(__file__).parent / "data" / "spider2-lite"
 SQLITE_DIR   = DATA_DIR / "resource" / "databases" / "sqlite"
-GOLD_SQL_DIR = DATA_DIR / "evaluation_suite" / "gold" / "sql_queries"
-GOLD_CSV_DIR = DATA_DIR / "evaluation_suite" / "gold" / "execution_results"
+GOLD_SQL_DIR = DATA_DIR / "evaluation_suite" / "gold" / "sql"
+GOLD_CSV_DIR = DATA_DIR / "evaluation_suite" / "gold" / "exec_result"
 RESULTS_DIR  = Path(__file__).parent / "results"
 
 

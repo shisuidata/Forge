@@ -21,6 +21,7 @@ Forge DSL → SQL 编译器。
 from __future__ import annotations
 import json
 import pathlib
+import re
 from typing import Any
 
 import jsonschema
@@ -50,34 +51,41 @@ _OP_SYMBOLS = {
 
 # ── 公开入口 ──────────────────────────────────────────────────────────────────
 
-def compile_query(forge: dict) -> str:
+_SUPPORTED_DIALECTS = ("sqlite", "mysql", "postgresql")
+
+
+def compile_query(forge: dict, dialect: str = "sqlite") -> str:
     """
     校验 Forge JSON 并编译为 SQL 字符串。
 
     Args:
-        forge: 符合 Forge DSL 规范的查询字典。
+        forge:   符合 Forge DSL 规范的查询字典。
+        dialect: 目标 SQL 方言，可选 "sqlite"（默认）、"mysql"、"postgresql"。
+                 控制日期函数、字符串聚合、JOIN 等方言差异的编译输出。
 
     Returns:
         多行 SQL 字符串，子句间以换行分隔。
 
     Raises:
-        ValueError: Forge JSON 违反 schema 约束时，抛出人类可读的错误描述。
+        ValueError: Forge JSON 违反 schema 约束，或方言不支持某特性时，抛出人类可读的错误描述。
     """
+    if dialect not in _SUPPORTED_DIALECTS:
+        raise ValueError(
+            f"不支持的方言：'{dialect}'。合法值：{_SUPPORTED_DIALECTS}"
+        )
     forge = _coerce(forge)
     try:
         jsonschema.validate(forge, _SCHEMA)
     except jsonschema.ValidationError as exc:
         raise ValueError(_friendly_error(exc)) from exc
-    return _compile(forge)
+    return _compile(forge, dialect)
 
 
 def _coerce(q: dict) -> dict:
     """
     在 schema 校验前对常见模型输出偏差做容错修复（不改变查询语义）。
 
-    修复项：
-    0. cte 存在但无顶层 scan → 自动用最后一个 CTE 名补全 scan，继承其 select
-       模型用 CTE 解复杂题时常忘记写主查询
+    修复项（仅限格式规范化，不猜测语义意图）：
     1. filter/having 为 dict 时自动包装为列表
        模型有时生成 "filter": {"or":[...]} 而非 "filter": [{"or":[...]}]
     2. between 条件中 val 为 [lo, hi] 数组时拆分为 lo/hi 字段
@@ -92,21 +100,26 @@ def _coerce(q: dict) -> dict:
        而非 {"col":"avg_amount","op":"gt","val":800}
     7. qualify 引用的 window 别名未在 select 中时，自动补齐
        模型在 window + qualify 组合中有时遗漏 rank alias，导致外层 WHERE 引用未定义列
+
+    注意：缺少必填字段（如 scan、select）不在此修复，由 schema 校验报错后交给模型重试。
+    8. 顶层 "query" 为 JSON 字符串时解包（模型有时把整个 Forge JSON 放进 "query" 字段）
+       模型有时生成 {"explain":"...", "query": "{\"scan\":\"orders\",...}"}
+       → 将 "query" 字符串解析后作为实际查询
     """
     q = dict(q)  # 浅拷贝，避免修改调用方的原始对象
 
-    # 修复 0：cte 存在但无顶层 scan → 自动补全
-    if q.get("cte") and "scan" not in q:
-        last_cte = q["cte"][-1]
-        q["scan"] = last_cte["name"]
-        # 继承最后一个 CTE 的 select（若有），否则选所有输出列
-        if "select" not in q:
-            inner_select = last_cte.get("query", {}).get("select", [])
-            # 把 table.col 引用替换为用 CTE 名作前缀
-            q["select"] = [
-                f"{last_cte['name']}.{s.split('.')[-1]}" if isinstance(s, str) and "." in s else s
-                for s in inner_select
-            ] if inner_select else [f"{last_cte['name']}.*"]
+    # 修复 8：顶层 "query" 为 JSON 字符串时解包
+    # 场景：模型把完整 Forge JSON 嵌套在 "query" 字段里，且顶层缺少必填的 scan/select。
+    # 此修复仅在顶层无 scan 且 query 是字符串时生效，不影响正常 union/CTE 中的 query dict。
+    if (isinstance(q.get("query"), str)
+            and "scan" not in q
+            and "select" not in q):
+        try:
+            inner = json.loads(q["query"])
+            if isinstance(inner, dict):
+                q = inner
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     # 修复 1：filter/having 为 dict 时包装为列表
     for field in ("filter", "having"):
@@ -285,18 +298,24 @@ def _friendly_error(exc: jsonschema.ValidationError) -> str:
 
 # ── 主编译逻辑 ────────────────────────────────────────────────────────────────
 
-def _compile(q: dict) -> str:
+def _compile(q: dict, dialect: str = "sqlite") -> str:
     """将已校验的 Forge 字典逐子句编译为 SQL，按标准子句顺序追加到列表后合并。
 
     若存在 qualify 字段，将内层查询包裹为子查询，qualify 条件作为外层 WHERE，
     实现窗口函数结果过滤（等价于 QUALIFY 语法，但兼容所有 SQL 方言）。
 
-    explain 和 cte 字段不参与编译（explain 为调试元数据，cte 暂未实现）。
+    若存在 union 字段，将各分支编译后以 UNION / UNION ALL 拼接。
+    sort/limit/offset 在 UNION 存在时被提升到整个 UNION 结果之后（标准 SQL 语义）。
+
+    若存在 cte 字段，最终输出以 WITH [RECURSIVE] 前置。
+    若任意 CTE 含 recursive_term，整个 WITH 子句使用 WITH RECURSIVE。
+
+    dialect: "sqlite" | "mysql" | "postgresql"，控制方言相关的 SQL 输出。
     """
     clauses: list[str] = []
 
     # SELECT：必须最先构建，以便解析 agg/window 别名
-    clauses.append("SELECT " + ", ".join(_select_exprs(q)))
+    clauses.append("SELECT " + ", ".join(_select_exprs(q, dialect)))
 
     # FROM：主扫描表
     clauses.append("FROM " + q["scan"])
@@ -304,13 +323,13 @@ def _compile(q: dict) -> str:
     # JOIN：anti/semi 会注入额外的 WHERE 条件，收集到 extra_where
     extra_where: list[str] = []
     for join in q.get("joins", []):
-        sql, injected = _join(join)
-        if sql:
-            clauses.append(sql)
+        join_sql, injected = _join(join, dialect)
+        if join_sql:
+            clauses.append(join_sql)
         extra_where.extend(injected)
 
     # WHERE：用户显式过滤条件 + anti/semi join 注入的隐式条件，全部 AND 连接
-    where_parts = [_condition(c) for c in q.get("filter", [])] + extra_where
+    where_parts = [_condition(c, dialect) for c in q.get("filter", [])] + extra_where
     if where_parts:
         clauses.append("WHERE " + " AND ".join(where_parts))
 
@@ -323,77 +342,141 @@ def _compile(q: dict) -> str:
         clauses.append("GROUP BY " + ", ".join(_group_item(g) for g in q["group"]))
 
     # HAVING：聚合后的行级过滤，条件间 AND 连接
-    having_parts = [_condition(c) for c in q.get("having", [])]
+    having_parts = [_condition(c, dialect) for c in q.get("having", [])]
     if having_parts:
         clauses.append("HAVING " + " AND ".join(having_parts))
 
-    # ORDER BY：dir 字段必填（asc/desc），已由 schema 保证
+    # UNION 存在时，sort/limit/offset 需提升到整个 UNION 之后（标准 SQL 语义）。
+    # 将尾部子句延迟处理：先收集，UNION 组装完再追加。
+    tail_clauses: list[str] = []
     if "sort" in q:
         sort_exprs = [f"{s['col']} {s['dir'].upper()}" for s in q["sort"]]
-        clauses.append("ORDER BY " + ", ".join(sort_exprs))
-
-    # LIMIT
+        tail_clauses.append("ORDER BY " + ", ".join(sort_exprs))
     if "limit" in q:
-        clauses.append(f"LIMIT {q['limit']}")
-
-    # OFFSET（分页）
+        tail_clauses.append(f"LIMIT {q['limit']}")
     if "offset" in q:
-        clauses.append(f"OFFSET {q['offset']}")
+        tail_clauses.append(f"OFFSET {q['offset']}")
+
+    # 若无 UNION，直接合并到主体
+    if not q.get("union"):
+        clauses.extend(tail_clauses)
+        tail_clauses = []
 
     inner_sql = "\n".join(clauses)
 
     # QUALIFY：窗口函数结果过滤，将内层查询包裹为子查询
     # 用途：实现 per-group TopN，如"每个品类成本排名前3的商品"
     if "qualify" in q:
-        qualify_parts = [_condition(c) for c in q["qualify"]]
+        qualify_parts = [_condition(c, dialect) for c in q["qualify"]]
         inner_sql = (
             f"SELECT * FROM (\n"
             + "\n".join(f"  {line}" for line in inner_sql.splitlines())
             + f"\n) AS _q\nWHERE {' AND '.join(qualify_parts)}"
         )
 
+    # UNION / UNION ALL：拼接各分支，尾部子句（ORDER BY/LIMIT/OFFSET）最后追加
+    if q.get("union"):
+        parts = [inner_sql]
+        for branch in q["union"]:
+            keyword = "UNION ALL" if branch["mode"] == "union_all" else "UNION"
+            branch_sql = _compile(_coerce(branch["query"]), dialect)
+            parts.append(f"{keyword}\n{branch_sql}")
+        inner_sql = "\n".join(parts)
+        if tail_clauses:
+            inner_sql += "\n" + "\n".join(tail_clauses)
+
     # CTE（WITH 子句）：多步查询，每条 CTE 递归编译其 query 字段
     if q.get("cte"):
         cte_parts: list[str] = []
+        is_recursive = False
         for cte_item in q["cte"]:
             cte_name = cte_item["name"]
             try:
-                cte_sql = _compile(_coerce(cte_item["query"]))
+                anchor_sql = _compile(_coerce(cte_item["query"]), dialect)
             except (KeyError, TypeError) as exc:
                 raise ValueError(
                     f"CTE '{cte_name}' 内部查询格式错误：{exc}"
                 ) from exc
-            indented = "\n".join(f"  {line}" for line in cte_sql.splitlines())
+
+            if cte_item.get("recursive") and cte_item.get("recursive_term"):
+                is_recursive = True
+                try:
+                    rec_sql = _compile(_coerce(cte_item["recursive_term"]), dialect)
+                except (KeyError, TypeError) as exc:
+                    raise ValueError(
+                        f"CTE '{cte_name}' 递归部分格式错误：{exc}"
+                    ) from exc
+                union_kw = (
+                    "UNION ALL"
+                    if cte_item.get("recursive_union", "union_all") == "union_all"
+                    else "UNION"
+                )
+                cte_body = anchor_sql + f"\n{union_kw}\n" + rec_sql
+            else:
+                cte_body = anchor_sql
+
+            indented = "\n".join(f"  {line}" for line in cte_body.splitlines())
             cte_parts.append(f"{cte_name} AS (\n{indented}\n)")
-        return "WITH " + ",\n".join(cte_parts) + "\n" + inner_sql
+
+        prefix = "WITH RECURSIVE" if is_recursive else "WITH"
+        return prefix + " " + ",\n".join(cte_parts) + "\n" + inner_sql
 
     return inner_sql
 
 
 # ── SELECT 表达式构建 ─────────────────────────────────────────────────────────
 
-def _select_exprs(q: dict) -> list[str]:
+def _expand_aliases(expr_str: str, alias_map: dict[str, str]) -> str:
+    """
+    将 expr 字符串中出现的别名（整词匹配）替换为对应的 SQL 表达式。
+
+    用途：select 中的 {"expr":"...","as":"..."} 可能引用同一查询的 agg/window 别名，
+    而 SQL 不允许在同一 SELECT 层级引用别名（SQLite 会报 "no such column"）。
+    展开后的 expr 直接嵌入 SQL 函数调用，避免运行时错误。
+
+    示例：
+        alias_map = {"total_users": "COUNT(*)", "repeat_users": "COUNT(CASE WHEN ...)"}
+        expr = "repeat_users * 1.0 / total_users"
+        → "COUNT(CASE WHEN ...) * 1.0 / COUNT(*)"
+
+    策略：按别名长度降序替换，避免短别名误匹配长别名的子串。
+    """
+    for alias in sorted(alias_map.keys(), key=len, reverse=True):
+        expr_str = re.sub(r'\b' + re.escape(alias) + r'\b', alias_map[alias], expr_str)
+    return expr_str
+
+
+def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
     """
     将 select 列表中的每个项展开为完整的 SELECT 表达式。
 
     查找顺序：
-    1. 若项为 dict（expr 对象）→ 直接编译为 expr AS alias
+    1. 若项为 dict（expr 对象）→ 展开其中的 agg/window 别名，编译为 expr AS alias
     2. 若项名是 agg 的别名 → 展开为聚合表达式（如 SUM(col) AS alias）
     3. 若项名是 window 的别名 → 展开为窗口函数表达式（如 ROW_NUMBER() OVER (...) AS alias）
     4. 否则直接透传（普通列引用）
+
+    对 expr 对象的别名展开：
+        agg/window 别名不能在同一 SELECT 中被 expr 字符串直接引用（SQL 不允许）。
+        编译器在此自动将别名替换为完整表达式，使生成的 SQL 在所有方言下可执行。
+        window 别名中的 agg 别名也已在 _window_expr 中展开（支持嵌套聚合窗口模式）。
     """
     # 预先构建别名 → SQL 表达式的查找字典，避免 O(n²) 线性扫描
     agg_map: dict[str, str] = {
-        agg["as"]: _agg_expr(agg) for agg in q.get("agg", [])
+        agg["as"]: _agg_expr(agg, dialect) for agg in q.get("agg", [])
     }
     win_map: dict[str, str] = {
         w["as"]: _window_expr(w, agg_map) for w in q.get("window", [])
     }
+    # 合并 map：agg 优先（agg 别名可能被 window col 引用，已在 win_map 构建时展开）
+    expand_map = {**agg_map, **win_map}
+
     exprs = []
     for col in q["select"]:
         if isinstance(col, dict):
-            # expr 对象：{"expr": "quantity * unit_price", "as": "revenue"}
-            exprs.append(f"{col['expr']} AS {col['as']}")
+            # expr 对象：展开其中引用的 agg/window 别名后再输出
+            expanded = _expand_aliases(col["expr"], expand_map)
+            exprs.append(f"{expanded} AS {col['as']}")
         elif col in agg_map:
             exprs.append(f"{agg_map[col]} AS {col}")
         elif col in win_map:
@@ -403,19 +486,37 @@ def _select_exprs(q: dict) -> list[str]:
     return exprs
 
 
-def _agg_expr(agg: dict) -> str:
+def _agg_expr(agg: dict, dialect: str = "sqlite") -> str:
     """
     将单条聚合定义编译为 SQL 聚合表达式（不含 AS 子句）。
 
-    count_all → COUNT(*)
-    count_distinct → COUNT(DISTINCT col)
-    其余 → FN(col)，函数名大写
+    count_all        → COUNT(*)
+    count_distinct   → COUNT(DISTINCT col)
+    group_concat     → 方言差异：
+        sqlite/mysql → GROUP_CONCAT(col)  /  GROUP_CONCAT(col, sep)
+        mysql+sep    → GROUP_CONCAT(col SEPARATOR sep)
+        postgresql   → STRING_AGG(col, ',')  /  STRING_AGG(col, sep)
+    其余             → FN(col)，函数名大写（跨方言兼容）
     """
     fn = agg["fn"]
     if fn == "count_all":
         return "COUNT(*)"
     if fn == "count_distinct":
         return f"COUNT(DISTINCT {agg['col']})"
+    if fn == "group_concat":
+        col = agg["col"]
+        sep = agg.get("separator")
+        if dialect == "postgresql":
+            sep_sql = _val(sep) if sep is not None else "','"
+            return f"STRING_AGG({col}, {sep_sql})"
+        if dialect == "mysql":
+            if sep is not None:
+                return f"GROUP_CONCAT({col} SEPARATOR {_val(sep)})"
+            return f"GROUP_CONCAT({col})"
+        # sqlite（默认）
+        if sep is not None:
+            return f"GROUP_CONCAT({col}, {_val(sep)})"
+        return f"GROUP_CONCAT({col})"
     return f"{fn.upper()}({agg['col']})"
 
 
@@ -454,7 +555,11 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
         call = f"{fn.upper()}({', '.join(args)})"
     else:
         # 聚合窗口函数：sum/avg/count/min/max
-        call = f"{fn.upper()}({w['col']})"
+        # 若 col 是 agg 别名，展开为原始聚合表达式（支持 SUM(SUM(expr)) OVER () 模式）
+        col = w["col"]
+        if agg_map and col in agg_map:
+            col = agg_map[col]
+        call = f"{fn.upper()}({col})"
 
     # ── OVER 子句 ─────────────────────────────────────────────────────────────
     over_parts: list[str] = []
@@ -472,7 +577,7 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
 
 # ── JOIN 处理 ─────────────────────────────────────────────────────────────────
 
-def _join(join: dict) -> tuple[str | None, list[str]]:
+def _join(join: dict, dialect: str = "sqlite") -> tuple[str | None, list[str]]:
     """
     将单条 join 定义编译为（JOIN 子句, 额外 WHERE 条件列表）。
 
@@ -497,13 +602,20 @@ def _join(join: dict) -> tuple[str | None, list[str]]:
     on    = join["on"]
 
     # ── 多条件 join（array）─────────────────────────────────────────────────
+    # MySQL 不支持 FULL OUTER JOIN，提前报错
+    if jtype == "full" and dialect == "mysql":
+        raise ValueError(
+            "MySQL 不支持 FULL OUTER JOIN。"
+            "请改用 LEFT JOIN + UNION + RIGHT JOIN 模拟，或切换到 SQLite / PostgreSQL。"
+        )
+
     if isinstance(on, list):
         if jtype in ("anti", "semi"):
             raise ValueError(
                 f"{jtype} join 不支持多条件 on。"
                 "anti/semi join 需要明确的等值键，请使用单条件 on 格式。"
             )
-        on_clause = " AND ".join(_condition(c) for c in on)
+        on_clause = " AND ".join(_condition(c, dialect) for c in on)
         keyword = _JOIN_KEYWORDS[jtype]
         return f"{keyword} {table} ON {on_clause}", []
 
@@ -531,7 +643,7 @@ def _join(join: dict) -> tuple[str | None, list[str]]:
 
 # ── 条件表达式 ────────────────────────────────────────────────────────────────
 
-def _condition(cond: dict) -> str:
+def _condition(cond: dict, dialect: str = "sqlite") -> str:
     """
     将单条条件定义编译为 SQL 谓词字符串。
 
@@ -549,11 +661,11 @@ def _condition(cond: dict) -> str:
     """
     # OR 组：递归处理每个子条件，外层加括号保证优先级正确
     if "or" in cond:
-        return "(" + " OR ".join(_condition(c) for c in cond["or"]) + ")"
+        return "(" + " OR ".join(_condition(c, dialect) for c in cond["or"]) + ")"
 
     # AND 组：用于 OR 内嵌 AND，如 (A AND B) OR C 中的 (A AND B) 部分
     if "and" in cond:
-        return "(" + " AND ".join(_condition(c) for c in cond["and"]) + ")"
+        return "(" + " AND ".join(_condition(c, dialect) for c in cond["and"]) + ")"
 
     col = cond["col"]
     op  = cond["op"]
@@ -563,28 +675,28 @@ def _condition(cond: dict) -> str:
     if op == "is_not_null":
         return f"{col} IS NOT NULL"
     if op == "between":
-        return f"{col} BETWEEN {_val(cond['lo'])} AND {_val(cond['hi'])}"
+        return f"{col} BETWEEN {_val(cond['lo'], dialect)} AND {_val(cond['hi'], dialect)}"
     if op == "in":
-        items = ", ".join(_val(v) for v in cond["val"])
+        items = ", ".join(_val(v, dialect) for v in cond["val"])
         return f"{col} IN ({items})"
     if op == "like":
-        return f"{col} LIKE {_val(cond['val'])}"
+        return f"{col} LIKE {_val(cond['val'], dialect)}"
 
     # 标准比较运算符，从映射表取符号
     symbol = _OP_SYMBOLS[op]
-    return f"{col} {symbol} {_val(cond['val'])}"
+    return f"{col} {symbol} {_val(cond['val'], dialect)}"
 
 
 # ── 值格式化 ──────────────────────────────────────────────────────────────────
 
-def _val(v: Any) -> str:
+def _val(v: Any, dialect: str = "sqlite") -> str:
     """
     将 Python 值格式化为 SQL 字面量字符串。
 
     类型处理规则：
         None              → NULL
-        {"$date": "..."}  → 'YYYY-MM-DD'
-        {"$preset": "..."} → 抛出 NotImplementedError（需运行时解析）
+        {"$date": "..."}  → 'YYYY-MM-DD'（跨方言统一）
+        {"$preset": "..."}→ 方言相关的日期表达式（见 _preset_val）
         bool              → TRUE / FALSE（须优先于 int 检测，因为 bool 是 int 子类）
         str               → '...' 并对内部单引号做转义（'' 替换）
         list              → 不应出现在此函数中（in 操作符由 _condition 处理）
@@ -596,30 +708,72 @@ def _val(v: Any) -> str:
         if "$date" in v:
             return f"'{v['$date']}'"
         if "$preset" in v:
-            _PRESET_MAP = {
-                "today":        "DATE('now')",
-                "yesterday":    "DATE('now','-1 day')",
-                "last_7_days":  "DATE('now','-7 days')",
-                "last_30_days": "DATE('now','-30 days')",
-                "this_month":   "DATE('now','start of month')",
-                "last_month":   "DATE('now','start of month','-1 month')",
-                "this_year":    "DATE('now','start of year')",
-            }
-            preset = v["$preset"]
-            if preset in _PRESET_MAP:
-                return _PRESET_MAP[preset]
-            if preset == "this_quarter":
-                # SQLite 无原生季度函数：((month-1)%3) 计算本月距季度起始的月数
-                return (
-                    "DATE('now','start of month',"
-                    "'-' || ((CAST(strftime('%m','now') AS INTEGER)-1)%3) || ' months')"
-                )
-            raise ValueError(
-                f"未知的 $preset 值：'{preset}'。"
-                f"合法值：{sorted(_PRESET_MAP) + ['this_quarter']}"
-            )
+            return _preset_val(v["$preset"], dialect)
     if isinstance(v, bool):           # 必须在 int 检测之前，因为 bool 是 int 子类
         return "TRUE" if v else "FALSE"
     if isinstance(v, str):
         return "'" + v.replace("'", "''") + "'"
     return str(v)
+
+
+def _preset_val(preset: str, dialect: str) -> str:
+    """
+    将 $preset 相对日期转换为目标方言的 SQL 日期表达式。
+
+    dialect = "sqlite"     → DATE('now', ...) / strftime(...)
+    dialect = "mysql"      → CURDATE() / DATE_SUB() / DATE_FORMAT() / DATE_ADD()
+    dialect = "postgresql" → CURRENT_DATE / CURRENT_DATE - INTERVAL '...' / DATE_TRUNC()
+    """
+    _VALID_PRESETS = (
+        "today", "yesterday", "last_7_days", "last_30_days",
+        "this_month", "last_month", "this_year", "this_quarter",
+    )
+    if preset not in _VALID_PRESETS:
+        raise ValueError(
+            f"未知的 $preset 值：'{preset}'。合法值：{_VALID_PRESETS}"
+        )
+
+    if dialect == "mysql":
+        _MAP = {
+            "today":        "CURDATE()",
+            "yesterday":    "DATE_SUB(CURDATE(), INTERVAL 1 DAY)",
+            "last_7_days":  "DATE_SUB(CURDATE(), INTERVAL 7 DAY)",
+            "last_30_days": "DATE_SUB(CURDATE(), INTERVAL 30 DAY)",
+            "this_month":   "DATE_FORMAT(CURDATE(), '%Y-%m-01')",
+            "last_month":   "DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')",
+            "this_year":    "DATE_FORMAT(CURDATE(), '%Y-01-01')",
+            "this_quarter": (
+                "DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-01-01'), "
+                "INTERVAL (QUARTER(CURDATE())-1)*3 MONTH)"
+            ),
+        }
+        return _MAP[preset]
+
+    if dialect == "postgresql":
+        _MAP = {
+            "today":        "CURRENT_DATE",
+            "yesterday":    "CURRENT_DATE - INTERVAL '1 day'",
+            "last_7_days":  "CURRENT_DATE - INTERVAL '7 days'",
+            "last_30_days": "CURRENT_DATE - INTERVAL '30 days'",
+            "this_month":   "DATE_TRUNC('month', CURRENT_DATE)",
+            "last_month":   "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')",
+            "this_year":    "DATE_TRUNC('year', CURRENT_DATE)",
+            "this_quarter": "DATE_TRUNC('quarter', CURRENT_DATE)",
+        }
+        return _MAP[preset]
+
+    # sqlite（默认）
+    _MAP = {
+        "today":        "DATE('now')",
+        "yesterday":    "DATE('now','-1 day')",
+        "last_7_days":  "DATE('now','-7 days')",
+        "last_30_days": "DATE('now','-30 days')",
+        "this_month":   "DATE('now','start of month')",
+        "last_month":   "DATE('now','start of month','-1 month')",
+        "this_year":    "DATE('now','start of year')",
+        "this_quarter": (
+            "DATE('now','start of month',"
+            "'-' || ((CAST(strftime('%m','now') AS INTEGER)-1)%3) || ' months')"
+        ),
+    }
+    return _MAP[preset]
