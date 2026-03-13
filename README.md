@@ -1,5 +1,11 @@
 # Forge
 
+> ⚠️ **早期阶段，与目标还有很大距离，正在持续迭代中。**
+>
+> Spider2-Lite EA 9.2%、自有用例 EA 50.0%，是诚实的现状记录。Forge 的核心假设——约束输出空间能系统性降低生成错误——已在自有用例上验证，但在学术 benchmark 的复杂算法查询上还有很长的路要走。
+
+---
+
 > **把生成错误降到接近零。**
 
 自然语言进，经过确定性编译，SQL 出。
@@ -92,15 +98,15 @@ Registry 不是一个静态的 schema 文件，它是组织知识的沉淀：
 
 ```mermaid
 flowchart LR
-    NL["🗣️ 自然语言\n统计各城市 VIP 用户\n的平均客单价"]
+    NL["🗣️ 自然语言<br/>统计各城市 VIP 用户<br/>的平均客单价"]
 
     subgraph forge["Forge 管道"]
         direction TB
-        REG["📚 Registry\n结构层 + 语义层"]
-        SCHEMA["📋 JSON Schema\n强制枚举约束"]
-        LLM["🤖 LLM\nStructured Output"]
-        JSON["📄 Forge JSON\n有约束的中间表示"]
-        COMPILER["⚙️ 确定性编译器\ncompile_query()"]
+        REG["📚 Registry<br/>结构层 + 语义层"]
+        SCHEMA["📋 JSON Schema<br/>强制枚举约束"]
+        LLM["🤖 LLM<br/>Structured Output"]
+        JSON["📄 Forge JSON<br/>有约束的中间表示"]
+        COMPILER["⚙️ 确定性编译器<br/>compile_query()"]
         SQL["📝 SQL"]
     end
 
@@ -125,11 +131,11 @@ flowchart TD
 
     FJ --> C1{编译}
     C1 -->|成功| EXEC[执行 + EA 评估]
-    C1 -->|失败| FB1["回传错误给 LLM\n请求修正 Forge JSON"]
+    C1 -->|失败| FB1["回传错误给 LLM<br/>请求修正 Forge JSON"]
 
     FB1 --> C2{重新编译}
     C2 -->|成功| EXEC
-    C2 -->|失败| FB2["raw SQL 兜底\ngenerate_sql_direct\n超出 DSL 能力时的逃生舱"]
+    C2 -->|失败| FB2["raw SQL 兜底<br/>generate_sql_direct<br/>超出 DSL 能力时的逃生舱"]
 
     FB2 --> EXEC
     EXEC -->|结果匹配| PASS["✅ Pass"]

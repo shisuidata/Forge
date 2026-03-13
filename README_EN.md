@@ -109,14 +109,17 @@ ORDER BY avg_value DESC
 | Feature | Notes |
 |---|---|
 | All JOIN types | `inner / left / right / full / anti / semi` |
-| Inequality joins | `on_multi`: array of conditions with `gt/gte/lt/lte/neq` |
-| Aggregate functions | `count / count_all / count_distinct / sum / avg / min / max` |
+| Multi-condition joins | `on` as array of SimpleConditions (inner/left/right/full only) |
+| Aggregate functions | `count / count_all / count_distinct / sum / avg / min / max / group_concat` |
 | Window functions | `row_number / rank / dense_rank / lag / lead` with PARTITION BY / ORDER BY |
-| CASE WHEN | `{"case": [...], "else": ..., "as": "alias"}` |
-| Relative dates | `{"$preset": "today / this_week / this_month / this_year / last_30_days"}` |
-| CTE (multi-step) | `"with": [{"name": "cte_name", "query": {...}}]` |
-| Function expressions | `{"$expr": "STRFTIME('%Y-%m', t.col)"}` |
+| CASE WHEN in agg | `{"fn":"count","col":"CASE WHEN x>=2 THEN 1 END","as":"alias"}` |
+| Relative dates | `{"$preset": "today / yesterday / last_7_days / last_30_days / this_month / last_month / this_quarter / this_year"}` |
+| CTE (multi-step) | `"cte": [{"name": "cte_name", "query": {...}}]` |
+| Computed expressions | `{"expr": "a * 1.0 / b", "as": "alias"}` in select array |
 | OR conditions | `{"or": [{...}, {...}]}` in filter array |
+| qualify (per-group TopN) | `"qualify": [{"col": "rn", "op": "lte", "val": 3}]` |
+| UNION | `"union": [{"mode": "union_all", "query": {...}}]` |
+| Recursive CTE | `"recursive": true, "recursive_term": {...}` on a CTE item |
 
 ## Benchmark Results
 

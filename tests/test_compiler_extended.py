@@ -493,3 +493,180 @@ def test_and_branch_rejected_at_top_level():
             ],
             "select": ["users.name"],
         })
+
+
+# ── UNION / UNION ALL ─────────────────────────────────────────────────────────
+
+def test_union_all_two_branches():
+    """UNION ALL 两个分支合并结果集"""
+    result = sql({
+        "scan": "orders",
+        "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+        "select": ["orders.user_id", "orders.total_amount"],
+        "union": [{"mode": "union_all", "query": {
+            "scan": "orders",
+            "filter": [{"col": "orders.status", "op": "eq", "val": "refunded"}],
+            "select": ["orders.user_id", "orders.total_amount"],
+        }}],
+    })
+    assert "UNION ALL" in result
+    assert result.count("SELECT") == 2
+    assert "completed" in result
+    assert "refunded" in result
+
+
+def test_union_distinct():
+    """UNION（去重）"""
+    result = sql({
+        "scan": "users",
+        "filter": [{"col": "users.city", "op": "eq", "val": "Beijing"}],
+        "select": ["users.id"],
+        "union": [{"mode": "union", "query": {
+            "scan": "users",
+            "filter": [{"col": "users.city", "op": "eq", "val": "Shanghai"}],
+            "select": ["users.id"],
+        }}],
+    })
+    assert "UNION\n" in result or "UNION ALL" not in result
+    assert "Beijing" in result
+    assert "Shanghai" in result
+
+
+def test_union_sort_limit_applies_to_whole():
+    """sort/limit 在 UNION 时应出现在最后（作用于整体）"""
+    result = sql({
+        "scan": "products",
+        "select": ["products.name", "products.cost_price"],
+        "filter": [{"col": "products.category", "op": "eq", "val": "A"}],
+        "union": [{"mode": "union_all", "query": {
+            "scan": "products",
+            "filter": [{"col": "products.category", "op": "eq", "val": "B"}],
+            "select": ["products.name", "products.cost_price"],
+        }}],
+        "sort": [{"col": "products.cost_price", "dir": "desc"}],
+        "limit": 5,
+    })
+    # ORDER BY 和 LIMIT 必须在 UNION ALL 之后
+    union_pos = result.index("UNION ALL")
+    order_pos = result.index("ORDER BY")
+    limit_pos = result.index("LIMIT 5")
+    assert union_pos < order_pos < limit_pos
+
+
+def test_union_with_cte():
+    """UNION 与 CTE 结合：WITH 子句对所有分支可见"""
+    result = sql({
+        "cte": [{"name": "active", "query": {
+            "scan": "users",
+            "filter": [{"col": "users.is_vip", "op": "eq", "val": 1}],
+            "select": ["users.id", "users.city"],
+        }}],
+        "scan": "active",
+        "select": ["active.city"],
+        "union": [{"mode": "union_all", "query": {
+            "scan": "active",
+            "filter": [{"col": "active.city", "op": "eq", "val": "Beijing"}],
+            "select": ["active.city"],
+        }}],
+    })
+    assert result.startswith("WITH ")
+    assert "UNION ALL" in result
+
+
+# ── GROUP_CONCAT ──────────────────────────────────────────────────────────────
+
+def test_group_concat_no_separator():
+    """GROUP_CONCAT 不带分隔符"""
+    result = sql({
+        "scan": "order_items",
+        "group": ["order_items.order_id"],
+        "agg": [{"fn": "group_concat", "col": "order_items.product_id", "as": "product_ids"}],
+        "select": ["order_items.order_id", "product_ids"],
+    })
+    assert "GROUP_CONCAT(order_items.product_id) AS product_ids" in result
+    assert "GROUP BY order_items.order_id" in result
+
+
+def test_group_concat_with_separator():
+    """GROUP_CONCAT 带自定义分隔符"""
+    result = sql({
+        "scan": "products",
+        "group": ["products.category"],
+        "agg": [{"fn": "group_concat", "col": "products.name", "separator": " | ", "as": "names"}],
+        "select": ["products.category", "names"],
+    })
+    assert "GROUP_CONCAT(products.name, ' | ') AS names" in result
+
+
+# ── 递归 CTE (WITH RECURSIVE) ─────────────────────────────────────────────────
+
+def test_recursive_cte_basic():
+    """WITH RECURSIVE：员工层级查询"""
+    result = sql({
+        "cte": [{
+            "name": "org_tree",
+            "recursive": True,
+            "query": {
+                "scan": "users",
+                "filter": [{"col": "users.id", "op": "eq", "val": 1}],
+                "select": ["users.id", "users.name", {"expr": "0", "as": "depth"}],
+            },
+            "recursive_term": {
+                "scan": "users",
+                "joins": [{"type": "inner", "table": "org_tree",
+                           "on": {"left": "users.id", "right": "org_tree.id"}}],
+                "select": ["users.id", "users.name", {"expr": "org_tree.depth + 1", "as": "depth"}],
+            },
+            "recursive_union": "union_all",
+        }],
+        "scan": "org_tree",
+        "select": ["org_tree.id", "org_tree.name", "org_tree.depth"],
+        "sort": [{"col": "org_tree.depth", "dir": "asc"}],
+    })
+    assert result.startswith("WITH RECURSIVE")
+    assert "org_tree AS (" in result
+    assert "UNION ALL" in result
+    assert "org_tree.depth + 1" in result
+
+
+def test_recursive_cte_union_distinct():
+    """WITH RECURSIVE：使用 UNION（去重）的递归 CTE"""
+    from forge.compiler import compile_query
+    result = compile_query({
+        "cte": [{
+            "name": "path",
+            "recursive": True,
+            "query": {
+                "scan": "users",
+                "filter": [{"col": "users.id", "op": "eq", "val": 1}],
+                "select": ["users.id"],
+            },
+            "recursive_term": {
+                "scan": "users",
+                "joins": [{"type": "inner", "table": "path",
+                           "on": {"left": "users.id", "right": "path.id"}}],
+                "select": ["users.id"],
+            },
+            "recursive_union": "union",
+        }],
+        "scan": "path",
+        "select": ["path.id"],
+    })
+    assert result.startswith("WITH RECURSIVE")
+    assert "UNION\n" in result  # UNION (not UNION ALL)
+    assert "UNION ALL" not in result
+
+
+def test_non_recursive_cte_still_uses_with():
+    """普通 CTE 不加 RECURSIVE 前缀"""
+    result = sql({
+        "cte": [{"name": "top_users", "query": {
+            "scan": "users",
+            "select": ["users.id"],
+            "limit": 10,
+        }}],
+        "scan": "top_users",
+        "select": ["top_users.id"],
+    })
+    assert result.startswith("WITH ")
+    assert "RECURSIVE" not in result
