@@ -273,15 +273,28 @@ FROM user_orders
 
 > A/D/E/F/G 在 32 题测试；H 起扩展到全部 40 题（新增能力测试题 33–40）。
 
-#### EA 得分（Execution Accuracy）
+#### EA 对比（Execution Accuracy，MiniMax-M2.5）
 
-| 方法 | 题数 | EA |
-|---|---|---|
-| Method J（5 次多数投票） | 40 | **50.0%** |
+在相同的 40 题上，用 MiniMax-M2.5 对比 Forge DSL 模式与直接 SQL 生成模式：
 
-EA 比 LLM 评分更严格：结果集必须完全一致（忽略行顺序，浮点 4 位精度）。50% 说明 Forge DSL 能精确表达并执行超过一半的真实业务查询。
+| 方法 | EA | 正确题数 | 执行错误 | 编译/其他错误 | 平均耗时 |
+|---|---|---|---|---|---|
+| **Forge (DSL)** | **55.0%** | 22/40 | 11 | 7 | 7.9s |
+| **直接 SQL** | **65.0%** | 26/40 | 14 | 0 | 4.3s |
 
-#### Forge J+Sem vs 直接 SQL（分类对比）
+按难度分层：
+
+| 难度 | Forge EA | 直接 SQL EA | 说明 |
+|---|---|---|---|
+| D1（基础过滤） | **100%** | **100%** | 两者持平 |
+| D2（JOIN/聚合/HAVING） | **76%** | 71% | Forge 略优 |
+| D3（窗口/CTE/多步） | 22% | **50%** | 直接 SQL 占优 |
+
+**D3 是核心差距来源**：MiniMax 模型在生成复杂 Forge DSL（多步 CTE、窗口函数的 qualify 语法）时出现 7 次编译错误；相比之下直接生成 SQL 无编译错误。
+
+这是诚实的发现：**Forge 的价值依赖模型的 DSL 生成能力**。强模型（Claude Sonnet）用 Forge 的 LLM Judge 得分（8.82 vs 8.38）和 EA 均优于直接 SQL；MiniMax 等较弱的模型在复杂查询上 DSL 语法错误增多，抵消了 DSL 约束带来的优势。在 D1/D2 的日常查询场景下，Forge 与直接 SQL 持平或更优。
+
+#### Forge J+Sem vs 直接 SQL（Claude Sonnet，LLM Judge，历史数据）
 
 | 分类 | 题数 | 直接 SQL | Forge J+Sem | Δ |
 |---|---|---|---|---|

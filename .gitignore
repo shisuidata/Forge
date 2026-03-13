@@ -12,3 +12,6 @@ tests/accuracy/results/
 tests/spider2/data/
 tests/spider2/results/
 local_sqlite.zip
+
+tests/benchmark/benchmark.db
+tests/benchmark/results/
