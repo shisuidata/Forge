@@ -337,6 +337,7 @@ def _call_openai(client, system: str, messages: list, tools: list) -> tuple[dict
         tools=oai_tools,
         tool_choice="required",
         max_tokens=2048,
+        temperature=0,
     )
     choice = resp.choices[0]
     if choice.message.tool_calls:

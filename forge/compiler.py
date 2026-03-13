@@ -100,11 +100,24 @@ def _coerce(q: dict) -> dict:
        而非 {"col":"avg_amount","op":"gt","val":800}
     7. qualify 引用的 window 别名未在 select 中时，自动补齐
        模型在 window + qualify 组合中有时遗漏 rank alias，导致外层 WHERE 引用未定义列
-
-    注意：缺少必填字段（如 scan、select）不在此修复，由 schema 校验报错后交给模型重试。
     8. 顶层 "query" 为 JSON 字符串时解包（模型有时把整个 Forge JSON 放进 "query" 字段）
        模型有时生成 {"explain":"...", "query": "{\"scan\":\"orders\",...}"}
        → 将 "query" 字符串解析后作为实际查询
+    9. select 中字符串含内联别名（"expr AS alias"）→ 转为 expr 对象
+       模型有时生成 "STRFTIME('%Y-%m', orders.created_at) as month"
+       → {"expr":"STRFTIME('%Y-%m', orders.created_at)","as":"month"}
+       内联别名写入 GROUP BY 时会产生 SQL 语法错误
+    10. 有 agg/group 但缺少 select 时，自动从 group + agg 别名生成 select
+        CTE 子查询最常见：模型提供了 scan/filter/group/agg 但忘了写 select
+    11. 顶层缺少 scan 但有 cte 时，自动推断 scan 为最后一个 CTE 名
+        模型有时生成 CTE 列表但忘了在主查询里设置 scan
+    12. 清理 agg items 中的非法字段（如 having、where 等模型伪造字段）
+        schema 对 agg item 有严格约束，非法字段会导致校验失败
+    13. select expr 字符串中出现 count_all() → 替换为 COUNT(*)
+        模型有时在 expr 中内联 count_all()，该函数名不是合法 SQL 函数
+    14. 当 scan 为 CTE 名时，select/agg.col/group 中的 table.col 引用
+        若 table 不是 CTE 名，则剥离 table. 前缀
+        原因：CTE 输出列不保留原表前缀，引用 products.category 会报 "no such column"
     """
     q = dict(q)  # 浅拷贝，避免修改调用方的原始对象
 
@@ -121,6 +134,11 @@ def _coerce(q: dict) -> dict:
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # 修复 11：缺少 scan 但有 cte 时，推断 scan 为最后一个 CTE 名
+    # 场景：模型生成了 CTE 列表和 group/agg/select，但忘了写主查询的 scan 字段
+    if "scan" not in q and q.get("cte"):
+        q["scan"] = q["cte"][-1]["name"]
+
     # 修复 1：filter/having 为 dict 时包装为列表
     for field in ("filter", "having"):
         if isinstance(q.get(field), dict):
@@ -133,6 +151,15 @@ def _coerce(q: dict) -> dict:
             fixed.append(_coerce_condition(cond))
         if fixed:
             q[field] = fixed
+
+    # 修复 12：清理 agg items 中的非法字段
+    # 场景：模型在 agg 项中混入 having、where 等非法字段，导致 schema 校验失败
+    _VALID_AGG_FIELDS = {"fn", "col", "as", "separator"}
+    if q.get("agg"):
+        q["agg"] = [
+            {k: v for k, v in item.items() if k in _VALID_AGG_FIELDS}
+            for item in q["agg"]
+        ]
 
     # 修复 4：count_all 不允许有 col 字段
     if q.get("agg"):
@@ -152,6 +179,33 @@ def _coerce(q: dict) -> dict:
                 key = (agg_item.get("fn"), agg_item.get("col", ""))
                 agg_lookup[key] = agg_item["as"]
         q["having"] = [_coerce_having_fn(c, agg_lookup) for c in q["having"]]
+
+    # 修复 9：select 中的字符串含内联别名（"expr AS alias"）→ 转为 expr 对象
+    # 场景：模型把 SELECT 的 AS 子句写进字符串，如 "STRFTIME('%Y-%m', t.col) as month"
+    # 若不处理，fix 5 会把含 "." 的整个字符串（含 " as month"）加入 GROUP BY，产生语法错误
+    if q.get("select"):
+        new_select = []
+        for item in q["select"]:
+            if isinstance(item, str):
+                # 贪婪匹配末尾的 " AS alias"（alias 为合法标识符，忽略大小写）
+                m = re.match(r'^(.+)\s+[Aa][Ss]\s+([A-Za-z_]\w*)\s*$', item)
+                if m:
+                    item = {"expr": m.group(1).strip(), "as": m.group(2)}
+            new_select.append(item)
+        q["select"] = new_select
+
+    # 修复 10：有 agg/group 但缺少 select 时，自动生成 select
+    # 场景：CTE 子查询常见，模型写了 scan/filter/group/agg 但忘了写 select
+    # 自动生成顺序：group 维度列在前，agg 别名在后（与 SQL 语义一致）
+    if "select" not in q and (q.get("agg") or q.get("group")):
+        auto_select: list = []
+        agg_aliases = [a["as"] for a in q.get("agg", []) if "as" in a]
+        for g in q.get("group", []):
+            if isinstance(g, str):
+                auto_select.append(g)
+        auto_select.extend(agg_aliases)
+        if auto_select:
+            q["select"] = auto_select
 
     # 修复 5：group 存在时，补全 select 中缺失的维度列到 group
     if q.get("group") is not None and q.get("agg"):
@@ -173,6 +227,74 @@ def _coerce(q: dict) -> dict:
                 current_group.append(sel_item)
                 group_set.add(sel_item)
         q["group"] = current_group
+
+    # 修复 13：select expr 字符串中出现 count_all() → 替换为 COUNT(*)
+    # 场景：模型在 expr 中内联 count_all()，SQLite 不认识该函数名
+    if q.get("select"):
+        fixed_sel = []
+        for item in q["select"]:
+            if isinstance(item, dict) and "expr" in item:
+                item = dict(item)
+                item["expr"] = re.sub(
+                    r'\bcount_all\s*\(\s*\)', 'COUNT(*)', item["expr"], flags=re.IGNORECASE
+                )
+            fixed_sel.append(item)
+        q["select"] = fixed_sel
+
+    # 修复 14：当 scan 为 CTE 名时，外层列引用中的 table.col 去掉 table. 前缀
+    # 场景：模型在 CTE 内 GROUP BY products.category，然后外层 SELECT products.category
+    #       CTE 输出列名不带表前缀，SQLite 报 "no such column: products.category"
+    # 策略：收集 CTE 名集合，若 scan 是 CTE 名，则对 select 字符串、agg.col、group 中
+    #       出现的 "other_table.col" 格式（other_table 不是 CTE 名）剥离表前缀
+    if q.get("cte") and q.get("scan"):
+        cte_names = {c["name"] for c in q["cte"] if isinstance(c, dict) and "name" in c}
+        if q["scan"] in cte_names:
+            def _strip_prefix(s: str) -> str:
+                """若 s 形如 table.col 且 table 不在 cte_names，剥离 table. 前缀。"""
+                if isinstance(s, str) and "." in s:
+                    parts = s.split(".", 1)
+                    if parts[0] not in cte_names:
+                        return parts[1]
+                return s
+
+            # select 字符串项 及 expr 对象中纯列引用（"table.col"）
+            if q.get("select"):
+                new_sel = []
+                for item in q["select"]:
+                    if isinstance(item, str):
+                        item = _strip_prefix(item)
+                    elif isinstance(item, dict) and "expr" in item:
+                        expr_val = item["expr"]
+                        # 仅当 expr 是纯 table.col 形式（无空格/括号）时才剥离
+                        if (isinstance(expr_val, str)
+                                and re.match(r'^[A-Za-z_]\w*\.[A-Za-z_]\w*$', expr_val)):
+                            stripped = _strip_prefix(expr_val)
+                            if stripped != expr_val:
+                                item = dict(item)
+                                item["expr"] = stripped
+                    new_sel.append(item)
+                q["select"] = new_sel
+            # agg.col
+            if q.get("agg"):
+                new_agg = []
+                for agg_item in q["agg"]:
+                    agg_item = dict(agg_item)
+                    if "col" in agg_item:
+                        agg_item["col"] = _strip_prefix(agg_item["col"])
+                    new_agg.append(agg_item)
+                q["agg"] = new_agg
+            # group
+            if q.get("group"):
+                q["group"] = [_strip_prefix(g) for g in q["group"]]
+            # window partition
+            if q.get("window"):
+                new_win = []
+                for w in q["window"]:
+                    if w.get("partition"):
+                        w = dict(w)
+                        w["partition"] = [_strip_prefix(p) for p in w["partition"]]
+                    new_win.append(w)
+                q["window"] = new_win
 
     # 修复 7：qualify 引用的 window 别名未在 select 中时，自动补齐
     # 解决：模型使用 window + qualify 时遗漏 rank alias，导致外层 WHERE 引用未定义列。
@@ -440,9 +562,19 @@ def _expand_aliases(expr_str: str, alias_map: dict[str, str]) -> str:
         → "COUNT(CASE WHEN ...) * 1.0 / COUNT(*)"
 
     策略：按别名长度降序替换，避免短别名误匹配长别名的子串。
+    跳过 FROM/JOIN 后的词（CTE/表名引用），避免将表名展开为聚合表达式。
     """
     for alias in sorted(alias_map.keys(), key=len, reverse=True):
-        expr_str = re.sub(r'\b' + re.escape(alias) + r'\b', alias_map[alias], expr_str)
+        replacement = alias_map[alias]
+        pattern = re.compile(r'\b' + re.escape(alias) + r'\b')
+
+        def _sub(m, _repl=replacement, _expr=expr_str):
+            before = _expr[:m.start()].rstrip()
+            if re.search(r'\b(FROM|JOIN)\s*$', before, re.IGNORECASE):
+                return m.group(0)
+            return _repl
+
+        expr_str = pattern.sub(_sub, expr_str)
     return expr_str
 
 
