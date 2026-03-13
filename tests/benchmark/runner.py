@@ -35,6 +35,7 @@ BENCH_DIR = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 from forge.compiler import compile_query
+from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
@@ -43,6 +44,8 @@ DB_PATH    = BENCH_DIR / "benchmark.db"
 GOLD_DIR   = BENCH_DIR / "gold"
 CASES_PATH = BENCH_DIR / "cases.json"
 RESULTS_DIR = BENCH_DIR / "results"
+REGISTRY_PATH = ROOT / "schema.registry.json"
+EMBED_CACHE_PATH = ROOT / ".forge" / "schema_embeddings.pkl"
 
 MINIMAX_API_KEY  = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic")
@@ -53,10 +56,51 @@ LLM_BASE_URL = os.environ.get("LLM_BASE_URL", MINIMAX_BASE_URL)
 LLM_MODEL    = os.environ.get("LLM_MODEL",    MINIMAX_MODEL)
 LLM_FORMAT   = os.environ.get("LLM_FORMAT",   "anthropic")  # "anthropic" | "openai"
 
+# Embedding 配置（用于 schema 检索；默认复用 MiniMax key，切换到 OpenAI-compatible /v1 端点）
+EMBED_API_KEY  = os.environ.get("EMBED_API_KEY",  MINIMAX_API_KEY)
+EMBED_BASE_URL = os.environ.get("EMBED_BASE_URL", "https://api.minimaxi.com/v1")
+EMBED_MODEL    = os.environ.get("EMBED_MODEL",    "embo-01")
+RETRIEVAL_TOP_K = int(os.environ.get("RETRIEVAL_TOP_K", "5"))
 
-# ── System Prompts ────────────────────────────────────────────────────────────
 
-_SCHEMA = """
+# ── Schema 检索器初始化 ────────────────────────────────────────────────────────
+
+def _init_retriever() -> tuple[SchemaRetriever | None, object | None]:
+    """
+    初始化 SchemaRetriever 和查询嵌入函数。
+
+    返回：
+        (retriever, query_embed_fn)
+        若 registry 文件不存在或 embedding API 不可用，query_embed_fn 为 None
+        （retriever 仍可使用 BM25-lite 降级模式）
+    """
+    if not REGISTRY_PATH.exists():
+        return None, None
+
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    retriever = SchemaRetriever(registry, cache_path=EMBED_CACHE_PATH)
+
+    query_embed_fn = None
+    if EMBED_API_KEY:
+        try:
+            # 尝试加载已有索引，避免每次启动都重新调用 embedding API
+            if not retriever.load_index():
+                db_embed_fn = make_embed_fn(EMBED_API_KEY, EMBED_BASE_URL, EMBED_MODEL, "db")
+                retriever.build_index(db_embed_fn)
+                print("  [retriever] 向量索引已构建", flush=True)
+            else:
+                print("  [retriever] 向量索引从缓存加载", flush=True)
+            query_embed_fn = make_query_embed_fn(EMBED_API_KEY, EMBED_BASE_URL, EMBED_MODEL)
+        except Exception as e:
+            print(f"  [retriever] embedding API 不可用（{e}），使用 BM25-lite", flush=True)
+
+    return retriever, query_embed_fn
+
+
+# ── System Prompt 构建函数（替换硬编码的字符串常量）────────────────────────────
+
+# 全量 schema（fallback：检索器不可用时使用）
+_SCHEMA_FULL = """
 你可以查询以下数据库表（SQLite）：
 
 users       (id, name, city, created_at, is_vip)
@@ -225,18 +269,21 @@ having 中的 col 必须是 agg 定义的别名（as 字段），不能是原始
 只输出 JSON 对象，不要任何解释，不要 markdown 代码块。
 """
 
-FORGE_SYSTEM = f"""你是一个专业的数据查询助手，帮助用户用 Forge 格式描述数据查询需求。
+def _build_forge_system(schema_ctx: str) -> str:
+    return f"""你是一个专业的数据查询助手，帮助用户用 Forge 格式描述数据查询需求。
 
-{_SCHEMA}
+{schema_ctx}
 
 {_FORGE_SPEC}
 
 用户会描述一个数据查询需求，你需要输出符合 Forge 格式的 JSON。
 只输出 JSON 对象，不要任何其他内容。"""
 
-DIRECT_SYSTEM = f"""你是一个专业的 SQL 数据分析师。
 
-{_SCHEMA}
+def _build_direct_system(schema_ctx: str) -> str:
+    return f"""你是一个专业的 SQL 数据分析师。
+
+{schema_ctx}
 
 根据用户的问题，生成正确的 SQLite SQL 查询。
 - 使用 SQLite 语法（日期函数用 STRFTIME，随机用 RANDOM()）
@@ -282,9 +329,10 @@ DIRECT_TOOL = {
     },
 }
 
-DIRECT_SQL_SYSTEM_TOOL = f"""你是一个专业的 SQL 数据分析师。
+def _build_direct_system_tool(schema_ctx: str) -> str:
+    return f"""你是一个专业的 SQL 数据分析师。
 
-{_SCHEMA}
+{schema_ctx}
 
 根据用户的问题，调用 generate_sql_direct 工具，传入完整的 SQLite SQL 查询。
 - 使用 SQLite 语法
@@ -439,15 +487,38 @@ def _ea_match(pred_rows: list, gold_rows: list) -> bool:
 
 # ── Case 运行器 ───────────────────────────────────────────────────────────────
 
-def run_forge_case(client, case: dict) -> dict:
+def _get_schema_ctx(
+    question: str,
+    retriever: SchemaRetriever | None,
+    query_embed_fn,
+    top_k: int,
+) -> str:
+    """检索相关表并生成 schema 上下文文本；检索器不可用时返回全量 schema。"""
+    if retriever is None:
+        return _SCHEMA_FULL
+    tables = retriever.retrieve(question, query_embed_fn, top_k=top_k)
+    return retriever.get_schema_ddl(tables)
+
+
+def run_forge_case(
+    client,
+    case: dict,
+    retriever: SchemaRetriever | None = None,
+    query_embed_fn=None,
+    top_k: int = RETRIEVAL_TOP_K,
+) -> dict:
     """Forge 模式：tool_use → compile_query → exec → EA"""
     cid      = case["id"]
     question = case["question"]
     t0       = time.monotonic()
 
+    # 动态构建 system prompt（只含检索到的相关表）
+    schema_ctx   = _get_schema_ctx(question, retriever, query_embed_fn, top_k)
+    forge_system = _build_forge_system(schema_ctx)
+
     # Step 1: LLM → Forge JSON
     result = _call_tool_use(
-        client, FORGE_SYSTEM, question, [FORGE_TOOL], "generate_forge_query")
+        client, forge_system, question, [FORGE_TOOL], "generate_forge_query")
     if not result["ok"]:
         return _make_record(case, "llm_error", None, None, result["error"], t0)
 
@@ -470,7 +541,7 @@ def run_forge_case(client, case: dict) -> dict:
                     "请修正并重新生成正确的 Forge JSON。"
                 )
                 r2 = _call_tool_use(
-                    client, FORGE_SYSTEM, retry_q, [FORGE_TOOL], "generate_forge_query")
+                    client, forge_system, retry_q, [FORGE_TOOL], "generate_forge_query")
                 if r2["ok"]:
                     forge_json = _unwrap_forge_json(r2["input"])
                 else:
@@ -493,14 +564,23 @@ def run_forge_case(client, case: dict) -> dict:
                         ea_match=match, pred_rows=len(pred_rows), gold_rows=len(gold_rows))
 
 
-def run_direct_case(client, case: dict) -> dict:
+def run_direct_case(
+    client,
+    case: dict,
+    retriever: SchemaRetriever | None = None,
+    query_embed_fn=None,
+    top_k: int = RETRIEVAL_TOP_K,
+) -> dict:
     """直接 SQL 模式：tool_use → exec → EA"""
     cid      = case["id"]
     question = case["question"]
     t0       = time.monotonic()
 
+    schema_ctx    = _get_schema_ctx(question, retriever, query_embed_fn, top_k)
+    direct_system = _build_direct_system_tool(schema_ctx)
+
     result = _call_tool_use(
-        client, DIRECT_SQL_SYSTEM_TOOL, question, [DIRECT_TOOL], "generate_sql_direct")
+        client, direct_system, question, [DIRECT_TOOL], "generate_sql_direct")
     if not result["ok"]:
         return _make_record(case, "llm_error", None, None, result["error"], t0)
 
@@ -542,7 +622,14 @@ def _make_record(case: dict, status: str, forge_json, sql, error, t0,
 
 # ── 主流程 ────────────────────────────────────────────────────────────────────
 
-def run_method(method: str, cases: list[dict], workers: int, fresh: bool) -> None:
+def run_method(
+    method: str,
+    cases: list[dict],
+    workers: int,
+    fresh: bool,
+    use_retrieval: bool = True,
+    top_k: int = RETRIEVAL_TOP_K,
+) -> None:
     if not DB_PATH.exists():
         print(f"❌ 找不到 {DB_PATH}，请先运行 create_db.py", file=sys.stderr)
         sys.exit(1)
@@ -569,6 +656,15 @@ def run_method(method: str, cases: list[dict], workers: int, fresh: bool) -> Non
         print(f"  [{method}] 全部已完成，跳过", flush=True)
         return
 
+    # 初始化 schema 检索器（一次性，所有 worker 线程共享只读访问）
+    retriever, query_embed_fn = (None, None)
+    if use_retrieval:
+        retriever, query_embed_fn = _init_retriever()
+        mode_label = "向量" if query_embed_fn else "BM25-lite"
+        print(f"  [retriever] 检索模式={mode_label}  top_k={top_k}", flush=True)
+    else:
+        print(f"  [retriever] 已禁用（全量 schema）", flush=True)
+
     client = _make_client()
     run_fn = run_forge_case if method == "forge" else run_direct_case
 
@@ -579,7 +675,10 @@ def run_method(method: str, cases: list[dict], workers: int, fresh: bool) -> Non
     results: list[dict] = []
     with log_path.open("a", encoding="utf-8") as f_log:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(run_fn, client, c): c for c in todo}
+            futures = {
+                pool.submit(run_fn, client, c, retriever, query_embed_fn, top_k): c
+                for c in todo
+            }
             for i, fut in enumerate(as_completed(futures), 1):
                 rec = fut.result()
                 results.append(rec)
@@ -601,9 +700,13 @@ def run_method(method: str, cases: list[dict], workers: int, fresh: bool) -> Non
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--method", choices=["forge", "direct", "both"], default="both")
+    parser.add_argument("--method",  choices=["forge", "direct", "both"], default="both")
     parser.add_argument("--fresh",   action="store_true", help="清除旧结果重跑")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--no-retrieval", action="store_true",
+                        help="禁用 schema 检索，使用全量 schema（对照组）")
+    parser.add_argument("--top-k",   type=int, default=RETRIEVAL_TOP_K,
+                        help=f"每次检索返回的表数量（默认 {RETRIEVAL_TOP_K}）")
     args = parser.parse_args()
 
     if not CASES_PATH.exists():
@@ -614,7 +717,9 @@ def main() -> None:
 
     methods = ["forge", "direct"] if args.method == "both" else [args.method]
     for m in methods:
-        run_method(m, cases, args.workers, args.fresh)
+        run_method(m, cases, args.workers, args.fresh,
+                   use_retrieval=not args.no_retrieval,
+                   top_k=args.top_k)
 
     print("\n✅ 完成，运行 report.py 生成报告", flush=True)
 

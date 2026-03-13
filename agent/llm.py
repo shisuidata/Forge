@@ -25,11 +25,53 @@ import yaml
 from config import cfg
 from agent.prompts import build_system
 from forge.schema_builder import build_tool_schema
+from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
+
+
+# ── Schema 检索器（模块级单例，懒初始化）─────────────────────────────────────
+
+_retriever: SchemaRetriever | None = None
+_query_embed_fn = None
+_retriever_initialized = False
+
+
+def _get_retriever() -> tuple[SchemaRetriever | None, object | None]:
+    """
+    懒加载 SchemaRetriever 单例。
+
+    首次调用时读取 registry 并尝试加载/构建向量索引。
+    后续调用直接返回缓存的实例（registry 变更通过 forge sync 重建索引）。
+    """
+    global _retriever, _query_embed_fn, _retriever_initialized
+    if _retriever_initialized:
+        return _retriever, _query_embed_fn
+
+    _retriever_initialized = True
+    try:
+        registry = json.loads(cfg.REGISTRY_PATH.read_text())
+        cache_path = cfg.REGISTRY_PATH.parent / ".forge" / "schema_embeddings.pkl"
+        r = SchemaRetriever(registry, cache_path=cache_path)
+
+        embed_key  = getattr(cfg, "EMBED_API_KEY",  None) or getattr(cfg, "LLM_API_KEY", None)
+        embed_url  = getattr(cfg, "EMBED_BASE_URL", None) or "https://api.minimaxi.com/v1"
+        embed_model = getattr(cfg, "EMBED_MODEL",   None) or "embo-01"
+
+        if embed_key:
+            if not r.load_index():
+                db_fn = make_embed_fn(embed_key, embed_url, embed_model, "db")
+                r.build_index(db_fn)
+            _query_embed_fn = make_query_embed_fn(embed_key, embed_url, embed_model)
+
+        _retriever = r
+    except Exception:
+        pass  # retriever 不可用时静默降级，不影响 Agent 运行
+
+    return _retriever, _query_embed_fn
 
 
 # ── 注册表上下文格式化 ────────────────────────────────────────────────────────
 
-def _registry_context() -> str:
+def _registry_context(question: str | None = None) -> str:
     """
     读取结构层和语义层注册表，格式化为便于 LLM 理解的纯文本。
 
@@ -57,24 +99,46 @@ def _registry_context() -> str:
     """
     lines: list[str] = []
 
-    # ── 结构层：表名和字段名 ──────────────────────────────────────────────────
+    # ── 结构层：表名和字段名（向量检索精简 or 全量）────────────────────────────
     try:
         schema = json.loads(cfg.REGISTRY_PATH.read_text())
-        # 兼容旧格式（直接是 {table: {columns: [...]}} 而不是 {tables: {...}}）
-        tables = schema.get("tables", schema)
-        lines.append("表结构：")
-        for table, info in tables.items():
-            cols = info.get("columns", info) if isinstance(info, dict) else info
-            if isinstance(cols, dict):
-                col_parts = []
-                for col_name, meta in cols.items():
-                    if isinstance(meta, dict) and meta.get("enum"):
-                        col_parts.append(f"{col_name}[{'/'.join(str(v) for v in meta['enum'])}]")
-                    else:
-                        col_parts.append(col_name)
-                lines.append(f"  {table}: {', '.join(col_parts)}")
-            else:
-                lines.append(f"  {table}: {', '.join(cols)}")
+
+        # 当有问题文本时，用检索器只取相关表；否则全量展示
+        retriever, q_embed_fn = _get_retriever()
+        if question and retriever:
+            top_k = getattr(cfg, "RETRIEVAL_TOP_K", 5)
+            selected_tables = retriever.retrieve(question, q_embed_fn, top_k=top_k)
+            lines.append(f"表结构（与问题相关的 {len(selected_tables)} 张表）：")
+            tables_info = schema.get("tables", schema)
+            for table in selected_tables:
+                info = tables_info.get(table, {})
+                cols = info.get("columns", info) if isinstance(info, dict) else info
+                if isinstance(cols, dict):
+                    col_parts = []
+                    for col_name, meta in cols.items():
+                        if isinstance(meta, dict) and meta.get("enum"):
+                            col_parts.append(f"{col_name}[{'/'.join(str(v) for v in meta['enum'])}]")
+                        else:
+                            col_parts.append(col_name)
+                    lines.append(f"  {table}: {', '.join(col_parts)}")
+                else:
+                    lines.append(f"  {table}: {', '.join(cols)}")
+        else:
+            # 全量模式（无问题文本 / 检索器不可用）
+            tables = schema.get("tables", schema)
+            lines.append("表结构：")
+            for table, info in tables.items():
+                cols = info.get("columns", info) if isinstance(info, dict) else info
+                if isinstance(cols, dict):
+                    col_parts = []
+                    for col_name, meta in cols.items():
+                        if isinstance(meta, dict) and meta.get("enum"):
+                            col_parts.append(f"{col_name}[{'/'.join(str(v) for v in meta['enum'])}]")
+                        else:
+                            col_parts.append(col_name)
+                    lines.append(f"  {table}: {', '.join(col_parts)}")
+                else:
+                    lines.append(f"  {table}: {', '.join(cols)}")
     except Exception:
         lines.append("表结构：未找到，请先运行 forge sync。")
 
@@ -319,7 +383,14 @@ def call(history: list[Any]) -> dict:
         pass
     tools = _build_tools(registry)
 
-    system = build_system(_registry_context())
+    # 提取最新的用户问题，用于 schema 向量检索（精简 context）
+    current_question: str | None = None
+    for m in reversed(history):
+        if m.role == "user":
+            current_question = m.content
+            break
+
+    system = build_system(_registry_context(question=current_question))
     messages = [{"role": m.role, "content": m.content} for m in history]
     if cfg.LLM_PROVIDER == "anthropic":
         return _call_anthropic(messages, system, tools)
