@@ -54,14 +54,60 @@ class SchemaRetriever:
         self,
         registry: dict,
         cache_path: Path | str | None = None,
+        metrics_registry: dict | None = None,
     ) -> None:
         self.registry = registry
         self.tables: list[str] = list(registry.get("tables", {}).keys())
-        self._fks: dict[str, set[str]] = self._detect_fks()   # 先检测 FK，再构建文本
+        self._fks: dict[str, set[str]] = self._detect_fks()
+        self._metrics_registry: dict = metrics_registry or {}
+        # 指标→表 映射：从 metrics_registry 反推每张表承载哪些业务指标
+        self._table_metrics: dict[str, list[str]] = self._build_table_metrics(self._metrics_registry)
         self.table_texts: dict[str, str] = self._build_table_texts()
-        self._embeddings: np.ndarray | None = None   # shape: (n_tables, embed_dim)
-        self._idf: dict[str, float] | None = None    # BM25-lite 降级缓存
+        self._embeddings: np.ndarray | None = None
+        self._idf: dict[str, float] | None = None
         self.cache_path = Path(cache_path) if cache_path else None
+
+    # ── 指标→表 映射 ──────────────────────────────────────────────────────────
+
+    def _build_table_metrics(self, metrics_registry: dict) -> dict[str, list[str]]:
+        """
+        从语义层（metrics.registry.yaml）反向推导每张表承载的业务指标。
+
+        规范 schema 假设：metrics 的 measure / period_col / dimensions 字段均为
+        table.column 格式，可以直接提取表名。
+
+        Returns:
+            {table_name: [metric_label, ...]}
+            例：{"dwd_order_detail": ["GMV（成交总额）", "支付GMV", "订单量", "复购用户数", ...]}
+        """
+        table_to_labels: dict[str, list[str]] = {t: [] for t in self.tables}
+
+        for metric_name, metric in metrics_registry.items():
+            label = metric.get("label", metric_name)
+            # 从 measure / period_col / dimensions 中提取表名
+            ref_cols: list[str] = []
+            if metric.get("measure"):
+                ref_cols.append(metric["measure"])
+            if metric.get("period_col"):
+                ref_cols.append(metric["period_col"])
+            for dim in metric.get("dimensions", []):
+                if "." in dim:
+                    ref_cols.append(dim)
+            for numerator_or_denom in ("numerator", "denominator"):
+                # 衍生指标：递归从原子指标里取 measure（简单处理：只取一层）
+                ref_name = metric.get(numerator_or_denom, "")
+                if ref_name and ref_name in metrics_registry:
+                    ref_m = metrics_registry[ref_name].get("measure", "")
+                    if ref_m:
+                        ref_cols.append(ref_m)
+
+            for col_ref in ref_cols:
+                if "." in col_ref:
+                    table = col_ref.split(".")[0]
+                    if table in table_to_labels and label not in table_to_labels[table]:
+                        table_to_labels[table].append(label)
+
+        return table_to_labels
 
     # ── FK 检测 ───────────────────────────────────────────────────────────────
 
@@ -140,6 +186,12 @@ class SchemaRetriever:
             related = self._fks.get(table_name, set())
             if related:
                 parts.append(f"Related tables: {', '.join(sorted(related))}")
+
+            # 注入业务指标（已在 _build_table_metrics 中计算）
+            # 让 "dwd_order_detail" 的向量包含 "GMV / 客单价 / 复购率" 等业务词
+            metrics = self._table_metrics.get(table_name, [])
+            if metrics:
+                parts.append(f"业务指标: {', '.join(metrics[:12])}")
 
             texts[table_name] = ". ".join(parts)
 
@@ -221,6 +273,10 @@ class SchemaRetriever:
         if top_k >= len(self.tables):
             return list(self.tables)
 
+        # Phase 0：指标名称直接匹配（规范语义层假设）
+        # 若问题命中已注册的业务指标，直接从其定义中提取所需表，精度最高
+        metric_tables = self._retrieve_by_metrics(question)
+
         # Phase 1：表级语义检索
         if self._embeddings is not None and embed_fn is not None:
             candidates = self._retrieve_by_embedding(question, embed_fn, top_k)
@@ -229,8 +285,14 @@ class SchemaRetriever:
 
         # Phase 2：列名关键词补充（去重合并，candidates 优先）
         col_tables = self._retrieve_by_columns(question, top_k)
-        seen: set[str] = set(candidates)
-        merged = list(candidates)
+
+        # 合并优先级：metric_tables > vector/BM25 > column match
+        seen: set[str] = set()
+        merged: list[str] = []
+        for t in metric_tables + candidates:
+            if t not in seen:
+                seen.add(t)
+                merged.append(t)
         for t in col_tables:
             if t not in seen:
                 seen.add(t)
@@ -267,6 +329,70 @@ class SchemaRetriever:
             scores[table] = score
 
         return sorted(self.tables, key=lambda t: scores[t], reverse=True)[:top_k]
+
+    def _retrieve_by_metrics(self, question: str) -> list[str]:
+        """
+        Phase 0：指标名称直接匹配。
+
+        将问题与已注册业务指标的 label 和 name 进行关键词匹配。
+        命中后从指标定义中提取 measure / period_col / dimensions 所在的表，
+        直接返回为高置信度候选表。
+
+        优势：对"复购率""客单价""广告 ROI"等明确指标名的查询精度接近 100%。
+        依赖 metrics_registry 传入（构造时注入）。
+        """
+        if not hasattr(self, '_metrics_registry') or not self._metrics_registry:
+            return []
+
+        q_lower = question.lower()
+        matched_tables: list[str] = []
+        seen: set[str] = set()
+
+        for metric_name, metric in self._metrics_registry.items():
+            label = metric.get("label", "")
+            # 匹配 metric name 或 label 的任意词
+            match_targets = [metric_name.lower(), label.lower()]
+            hit = any(
+                (t in q_lower or q_lower in t)
+                for t in match_targets
+                if len(t) >= 2
+            )
+            # 也尝试 label 中的关键词（"客单价" → "客单" "单价"）
+            if not hit:
+                for chunk in re.split(r'[（）\s/（）、,，]', label):
+                    chunk = chunk.strip().lower()
+                    if len(chunk) >= 2 and chunk in q_lower:
+                        hit = True
+                        break
+
+            if not hit:
+                continue
+
+            # 提取该指标所需的表
+            ref_cols: list[str] = []
+            if metric.get("measure"):
+                ref_cols.append(metric["measure"])
+            if metric.get("period_col"):
+                ref_cols.append(metric["period_col"])
+            for dim in metric.get("dimensions", []):
+                if "." in dim:
+                    ref_cols.append(dim)
+            # 衍生指标：从分子/分母原子指标里取 measure
+            for key in ("numerator", "denominator"):
+                ref_name = metric.get(key, "")
+                if ref_name and ref_name in self._metrics_registry:
+                    ref_m = self._metrics_registry[ref_name].get("measure", "")
+                    if ref_m:
+                        ref_cols.append(ref_m)
+
+            for col_ref in ref_cols:
+                if "." in col_ref:
+                    table = col_ref.split(".")[0]
+                    if table in set(self.tables) and table not in seen:
+                        seen.add(table)
+                        matched_tables.append(table)
+
+        return matched_tables
 
     def _retrieve_by_columns(self, question: str, top_k: int) -> list[str]:
         """
