@@ -285,3 +285,357 @@ def test_clause_order_in_full_query():
     keywords = ["SELECT", "FROM", "INNER JOIN", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT"]
     positions = [result.index(kw) for kw in keywords]
     assert positions == sorted(positions), "SQL clauses are out of order"
+
+
+# ── P1: window frame ──────────────────────────────────────────────────────────
+
+def test_window_frame_rows_between():
+    """Window frame: ROWS BETWEEN 6 PRECEDING AND CURRENT ROW (7-day rolling avg)."""
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "avg", "col": "orders.total_amount",
+            "order": [{"col": "orders.created_at", "dir": "asc"}],
+            "frame": {"unit": "rows", "start": "6 preceding", "end": "current_row"},
+            "as": "rolling_avg"
+        }],
+        "select": ["orders.created_at", "rolling_avg"],
+    })
+    assert "AVG(orders.total_amount) OVER" in result
+    assert "ROWS BETWEEN 6 PRECEDING AND CURRENT ROW" in result
+
+
+def test_window_frame_running_total():
+    """Window frame: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW (running total)."""
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "sum", "col": "orders.total_amount",
+            "order": [{"col": "orders.created_at", "dir": "asc"}],
+            "frame": {"unit": "rows", "start": "unbounded_preceding", "end": "current_row"},
+            "as": "running_total"
+        }],
+        "select": ["running_total"],
+    })
+    assert "ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW" in result
+
+
+def test_window_frame_range():
+    """Window frame: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW."""
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "sum", "col": "orders.total_amount",
+            "order": [{"col": "orders.created_at", "dir": "asc"}],
+            "frame": {"unit": "range", "start": "unbounded_preceding", "end": "current_row"},
+            "as": "range_total"
+        }],
+        "select": ["range_total"],
+    })
+    assert "RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW" in result
+
+
+# ── P1: date trunc group key ──────────────────────────────────────────────────
+
+def test_group_expr_date_trunc():
+    """Group by computed expression (date truncation) with alias referenced in select."""
+    result = sql({
+        "scan": "orders",
+        "group": [{"expr": "STRFTIME('%Y-%m', orders.created_at)", "as": "month"}],
+        "agg":   [{"fn": "count_all", "as": "order_count"}],
+        "select": ["month", "order_count"],
+    })
+    assert "STRFTIME('%Y-%m', orders.created_at) AS month" in result
+    assert "GROUP BY STRFTIME('%Y-%m', orders.created_at)" in result
+    assert "COUNT(*) AS order_count" in result
+
+
+def test_group_expr_mixed_with_column():
+    """Group by a mix of plain column and computed expression."""
+    result = sql({
+        "scan": "orders",
+        "group": [
+            "orders.user_id",
+            {"expr": "STRFTIME('%Y-%m', orders.created_at)", "as": "month"},
+        ],
+        "agg":   [{"fn": "sum", "col": "orders.total_amount", "as": "revenue"}],
+        "select": ["orders.user_id", "month", "revenue"],
+    })
+    assert "GROUP BY orders.user_id, STRFTIME('%Y-%m', orders.created_at)" in result
+    assert "STRFTIME('%Y-%m', orders.created_at) AS month" in result
+
+
+# ── P1: new window functions ──────────────────────────────────────────────────
+
+def test_window_percent_rank():
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "percent_rank",
+            "order": [{"col": "orders.total_amount", "dir": "desc"}],
+            "as": "pct_rank"
+        }],
+        "select": ["orders.id", "pct_rank"],
+    })
+    assert "PERCENT_RANK() OVER" in result
+    assert "ORDER BY orders.total_amount DESC" in result
+
+
+def test_window_cume_dist():
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "cume_dist",
+            "order": [{"col": "orders.total_amount", "dir": "asc"}],
+            "as": "cd"
+        }],
+        "select": ["orders.id", "cd"],
+    })
+    assert "CUME_DIST() OVER" in result
+
+
+def test_window_ntile():
+    """NTILE(4) → quartile buckets."""
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "ntile", "n": 4,
+            "order": [{"col": "orders.total_amount", "dir": "desc"}],
+            "as": "quartile"
+        }],
+        "select": ["orders.id", "quartile"],
+    })
+    assert "NTILE(4) OVER" in result
+
+
+def test_window_first_value():
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "first_value", "col": "orders.total_amount",
+            "partition": ["orders.user_id"],
+            "order": [{"col": "orders.created_at", "dir": "asc"}],
+            "as": "first_order_amount"
+        }],
+        "select": ["orders.user_id", "first_order_amount"],
+    })
+    assert "FIRST_VALUE(orders.total_amount) OVER" in result
+    assert "PARTITION BY orders.user_id" in result
+
+
+def test_window_last_value_with_frame():
+    """LAST_VALUE needs ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING to work correctly."""
+    result = sql({
+        "scan": "orders",
+        "window": [{
+            "fn": "last_value", "col": "orders.total_amount",
+            "partition": ["orders.user_id"],
+            "order": [{"col": "orders.created_at", "dir": "asc"}],
+            "frame": {"unit": "rows", "start": "unbounded_preceding", "end": "unbounded_following"},
+            "as": "last_order_amount"
+        }],
+        "select": ["orders.user_id", "last_order_amount"],
+    })
+    assert "LAST_VALUE(orders.total_amount) OVER" in result
+    assert "ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING" in result
+
+
+# ── P2: SELECT DISTINCT ───────────────────────────────────────────────────────
+
+def test_select_distinct():
+    result = sql({
+        "scan": "orders",
+        "distinct": True,
+        "select": ["orders.user_id", "orders.status"],
+    })
+    assert result.startswith("SELECT DISTINCT")
+    assert "orders.user_id" in result
+
+
+def test_select_without_distinct():
+    """Without distinct: true, output must be SELECT (not SELECT DISTINCT)."""
+    result = sql({
+        "scan": "orders",
+        "select": ["orders.user_id"],
+    })
+    assert "SELECT DISTINCT" not in result
+    assert result.startswith("SELECT")
+
+
+# ── P2: INTERSECT / EXCEPT ───────────────────────────────────────────────────
+
+def test_intersect():
+    result = sql({
+        "scan": "orders",
+        "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+        "select": ["orders.user_id"],
+        "intersect": [{"query": {
+            "scan": "orders",
+            "filter": [{"col": "orders.total_amount", "op": "gte", "val": 1000}],
+            "select": ["orders.user_id"],
+        }}],
+    })
+    assert "INTERSECT" in result
+    assert result.count("orders.user_id") >= 2
+
+
+def test_except():
+    result = sql({
+        "scan": "users",
+        "select": ["users.id"],
+        "except": [{"query": {
+            "scan": "orders",
+            "select": ["orders.user_id"],
+        }}],
+    })
+    assert "EXCEPT" in result
+
+
+# ── P2: filter IN subquery ────────────────────────────────────────────────────
+
+def test_filter_in_subquery():
+    """IN (SELECT ...) subquery compiles correctly."""
+    result = sql({
+        "scan": "users",
+        "filter": [{
+            "col": "users.id",
+            "op": "in",
+            "val": {"subquery": {
+                "scan": "orders",
+                "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+                "select": ["orders.user_id"],
+            }}
+        }],
+        "select": ["users.id", "users.name"],
+    })
+    assert "users.id IN (" in result
+    assert "SELECT orders.user_id" in result
+    assert "orders.status = 'completed'" in result
+
+
+# ── P2: agg FILTER clause ─────────────────────────────────────────────────────
+
+def test_agg_filter_clause():
+    """SUM(col) FILTER (WHERE ...) compiles correctly (SQLite / PostgreSQL)."""
+    result = sql({
+        "scan": "orders",
+        "agg": [
+            {"fn": "count_all", "as": "total_orders"},
+            {
+                "fn": "sum", "col": "orders.total_amount", "as": "vip_revenue",
+                "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}]
+            },
+        ],
+        "select": ["total_orders", "vip_revenue"],
+    })
+    assert "SUM(orders.total_amount) FILTER (WHERE orders.status = 'completed') AS vip_revenue" in result
+    assert "COUNT(*) AS total_orders" in result
+
+
+def test_agg_filter_mysql_raises():
+    """MySQL does not support FILTER (WHERE ...) — must raise ValueError."""
+    with pytest.raises(ValueError, match="MySQL"):
+        compile_query({
+            "scan": "orders",
+            "agg": [{
+                "fn": "sum", "col": "orders.total_amount", "as": "rev",
+                "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+            }],
+            "select": ["rev"],
+        }, dialect="mysql")
+
+
+# ── NULL 安全 neq 编译 ────────────────────────────────────────────────────────
+
+def test_null_safe_neq_with_nullable_col():
+    """nullable 列的 neq 条件自动展开为 (col != val OR col IS NULL)"""
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.user_id", "op": "neq", "val": 0}], "select": ["orders.id"]},
+        nullable_cols=frozenset(["orders.user_id"])
+    ).split())
+    assert result == "SELECT orders.id FROM orders WHERE (orders.user_id != 0 OR orders.user_id IS NULL)"
+
+
+def test_null_safe_neq_col_shortname():
+    """nullable_cols 支持不带表前缀的列名匹配"""
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.status", "op": "neq", "val": "cancelled"}], "select": ["orders.id"]},
+        nullable_cols=frozenset(["status"])
+    ).split())
+    assert result == "SELECT orders.id FROM orders WHERE (orders.status != 'cancelled' OR orders.status IS NULL)"
+
+
+def test_neq_without_nullable_stays_simple():
+    """不传 nullable_cols 时，neq 保持普通形式"""
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.status", "op": "neq", "val": "cancelled"}], "select": ["orders.id"]}
+    ).split())
+    assert result == "SELECT orders.id FROM orders WHERE orders.status != 'cancelled'"
+
+
+# ── BigQuery 方言 ─────────────────────────────────────────────────────────────
+
+def test_bigquery_preset_today():
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.created_at", "op": "gte", "val": {"$preset": "today"}}], "select": ["orders.id"]},
+        dialect="bigquery"
+    ).split())
+    assert "CURRENT_DATE()" in result
+
+
+def test_bigquery_preset_this_month():
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.created_at", "op": "gte", "val": {"$preset": "this_month"}}], "select": ["orders.id"]},
+        dialect="bigquery"
+    ).split())
+    assert "DATE_TRUNC(CURRENT_DATE(), MONTH)" in result
+
+
+def test_bigquery_group_concat():
+    result = " ".join(compile_query(
+        {"scan": "orders", "group": ["orders.status"], "agg": [{"fn": "group_concat", "col": "orders.id", "as": "ids"}], "select": ["orders.status", "ids"]},
+        dialect="bigquery"
+    ).split())
+    assert "STRING_AGG(orders.id," in result
+
+
+def test_bigquery_no_right_join():
+    with pytest.raises(ValueError, match="BigQuery"):
+        compile_query(
+            {"scan": "orders", "joins": [{"type": "right", "table": "users", "on": {"left": "orders.user_id", "right": "users.id"}}], "select": ["orders.id"]},
+            dialect="bigquery"
+        )
+
+
+# ── Snowflake 方言 ────────────────────────────────────────────────────────────
+
+def test_snowflake_preset_last_7_days():
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.created_at", "op": "gte", "val": {"$preset": "last_7_days"}}], "select": ["orders.id"]},
+        dialect="snowflake"
+    ).split())
+    assert "DATEADD(day, -7, CURRENT_DATE())" in result
+
+
+def test_snowflake_preset_this_month():
+    result = " ".join(compile_query(
+        {"scan": "orders", "filter": [{"col": "orders.created_at", "op": "gte", "val": {"$preset": "this_month"}}], "select": ["orders.id"]},
+        dialect="snowflake"
+    ).split())
+    assert "DATE_TRUNC('month', CURRENT_DATE())" in result
+
+
+def test_snowflake_group_concat():
+    result = " ".join(compile_query(
+        {"scan": "orders", "group": ["orders.status"], "agg": [{"fn": "group_concat", "col": "orders.id", "as": "ids"}], "select": ["orders.status", "ids"]},
+        dialect="snowflake"
+    ).split())
+    assert "LISTAGG(orders.id," in result
+
+
+def test_snowflake_filter_clause_raises():
+    with pytest.raises(ValueError, match="Snowflake"):
+        compile_query(
+            {"scan": "orders", "group": ["orders.status"], "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "total", "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}]}], "select": ["orders.status", "total"]},
+            dialect="snowflake"
+        )

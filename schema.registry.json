@@ -24,7 +24,9 @@
       "description": "订单主表：记录用户下单行为，含订单状态、总金额、下单时间",
       "columns": {
         "id": {},
-        "user_id": {},
+        "user_id": {
+          "nullable": true
+        },
         "status": {
           "enum": ["completed", "pending", "cancelled"]
         },

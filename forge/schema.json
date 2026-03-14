@@ -26,8 +26,13 @@
 
     "group": {
       "type": "array",
-      "description": "Group-by keys. Required if agg is present.",
-      "items": { "type": "string" }
+      "description": "Group-by keys. Required if agg is present. Accepts column refs (string) or computed expressions {\"expr\":\"...\",\"as\":\"alias\"} for date truncation, etc.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          { "$ref": "#/definitions/GroupExpr" }
+        ]
+      }
     },
 
     "agg": {
@@ -112,6 +117,11 @@
       }
     },
 
+    "distinct": {
+      "type": "boolean",
+      "description": "If true, adds DISTINCT to SELECT, deduplicating result rows. Use sparingly — DISTINCT is expensive and often indicates a missing GROUP BY."
+    },
+
     "union": {
       "type": "array",
       "description": "UNION / UNION ALL with subsequent queries. The main query is the first branch. sort/limit/offset on the main query apply to the entire UNION result.",
@@ -131,6 +141,32 @@
           }
         }
       }
+    },
+
+    "intersect": {
+      "type": "array",
+      "description": "INTERSECT with subsequent queries — returns only rows present in all branches. Column count and types must match.",
+      "items": {
+        "type": "object",
+        "required": ["query"],
+        "additionalProperties": false,
+        "properties": {
+          "query": { "type": "object", "description": "A Forge query object for this INTERSECT branch." }
+        }
+      }
+    },
+
+    "except": {
+      "type": "array",
+      "description": "EXCEPT with subsequent queries — subtracts rows appearing in subsequent branches from the main query result.",
+      "items": {
+        "type": "object",
+        "required": ["query"],
+        "additionalProperties": false,
+        "properties": {
+          "query": { "type": "object", "description": "A Forge query object for this EXCEPT branch." }
+        }
+      }
     }
 
   },
@@ -138,7 +174,7 @@
   "definitions": {
 
     "ScalarVal": {
-      "description": "A typed scalar, array, or date value.",
+      "description": "A typed scalar, array, date value, or subquery (for IN operator).",
       "oneOf": [
         { "type": "string" },
         { "type": "number" },
@@ -169,6 +205,15 @@
               "enum": ["today", "yesterday", "last_7_days", "last_30_days",
                        "this_month", "last_month", "this_quarter", "this_year"]
             }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Subquery for IN operator. The inner Forge query must return exactly one column.",
+          "required": ["subquery"],
+          "additionalProperties": false,
+          "properties": {
+            "subquery": { "type": "object", "description": "A Forge query object that returns a single column." }
           }
         }
       ]
@@ -323,7 +368,12 @@
           "type": "string",
           "description": "Column reference or arithmetic expression, e.g. 'orders.amount' or 'order_items.quantity * order_items.unit_price'. The value is passed verbatim into the SQL function call."
         },
-        "as":  { "type": "string" }
+        "as":  { "type": "string" },
+        "filter": {
+          "type": "array",
+          "description": "FILTER (WHERE ...) clause: only rows matching these conditions contribute to this aggregate. Example: {\"fn\":\"count_all\",\"as\":\"vip_count\",\"filter\":[{\"col\":\"users.is_vip\",\"op\":\"eq\",\"val\":1}]}. Not supported in MySQL.",
+          "items": { "$ref": "#/definitions/SimpleCondition" }
+        }
       }
     },
 
@@ -374,9 +424,10 @@
       "type": "object",
       "required": ["fn", "as"],
       "additionalProperties": false,
-      "description": "Ranking functions — no input column. row_number: unique sequential integers (no ties). rank: tied rows get same number, next rank skips (1,1,3). dense_rank: tied rows get same number, no gap (1,1,2).",
+      "description": "Ranking/distribution functions — no input column. row_number: unique sequential integers. rank: tied rows share rank, next skips (1,1,3). dense_rank: no gap (1,1,2). percent_rank: relative rank 0..1. cume_dist: cumulative distribution 0..1. ntile(n): divides rows into n buckets (requires 'n' field).",
       "properties": {
-        "fn":        { "type": "string", "enum": ["row_number", "rank", "dense_rank"] },
+        "fn":        { "type": "string", "enum": ["row_number", "rank", "dense_rank", "percent_rank", "cume_dist", "ntile"] },
+        "n":         { "type": "integer", "minimum": 1, "description": "Bucket count for ntile only. E.g. ntile(4) divides into quartiles." },
         "partition": { "type": "array",  "items": { "type": "string" } },
         "order":     { "type": "array",  "items": { "$ref": "#/definitions/SortKey" } },
         "as":        { "type": "string" }
@@ -387,12 +438,13 @@
       "type": "object",
       "required": ["fn", "col", "as"],
       "additionalProperties": false,
-      "description": "Aggregate window functions: SUM/AVG/COUNT/MIN/MAX OVER (...).",
+      "description": "Aggregate window functions: SUM/AVG/COUNT/MIN/MAX OVER (...). Add 'frame' for moving windows (e.g. 7-day rolling average).",
       "properties": {
         "fn":        { "type": "string", "enum": ["sum", "avg", "count", "min", "max"] },
         "col":       { "type": "string" },
         "partition": { "type": "array",  "items": { "type": "string" } },
         "order":     { "type": "array",  "items": { "$ref": "#/definitions/SortKey" } },
+        "frame":     { "$ref": "#/definitions/WindowFrame" },
         "as":        { "type": "string" }
       }
     },
@@ -401,15 +453,49 @@
       "type": "object",
       "required": ["fn", "col", "as"],
       "additionalProperties": false,
-      "description": "Navigation functions: LAG / LEAD. offset defaults to 1. default is the value used when no prior/next row exists — set to a meaningful string like 'first_order' when the question asks for it, or omit for NULL.",
+      "description": "Navigation/value functions. lag/lead: access prior/next row's value (offset defaults to 1; default fills NULLs). first_value/last_value: first or last value in the window frame.",
       "properties": {
-        "fn":        { "type": "string", "enum": ["lag", "lead"] },
+        "fn":        { "type": "string", "enum": ["lag", "lead", "first_value", "last_value"] },
         "col":       { "type": "string" },
-        "offset":    { "type": "integer", "minimum": 1 },
-        "default":   { "$ref": "#/definitions/ScalarVal" },
+        "offset":    { "type": "integer", "minimum": 1, "description": "lag/lead only: rows to look back/forward." },
+        "default":   { "$ref": "#/definitions/ScalarVal", "description": "lag/lead only: value when no prior/next row exists." },
         "partition": { "type": "array",  "items": { "type": "string" } },
         "order":     { "type": "array",  "items": { "$ref": "#/definitions/SortKey" }, "minItems": 1 },
+        "frame":     { "$ref": "#/definitions/WindowFrame", "description": "first_value/last_value: control which rows are in scope. Defaults to RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW." },
         "as":        { "type": "string" }
+      }
+    },
+
+    "WindowFrame": {
+      "type": "object",
+      "required": ["unit", "start"],
+      "additionalProperties": false,
+      "description": "Window frame clause (ROWS/RANGE BETWEEN start AND end). Common patterns: {unit:'rows',start:'unbounded_preceding',end:'current_row'} for running total; {unit:'rows',start:'6 preceding',end:'current_row'} for 7-day rolling average.",
+      "properties": {
+        "unit":  {
+          "type": "string",
+          "enum": ["rows", "range"],
+          "description": "ROWS = physical row offset; RANGE = logical value offset (requires ORDER BY)."
+        },
+        "start": {
+          "type": "string",
+          "description": "Frame start bound: 'unbounded_preceding', 'current_row', or 'N preceding' / 'N following'."
+        },
+        "end": {
+          "type": "string",
+          "description": "Frame end bound: 'current_row', 'unbounded_following', or 'N preceding' / 'N following'. If omitted, the frame is a single-bound expression."
+        }
+      }
+    },
+
+    "GroupExpr": {
+      "type": "object",
+      "required": ["expr"],
+      "additionalProperties": false,
+      "description": "Computed GROUP BY expression with optional alias. Use for date truncation grouping: {\"expr\":\"STRFTIME('%Y-%m', orders.created_at)\",\"as\":\"month\"}. The alias is referenced in select.",
+      "properties": {
+        "expr": { "type": "string", "description": "SQL expression for GROUP BY (e.g. STRFTIME, DATE_TRUNC, CAST)." },
+        "as":   { "type": "string", "description": "Alias to reference this computed group key in select." }
       }
     }
 

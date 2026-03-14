@@ -51,17 +51,27 @@ _OP_SYMBOLS = {
 
 # ── 公开入口 ──────────────────────────────────────────────────────────────────
 
-_SUPPORTED_DIALECTS = ("sqlite", "mysql", "postgresql")
+_SUPPORTED_DIALECTS = ("sqlite", "mysql", "postgresql", "bigquery", "snowflake")
 
 
-def compile_query(forge: dict, dialect: str = "sqlite") -> str:
+def _col_is_nullable(col: str, nullable_cols: frozenset[str]) -> bool:
+    """检查列引用是否被标记为可空（支持 table.col 和 col 两种格式）。"""
+    return col in nullable_cols or col.split(".", 1)[-1] in nullable_cols
+
+
+def compile_query(forge: dict, dialect: str = "sqlite",
+                  nullable_cols: frozenset[str] | None = None) -> str:
     """
     校验 Forge JSON 并编译为 SQL 字符串。
 
     Args:
-        forge:   符合 Forge DSL 规范的查询字典。
-        dialect: 目标 SQL 方言，可选 "sqlite"（默认）、"mysql"、"postgresql"。
-                 控制日期函数、字符串聚合、JOIN 等方言差异的编译输出。
+        forge:        符合 Forge DSL 规范的查询字典。
+        dialect:      目标 SQL 方言，可选 "sqlite"（默认）、"mysql"、"postgresql"、
+                      "bigquery"、"snowflake"。
+                      控制日期函数、字符串聚合、JOIN 等方言差异的编译输出。
+        nullable_cols: 可空列名集合（支持 "table.col" 或 "col" 格式）。
+                      当某列被标记为可空且使用 neq 运算符时，自动展开为
+                      (col != val OR col IS NULL)，避免 NULL 被静默排除。
 
     Returns:
         多行 SQL 字符串，子句间以换行分隔。
@@ -78,7 +88,7 @@ def compile_query(forge: dict, dialect: str = "sqlite") -> str:
         jsonschema.validate(forge, _SCHEMA)
     except jsonschema.ValidationError as exc:
         raise ValueError(_friendly_error(exc)) from exc
-    return _compile(forge, dialect)
+    return _compile(forge, dialect, nullable_cols)
 
 
 def _coerce(q: dict) -> dict:
@@ -93,7 +103,7 @@ def _coerce(q: dict) -> dict:
     3. window default=None 转为 null（保持 JSON 语义，_val() 后续转 NULL）
     4. agg 中 count_all + col 字段共存时，删除多余的 col
        模型有时生成 {"fn":"count_all","col":"t.id","as":"..."} 而非 {"fn":"count_all","as":"..."}
-    5. group 存在时，select 里的非聚合/非窗口字段自动补齐到 group
+    5. group 存在时，select 里的非聚合/非窗口/非 group_expr 别名字段自动补齐到 group
        模型有时 GROUP BY user_id 但 SELECT 里包含 name、city 等未 GROUP 的列
     6. having 中出现 fn 字段（内联聚合表达式）→ 替换为对应 agg alias
        模型有时生成 {"col":"orders.total_amount","fn":"avg","op":"gt","val":800}
@@ -154,7 +164,7 @@ def _coerce(q: dict) -> dict:
 
     # 修复 12：清理 agg items 中的非法字段
     # 场景：模型在 agg 项中混入 having、where 等非法字段，导致 schema 校验失败
-    _VALID_AGG_FIELDS = {"fn", "col", "as", "separator"}
+    _VALID_AGG_FIELDS = {"fn", "col", "as", "separator", "filter"}
     if q.get("agg"):
         q["agg"] = [
             {k: v for k, v in item.items() if k in _VALID_AGG_FIELDS}
@@ -211,7 +221,12 @@ def _coerce(q: dict) -> dict:
     if q.get("group") is not None and q.get("agg"):
         agg_aliases    = {a["as"] for a in q.get("agg", [])    if "as" in a}
         window_aliases = {w["as"] for w in q.get("window", []) if "as" in w}
-        known_aliases  = agg_aliases | window_aliases
+        # group expr 别名（如 "month"）已有对应 group 条目，不应再追加为普通列
+        group_expr_aliases = {
+            g["as"] for g in q.get("group", [])
+            if isinstance(g, dict) and "as" in g
+        }
+        known_aliases  = agg_aliases | window_aliases | group_expr_aliases
         current_group  = list(q["group"])
         # group_set 只存字符串形式（用于重复检测）
         group_set      = {g if isinstance(g, str) else g.get("as", "") for g in current_group}
@@ -220,7 +235,7 @@ def _coerce(q: dict) -> dict:
             if not isinstance(sel_item, str):
                 continue
             if sel_item in known_aliases:
-                continue          # agg/window 别名，不需要进 GROUP BY
+                continue          # agg/window/group_expr 别名，不需要进 GROUP BY
             if sel_item in group_set:
                 continue          # 已经在 GROUP BY 里
             if "." in sel_item:   # 看起来像 table.col 格式
@@ -420,24 +435,27 @@ def _friendly_error(exc: jsonschema.ValidationError) -> str:
 
 # ── 主编译逻辑 ────────────────────────────────────────────────────────────────
 
-def _compile(q: dict, dialect: str = "sqlite") -> str:
+def _compile(q: dict, dialect: str = "sqlite",
+             nullable_cols: frozenset[str] | None = None) -> str:
     """将已校验的 Forge 字典逐子句编译为 SQL，按标准子句顺序追加到列表后合并。
 
     若存在 qualify 字段，将内层查询包裹为子查询，qualify 条件作为外层 WHERE，
     实现窗口函数结果过滤（等价于 QUALIFY 语法，但兼容所有 SQL 方言）。
 
-    若存在 union 字段，将各分支编译后以 UNION / UNION ALL 拼接。
-    sort/limit/offset 在 UNION 存在时被提升到整个 UNION 结果之后（标准 SQL 语义）。
+    若存在 union/intersect/except 字段，将各分支编译后以相应关键字拼接。
+    sort/limit/offset 在集合运算存在时被提升到整体结果之后（标准 SQL 语义）。
 
     若存在 cte 字段，最终输出以 WITH [RECURSIVE] 前置。
     若任意 CTE 含 recursive_term，整个 WITH 子句使用 WITH RECURSIVE。
 
-    dialect: "sqlite" | "mysql" | "postgresql"，控制方言相关的 SQL 输出。
+    dialect:      "sqlite" | "mysql" | "postgresql" | "bigquery" | "snowflake"，控制方言相关的 SQL 输出。
+    nullable_cols: 可空列名集合，用于 neq 条件的 NULL 安全展开。
     """
     clauses: list[str] = []
 
-    # SELECT：必须最先构建，以便解析 agg/window 别名
-    clauses.append("SELECT " + ", ".join(_select_exprs(q, dialect)))
+    # SELECT [DISTINCT]：必须最先构建，以便解析 agg/window 别名
+    select_prefix = "SELECT DISTINCT" if q.get("distinct") else "SELECT"
+    clauses.append(select_prefix + " " + ", ".join(_select_exprs(q, dialect)))
 
     # FROM：主扫描表
     clauses.append("FROM " + q["scan"])
@@ -445,13 +463,13 @@ def _compile(q: dict, dialect: str = "sqlite") -> str:
     # JOIN：anti/semi 会注入额外的 WHERE 条件，收集到 extra_where
     extra_where: list[str] = []
     for join in q.get("joins", []):
-        join_sql, injected = _join(join, dialect)
+        join_sql, injected = _join(join, dialect, nullable_cols)
         if join_sql:
             clauses.append(join_sql)
         extra_where.extend(injected)
 
     # WHERE：用户显式过滤条件 + anti/semi join 注入的隐式条件，全部 AND 连接
-    where_parts = [_condition(c, dialect) for c in q.get("filter", [])] + extra_where
+    where_parts = [_condition(c, dialect, nullable_cols) for c in q.get("filter", [])] + extra_where
     if where_parts:
         clauses.append("WHERE " + " AND ".join(where_parts))
 
@@ -464,7 +482,7 @@ def _compile(q: dict, dialect: str = "sqlite") -> str:
         clauses.append("GROUP BY " + ", ".join(_group_item(g) for g in q["group"]))
 
     # HAVING：聚合后的行级过滤，条件间 AND 连接
-    having_parts = [_condition(c, dialect) for c in q.get("having", [])]
+    having_parts = [_condition(c, dialect, nullable_cols) for c in q.get("having", [])]
     if having_parts:
         clauses.append("HAVING " + " AND ".join(having_parts))
 
@@ -479,8 +497,9 @@ def _compile(q: dict, dialect: str = "sqlite") -> str:
     if "offset" in q:
         tail_clauses.append(f"OFFSET {q['offset']}")
 
-    # 若无 UNION，直接合并到主体
-    if not q.get("union"):
+    # 若无集合运算，直接合并尾部子句到主体
+    has_set_ops = q.get("union") or q.get("intersect") or q.get("except")
+    if not has_set_ops:
         clauses.extend(tail_clauses)
         tail_clauses = []
 
@@ -489,20 +508,27 @@ def _compile(q: dict, dialect: str = "sqlite") -> str:
     # QUALIFY：窗口函数结果过滤，将内层查询包裹为子查询
     # 用途：实现 per-group TopN，如"每个品类成本排名前3的商品"
     if "qualify" in q:
-        qualify_parts = [_condition(c, dialect) for c in q["qualify"]]
+        qualify_parts = [_condition(c, dialect, nullable_cols) for c in q["qualify"]]
         inner_sql = (
             f"SELECT * FROM (\n"
             + "\n".join(f"  {line}" for line in inner_sql.splitlines())
             + f"\n) AS _q\nWHERE {' AND '.join(qualify_parts)}"
         )
 
-    # UNION / UNION ALL：拼接各分支，尾部子句（ORDER BY/LIMIT/OFFSET）最后追加
-    if q.get("union"):
+    # 集合运算（UNION / INTERSECT / EXCEPT）：拼接各分支，尾部子句最后追加
+    has_set_ops = q.get("union") or q.get("intersect") or q.get("except")
+    if has_set_ops:
         parts = [inner_sql]
-        for branch in q["union"]:
+        for branch in q.get("union", []):
             keyword = "UNION ALL" if branch["mode"] == "union_all" else "UNION"
-            branch_sql = _compile(_coerce(branch["query"]), dialect)
+            branch_sql = _compile(_coerce(branch["query"]), dialect, nullable_cols)
             parts.append(f"{keyword}\n{branch_sql}")
+        for branch in q.get("intersect", []):
+            branch_sql = _compile(_coerce(branch["query"]), dialect, nullable_cols)
+            parts.append(f"INTERSECT\n{branch_sql}")
+        for branch in q.get("except", []):
+            branch_sql = _compile(_coerce(branch["query"]), dialect, nullable_cols)
+            parts.append(f"EXCEPT\n{branch_sql}")
         inner_sql = "\n".join(parts)
         if tail_clauses:
             inner_sql += "\n" + "\n".join(tail_clauses)
@@ -514,7 +540,7 @@ def _compile(q: dict, dialect: str = "sqlite") -> str:
         for cte_item in q["cte"]:
             cte_name = cte_item["name"]
             try:
-                anchor_sql = _compile(_coerce(cte_item["query"]), dialect)
+                anchor_sql = _compile(_coerce(cte_item["query"]), dialect, nullable_cols)
             except (KeyError, TypeError) as exc:
                 raise ValueError(
                     f"CTE '{cte_name}' 内部查询格式错误：{exc}"
@@ -523,7 +549,7 @@ def _compile(q: dict, dialect: str = "sqlite") -> str:
             if cte_item.get("recursive") and cte_item.get("recursive_term"):
                 is_recursive = True
                 try:
-                    rec_sql = _compile(_coerce(cte_item["recursive_term"]), dialect)
+                    rec_sql = _compile(_coerce(cte_item["recursive_term"]), dialect, nullable_cols)
                 except (KeyError, TypeError) as exc:
                     raise ValueError(
                         f"CTE '{cte_name}' 递归部分格式错误：{exc}"
@@ -586,7 +612,8 @@ def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
     1. 若项为 dict（expr 对象）→ 展开其中的 agg/window 别名，编译为 expr AS alias
     2. 若项名是 agg 的别名 → 展开为聚合表达式（如 SUM(col) AS alias）
     3. 若项名是 window 的别名 → 展开为窗口函数表达式（如 ROW_NUMBER() OVER (...) AS alias）
-    4. 否则直接透传（普通列引用）
+    4. 若项名是 group expr 的别名 → 展开为计算表达式（如 STRFTIME(...) AS month）
+    5. 否则直接透传（普通列引用）
 
     对 expr 对象的别名展开：
         agg/window 别名不能在同一 SELECT 中被 expr 字符串直接引用（SQL 不允许）。
@@ -599,6 +626,12 @@ def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
     }
     win_map: dict[str, str] = {
         w["as"]: _window_expr(w, agg_map) for w in q.get("window", [])
+    }
+    # group expr 别名：{"expr": "STRFTIME(...)", "as": "month"} → "month": "STRFTIME(...)"
+    group_expr_map: dict[str, str] = {
+        g["as"]: g["expr"]
+        for g in q.get("group", [])
+        if isinstance(g, dict) and "expr" in g and "as" in g
     }
     # 合并 map：agg 优先（agg 别名可能被 window col 引用，已在 win_map 构建时展开）
     expand_map = {**agg_map, **win_map}
@@ -613,6 +646,8 @@ def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
             exprs.append(f"{agg_map[col]} AS {col}")
         elif col in win_map:
             exprs.append(f"{win_map[col]} AS {col}")
+        elif col in group_expr_map:
+            exprs.append(f"{group_expr_map[col]} AS {col}")
         else:
             exprs.append(col)
     return exprs
@@ -629,27 +664,88 @@ def _agg_expr(agg: dict, dialect: str = "sqlite") -> str:
         mysql+sep    → GROUP_CONCAT(col SEPARATOR sep)
         postgresql   → STRING_AGG(col, ',')  /  STRING_AGG(col, sep)
     其余             → FN(col)，函数名大写（跨方言兼容）
+
+    FILTER 子句（filter 字段）：
+        SUM(col) FILTER (WHERE cond1 AND cond2)
+        SQLite（≥3.30）和 PostgreSQL 原生支持。MySQL 不支持，需手动改写。
     """
     fn = agg["fn"]
     if fn == "count_all":
-        return "COUNT(*)"
-    if fn == "count_distinct":
-        return f"COUNT(DISTINCT {agg['col']})"
-    if fn == "group_concat":
+        base = "COUNT(*)"
+    elif fn == "count_distinct":
+        base = f"COUNT(DISTINCT {agg['col']})"
+    elif fn == "group_concat":
         col = agg["col"]
         sep = agg.get("separator")
-        if dialect == "postgresql":
+        if dialect in ("postgresql", "bigquery"):
             sep_sql = _val(sep) if sep is not None else "','"
-            return f"STRING_AGG({col}, {sep_sql})"
-        if dialect == "mysql":
+            base = f"STRING_AGG({col}, {sep_sql})"
+        elif dialect == "snowflake":
+            sep_sql = f"'{sep}'" if sep is not None else "','"
+            base = f"LISTAGG({col}, {sep_sql})"
+        elif dialect == "mysql":
             if sep is not None:
-                return f"GROUP_CONCAT({col} SEPARATOR {_val(sep)})"
-            return f"GROUP_CONCAT({col})"
-        # sqlite（默认）
-        if sep is not None:
-            return f"GROUP_CONCAT({col}, {_val(sep)})"
-        return f"GROUP_CONCAT({col})"
-    return f"{fn.upper()}({agg['col']})"
+                base = f"GROUP_CONCAT({col} SEPARATOR {_val(sep)})"
+            else:
+                base = f"GROUP_CONCAT({col})"
+        else:
+            # sqlite（默认）
+            if sep is not None:
+                base = f"GROUP_CONCAT({col}, {_val(sep)})"
+            else:
+                base = f"GROUP_CONCAT({col})"
+    else:
+        base = f"{fn.upper()}({agg['col']})"
+
+    # FILTER (WHERE ...) 子句
+    filter_conds = agg.get("filter", [])
+    if filter_conds:
+        if dialect == "mysql":
+            raise ValueError(
+                f"MySQL 不支持 FILTER (WHERE ...) 子句（agg alias: {agg.get('as','?')}）。"
+                "请改写为 SUM(CASE WHEN cond THEN col END) 形式，或切换到 SQLite / PostgreSQL。"
+            )
+        if dialect == "bigquery":
+            raise ValueError(
+                f"BigQuery 不支持 FILTER (WHERE ...) 子句（agg alias: {agg.get('as','?')}）。"
+                "请改写为 COUNTIF / SUM(CASE WHEN cond THEN col END) 形式。"
+            )
+        if dialect == "snowflake":
+            raise ValueError(
+                f"Snowflake 不支持 FILTER (WHERE ...) 子句（agg alias: {agg.get('as','?')}）。"
+                "请改写为 SUM(CASE WHEN cond THEN col END) 形式，或切换到 SQLite / PostgreSQL。"
+            )
+        filter_sql = " AND ".join(_condition(c, dialect) for c in filter_conds)
+        return f"{base} FILTER (WHERE {filter_sql})"
+
+    return base
+
+
+def _frame_bound(s: str) -> str:
+    """
+    将窗口帧边界字符串转换为 SQL 关键字。
+
+    支持格式：
+        "unbounded_preceding" → "UNBOUNDED PRECEDING"
+        "current_row"         → "CURRENT ROW"
+        "unbounded_following" → "UNBOUNDED FOLLOWING"
+        "6 preceding"         → "6 PRECEDING"
+        "1 following"         → "1 FOLLOWING"
+    """
+    s_norm = s.strip().lower()
+    _MAP = {
+        "unbounded_preceding": "UNBOUNDED PRECEDING",
+        "current_row":         "CURRENT ROW",
+        "unbounded_following": "UNBOUNDED FOLLOWING",
+    }
+    if s_norm in _MAP:
+        return _MAP[s_norm]
+    # "N preceding" / "N following" 形式
+    m = re.match(r'^(\d+)\s+(preceding|following)$', s_norm)
+    if m:
+        return f"{m.group(1)} {m.group(2).upper()}"
+    # 透传（用户自定义或未知格式）
+    return s.upper()
 
 
 def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
@@ -658,12 +754,16 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
 
     函数调用部分：
         - 排名类（row_number/rank/dense_rank）：fn() 无参数
-        - 导航类（lag/lead）：fn(col[, offset[, default]])，offset/default 按需追加
+        - 分布类（percent_rank/cume_dist）：fn() 无参数
+        - 分桶类（ntile）：NTILE(n)，n 由 DSL 的 n 字段指定
+        - 导航类（lag/lead）：fn(col[, offset[, default]])
+        - 值类（first_value/last_value）：fn(col)，可配合 frame 控制窗口范围
         - 聚合类（sum/avg/count/min/max）：fn(col)
 
     OVER 子句：
         - 若有 partition → PARTITION BY col1, col2, ...
         - 若有 order    → ORDER BY col dir, ...
+        - 若有 frame    → ROWS/RANGE BETWEEN start AND end
         - 两者均缺时输出 OVER ()，适用于全局排名场景
 
     agg_map: 可选的聚合别名 → 原始表达式映射。ORDER BY 中若出现 agg alias，
@@ -673,9 +773,13 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
     fn = w["fn"]
 
     # ── 函数调用部分 ───────────────────────────────────────────────────────────
-    if fn in ("row_number", "rank", "dense_rank"):
-        # 排名函数不接受输入列
+    if fn in ("row_number", "rank", "dense_rank", "percent_rank", "cume_dist"):
+        # 排名/分布函数不接受输入列
         call = f"{fn.upper()}()"
+    elif fn == "ntile":
+        # 分桶：NTILE(n)，n 必须由用户指定
+        n = w.get("n", 4)
+        call = f"NTILE({n})"
     elif fn in ("lag", "lead"):
         # 导航函数：col 必填，offset/default 可选，按位置顺序追加
         args: list[str] = [w["col"]]
@@ -685,6 +789,9 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
                 # default 可以是任意标量类型，统一通过 _val() 格式化
                 args.append(_val(w["default"]))
         call = f"{fn.upper()}({', '.join(args)})"
+    elif fn in ("first_value", "last_value"):
+        # 值函数：直接取列，无额外参数
+        call = f"{fn.upper()}({w['col']})"
     else:
         # 聚合窗口函数：sum/avg/count/min/max
         # 若 col 是 agg 别名，展开为原始聚合表达式（支持 SUM(SUM(expr)) OVER () 模式）
@@ -704,12 +811,24 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
         ]
         over_parts.append("ORDER BY " + ", ".join(sort_exprs))
 
+    # 窗口帧（frame）：ROWS/RANGE BETWEEN start AND end
+    if w.get("frame"):
+        frame = w["frame"]
+        unit  = frame["unit"].upper()   # ROWS or RANGE
+        start = _frame_bound(frame["start"])
+        if "end" in frame:
+            end = _frame_bound(frame["end"])
+            over_parts.append(f"{unit} BETWEEN {start} AND {end}")
+        else:
+            over_parts.append(f"{unit} {start}")
+
     return f"{call} OVER ({' '.join(over_parts)})"
 
 
 # ── JOIN 处理 ─────────────────────────────────────────────────────────────────
 
-def _join(join: dict, dialect: str = "sqlite") -> tuple[str | None, list[str]]:
+def _join(join: dict, dialect: str = "sqlite",
+          nullable_cols: frozenset[str] | None = None) -> tuple[str | None, list[str]]:
     """
     将单条 join 定义编译为（JOIN 子句, 额外 WHERE 条件列表）。
 
@@ -741,13 +860,19 @@ def _join(join: dict, dialect: str = "sqlite") -> tuple[str | None, list[str]]:
             "请改用 LEFT JOIN + UNION + RIGHT JOIN 模拟，或切换到 SQLite / PostgreSQL。"
         )
 
+    # BigQuery 不支持 RIGHT JOIN
+    if jtype == "right" and dialect == "bigquery":
+        raise ValueError(
+            "BigQuery 不支持 RIGHT JOIN。请改用 LEFT JOIN（交换表顺序）。"
+        )
+
     if isinstance(on, list):
         if jtype in ("anti", "semi"):
             raise ValueError(
                 f"{jtype} join 不支持多条件 on。"
                 "anti/semi join 需要明确的等值键，请使用单条件 on 格式。"
             )
-        on_clause = " AND ".join(_condition(c, dialect) for c in on)
+        on_clause = " AND ".join(_condition(c, dialect, nullable_cols) for c in on)
         keyword = _JOIN_KEYWORDS[jtype]
         return f"{keyword} {table} ON {on_clause}", []
 
@@ -775,7 +900,8 @@ def _join(join: dict, dialect: str = "sqlite") -> tuple[str | None, list[str]]:
 
 # ── 条件表达式 ────────────────────────────────────────────────────────────────
 
-def _condition(cond: dict, dialect: str = "sqlite") -> str:
+def _condition(cond: dict, dialect: str = "sqlite",
+               nullable_cols: frozenset[str] | None = None) -> str:
     """
     将单条条件定义编译为 SQL 谓词字符串。
 
@@ -790,14 +916,15 @@ def _condition(cond: dict, dialect: str = "sqlite") -> str:
         in      → val 为列表，生成 IN (v1, v2, ...)
         like    → val 为字符串模式
         eq/neq/gt/gte/lt/lte → 标准二元比较符
+        neq + nullable_cols → (col != val OR col IS NULL)，避免 NULL 被静默排除
     """
     # OR 组：递归处理每个子条件，外层加括号保证优先级正确
     if "or" in cond:
-        return "(" + " OR ".join(_condition(c, dialect) for c in cond["or"]) + ")"
+        return "(" + " OR ".join(_condition(c, dialect, nullable_cols) for c in cond["or"]) + ")"
 
     # AND 组：用于 OR 内嵌 AND，如 (A AND B) OR C 中的 (A AND B) 部分
     if "and" in cond:
-        return "(" + " AND ".join(_condition(c, dialect) for c in cond["and"]) + ")"
+        return "(" + " AND ".join(_condition(c, dialect, nullable_cols) for c in cond["and"]) + ")"
 
     col = cond["col"]
     op  = cond["op"]
@@ -809,10 +936,20 @@ def _condition(cond: dict, dialect: str = "sqlite") -> str:
     if op == "between":
         return f"{col} BETWEEN {_val(cond['lo'], dialect)} AND {_val(cond['hi'], dialect)}"
     if op == "in":
-        items = ", ".join(_val(v, dialect) for v in cond["val"])
+        val = cond["val"]
+        if isinstance(val, dict) and "subquery" in val:
+            # IN (SELECT ...) 子查询
+            sub_sql = _compile(_coerce(val["subquery"]), dialect, nullable_cols)
+            indented = "\n".join(f"  {line}" for line in sub_sql.splitlines())
+            return f"{col} IN (\n{indented}\n)"
+        items = ", ".join(_val(v, dialect) for v in val)
         return f"{col} IN ({items})"
     if op == "like":
         return f"{col} LIKE {_val(cond['val'], dialect)}"
+
+    # neq + nullable 列：展开为 (col != val OR col IS NULL)，避免 NULL 被静默排除
+    if op == "neq" and nullable_cols and _col_is_nullable(col, nullable_cols):
+        return f"({col} != {_val(cond['val'], dialect)} OR {col} IS NULL)"
 
     # 标准比较运算符，从映射表取符号
     symbol = _OP_SYMBOLS[op]
@@ -864,6 +1001,32 @@ def _preset_val(preset: str, dialect: str) -> str:
         raise ValueError(
             f"未知的 $preset 值：'{preset}'。合法值：{_VALID_PRESETS}"
         )
+
+    if dialect == "bigquery":
+        _MAP = {
+            "today":        "CURRENT_DATE()",
+            "yesterday":    "DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)",
+            "last_7_days":  "DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)",
+            "last_30_days": "DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)",
+            "this_month":   "DATE_TRUNC(CURRENT_DATE(), MONTH)",
+            "last_month":   "DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)",
+            "this_year":    "DATE_TRUNC(CURRENT_DATE(), YEAR)",
+            "this_quarter": "DATE_TRUNC(CURRENT_DATE(), QUARTER)",
+        }
+        return _MAP[preset]
+
+    if dialect == "snowflake":
+        _MAP = {
+            "today":        "CURRENT_DATE()",
+            "yesterday":    "DATEADD(day, -1, CURRENT_DATE())",
+            "last_7_days":  "DATEADD(day, -7, CURRENT_DATE())",
+            "last_30_days": "DATEADD(day, -30, CURRENT_DATE())",
+            "this_month":   "DATE_TRUNC('month', CURRENT_DATE())",
+            "last_month":   "DATE_TRUNC('month', DATEADD(month, -1, CURRENT_DATE()))",
+            "this_year":    "DATE_TRUNC('year', CURRENT_DATE())",
+            "this_quarter": "DATE_TRUNC('quarter', CURRENT_DATE())",
+        }
+        return _MAP[preset]
 
     if dialect == "mysql":
         _MAP = {
