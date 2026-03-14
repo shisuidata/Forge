@@ -57,10 +57,43 @@ class SchemaRetriever:
     ) -> None:
         self.registry = registry
         self.tables: list[str] = list(registry.get("tables", {}).keys())
+        self._fks: dict[str, set[str]] = self._detect_fks()   # 先检测 FK，再构建文本
         self.table_texts: dict[str, str] = self._build_table_texts()
         self._embeddings: np.ndarray | None = None   # shape: (n_tables, embed_dim)
         self._idf: dict[str, float] | None = None    # BM25-lite 降级缓存
         self.cache_path = Path(cache_path) if cache_path else None
+
+    # ── FK 检测 ───────────────────────────────────────────────────────────────
+
+    def _detect_fks(self) -> dict[str, set[str]]:
+        """
+        基于命名约定自动检测外键关系（规范 schema 假设）。
+
+        规则：列名以 `_id` 结尾且去掉后缀后与已知表名匹配，则视为 FK。
+        例：orders.user_id → users，order_items.order_id → orders
+
+        Returns:
+            {table: {直接引用的表集合}}
+        """
+        tables_info = self.registry.get("tables", self.registry)
+        table_set = set(self.tables)
+        fks: dict[str, set[str]] = {t: set() for t in self.tables}
+
+        for table, info in tables_info.items():
+            if not isinstance(info, dict):
+                continue
+            cols = info.get("columns", {})
+            col_names = cols.keys() if isinstance(cols, dict) else cols
+            for col in col_names:
+                if col.endswith("_id"):
+                    stem = col[:-3]   # 去掉 _id 后缀，如 user_id → user
+                    # 尝试单数和复数两种形式（order → orders，product → products）
+                    for ref in (stem, stem + "s"):
+                        if ref in table_set and ref != table:
+                            fks[table].add(ref)
+                            break
+
+        return fks
 
     # ── 文本构建 ──────────────────────────────────────────────────────────────
 
@@ -68,9 +101,13 @@ class SchemaRetriever:
         """
         为每张表生成富文本描述，用于嵌入。
 
-        格式：Table: {name}. Description: {desc}. Columns: {col1 (枚举值), col2, ...}
+        格式：
+            Table: {name}. Description: {desc}.
+            Columns: {col1 (枚举值), col2, ...}.
+            Related tables: {fk_table1, fk_table2}.   ← 新增，让向量感知 JOIN 关系
 
-        包含枚举值是关键：能让 "已完成订单" 命中 orders.status=completed。
+        包含枚举值：能让 "已完成订单" 命中 orders.status=completed。
+        包含关联表：能让 "用户消费" 同时召回 orders（通过 users 的向量）。
         """
         texts: dict[str, str] = {}
         tables_info = self.registry.get("tables", self.registry)
@@ -94,6 +131,11 @@ class SchemaRetriever:
                         col_parts.append(col_name)
 
                 parts.append(f"Columns: {', '.join(col_parts)}")
+
+            # 注入 FK 关系（已在 _detect_fks 中计算）
+            related = self._fks.get(table_name, set())
+            if related:
+                parts.append(f"Related tables: {', '.join(sorted(related))}")
 
             texts[table_name] = ". ".join(parts)
 
@@ -151,26 +193,47 @@ class SchemaRetriever:
         top_k: int = 3,
     ) -> list[str]:
         """
-        返回与问题最相关的 top_k 张表名。
+        三层检索策略，返回与问题相关的表名列表。
 
-        优先使用向量检索（需要 embed_fn 且已建索引），
-        否则自动降级到 BM25-lite 关键词匹配。
+        Phase 1 — 表级语义检索（向量 or BM25）：
+            抓住"订单金额"→ orders、"用户城市"→ users 这类语义关联。
+
+        Phase 2 — 列名关键词补充：
+            规范 schema 下列名本身即语义，直接匹配问题中出现的词。
+            补充 Phase 1 可能遗漏的表（如问题里直接提到了 product_id）。
+
+        Phase 3 — FK 自动扩展：
+            基于 _detect_fks 的外键图，把已选表的直接依赖表拉进来。
+            确保 JOIN 所需的父表不被遗漏（如 order_items → orders → users）。
 
         Args:
             question: 用户自然语言问题
             embed_fn: 嵌入函数（可 None，触发降级）
-            top_k:    返回表数量
+            top_k:    Phase 1+2 的初始召回数量（FK 扩展后可能更多）
 
         Returns:
-            表名列表，按相关度降序排列
+            表名列表，按相关度降序排列（Phase 1 优先，FK 扩展附加在后）
         """
         if top_k >= len(self.tables):
             return list(self.tables)
 
+        # Phase 1：表级语义检索
         if self._embeddings is not None and embed_fn is not None:
-            return self._retrieve_by_embedding(question, embed_fn, top_k)
+            candidates = self._retrieve_by_embedding(question, embed_fn, top_k)
+        else:
+            candidates = self._retrieve_by_keywords(question, top_k)
 
-        return self._retrieve_by_keywords(question, top_k)
+        # Phase 2：列名关键词补充（去重合并，candidates 优先）
+        col_tables = self._retrieve_by_columns(question, top_k)
+        seen: set[str] = set(candidates)
+        merged = list(candidates)
+        for t in col_tables:
+            if t not in seen:
+                seen.add(t)
+                merged.append(t)
+
+        # Phase 3：FK 扩展
+        return self._expand_fks(merged)
 
     def _retrieve_by_embedding(
         self,
@@ -200,6 +263,75 @@ class SchemaRetriever:
             scores[table] = score
 
         return sorted(self.tables, key=lambda t: scores[t], reverse=True)[:top_k]
+
+    def _retrieve_by_columns(self, question: str, top_k: int) -> list[str]:
+        """
+        列名关键词匹配：在问题中查找与列名重叠的词，按命中数排序返回表。
+
+        规范 schema 假设下列名有语义（total_amount、order_status），
+        问题中可能直接出现列名词根（amount、status、category）。
+
+        匹配策略：
+          1. 问题 token 与列名完全匹配（最高权重）
+          2. 问题 token 是列名的子串（如 "amount" in "total_amount"）
+          3. 列名是问题 token 的子串（如 "city" in "city_name"）
+          列的 description 字段若存在，同样参与 BM25 匹配。
+        """
+        q_tokens = set(self._tokenize(question.lower()))
+        tables_info = self.registry.get("tables", self.registry)
+        scores: dict[str, float] = {t: 0.0 for t in self.tables}
+
+        for table, info in tables_info.items():
+            if not isinstance(info, dict):
+                continue
+            cols = info.get("columns", {})
+            items = cols.items() if isinstance(cols, dict) else [(c, {}) for c in cols]
+            for col_name, meta in items:
+                col_lower = col_name.lower()
+                col_tokens = set(col_lower.split("_"))   # total_amount → {total, amount}
+
+                # 完全匹配：问题 token 与列名词根完全吻合
+                exact = q_tokens & col_tokens
+                scores[table] += len(exact) * 2.0
+
+                # 子串匹配：问题 token 包含在列名里，或列名包含在问题 token 里
+                for qt in q_tokens:
+                    if len(qt) >= 3 and (qt in col_lower or col_lower in qt):
+                        scores[table] += 0.5
+
+                # 列 description 里的 BM25 匹配
+                if isinstance(meta, dict):
+                    desc = meta.get("description", "")
+                    if desc:
+                        desc_tokens = set(self._tokenize(desc.lower()))
+                        scores[table] += len(q_tokens & desc_tokens) * 1.0
+
+        # 只返回有得分的表，按得分降序
+        ranked = sorted(
+            [t for t in self.tables if scores[t] > 0],
+            key=lambda t: scores[t],
+            reverse=True,
+        )
+        return ranked[:top_k]
+
+    def _expand_fks(self, tables: list[str]) -> list[str]:
+        """
+        FK 图扩展：对已选表集合，加入它们直接引用的父表。
+
+        只扩展一层（直接 FK），避免过度膨胀。
+        已在列表中的表不重复添加，扩展的表附加在原列表末尾。
+
+        例：[order_items] → [order_items, orders, products]
+            [orders]      → [orders, users]
+        """
+        seen: set[str] = set(tables)
+        expanded = list(tables)
+        for table in list(tables):   # 遍历原始列表，不递归扩展新加入的表
+            for ref in self._fks.get(table, set()):
+                if ref not in seen:
+                    seen.add(ref)
+                    expanded.append(ref)
+        return expanded
 
     def _build_idf(self) -> None:
         """预计算语料 IDF 权重（BM25-lite 使用）。"""
