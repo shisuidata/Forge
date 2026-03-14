@@ -7,6 +7,9 @@ __pycache__/
 dist/
 .env
 demo/*.db
+.DS_Store
+.claude/
+.forge/
 
 tests/accuracy/results/
 tests/spider2/data/
