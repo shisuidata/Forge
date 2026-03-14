@@ -112,7 +112,7 @@ Registry 不是一个静态的 schema 文件，它是组织知识的沉淀：
 
 - Prompt 修复有蝴蝶效应，经常修好一个问题破坏另一个
 - 编译器修复是确定性的，不影响其他路径，测试可覆盖
-- 8 个 `_coerce` 修复，每一个都来自真实失败案例
+- 14 个 `_coerce` 修复，每一个都来自真实失败案例
 
 ---
 
@@ -125,6 +125,7 @@ flowchart LR
     subgraph forge["Forge 管道"]
         direction TB
         REG["📚 Registry<br/>结构层 + 语义层"]
+        RETRIEVER["🔍 SchemaRetriever<br/>向量检索 / BM25 降级<br/>→ top-k 相关表"]
         SCHEMA["📋 JSON Schema<br/>强制枚举约束"]
         LLM["🤖 LLM<br/>Structured Output"]
         JSON["📄 Forge JSON<br/>有约束的中间表示"]
@@ -135,8 +136,9 @@ flowchart LR
     DB["🗄️ 数据库"]
     RESULT["📊 结果集"]
 
-    NL --> LLM
-    REG --> LLM
+    NL --> RETRIEVER
+    REG --> RETRIEVER
+    RETRIEVER -->|"精简 schema<br/>（仅 top-k 张表）"| LLM
     SCHEMA --> LLM
     LLM --> JSON
     JSON --> COMPILER
@@ -239,14 +241,85 @@ FROM user_orders
 | **JOIN 类型** | `inner / left / right / full / anti / semi`，类型必须显式声明 |
 | **anti join** | 替代 `NOT IN`，从根源消灭 NULL 陷阱 |
 | **聚合函数** | `count / count_all / count_distinct / sum / avg / min / max / group_concat` |
+| **agg FILTER 子句** | `{"fn":"sum","col":"...","filter":[...]}` → `SUM(...) FILTER (WHERE ...)`，SQLite/PG 原生支持 |
 | **CASE WHEN in agg** | `{"fn":"count","col":"CASE WHEN x>=2 THEN 1 END"}` |
-| **窗口函数** | `row_number / rank / dense_rank / lag / lead`，支持 PARTITION BY / ORDER BY |
+| **窗口函数（排名/分布）** | `row_number / rank / dense_rank / percent_rank / cume_dist / ntile(n)` |
+| **窗口函数（值/导航）** | `lag / lead / first_value / last_value`，支持 offset、default、frame |
+| **窗口帧（frame）** | `{"unit":"rows","start":"6 preceding","end":"current_row"}` → `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW`；支持滑动平均、累计求和 |
 | **qualify** | 窗口结果过滤（per-group TopN），编译为包装子查询 |
 | **CTE** | 多步聚合、派生指标，支持 recursive CTE |
+| **日期截断分组** | `group` 支持 `{"expr":"STRFTIME('%Y-%m',col)","as":"month"}`，别名直接在 select 中引用 |
 | **日期** | `$date` 字面量 + `$preset` 相对日期（8 种预设） |
-| **方言适配** | SQLite / MySQL / PostgreSQL（日期函数、字符串聚合、FULL JOIN 检测） |
+| **SELECT DISTINCT** | 顶层加 `"distinct": true` |
+| **集合运算** | `union / union_all / intersect / except`，主查询的 sort/limit 应用于整体 |
+| **IN 子查询** | `{"col":"users.id","op":"in","val":{"subquery":{...}}}` → `col IN (SELECT ...)` |
+| **方言适配** | SQLite / MySQL / PostgreSQL（日期函数、字符串聚合、FULL JOIN 检测、FILTER 子句可用性校验） |
 | **alias 展开** | SELECT expr 中引用 agg/window alias 自动展开，消灭 alias 作用域错误 |
-| **UNION** | `union / union_all`，主查询的 sort/limit 应用于整体 |
+
+---
+
+## Schema 向量检索（RAG）
+
+当 Registry 包含几十/几百张表时，把完整 schema 放进 prompt 会撑爆 context window，且大量无关表会干扰 LLM 意图识别。Forge 通过 `forge/retriever.py` 内置了一套两级检索方案。
+
+### 工作流程
+
+```
+用户问题
+  ↓
+SchemaRetriever.retrieve(question, embed_fn, top_k=5)
+  ├── 已建索引 + embed_fn 可用 → 向量检索（cosine similarity）
+  └── 否则 → BM25-lite 关键词降级（自动触发，无需配置）
+  ↓
+top-k 相关表的 DDL schema（仅注入 prompt 中这几张表）
+  ↓
+LLM 生成 Forge JSON（context 更短，干扰更少）
+```
+
+### 表描述构建（索引的基础）
+
+检索质量的上限取决于「每张表的描述文本写得有多好」。Forge 把 Registry 中每张表的元信息拼成富文本：
+
+```
+Table: orders. Description: 订单主表. Columns: id, user_id, status (completed, cancelled), total_amount, created_at
+```
+
+**关键：枚举值写进描述里。** 当用户问「已完成订单」，`status (completed, cancelled)` 让 embedding 能正确命中 `orders` 表，而不是找错表。
+
+### 两级检索
+
+| 模式 | 原理 | 触发条件 | 召回率（4 张表，top_k=5） |
+|---|---|---|---|
+| **向量检索** | L2 归一化 cosine 相似度 | 已建索引 + embed_fn 可用 | 100% |
+| **BM25-lite 降级** | TF×IDF + 中文 bigram 分词 | 无 embedding API 时自动启用 | 92.9% |
+
+BM25-lite 的中文分词策略：纯中文块同时生成原串（精确匹配权重高）+ 字符级 bigram（模糊匹配），让「品类」能从「商品品类分类」中命中。
+
+### Embedding API 兼容性
+
+`make_embed_fn` 工厂函数屏蔽了不同 API 的格式差异：
+
+| API | 请求格式 | 响应格式 |
+|---|---|---|
+| 标准 OpenAI | `{"input": ["..."]}` | `{"data": [{"embedding": [...]}]}` |
+| MiniMax | `{"texts": ["..."], "type": "db"/"query"}` | `{"vectors": [[...], [...]]}` |
+
+MiniMax 区分 `db`（建索引用）和 `query`（查询用）两种嵌入类型，混用会降低召回率。Forge 自动为索引构建和查询检索使用正确的 type。
+
+### 向量索引缓存
+
+- 首次运行：调用 embedding API 批量嵌入所有表描述，L2 归一化后缓存到 `.forge/schema_embeddings.pkl`
+- 后续查询：直接加载缓存（毫秒级），表集合变更时自动失效重建
+- `top_k >= 表总数` 时跳过检索，直接返回全部表（避免在小 schema 上浪费 API 调用）
+
+### Schema 压缩效果
+
+| 场景 | 全量 schema token | 检索精简后 | 减少 |
+|---|---|---|---|
+| 4 张表，top_k=5 | ~230 | ~230（自动全取） | 0% |
+| 50 张表，top_k=5 | ~2,800 | ~560 | **~80%** |
+
+> 在真实企业场景的几十张表 schema 中，每次查询只注入 5 张最相关的表，prompt 中 schema 部分可压缩 80% 以上。
 
 ---
 
@@ -273,26 +346,34 @@ FROM user_orders
 
 > A/D/E/F/G 在 32 题测试；H 起扩展到全部 40 题（新增能力测试题 33–40）。
 
-#### EA 对比（Execution Accuracy，MiniMax-M2.5）
+#### EA 对比（Execution Accuracy，跨模型）
 
-在相同的 40 题上，用 MiniMax-M2.5 对比 Forge DSL 模式与直接 SQL 生成模式：
+同一套 40 题，在两个模型上分别对比 Forge DSL 模式 vs 直接 SQL 生成模式：
+
+**MiniMax-M2.5（中等能力模型）**
 
 | 方法 | EA | 正确题数 | 执行错误 | 编译/其他错误 | 平均耗时 |
 |---|---|---|---|---|---|
-| **Forge (DSL)** | **57.5%** | 23/40 | 10 | 5 | 6.5s |
+| **Forge (DSL)** | **65.0%** | 26/40 | 2 | 0 | ~10s |
 | **直接 SQL** | **57.5%** | 23/40 | 16 | 1 | 4.2s |
 
-按难度分层：
+**GLM-5 via 硅基流动（强推理模型，各 35/39 题，5 题超时跳过）**
 
-| 难度 | Forge EA | 直接 SQL EA | 说明 |
+| 方法 | EA | 正确题数 | 平均耗时 |
 |---|---|---|---|
-| D1（基础过滤） | **100%** | **100%** | 两者持平 |
-| D2（JOIN/聚合/HAVING） | **76%** | 65% | Forge 明显占优 |
-| D3（窗口/CTE/多步） | 28% | **39%** | 直接 SQL 略优 |
+| **Forge (DSL)** | **74.3%** | 26/35 | 10–660s（推理型模型） |
+| **直接 SQL** | **74.4%** | 29/39 | ~15s |
 
-经过编译器容错优化（编译错误从 7 次降至 5 次），Forge 在 MiniMax-M2.5 上与直接 SQL 持平（57.5% vs 57.5%），**在 D2 日常业务查询上 Forge 以 76% vs 65% 明显领先**。
+按分类对比（GLM-5，已完成题目）：
 
-> 注：MiniMax API 输出存在不可消除的随机性（temperature=0 仍有约 ±5pp 单次方差），以上为代表性单次测量值。**Forge 的价值体现在 D1/D2 的日常查询场景**；D3 的算法型复杂查询（多步窗口、CTE 嵌套）超出 Forge 的核心设计目标。
+| 分类 | Forge | Direct | Δ |
+|---|---|---|---|
+| 基础过滤 / 多表JOIN / 窗口函数 | 持平 | 持平 | — |
+| 聚合+GROUPBY / 时序 | **100%** | 80% | **+20pp** |
+| 排名TopN | 60% | **80%** | -20pp |
+| CTE多步 / 综合复合 | 较弱 | 较强 | -15~25pp |
+
+> 注：MiniMax API 输出存在不可消除的随机性（temperature=0 仍有约 ±5pp 单次方差），以上为代表性单次测量值。GLM-5 的 5 题超时源于推理模型在复杂 CTE 上的极长推理时间（单题最高 660s）。
 
 #### Forge J+Sem vs 直接 SQL（Claude Sonnet，LLM Judge，历史数据）
 
@@ -386,6 +467,62 @@ SELECT repeat_users * 1.0 / total_users AS repurchase_rate
 
 ---
 
+## 正在思索中
+
+> **这一节是诚实的自我质疑，不是结论。**
+
+GLM-5 的测试结果让我们开始重新审视 Forge 的核心前提。
+
+### 核心前提回顾
+
+Forge 的逻辑链是：
+
+```
+LLM 在无约束空间里写 SQL → 错误率高
+↓
+用 DSL + Structured Output 收窄输出空间 → 生成错误物理上不可能
+↓
+Forge 的 EA 明显优于直接 SQL 生成
+```
+
+MiniMax（中等能力模型）的数据支持这个逻辑：Forge 65.0% vs 直接 SQL 57.5%，差距 **+7.5pp**。
+
+### 问题出在哪里
+
+GLM-5（强推理模型）的数据打了一个问号：Forge 74.3% vs 直接 SQL 74.4%，**几乎相同**。
+
+这个结果指向一个不舒服的假说：
+
+**当模型足够强，"生成错误"这个错误类型本身就在萎缩。** 强模型不需要 DSL 约束来避免 `NOT IN` 的 NULL 陷阱，不需要被告知 JOIN 必须有类型——它自己就不会犯这些错误。
+
+如果这个假说成立，随着基础模型持续变强，Forge 的 DSL 约束层带来的增量价值会持续缩小。
+
+### 什么还成立
+
+思考之后，有几件事我们认为仍然成立，与模型能力无关：
+
+**1. Registry 语义层的价值与模型能力无关**
+
+"复购率"的分母是全部用户还是下过单的用户——这是业务定义问题，不是推理能力问题。再强的模型也无法凭空知道你们公司的指标定义。Registry 语义层作为组织知识的沉淀，是真实的护城河。
+
+**2. 审计链的价值与模型能力无关**
+
+用户审核的 SQL 和实际执行的 SQL 是同一份。无论 LLM 多强，这个「可审计、可追溯」的属性在企业数据场景里都是硬需求。
+
+**3. 弱模型场景仍大量存在**
+
+私有化部署的现实是：许多数据团队用的是本地部署的中小模型（Qwen 7B、Llama 8B），而不是 GPT-4 级别的模型。在弱模型场景下，DSL 约束的价值仍然显著。
+
+### 还不清楚的事
+
+- GLM-5 的「74.3% 持平」是偶然（5 题超时导致样本偏差），还是真实信号？
+- 如果基础模型持续变强，Forge 的价值主张是否应该从「DSL 约束减少生成错误」转向「Registry 语义层 + 审计链」？
+- DSL 是否应该变得更薄，只保留语义消歧层，放弃对 SQL 语法的约束？
+
+**这些问题目前没有答案，项目正在主动寻找。** 如果你有想法，欢迎开 Issue 讨论。
+
+---
+
 ## 快速开始
 
 ```bash
@@ -416,7 +553,8 @@ python tests/spider2/runner.py --limit 20
 ```
 forge/
   ├── schema.json          — Forge DSL 格式定义（JSON Schema）
-  ├── compiler.py          — 确定性编译器：Forge JSON → SQL（3 方言）
+  ├── compiler.py          — 确定性编译器：Forge JSON → SQL（3 方言，14 个容错修复）
+  ├── retriever.py         — Schema 向量检索器（embedding + BM25-lite 降级）
   ├── schema_builder.py    — 动态构建 tool schema（注入枚举约束）
   └── cli.py               — CLI 入口
 
@@ -424,7 +562,7 @@ registry/
   └── sync.py              — forge sync：直连数据库生成 Registry
 
 tests/
-  ├── test_compiler.py     — 编译器单元测试（21 个用例）
+  ├── test_compiler.py     — 编译器单元测试（38 个用例）
   ├── accuracy/            — 自有 40 题基准（LLM judge + EA，10 个版本）
   │   ├── cases.json       — 题目 + reference SQL
   │   ├── runner.py        — 多方法对比运行器
@@ -443,6 +581,6 @@ tests/
 |---|---|---|---|
 | 自有用例（Method J） | 40 | LLM Judge | **8.65 / 10** |
 | 自有用例（Method J+Sem） | 40 | LLM Judge | **8.82 / 10** |
-| 自有用例（MiniMax，EA） | 40 | Execution Accuracy | **57.5%** |
+| 自有用例（MiniMax，EA） | 40 | Execution Accuracy | **65.0%** |
 | Spider2-Lite SQLite | 123 | Execution Accuracy | **9.2%** |
 | Spider2-Lite SQLite | 123 | 编译成功率 | **97.6%** |
