@@ -1,0 +1,2575 @@
+#!/usr/bin/env python3
+"""
+生成 ~200 张表的电商数仓 Registry（DIM + DWD 分层），
+用于测试 SchemaRetriever 在大规模 schema 下的召回精度。
+
+输出：tests/fixtures/large_registry.json
+运行：python3 tests/fixtures/gen_large_registry.py
+"""
+from __future__ import annotations
+import json
+from pathlib import Path
+
+# ── DIM 层：维度表（~50 张）─────────────────────────────────────────────────
+
+DIM_TABLES: dict[str, dict] = {
+
+    # ── 用户域 ────────────────────────────────────────────────────────────────
+    "dim_user": {
+        "description": "用户维度表：注册用户基础信息，含等级、渠道、城市等属性",
+        "columns": {
+            "user_id":        {},
+            "user_name":      {},
+            "gender":         {"enum": ["male", "female", "unknown"]},
+            "age_group":      {"enum": ["18-24", "25-34", "35-44", "45-54", "55+"]},
+            "vip_level_id":   {},
+            "region_id":      {},
+            "channel_id":     {},
+            "register_date":  {},
+            "is_active":      {"enum": [0, 1]},
+            "risk_level_id":  {},
+        },
+    },
+    "dim_vip_level": {
+        "description": "VIP 等级维度：用户会员级别定义，含权益和升级阈值",
+        "columns": {
+            "vip_level_id":   {},
+            "level_name":     {"enum": ["普通", "银卡", "金卡", "铂金", "钻石"]},
+            "min_points":     {},
+            "discount_rate":  {},
+            "free_shipping":  {"enum": [0, 1]},
+        },
+    },
+    "dim_user_segment": {
+        "description": "用户分群维度：基于 RFM 等模型的用户分群标签",
+        "columns": {
+            "segment_id":     {},
+            "segment_name":   {"enum": ["高价值", "潜力", "流失风险", "沉睡", "新用户"]},
+            "rfm_score":      {},
+            "update_date":    {},
+        },
+    },
+    "dim_risk_level": {
+        "description": "风险等级维度：用户/交易风险评级标准",
+        "columns": {
+            "risk_level_id":  {},
+            "level_name":     {"enum": ["低风险", "中风险", "高风险", "黑名单"]},
+            "intercept_flag": {"enum": [0, 1]},
+        },
+    },
+
+    # ── 商品域 ────────────────────────────────────────────────────────────────
+    "dim_product": {
+        "description": "商品维度表：SKU 级别商品信息，含品类、品牌、上架状态",
+        "columns": {
+            "product_id":     {},
+            "product_name":   {},
+            "category_id":    {},
+            "brand_id":       {},
+            "supplier_id":    {},
+            "unit_price":     {},
+            "cost_price":     {},
+            "status":         {"enum": ["on_sale", "off_shelf", "pre_sale", "discontinued"]},
+            "is_imported":    {"enum": [0, 1]},
+            "weight_kg":      {"nullable": True},
+        },
+    },
+    "dim_category": {
+        "description": "商品品类维度：三级品类体系（大类 / 中类 / 小类）",
+        "columns": {
+            "category_id":    {},
+            "category_name":  {},
+            "parent_id":      {"nullable": True},
+            "level":          {"enum": [1, 2, 3]},
+            "is_leaf":        {"enum": [0, 1]},
+        },
+    },
+    "dim_brand": {
+        "description": "品牌维度：商品品牌信息，含国别、授权状态",
+        "columns": {
+            "brand_id":       {},
+            "brand_name":     {},
+            "country":        {},
+            "is_authorized":  {"enum": [0, 1]},
+            "brand_level":    {"enum": ["国际", "国内知名", "新兴", "白牌"]},
+        },
+    },
+    "dim_supplier": {
+        "description": "供应商维度：供货商基础信息，含等级和账期",
+        "columns": {
+            "supplier_id":    {},
+            "supplier_name":  {},
+            "region_id":      {},
+            "supplier_level": {"enum": ["S", "A", "B", "C"]},
+            "payment_days":   {},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+    "dim_tag": {
+        "description": "标签维度：商品和用户通用标签体系",
+        "columns": {
+            "tag_id":         {},
+            "tag_name":       {},
+            "tag_type":       {"enum": ["user", "product", "order"]},
+            "tag_source":     {"enum": ["manual", "algo", "rule"]},
+        },
+    },
+
+    # ── 地域域 ────────────────────────────────────────────────────────────────
+    "dim_region": {
+        "description": "地域维度：省市区三级行政区划",
+        "columns": {
+            "region_id":      {},
+            "region_name":    {},
+            "parent_id":      {"nullable": True},
+            "level":          {"enum": ["country", "province", "city", "district"]},
+            "tier":           {"enum": ["一线", "新一线", "二线", "三线", "其他"], "nullable": True},
+        },
+    },
+    "dim_city": {
+        "description": "城市维度：城市级别信息，含城市线级和物流区域",
+        "columns": {
+            "city_id":        {},
+            "city_name":      {},
+            "province_id":    {},
+            "city_tier":      {"enum": ["一线", "新一线", "二线", "三线", "四线及以下"]},
+            "logistics_zone": {},
+        },
+    },
+    "dim_province": {
+        "description": "省份维度：国内省级行政区信息",
+        "columns": {
+            "province_id":    {},
+            "province_name":  {},
+            "region_group":   {"enum": ["华北", "华东", "华南", "华中", "西北", "西南", "东北"]},
+        },
+    },
+    "dim_warehouse": {
+        "description": "仓库维度：仓储节点信息，含类型和所属城市",
+        "columns": {
+            "warehouse_id":   {},
+            "warehouse_name": {},
+            "city_id":        {},
+            "warehouse_type": {"enum": ["中心仓", "区域仓", "前置仓", "保税仓"]},
+            "is_active":      {"enum": [0, 1]},
+            "area_sqm":       {},
+        },
+    },
+
+    # ── 渠道域 ────────────────────────────────────────────────────────────────
+    "dim_channel": {
+        "description": "流量渠道维度：用户来源渠道，含自然流量和付费渠道",
+        "columns": {
+            "channel_id":     {},
+            "channel_name":   {},
+            "channel_type":   {"enum": ["organic", "paid_search", "social", "email", "affiliate", "direct"]},
+            "platform_id":    {},
+            "cost_per_click": {"nullable": True},
+        },
+    },
+    "dim_platform": {
+        "description": "平台维度：用户访问平台，含 App / Web / 小程序",
+        "columns": {
+            "platform_id":    {},
+            "platform_name":  {"enum": ["iOS App", "Android App", "PC Web", "H5", "微信小程序", "抖音小程序"]},
+            "platform_type":  {"enum": ["app", "web", "miniprogram"]},
+        },
+    },
+    "dim_device": {
+        "description": "设备维度：用户终端设备类型，含操作系统和机型",
+        "columns": {
+            "device_id":      {},
+            "os_type":        {"enum": ["iOS", "Android", "Windows", "macOS", "other"]},
+            "device_type":    {"enum": ["phone", "tablet", "desktop", "smart_tv"]},
+            "brand":          {},
+        },
+    },
+
+    # ── 营销域 ────────────────────────────────────────────────────────────────
+    "dim_coupon": {
+        "description": "优惠券维度：券类型、面额、使用条件定义",
+        "columns": {
+            "coupon_id":      {},
+            "coupon_name":    {},
+            "coupon_type":    {"enum": ["满减", "折扣", "免邮", "换购", "赠品"]},
+            "face_value":     {},
+            "min_order_amt":  {},
+            "valid_days":     {},
+            "is_stackable":   {"enum": [0, 1]},
+        },
+    },
+    "dim_promotion": {
+        "description": "促销活动维度：活动类型、时间段、参与规则",
+        "columns": {
+            "promotion_id":   {},
+            "promotion_name": {},
+            "promo_type":     {"enum": ["双十一", "618", "日常满减", "新人专享", "限时秒杀", "拼团"]},
+            "start_date":     {},
+            "end_date":       {},
+            "budget":         {"nullable": True},
+        },
+    },
+    "dim_activity": {
+        "description": "营销活动维度：站内活动配置，含页面位置和目标人群",
+        "columns": {
+            "activity_id":    {},
+            "activity_name":  {},
+            "activity_type":  {"enum": ["banner", "弹窗", "专题页", "直播", "短视频"]},
+            "target_segment": {"nullable": True},
+            "start_dt":       {},
+            "end_dt":         {},
+        },
+    },
+    "dim_gift_card": {
+        "description": "礼品卡维度：礼品卡面额和使用范围定义",
+        "columns": {
+            "gift_card_type_id": {},
+            "card_name":         {},
+            "denomination":      {},
+            "valid_months":      {},
+            "scope":             {"enum": ["全场", "指定品类", "指定品牌"]},
+        },
+    },
+
+    # ── 支付 / 物流域 ─────────────────────────────────────────────────────────
+    "dim_payment_method": {
+        "description": "支付方式维度：支付渠道和支付类型定义",
+        "columns": {
+            "payment_method_id": {},
+            "method_name":       {"enum": ["支付宝", "微信支付", "银行卡", "花呗", "京东白条", "货到付款", "礼品卡"]},
+            "method_type":       {"enum": ["third_party", "bank", "installment", "cod", "voucher"]},
+            "support_refund":    {"enum": [0, 1]},
+        },
+    },
+    "dim_logistics_company": {
+        "description": "物流公司维度：快递服务商信息，含时效和费率",
+        "columns": {
+            "logistics_id":   {},
+            "company_name":   {"enum": ["顺丰", "圆通", "申通", "韵达", "中通", "极兔", "京东物流"]},
+            "service_type":   {"enum": ["标准", "次日达", "当日达", "经济件"]},
+            "avg_days":       {},
+        },
+    },
+    "dim_return_reason": {
+        "description": "退货原因维度：退换货原因分类标准",
+        "columns": {
+            "reason_id":      {},
+            "reason_name":    {},
+            "reason_type":    {"enum": ["质量问题", "尺寸不符", "与描述不符", "不喜欢", "拍错", "物流损坏"]},
+            "is_merchant_fault": {"enum": [0, 1]},
+        },
+    },
+    "dim_after_sale_type": {
+        "description": "售后类型维度：退款、退货、换货等售后类型定义",
+        "columns": {
+            "after_sale_type_id": {},
+            "type_name":          {"enum": ["仅退款", "退货退款", "换货", "补发", "维修"]},
+            "need_return_goods":  {"enum": [0, 1]},
+        },
+    },
+
+    # ── 内容 / 评价域 ─────────────────────────────────────────────────────────
+    "dim_review_tag": {
+        "description": "评价标签维度：商品评价常见标签体系",
+        "columns": {
+            "review_tag_id":  {},
+            "tag_text":       {},
+            "sentiment":      {"enum": ["positive", "negative", "neutral"]},
+            "category_id":    {"nullable": True},
+        },
+    },
+    "dim_content_type": {
+        "description": "内容类型维度：站内 UGC/PGC 内容分类",
+        "columns": {
+            "content_type_id": {},
+            "type_name":       {"enum": ["图文评测", "短视频", "直播回放", "问答", "晒单"]},
+            "platform_id":     {"nullable": True},
+        },
+    },
+
+    # ── 员工 / 客服域 ─────────────────────────────────────────────────────────
+    "dim_employee": {
+        "description": "员工维度：内部员工基础信息，含部门和岗位",
+        "columns": {
+            "employee_id":    {},
+            "employee_name":  {},
+            "department_id":  {},
+            "job_title":      {},
+            "hire_date":      {},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+    "dim_department": {
+        "description": "部门维度：组织架构部门信息",
+        "columns": {
+            "department_id":  {},
+            "dept_name":      {},
+            "parent_id":      {"nullable": True},
+            "cost_center":    {},
+        },
+    },
+    "dim_customer_service": {
+        "description": "客服维度：客服人员信息，含技能标签和评分",
+        "columns": {
+            "cs_id":          {},
+            "cs_name":        {},
+            "skill_tags":     {},
+            "avg_rating":     {},
+            "employee_id":    {},
+        },
+    },
+
+    # ── 商家 / 结算域 ─────────────────────────────────────────────────────────
+    "dim_merchant": {
+        "description": "商家维度：平台入驻商家信息，含类型和资质",
+        "columns": {
+            "merchant_id":    {},
+            "merchant_name":  {},
+            "merchant_type":  {"enum": ["自营", "POP商家", "品牌旗舰店"]},
+            "category_id":    {},
+            "settle_cycle":   {"enum": ["T+1", "T+7", "月结"]},
+            "commission_rate":{},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+    "dim_store": {
+        "description": "门店维度：线下门店信息，含城市和营业状态",
+        "columns": {
+            "store_id":       {},
+            "store_name":     {},
+            "city_id":        {},
+            "store_type":     {"enum": ["旗舰店", "体验店", "自提点"]},
+            "is_open":        {"enum": [0, 1]},
+            "open_date":      {},
+        },
+    },
+
+    # ── 时间域 ────────────────────────────────────────────────────────────────
+    "dim_date": {
+        "description": "日期维度：标准日历表，含节假日、周次、月季年标记",
+        "columns": {
+            "date_id":        {},
+            "full_date":      {},
+            "year":           {},
+            "quarter":        {"enum": [1, 2, 3, 4]},
+            "month":          {},
+            "week":           {},
+            "day_of_week":    {"enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]},
+            "is_holiday":     {"enum": [0, 1]},
+            "is_workday":     {"enum": [0, 1]},
+            "holiday_name":   {"nullable": True},
+        },
+    },
+    "dim_time": {
+        "description": "时间维度：小时级时间段，含早/午/晚等时段标签",
+        "columns": {
+            "time_id":        {},
+            "hour":           {},
+            "time_period":    {"enum": ["凌晨", "早晨", "上午", "午间", "下午", "傍晚", "夜间"]},
+            "is_peak":        {"enum": [0, 1]},
+        },
+    },
+
+    # ── 积分 / 会员权益域 ─────────────────────────────────────────────────────
+    "dim_point_rule": {
+        "description": "积分规则维度：积分获取和消耗规则定义",
+        "columns": {
+            "rule_id":        {},
+            "rule_name":      {},
+            "action_type":    {"enum": ["购买", "评价", "签到", "分享", "邀请", "使用积分"]},
+            "points_ratio":   {},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+    "dim_subscription_plan": {
+        "description": "订阅计划维度：会员订阅套餐定义，含价格和权益",
+        "columns": {
+            "plan_id":        {},
+            "plan_name":      {"enum": ["月度会员", "季度会员", "年度会员", "永久会员"]},
+            "price":          {},
+            "duration_days":  {},
+            "benefits":       {},
+        },
+    },
+
+    # ── 广告 / 推荐域 ─────────────────────────────────────────────────────────
+    "dim_ad_placement": {
+        "description": "广告位维度：站内广告位置定义，含页面和展示类型",
+        "columns": {
+            "placement_id":   {},
+            "placement_name": {},
+            "page_type":      {"enum": ["首页", "搜索结果页", "商品详情页", "购物车", "个人中心"]},
+            "ad_type":        {"enum": ["banner", "信息流", "搜索竞价", "弹窗", "开屏"]},
+            "max_cpm":        {"nullable": True},
+        },
+    },
+    "dim_recommendation_algo": {
+        "description": "推荐算法维度：推荐策略版本，含召回和排序算法标识",
+        "columns": {
+            "algo_id":        {},
+            "algo_name":      {},
+            "recall_method":  {"enum": ["CF", "i2i", "u2i", "热门", "新品"]},
+            "rank_method":    {"enum": ["LR", "GBDT", "DNN", "规则"]},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+    "dim_search_intent": {
+        "description": "搜索意图维度：搜索词分类，含意图类型和品类映射",
+        "columns": {
+            "intent_id":      {},
+            "intent_name":    {},
+            "intent_type":    {"enum": ["导航型", "信息型", "交易型", "品牌型"]},
+            "category_id":    {"nullable": True},
+        },
+    },
+
+    # ── 直播 / KOL 维度 ───────────────────────────────────────────────────────
+    "dim_anchor": {
+        "description": "主播维度：直播主播/达人的账号等级和分类信息",
+        "columns": {
+            "anchor_id":      {},
+            "anchor_name":    {},
+            "anchor_level":   {"enum": ["头部", "腰部", "尾部", "素人"]},
+            "platform_id":    {},
+            "category_id":    {"nullable": True},
+            "fan_tier":       {"enum": ["百万+", "10万-100万", "1万-10万", "1万以下"]},
+        },
+    },
+    "dim_live_category": {
+        "description": "直播品类维度：直播带货的商品品类分类",
+        "columns": {
+            "live_cat_id":    {},
+            "cat_name":       {"enum": ["美妆个护", "服饰鞋包", "食品饮料", "家电数码", "家居生活", "母婴玩具", "运动户外"]},
+            "parent_id":      {"nullable": True},
+            "commission_rate":{},
+        },
+    },
+    "dim_content_label": {
+        "description": "内容标签维度：UGC/PGC 内容的分类标签体系",
+        "columns": {
+            "label_id":       {},
+            "label_name":     {},
+            "label_type":     {"enum": ["场景", "人群", "功效", "风格", "情感"]},
+            "category_id":    {"nullable": True},
+        },
+    },
+
+    # ── 商品属性维度 ──────────────────────────────────────────────────────────
+    "dim_product_spec": {
+        "description": "商品规格维度：SKU 规格组合（颜色/尺寸/容量等）",
+        "columns": {
+            "spec_id":        {},
+            "product_id":     {},
+            "spec_key":       {"enum": ["颜色", "尺寸", "容量", "套餐", "版本"]},
+            "spec_value":     {},
+        },
+    },
+    "dim_product_cert": {
+        "description": "商品资质维度：食品/医疗/进口等特殊商品的资质证书记录",
+        "columns": {
+            "cert_id":        {},
+            "product_id":     {},
+            "cert_type":      {"enum": ["食品经营许可", "进口报关单", "3C认证", "医疗器械注册证", "有机认证"]},
+            "cert_no":        {},
+            "expire_date":    {"nullable": True},
+            "is_valid":       {"enum": [0, 1]},
+        },
+    },
+    "dim_unit": {
+        "description": "计量单位维度：商品销售和库存计量单位标准",
+        "columns": {
+            "unit_id":        {},
+            "unit_name":      {"enum": ["件", "箱", "袋", "瓶", "套", "双", "克", "kg", "ml", "L"]},
+            "unit_type":      {"enum": ["计件", "重量", "体积", "长度"]},
+        },
+    },
+
+    # ── 物流 / 地址维度 ───────────────────────────────────────────────────────
+    "dim_delivery_time_slot": {
+        "description": "配送时间段维度：即时配送可选的预约时间窗口",
+        "columns": {
+            "slot_id":        {},
+            "slot_name":      {"enum": ["09:00-12:00", "12:00-15:00", "15:00-18:00", "18:00-21:00", "全天"]},
+            "is_peak":        {"enum": [0, 1]},
+            "extra_fee":      {},
+        },
+    },
+    "dim_logistics_route": {
+        "description": "物流路由维度：仓库到城市的物流干线路由配置",
+        "columns": {
+            "route_id":       {},
+            "from_warehouse_id": {},
+            "to_city_id":     {},
+            "logistics_id":   {},
+            "avg_days":       {},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+
+    # ── 财务 / 结算维度 ───────────────────────────────────────────────────────
+    "dim_tax_rate": {
+        "description": "税率维度：不同商品品类适用的增值税率标准",
+        "columns": {
+            "tax_rate_id":    {},
+            "category_id":    {},
+            "tax_type":       {"enum": ["增值税", "消费税", "关税"]},
+            "rate":           {},
+            "effective_date": {},
+        },
+    },
+    "dim_currency": {
+        "description": "货币维度：跨境业务涉及的货币种类和汇率基准",
+        "columns": {
+            "currency_id":    {},
+            "currency_code":  {"enum": ["CNY", "USD", "EUR", "JPY", "HKD", "GBP"]},
+            "currency_name":  {},
+            "exchange_rate":  {},
+        },
+    },
+
+    # ── 用户标签维度 ──────────────────────────────────────────────────────────
+    "dim_user_label": {
+        "description": "用户标签维度：算法/规则生成的用户画像标签库",
+        "columns": {
+            "label_id":       {},
+            "label_name":     {},
+            "label_category": {"enum": ["消费偏好", "价格敏感度", "品牌偏好", "生命周期", "风险标签"]},
+            "label_source":   {"enum": ["算法", "规则", "人工"]},
+            "update_cycle":   {"enum": ["实时", "日更", "周更"]},
+        },
+    },
+    "dim_rfm_segment": {
+        "description": "RFM 分层维度：基于购买频率/金额/时间的用户价值分层标准",
+        "columns": {
+            "segment_id":     {},
+            "segment_name":   {"enum": ["高价值活跃", "高价值流失", "中价值成长", "低价值新用户", "沉默用户"]},
+            "r_score_range":  {},
+            "f_score_range":  {},
+            "m_score_range":  {},
+            "strategy":       {},
+        },
+    },
+
+    # ── 运营配置维度 ──────────────────────────────────────────────────────────
+    "dim_ab_experiment": {
+        "description": "A/B 实验维度：线上实验的配置信息，含流量分配和目标指标",
+        "columns": {
+            "experiment_id":  {},
+            "exp_name":       {},
+            "exp_type":       {"enum": ["UI", "算法", "策略", "价格", "文案"]},
+            "traffic_pct":    {},
+            "start_dt":       {},
+            "end_dt":         {"nullable": True},
+            "status":         {"enum": ["草稿", "运行中", "已结束", "已中止"]},
+            "owner_id":       {},
+        },
+    },
+    "dim_message_template": {
+        "description": "消息模板维度：推送/短信/邮件消息模板的配置",
+        "columns": {
+            "template_id":    {},
+            "template_name":  {},
+            "channel":        {"enum": ["app_push", "sms", "email", "in_app"]},
+            "scene":          {"enum": ["订单通知", "营销活动", "账户安全", "物流更新", "售后通知"]},
+            "is_active":      {"enum": [0, 1]},
+        },
+    },
+    "dim_holiday": {
+        "description": "节假日维度：法定节假日和电商大促节点的定义",
+        "columns": {
+            "holiday_id":     {},
+            "holiday_name":   {"enum": ["双十一", "618", "春节", "五一", "国庆", "双十二", "38女王节", "99大促"]},
+            "holiday_type":   {"enum": ["法定节假日", "电商大促", "品牌日"]},
+            "start_date":     {},
+            "end_date":       {},
+        },
+    },
+}
+
+# ── DWD 层：明细表（~150 张）────────────────────────────────────────────────
+
+DWD_TABLES: dict[str, dict] = {
+
+    # ── 交易域 ────────────────────────────────────────────────────────────────
+    "dwd_order_detail": {
+        "description": "订单明细事实表：用户每笔订单的完整信息，含金额、状态、来源渠道",
+        "columns": {
+            "order_id":          {},
+            "user_id":           {},
+            "merchant_id":       {},
+            "channel_id":        {},
+            "platform_id":       {},
+            "promotion_id":      {"nullable": True},
+            "order_status":      {"enum": ["待付款", "待发货", "待收货", "已完成", "已取消", "售后中"]},
+            "total_amount":      {},
+            "discount_amount":   {},
+            "coupon_amount":     {},
+            "freight_amount":    {},
+            "pay_amount":        {},
+            "order_dt":          {},
+            "pay_dt":            {"nullable": True},
+            "complete_dt":       {"nullable": True},
+            "warehouse_id":      {"nullable": True},
+        },
+    },
+    "dwd_order_item_detail": {
+        "description": "订单商品明细事实表：订单内每个 SKU 的购买记录，含数量、单价、优惠",
+        "columns": {
+            "order_item_id":     {},
+            "order_id":          {},
+            "product_id":        {},
+            "user_id":           {},
+            "quantity":          {},
+            "unit_price":        {},
+            "discount_rate":     {},
+            "actual_amount":     {},
+            "coupon_id":         {"nullable": True},
+            "is_gift":           {"enum": [0, 1]},
+            "order_dt":          {},
+        },
+    },
+    "dwd_payment_detail": {
+        "description": "支付明细事实表：每笔支付流水，含支付方式、状态、耗时",
+        "columns": {
+            "payment_id":        {},
+            "order_id":          {},
+            "user_id":           {},
+            "payment_method_id": {},
+            "pay_amount":        {},
+            "pay_status":        {"enum": ["成功", "失败", "超时", "撤销"]},
+            "pay_dt":            {},
+            "callback_dt":       {"nullable": True},
+            "third_party_txn_id":{"nullable": True},
+        },
+    },
+    "dwd_refund_detail": {
+        "description": "退款明细事实表：退款申请和处理记录，含退款金额和原因",
+        "columns": {
+            "refund_id":         {},
+            "order_id":          {},
+            "user_id":           {},
+            "after_sale_type_id":{},
+            "refund_amount":     {},
+            "refund_status":     {"enum": ["申请中", "审核通过", "退款中", "已退款", "拒绝"]},
+            "apply_dt":          {},
+            "complete_dt":       {"nullable": True},
+            "reason_id":         {},
+        },
+    },
+    "dwd_return_goods_detail": {
+        "description": "退货物流明细事实表：退货商品的寄回物流信息",
+        "columns": {
+            "return_id":         {},
+            "refund_id":         {},
+            "order_id":          {},
+            "user_id":           {},
+            "logistics_id":      {},
+            "tracking_no":       {},
+            "ship_dt":           {"nullable": True},
+            "arrive_dt":         {"nullable": True},
+            "inspection_result": {"enum": ["合格", "瑕疵", "损坏", "非原物"], "nullable": True},
+        },
+    },
+    "dwd_cart_detail": {
+        "description": "购物车明细事实表：用户加购/删除购物车行为记录",
+        "columns": {
+            "cart_id":           {},
+            "user_id":           {},
+            "product_id":        {},
+            "action_type":       {"enum": ["add", "remove", "update_qty", "checkout"]},
+            "quantity":          {},
+            "action_dt":         {},
+            "platform_id":       {},
+            "channel_id":        {"nullable": True},
+        },
+    },
+    "dwd_coupon_use_detail": {
+        "description": "优惠券使用明细事实表：用户领取和使用优惠券的完整记录",
+        "columns": {
+            "coupon_use_id":     {},
+            "coupon_id":         {},
+            "user_id":           {},
+            "order_id":          {"nullable": True},
+            "action_type":       {"enum": ["receive", "use", "expire", "return"]},
+            "action_dt":         {},
+            "discount_amount":   {"nullable": True},
+        },
+    },
+    "dwd_flash_sale_order_detail": {
+        "description": "限时秒杀订单明细：秒杀活动期间下单记录，含抢购时间和库存快照",
+        "columns": {
+            "flash_order_id":    {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "promotion_id":      {},
+            "sale_price":        {},
+            "original_price":    {},
+            "queue_dt":          {},
+            "order_dt":          {},
+            "stock_snapshot":    {},
+        },
+    },
+    "dwd_group_buy_detail": {
+        "description": "拼团订单明细：拼团活动的参团记录，含团长/团员标识",
+        "columns": {
+            "group_id":          {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "role":              {"enum": ["团长", "团员"]},
+            "group_status":      {"enum": ["拼团中", "拼团成功", "拼团失败"]},
+            "join_dt":           {},
+            "complete_dt":       {"nullable": True},
+        },
+    },
+    "dwd_pre_sale_detail": {
+        "description": "预售订单明细：预售商品的定金和尾款支付记录",
+        "columns": {
+            "presale_id":        {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "deposit_amount":    {},
+            "final_amount":      {},
+            "deposit_pay_dt":    {},
+            "final_pay_dt":      {"nullable": True},
+            "delivery_dt":       {"nullable": True},
+        },
+    },
+
+    # ── 物流域 ────────────────────────────────────────────────────────────────
+    "dwd_logistics_detail": {
+        "description": "物流轨迹明细事实表：包裹每个状态节点的时间记录",
+        "columns": {
+            "track_id":          {},
+            "order_id":          {},
+            "logistics_id":      {},
+            "tracking_no":       {},
+            "track_status":      {"enum": ["揽收", "运输中", "派送中", "已签收", "派送失败", "退回中"]},
+            "track_dt":          {},
+            "location":          {"nullable": True},
+            "operator":          {"nullable": True},
+        },
+    },
+    "dwd_delivery_detail": {
+        "description": "配送明细事实表：快递员配送任务记录，含时效达标情况",
+        "columns": {
+            "delivery_id":       {},
+            "order_id":          {},
+            "logistics_id":      {},
+            "courier_id":        {"nullable": True},
+            "city_id":           {},
+            "expected_dt":       {},
+            "actual_dt":         {"nullable": True},
+            "is_on_time":        {"enum": [0, 1], "nullable": True},
+            "sign_type":         {"enum": ["本人签收", "他人代签", "快递柜", "门卫"], "nullable": True},
+        },
+    },
+    "dwd_warehouse_inbound_detail": {
+        "description": "仓库入库明细事实表：商品入库操作记录",
+        "columns": {
+            "inbound_id":        {},
+            "warehouse_id":      {},
+            "product_id":        {},
+            "supplier_id":       {},
+            "quantity":          {},
+            "batch_no":          {},
+            "inbound_dt":        {},
+            "operator_id":       {},
+            "quality_status":    {"enum": ["合格", "待检", "不合格"]},
+        },
+    },
+    "dwd_warehouse_outbound_detail": {
+        "description": "仓库出库明细事实表：商品出库（拣货/发货）操作记录",
+        "columns": {
+            "outbound_id":       {},
+            "warehouse_id":      {},
+            "order_id":          {},
+            "product_id":        {},
+            "quantity":          {},
+            "outbound_dt":       {},
+            "operator_id":       {},
+            "outbound_type":     {"enum": ["销售出库", "退货出库", "调拨出库"]},
+        },
+    },
+    "dwd_inventory_change_detail": {
+        "description": "库存变动明细事实表：每次库存增减的操作日志",
+        "columns": {
+            "change_id":         {},
+            "warehouse_id":      {},
+            "product_id":        {},
+            "change_type":       {"enum": ["入库", "出库", "调拨", "盘盈", "盘亏", "冻结", "解冻"]},
+            "quantity_delta":    {},
+            "quantity_after":    {},
+            "change_dt":         {},
+            "ref_order_id":      {"nullable": True},
+        },
+    },
+
+    # ── 用户行为域 ────────────────────────────────────────────────────────────
+    "dwd_page_view_log": {
+        "description": "页面浏览日志：用户访问页面的会话级记录，含停留时长",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "session_id":        {},
+            "device_id":         {},
+            "platform_id":       {},
+            "page_type":         {"enum": ["首页", "分类页", "搜索结果页", "商品详情页", "购物车", "个人中心", "其他"]},
+            "ref_page_type":     {"nullable": True},
+            "stay_seconds":      {},
+            "log_dt":            {},
+            "channel_id":        {"nullable": True},
+        },
+    },
+    "dwd_product_view_log": {
+        "description": "商品详情页浏览日志：用户浏览商品详情的行为记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "product_id":        {},
+            "session_id":        {},
+            "platform_id":       {},
+            "stay_seconds":      {},
+            "view_depth":        {},
+            "log_dt":            {},
+            "rec_algo_id":       {"nullable": True},
+        },
+    },
+    "dwd_search_log": {
+        "description": "搜索行为日志：用户搜索请求记录，含关键词、结果数、点击情况",
+        "columns": {
+            "search_id":         {},
+            "user_id":           {"nullable": True},
+            "session_id":        {},
+            "keyword":           {},
+            "intent_id":         {"nullable": True},
+            "result_count":      {},
+            "click_count":       {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_click_log": {
+        "description": "点击行为日志：用户在页面上的点击事件，含点击位置和目标",
+        "columns": {
+            "click_id":          {},
+            "user_id":           {"nullable": True},
+            "session_id":        {},
+            "platform_id":       {},
+            "page_type":         {},
+            "element_type":      {"enum": ["商品卡片", "banner", "按钮", "链接", "推荐位", "广告"]},
+            "target_id":         {"nullable": True},
+            "log_dt":            {},
+        },
+    },
+    "dwd_favorite_log": {
+        "description": "收藏行为日志：用户收藏/取消收藏商品的记录",
+        "columns": {
+            "fav_id":            {},
+            "user_id":           {},
+            "product_id":        {},
+            "action_type":       {"enum": ["collect", "cancel"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_share_log": {
+        "description": "分享行为日志：用户分享商品/内容到外部渠道的记录",
+        "columns": {
+            "share_id":          {},
+            "user_id":           {},
+            "content_type":      {"enum": ["product", "order", "coupon", "activity"]},
+            "content_id":        {},
+            "share_channel":     {"enum": ["微信好友", "朋友圈", "微博", "QQ", "复制链接"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_live_watch_log": {
+        "description": "直播观看日志：用户观看直播的行为记录，含停留时长和互动次数",
+        "columns": {
+            "watch_id":          {},
+            "user_id":           {"nullable": True},
+            "live_id":           {},
+            "platform_id":       {},
+            "watch_seconds":     {},
+            "comment_count":     {},
+            "like_count":        {},
+            "enter_dt":          {},
+            "exit_dt":           {"nullable": True},
+        },
+    },
+    "dwd_live_order_detail": {
+        "description": "直播间订单明细：用户在直播间内下单的记录",
+        "columns": {
+            "live_order_id":     {},
+            "order_id":          {},
+            "user_id":           {},
+            "live_id":           {},
+            "product_id":        {},
+            "anchor_id":         {},
+            "order_dt":          {},
+            "pay_amount":        {},
+        },
+    },
+    "dwd_comment_detail": {
+        "description": "商品评价明细事实表：用户对已购商品的图文评价",
+        "columns": {
+            "comment_id":        {},
+            "order_item_id":     {},
+            "user_id":           {},
+            "product_id":        {},
+            "rating":            {"enum": [1, 2, 3, 4, 5]},
+            "comment_type":      {"enum": ["好评", "中评", "差评"]},
+            "has_image":         {"enum": [0, 1]},
+            "has_video":         {"enum": [0, 1]},
+            "comment_dt":        {},
+            "is_anonymous":      {"enum": [0, 1]},
+        },
+    },
+
+    # ── 营销域 ────────────────────────────────────────────────────────────────
+    "dwd_promotion_apply_detail": {
+        "description": "促销活动参与明细：用户参与促销活动的记录，含优惠金额",
+        "columns": {
+            "apply_id":          {},
+            "promotion_id":      {},
+            "order_id":          {},
+            "user_id":           {},
+            "discount_amount":   {},
+            "apply_dt":          {},
+        },
+    },
+    "dwd_activity_expose_log": {
+        "description": "营销活动曝光日志：活动页面对用户的曝光和点击记录",
+        "columns": {
+            "expose_id":         {},
+            "activity_id":       {},
+            "user_id":           {"nullable": True},
+            "platform_id":       {},
+            "action_type":       {"enum": ["expose", "click", "close"]},
+            "log_dt":            {},
+        },
+    },
+    "dwd_push_send_log": {
+        "description": "消息推送发送日志：App 推送/短信/邮件的发送记录",
+        "columns": {
+            "push_id":           {},
+            "user_id":           {},
+            "push_type":         {"enum": ["app_push", "sms", "email", "in_app"]},
+            "template_id":       {},
+            "send_status":       {"enum": ["success", "fail", "filtered"]},
+            "send_dt":           {},
+            "activity_id":       {"nullable": True},
+        },
+    },
+    "dwd_push_click_log": {
+        "description": "消息推送点击日志：用户点击推送消息的行为记录",
+        "columns": {
+            "click_id":          {},
+            "push_id":           {},
+            "user_id":           {},
+            "click_dt":          {},
+            "landing_page":      {},
+            "platform_id":       {},
+        },
+    },
+    "dwd_ad_impression_log": {
+        "description": "广告曝光日志：广告位对用户的展示记录，含竞价信息",
+        "columns": {
+            "impression_id":     {},
+            "placement_id":      {},
+            "user_id":           {"nullable": True},
+            "product_id":        {"nullable": True},
+            "bid_price":         {},
+            "show_price":        {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_ad_click_log": {
+        "description": "广告点击日志：用户点击广告的行为记录，含点击费用",
+        "columns": {
+            "click_id":          {},
+            "impression_id":     {},
+            "user_id":           {"nullable": True},
+            "placement_id":      {},
+            "product_id":        {"nullable": True},
+            "click_cost":        {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_ad_convert_log": {
+        "description": "广告转化日志：广告点击后发生购买转化的记录",
+        "columns": {
+            "convert_id":        {},
+            "click_id":          {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "placement_id":      {},
+            "convert_dt":        {},
+            "order_amount":      {},
+        },
+    },
+    "dwd_recommendation_expose_log": {
+        "description": "推荐曝光日志：推荐系统向用户展示商品的记录",
+        "columns": {
+            "rec_id":            {},
+            "user_id":           {"nullable": True},
+            "product_id":        {},
+            "algo_id":           {},
+            "position":          {},
+            "page_type":         {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_recommendation_click_log": {
+        "description": "推荐点击日志：用户点击推荐商品的行为记录",
+        "columns": {
+            "click_id":          {},
+            "rec_id":            {},
+            "user_id":           {},
+            "product_id":        {},
+            "algo_id":           {},
+            "click_dt":          {},
+        },
+    },
+
+    # ── 用户账户域 ────────────────────────────────────────────────────────────
+    "dwd_user_register_log": {
+        "description": "用户注册日志：新用户注册事件，含注册渠道和设备信息",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "register_type":     {"enum": ["手机号", "微信", "微博", "苹果账号", "邮箱"]},
+            "channel_id":        {},
+            "device_id":         {},
+            "platform_id":       {},
+            "region_id":         {"nullable": True},
+            "register_dt":       {},
+        },
+    },
+    "dwd_user_login_log": {
+        "description": "用户登录日志：每次用户登录行为，含设备和安全信息",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "login_type":        {"enum": ["密码", "短信验证码", "微信", "指纹", "面容"]},
+            "device_id":         {},
+            "platform_id":       {},
+            "ip_address":        {},
+            "login_status":      {"enum": ["success", "fail_pwd", "fail_risk", "captcha"]},
+            "login_dt":          {},
+        },
+    },
+    "dwd_user_profile_change_log": {
+        "description": "用户资料变更日志：用户修改个人信息的记录",
+        "columns": {
+            "change_id":         {},
+            "user_id":           {},
+            "field_name":        {"enum": ["昵称", "头像", "手机号", "收货地址", "密码", "支付密码"]},
+            "old_value":         {"nullable": True},
+            "new_value":         {},
+            "change_dt":         {},
+            "platform_id":       {},
+        },
+    },
+    "dwd_address_detail": {
+        "description": "用户收货地址明细：用户收货地址的新增/修改/删除记录",
+        "columns": {
+            "address_id":        {},
+            "user_id":           {},
+            "region_id":         {},
+            "city_id":           {},
+            "detail_address":    {},
+            "is_default":        {"enum": [0, 1]},
+            "action_type":       {"enum": ["add", "update", "delete"]},
+            "action_dt":         {},
+        },
+    },
+    "dwd_point_earn_detail": {
+        "description": "积分获取明细事实表：用户通过各种行为获得积分的记录",
+        "columns": {
+            "earn_id":           {},
+            "user_id":           {},
+            "rule_id":           {},
+            "points_earned":     {},
+            "ref_order_id":      {"nullable": True},
+            "earn_dt":           {},
+            "expire_dt":         {"nullable": True},
+        },
+    },
+    "dwd_point_use_detail": {
+        "description": "积分消耗明细事实表：用户使用积分抵扣的记录",
+        "columns": {
+            "use_id":            {},
+            "user_id":           {},
+            "order_id":          {},
+            "points_used":       {},
+            "discount_amount":   {},
+            "use_dt":            {},
+        },
+    },
+    "dwd_vip_upgrade_log": {
+        "description": "VIP 等级变更日志：用户 VIP 等级升降级事件",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "old_level_id":      {"nullable": True},
+            "new_level_id":      {},
+            "trigger_type":      {"enum": ["消费达标", "积分达标", "活动赠送", "到期降级"]},
+            "log_dt":            {},
+        },
+    },
+    "dwd_subscription_detail": {
+        "description": "会员订阅明细事实表：用户订阅/续费/退订记录",
+        "columns": {
+            "sub_id":            {},
+            "user_id":           {},
+            "plan_id":           {},
+            "action_type":       {"enum": ["subscribe", "renew", "upgrade", "cancel", "expire"]},
+            "amount":            {},
+            "start_dt":          {},
+            "end_dt":            {},
+            "sub_dt":            {},
+        },
+    },
+    "dwd_gift_card_use_detail": {
+        "description": "礼品卡使用明细事实表：礼品卡激活和消费记录",
+        "columns": {
+            "use_id":            {},
+            "gift_card_type_id": {},
+            "card_no":           {},
+            "user_id":           {},
+            "order_id":          {"nullable": True},
+            "action_type":       {"enum": ["activate", "use", "expire"]},
+            "amount_used":       {"nullable": True},
+            "action_dt":         {},
+        },
+    },
+
+    # ── 客服域 ────────────────────────────────────────────────────────────────
+    "dwd_after_sale_detail": {
+        "description": "售后申请明细事实表：售后申请的完整处理记录",
+        "columns": {
+            "after_sale_id":     {},
+            "order_id":          {},
+            "user_id":           {},
+            "after_sale_type_id":{},
+            "reason_id":         {},
+            "status":            {"enum": ["申请中", "处理中", "已完成", "已拒绝", "已撤销"]},
+            "apply_dt":          {},
+            "complete_dt":       {"nullable": True},
+            "cs_id":             {"nullable": True},
+            "user_rating":       {"enum": [1, 2, 3, 4, 5], "nullable": True},
+        },
+    },
+    "dwd_consult_log": {
+        "description": "用户咨询日志：售前/售后咨询会话记录，含问题分类",
+        "columns": {
+            "consult_id":        {},
+            "user_id":           {},
+            "cs_id":             {"nullable": True},
+            "channel":           {"enum": ["在线客服", "电话", "机器人", "留言"]},
+            "question_type":     {"enum": ["商品咨询", "物流查询", "退换货", "支付问题", "账户问题", "其他"]},
+            "session_seconds":   {},
+            "is_resolved":       {"enum": [0, 1]},
+            "satisfaction":      {"enum": [1, 2, 3, 4, 5], "nullable": True},
+            "consult_dt":        {},
+        },
+    },
+    "dwd_complaint_detail": {
+        "description": "用户投诉明细事实表：正式投诉的受理和处理记录",
+        "columns": {
+            "complaint_id":      {},
+            "user_id":           {},
+            "order_id":          {"nullable": True},
+            "complaint_type":    {"enum": ["商品质量", "虚假宣传", "物流延误", "客服态度", "其他"]},
+            "severity":          {"enum": ["一般", "严重", "紧急"]},
+            "status":            {"enum": ["待处理", "处理中", "已解决", "已关闭"]},
+            "apply_dt":          {},
+            "close_dt":          {"nullable": True},
+            "compensation":      {"nullable": True},
+        },
+    },
+
+    # ── 供应链域 ──────────────────────────────────────────────────────────────
+    "dwd_purchase_order_detail": {
+        "description": "采购订单明细事实表：向供应商下采购订单的记录",
+        "columns": {
+            "po_id":             {},
+            "po_item_id":        {},
+            "supplier_id":       {},
+            "product_id":        {},
+            "warehouse_id":      {},
+            "ordered_qty":       {},
+            "received_qty":      {"nullable": True},
+            "unit_cost":         {},
+            "order_dt":          {},
+            "expected_arrive_dt":{},
+            "actual_arrive_dt":  {"nullable": True},
+            "po_status":         {"enum": ["待确认", "已确认", "在途", "已到货", "已取消"]},
+        },
+    },
+    "dwd_supplier_settle_detail": {
+        "description": "供应商结算明细事实表：与供应商的货款结算记录",
+        "columns": {
+            "settle_id":         {},
+            "supplier_id":       {},
+            "po_id":             {},
+            "settle_amount":     {},
+            "settle_type":       {"enum": ["货款", "退款", "罚款", "奖励"]},
+            "settle_dt":         {},
+            "status":            {"enum": ["待审核", "已审核", "已付款"]},
+        },
+    },
+    "dwd_quality_check_detail": {
+        "description": "质检明细事实表：商品入库质检结果记录",
+        "columns": {
+            "check_id":          {},
+            "inbound_id":        {},
+            "product_id":        {},
+            "warehouse_id":      {},
+            "check_result":      {"enum": ["合格", "轻微瑕疵", "严重瑕疵", "不合格"]},
+            "sample_qty":        {},
+            "defect_qty":        {},
+            "checker_id":        {},
+            "check_dt":          {},
+        },
+    },
+    "dwd_price_change_log": {
+        "description": "商品价格变动日志：SKU 价格调整的历史记录",
+        "columns": {
+            "change_id":         {},
+            "product_id":        {},
+            "old_price":         {},
+            "new_price":         {},
+            "change_type":       {"enum": ["人工调价", "促销定价", "自动竞价", "成本调整"]},
+            "operator_id":       {"nullable": True},
+            "change_dt":         {},
+            "effective_dt":      {},
+        },
+    },
+    "dwd_stock_alert_log": {
+        "description": "库存预警日志：库存低于阈值或滞销触发的预警记录",
+        "columns": {
+            "alert_id":          {},
+            "warehouse_id":      {},
+            "product_id":        {},
+            "alert_type":        {"enum": ["低库存", "断货", "滞销", "近效期"]},
+            "current_stock":     {},
+            "threshold":         {},
+            "is_handled":        {"enum": [0, 1]},
+            "alert_dt":          {},
+        },
+    },
+
+    # ── 财务域 ────────────────────────────────────────────────────────────────
+    "dwd_merchant_settle_detail": {
+        "description": "商家结算明细事实表：平台与 POP 商家的佣金结算明细",
+        "columns": {
+            "settle_id":         {},
+            "merchant_id":       {},
+            "order_id":          {},
+            "order_amount":      {},
+            "commission_rate":   {},
+            "commission_amount": {},
+            "settle_status":     {"enum": ["待结算", "已结算", "冻结"]},
+            "settle_dt":         {},
+        },
+    },
+    "dwd_invoice_detail": {
+        "description": "发票明细事实表：用户申请开票的记录，含发票类型和金额",
+        "columns": {
+            "invoice_id":        {},
+            "order_id":          {},
+            "user_id":           {},
+            "invoice_type":      {"enum": ["增值税普通发票", "增值税专用发票", "电子发票"]},
+            "invoice_amount":    {},
+            "tax_amount":        {},
+            "apply_dt":          {},
+            "issue_dt":          {"nullable": True},
+        },
+    },
+    "dwd_cashback_detail": {
+        "description": "返现明细事实表：用户获得现金返还的记录，含来源和到账状态",
+        "columns": {
+            "cashback_id":       {},
+            "user_id":           {},
+            "order_id":          {"nullable": True},
+            "cashback_type":     {"enum": ["订单返现", "邀请返现", "活动奖励"]},
+            "amount":            {},
+            "status":            {"enum": ["待到账", "已到账", "已失效"]},
+            "earn_dt":           {},
+            "arrive_dt":         {"nullable": True},
+        },
+    },
+
+    # ── 风控域 ────────────────────────────────────────────────────────────────
+    "dwd_fraud_detect_log": {
+        "description": "欺诈检测日志：风控系统对订单/登录等事件的风险评估记录",
+        "columns": {
+            "detect_id":         {},
+            "event_type":        {"enum": ["登录", "下单", "支付", "退款", "提现"]},
+            "user_id":           {"nullable": True},
+            "event_id":          {},
+            "risk_score":        {},
+            "risk_level_id":     {},
+            "action_taken":      {"enum": ["放行", "验证码", "人工审核", "拦截"]},
+            "detect_dt":         {},
+        },
+    },
+    "dwd_risk_event_log": {
+        "description": "风险事件日志：确认的风险行为记录，含事件类型和处置结果",
+        "columns": {
+            "event_id":          {},
+            "user_id":           {},
+            "event_type":        {"enum": ["薅羊毛", "刷单", "账号盗用", "信用卡诈骗", "恶意退款"]},
+            "evidence":          {},
+            "action":            {"enum": ["封号", "限购", "冻结资产", "移交公安"]},
+            "status":            {"enum": ["待处理", "已处置", "误判申诉中"]},
+            "event_dt":          {},
+        },
+    },
+    "dwd_blacklist_log": {
+        "description": "黑名单变更日志：用户加入/移出黑名单的操作记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "action_type":       {"enum": ["add", "remove"]},
+            "reason":            {},
+            "operator_id":       {},
+            "action_dt":         {},
+            "expire_dt":         {"nullable": True},
+        },
+    },
+
+    # ── 内容审核域 ────────────────────────────────────────────────────────────
+    "dwd_review_audit_log": {
+        "description": "评价审核日志：商品评价内容的人工/机器审核记录",
+        "columns": {
+            "audit_id":          {},
+            "comment_id":        {},
+            "audit_type":        {"enum": ["auto", "manual"]},
+            "audit_result":      {"enum": ["通过", "拒绝", "删除", "待人工复核"]},
+            "reject_reason":     {"nullable": True},
+            "auditor_id":        {"nullable": True},
+            "audit_dt":          {},
+        },
+    },
+    "dwd_content_report_log": {
+        "description": "内容举报日志：用户对违规内容的举报记录",
+        "columns": {
+            "report_id":         {},
+            "reporter_id":       {},
+            "content_type":      {"enum": ["评价", "问答", "晒单", "直播", "商品图"]},
+            "content_id":        {},
+            "report_reason":     {"enum": ["虚假信息", "色情低俗", "违规商品", "人身攻击", "其他"]},
+            "status":            {"enum": ["待处理", "已处理", "驳回"]},
+            "report_dt":         {},
+        },
+    },
+
+    # ── 数据质量 / 系统域 ─────────────────────────────────────────────────────
+    "dwd_etl_run_log": {
+        "description": "ETL 运行日志：数据管道每次执行的运行记录，含状态和耗时",
+        "columns": {
+            "run_id":            {},
+            "pipeline_name":     {},
+            "data_date":         {},
+            "start_dt":          {},
+            "end_dt":            {"nullable": True},
+            "status":            {"enum": ["running", "success", "failed", "skipped"]},
+            "rows_processed":    {"nullable": True},
+            "error_msg":         {"nullable": True},
+        },
+    },
+    "dwd_data_quality_check_log": {
+        "description": "数据质量检查日志：字段级数据质量规则的检查结果",
+        "columns": {
+            "check_id":          {},
+            "table_name":        {},
+            "column_name":       {"nullable": True},
+            "check_rule":        {},
+            "check_result":      {"enum": ["pass", "warn", "fail"]},
+            "fail_count":        {},
+            "check_dt":          {},
+        },
+    },
+
+    # ── 直播 / 短视频域 ───────────────────────────────────────────────────────
+    "dwd_live_room_detail": {
+        "description": "直播间明细事实表：每场直播的基础信息和核心数据指标",
+        "columns": {
+            "live_id":           {},
+            "anchor_id":         {},
+            "merchant_id":       {"nullable": True},
+            "platform_id":       {},
+            "live_status":       {"enum": ["预告", "直播中", "已结束"]},
+            "start_dt":          {},
+            "end_dt":            {"nullable": True},
+            "max_online_users":  {},
+            "total_viewers":     {},
+            "total_orders":      {},
+            "gmv":               {},
+            "category_id":       {"nullable": True},
+        },
+    },
+    "dwd_anchor_detail": {
+        "description": "主播/达人明细事实表：站内主播的账号信息和粉丝数据",
+        "columns": {
+            "anchor_id":         {},
+            "anchor_name":       {},
+            "platform_id":       {},
+            "anchor_level":      {"enum": ["头部", "腰部", "尾部", "素人"]},
+            "fan_count":         {},
+            "category_id":       {"nullable": True},
+            "cooperation_type":  {"enum": ["自营", "MCN", "个人"]},
+            "commission_rate":   {},
+        },
+    },
+    "dwd_short_video_log": {
+        "description": "短视频行为日志：用户浏览短视频内容的互动记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "video_id":          {},
+            "anchor_id":         {},
+            "action_type":       {"enum": ["view", "like", "comment", "share", "follow", "add_cart"]},
+            "watch_seconds":     {"nullable": True},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_ugc_content_detail": {
+        "description": "UGC 内容明细：用户生成内容（晒单/评测/问答）的发布记录",
+        "columns": {
+            "content_id":        {},
+            "user_id":           {},
+            "content_type_id":   {},
+            "product_id":        {"nullable": True},
+            "order_id":          {"nullable": True},
+            "like_count":        {},
+            "comment_count":     {},
+            "is_featured":       {"enum": [0, 1]},
+            "publish_dt":        {},
+            "audit_status":      {"enum": ["待审核", "已发布", "已删除", "违规下架"]},
+        },
+    },
+
+    # ── 搜索 / 推荐深度域 ─────────────────────────────────────────────────────
+    "dwd_search_result_click_log": {
+        "description": "搜索结果点击日志：用户在搜索结果列表中的点击行为",
+        "columns": {
+            "click_id":          {},
+            "search_id":         {},
+            "user_id":           {"nullable": True},
+            "product_id":        {},
+            "position":          {},
+            "page_no":           {},
+            "click_dt":          {},
+            "platform_id":       {},
+        },
+    },
+    "dwd_search_no_result_log": {
+        "description": "搜索无结果日志：用户搜索后返回零结果的记录，用于词库扩充",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "keyword":           {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_filter_use_log": {
+        "description": "筛选条件使用日志：用户在列表页使用筛选/排序功能的记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "page_type":         {"enum": ["分类页", "搜索结果页", "活动页"]},
+            "filter_type":       {"enum": ["价格区间", "品牌", "品类", "好评率", "销量", "综合排序"]},
+            "filter_value":      {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_product_compare_log": {
+        "description": "商品对比日志：用户对多个商品进行横向对比的行为记录",
+        "columns": {
+            "compare_id":        {},
+            "user_id":           {"nullable": True},
+            "product_ids":       {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+
+    # ── 会员 / 社交域 ─────────────────────────────────────────────────────────
+    "dwd_follow_log": {
+        "description": "关注行为日志：用户关注/取关其他用户或品牌店铺的记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "target_type":       {"enum": ["user", "store", "brand", "anchor"]},
+            "target_id":         {},
+            "action_type":       {"enum": ["follow", "unfollow"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_invite_log": {
+        "description": "邀请注册日志：用户邀请新用户注册的裂变行为记录",
+        "columns": {
+            "invite_id":         {},
+            "inviter_id":        {},
+            "invitee_id":        {"nullable": True},
+            "invite_channel":    {"enum": ["微信", "短信", "邀请码", "二维码"]},
+            "invite_status":     {"enum": ["已发送", "已注册", "已完成首单"]},
+            "send_dt":           {},
+            "register_dt":       {"nullable": True},
+            "reward_amount":     {"nullable": True},
+        },
+    },
+    "dwd_rating_detail": {
+        "description": "商家/服务评分明细：用户对商家服务的评分记录",
+        "columns": {
+            "rating_id":         {},
+            "order_id":          {},
+            "user_id":           {},
+            "merchant_id":       {},
+            "product_score":     {"enum": [1, 2, 3, 4, 5]},
+            "logistics_score":   {"enum": [1, 2, 3, 4, 5]},
+            "service_score":     {"enum": [1, 2, 3, 4, 5]},
+            "rating_dt":         {},
+        },
+    },
+
+    # ── 门店 / O2O 域 ─────────────────────────────────────────────────────────
+    "dwd_store_visit_log": {
+        "description": "门店到访日志：用户到访线下门店的记录（含 LBS 打卡）",
+        "columns": {
+            "visit_id":          {},
+            "user_id":           {"nullable": True},
+            "store_id":          {},
+            "visit_type":        {"enum": ["扫码入店", "LBS感知", "自提核销"]},
+            "stay_minutes":      {"nullable": True},
+            "visit_dt":          {},
+        },
+    },
+    "dwd_o2o_order_detail": {
+        "description": "O2O 订单明细：线上下单线下自提/配送订单的完整记录",
+        "columns": {
+            "o2o_order_id":      {},
+            "order_id":          {},
+            "user_id":           {},
+            "store_id":          {},
+            "fulfillment_type":  {"enum": ["自提", "门店配送", "即时配送"]},
+            "book_time":         {"nullable": True},
+            "pickup_dt":         {"nullable": True},
+            "is_on_time":        {"enum": [0, 1], "nullable": True},
+        },
+    },
+    "dwd_store_inventory_detail": {
+        "description": "门店库存明细：线下门店商品库存变动记录",
+        "columns": {
+            "inv_id":            {},
+            "store_id":          {},
+            "product_id":        {},
+            "change_type":       {"enum": ["销售", "调拨入", "调拨出", "盘点", "报损"]},
+            "quantity_delta":    {},
+            "quantity_after":    {},
+            "change_dt":         {},
+        },
+    },
+
+    # ── B2B / 企业采购域 ──────────────────────────────────────────────────────
+    "dwd_enterprise_order_detail": {
+        "description": "企业采购订单明细：企业客户的批量采购记录",
+        "columns": {
+            "ent_order_id":      {},
+            "enterprise_id":     {},
+            "product_id":        {},
+            "quantity":          {},
+            "unit_price":        {},
+            "total_amount":      {},
+            "contract_id":       {"nullable": True},
+            "order_dt":          {},
+            "delivery_dt":       {"nullable": True},
+            "status":            {"enum": ["待审核", "已审核", "已发货", "已完成", "已取消"]},
+        },
+    },
+    "dwd_enterprise_contract_detail": {
+        "description": "企业合同明细：与企业客户签订的框架合同记录",
+        "columns": {
+            "contract_id":       {},
+            "enterprise_id":     {},
+            "contract_amount":   {},
+            "discount_rate":     {},
+            "start_date":        {},
+            "end_date":          {},
+            "sign_dt":           {},
+            "status":            {"enum": ["生效", "到期", "终止"]},
+        },
+    },
+
+    # ── 积分商城 / 权益兑换域 ─────────────────────────────────────────────────
+    "dwd_points_mall_order": {
+        "description": "积分商城兑换明细：用户在积分商城兑换商品/权益的记录",
+        "columns": {
+            "mall_order_id":     {},
+            "user_id":           {},
+            "item_type":         {"enum": ["实物商品", "虚拟权益", "优惠券", "公益捐赠"]},
+            "item_id":           {},
+            "points_cost":       {},
+            "cash_cost":         {"nullable": True},
+            "exchange_dt":       {},
+            "status":            {"enum": ["处理中", "已发放", "已发货", "已取消"]},
+        },
+    },
+
+    # ── 广告投放深度域 ────────────────────────────────────────────────────────
+    "dwd_ad_budget_detail": {
+        "description": "广告预算消耗明细：广告计划的每日预算消耗记录",
+        "columns": {
+            "budget_id":         {},
+            "placement_id":      {},
+            "merchant_id":       {},
+            "budget_amount":     {},
+            "spent_amount":      {},
+            "impression_count":  {},
+            "click_count":       {},
+            "order_count":       {},
+            "date_id":           {},
+        },
+    },
+    "dwd_ad_keyword_bid_log": {
+        "description": "关键词竞价日志：搜索广告关键词出价变更记录",
+        "columns": {
+            "bid_id":            {},
+            "merchant_id":       {},
+            "keyword":           {},
+            "old_bid":           {},
+            "new_bid":           {},
+            "bid_type":          {"enum": ["手动", "智能出价", "目标ROAS"]},
+            "change_dt":         {},
+        },
+    },
+
+    # ── 运营配置域 ────────────────────────────────────────────────────────────
+    "dwd_ab_test_exposure_log": {
+        "description": "A/B 测试曝光日志：实验流量分组和用户分配记录",
+        "columns": {
+            "log_id":            {},
+            "experiment_id":     {},
+            "user_id":           {"nullable": True},
+            "group_name":        {"enum": ["control", "treatment_a", "treatment_b", "treatment_c"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_ab_test_convert_log": {
+        "description": "A/B 测试转化日志：实验组的目标指标转化记录",
+        "columns": {
+            "convert_id":        {},
+            "experiment_id":     {},
+            "user_id":           {},
+            "group_name":        {},
+            "metric_name":       {},
+            "metric_value":      {},
+            "convert_dt":        {},
+        },
+    },
+    "dwd_feature_flag_log": {
+        "description": "功能开关日志：产品功能灰度发布的用户分配记录",
+        "columns": {
+            "log_id":            {},
+            "feature_name":      {},
+            "user_id":           {"nullable": True},
+            "is_enabled":        {"enum": [0, 1]},
+            "rollout_pct":       {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_coupon_issue_detail": {
+        "description": "优惠券发放明细：系统批量/手动发放优惠券的记录",
+        "columns": {
+            "issue_id":          {},
+            "coupon_id":         {},
+            "user_id":           {},
+            "issue_type":        {"enum": ["活动发放", "满赠", "补偿", "新人礼包", "续费赠送"]},
+            "issue_dt":          {},
+            "expire_dt":         {},
+            "promotion_id":      {"nullable": True},
+        },
+    },
+    "dwd_banner_click_log": {
+        "description": "Banner 点击日志：首页/活动页 banner 的曝光和点击行为",
+        "columns": {
+            "click_id":          {},
+            "banner_id":         {},
+            "user_id":           {"nullable": True},
+            "activity_id":       {"nullable": True},
+            "action_type":       {"enum": ["expose", "click"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+
+    # ── 物流深度域 ────────────────────────────────────────────────────────────
+    "dwd_logistics_exception_log": {
+        "description": "物流异常日志：快递途中出现的异常事件记录（丢件/损坏/延误）",
+        "columns": {
+            "exception_id":      {},
+            "tracking_no":       {},
+            "order_id":          {},
+            "logistics_id":      {},
+            "exception_type":    {"enum": ["丢件", "破损", "延误", "错发", "拒收"]},
+            "report_dt":         {},
+            "resolve_dt":        {"nullable": True},
+            "compensation":      {"nullable": True},
+        },
+    },
+    "dwd_self_pickup_log": {
+        "description": "自提核销日志：用户在门店或快递柜自提包裹的记录",
+        "columns": {
+            "pickup_id":         {},
+            "order_id":          {},
+            "user_id":           {},
+            "store_id":          {"nullable": True},
+            "pickup_code":       {},
+            "pickup_dt":         {},
+            "expire_dt":         {},
+        },
+    },
+
+    # ── 数据服务 / API 调用域 ─────────────────────────────────────────────────
+    "dwd_api_call_log": {
+        "description": "API 调用日志：内外部服务接口的调用记录，含延迟和状态码",
+        "columns": {
+            "call_id":           {},
+            "api_name":          {},
+            "caller_id":         {},
+            "http_method":       {"enum": ["GET", "POST", "PUT", "DELETE"]},
+            "status_code":       {},
+            "latency_ms":        {},
+            "call_dt":           {},
+            "is_error":          {"enum": [0, 1]},
+        },
+    },
+    "dwd_report_access_log": {
+        "description": "报表访问日志：内部用户访问数据报表的记录，用于报表热度分析",
+        "columns": {
+            "access_id":         {},
+            "employee_id":       {},
+            "report_name":       {},
+            "department_id":     {},
+            "access_dt":         {},
+            "load_seconds":      {},
+        },
+    },
+
+    # ── 商家工具域 ────────────────────────────────────────────────────────────
+    "dwd_merchant_login_log": {
+        "description": "商家后台登录日志：POP 商家登录商家中心的记录",
+        "columns": {
+            "log_id":            {},
+            "merchant_id":       {},
+            "login_type":        {"enum": ["密码", "验证码", "子账号"]},
+            "ip_address":        {},
+            "login_status":      {"enum": ["success", "fail"]},
+            "login_dt":          {},
+        },
+    },
+    "dwd_merchant_product_operate_log": {
+        "description": "商家商品操作日志：商家对商品信息进行修改的操作记录",
+        "columns": {
+            "log_id":            {},
+            "merchant_id":       {},
+            "product_id":        {},
+            "operation":         {"enum": ["上架", "下架", "改价", "改库存", "改描述", "改主图"]},
+            "operator_id":       {},
+            "old_value":         {"nullable": True},
+            "new_value":         {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_merchant_settle_apply": {
+        "description": "商家提现申请明细：商家申请提取结算款项的记录",
+        "columns": {
+            "apply_id":          {},
+            "merchant_id":       {},
+            "apply_amount":      {},
+            "settle_account":    {},
+            "status":            {"enum": ["申请中", "审核通过", "转账中", "已到账", "已拒绝"]},
+            "apply_dt":          {},
+            "complete_dt":       {"nullable": True},
+        },
+    },
+
+    # ── 额外 DIM 支撑 ─────────────────────────────────────────────────────────
+    "dwd_enterprise_info": {
+        "description": "企业客户信息明细：B 端企业客户的注册和认证信息",
+        "columns": {
+            "enterprise_id":     {},
+            "enterprise_name":   {},
+            "industry":          {"enum": ["制造业", "零售业", "互联网", "金融", "教育", "医疗", "其他"]},
+            "scale":             {"enum": ["小微", "中小", "中型", "大型", "集团"]},
+            "region_id":         {},
+            "credit_level":      {"enum": ["AAA", "AA", "A", "BBB", "BB"]},
+            "register_dt":       {},
+        },
+    },
+    "dwd_anchor_live_schedule": {
+        "description": "主播排班明细：主播直播计划和实际开播记录",
+        "columns": {
+            "schedule_id":       {},
+            "anchor_id":         {},
+            "platform_id":       {},
+            "plan_start_dt":     {},
+            "plan_end_dt":       {},
+            "actual_start_dt":   {"nullable": True},
+            "actual_end_dt":     {"nullable": True},
+            "is_cancelled":      {"enum": [0, 1]},
+        },
+    },
+    "dwd_category_browse_log": {
+        "description": "品类导航浏览日志：用户在品类页面的浏览和点击记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "category_id":       {},
+            "action_type":       {"enum": ["view", "click_sub", "click_product"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_brand_follow_log": {
+        "description": "品牌关注日志：用户关注/取关品牌店铺的记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "brand_id":          {},
+            "action_type":       {"enum": ["follow", "unfollow"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_notification_detail": {
+        "description": "站内消息明细：系统、订单、营销等站内通知的发送和阅读记录",
+        "columns": {
+            "notify_id":         {},
+            "user_id":           {},
+            "notify_type":       {"enum": ["订单状态", "物流更新", "优惠券到期", "系统公告", "互动消息"]},
+            "is_read":           {"enum": [0, 1]},
+            "send_dt":           {},
+            "read_dt":           {"nullable": True},
+        },
+    },
+    "dwd_cashier_session_log": {
+        "description": "结算页会话日志：用户进入结算页的完整会话记录，含放弃原因",
+        "columns": {
+            "session_id":        {},
+            "user_id":           {},
+            "order_amount":      {},
+            "item_count":        {},
+            "payment_method_id": {"nullable": True},
+            "enter_dt":          {},
+            "exit_dt":           {"nullable": True},
+            "is_paid":           {"enum": [0, 1]},
+            "abandon_step":      {"enum": ["地址确认", "支付方式", "密码输入", "验证码", None], "nullable": True},
+        },
+    },
+    "dwd_search_suggest_log": {
+        "description": "搜索联想词日志：用户选择搜索联想词/热词的记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {"nullable": True},
+            "input_keyword":     {},
+            "selected_suggest":  {},
+            "suggest_position":  {},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_price_alert_log": {
+        "description": "降价提醒日志：用户订阅降价提醒后触发的通知记录",
+        "columns": {
+            "alert_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "target_price":      {},
+            "trigger_price":     {"nullable": True},
+            "subscribe_dt":      {},
+            "trigger_dt":        {"nullable": True},
+            "is_purchased":      {"enum": [0, 1]},
+        },
+    },
+
+    # ── 拼团 / 砍价 / 秒杀深度域 ─────────────────────────────────────────────
+    "dwd_bargain_detail": {
+        "description": "砍价活动明细：用户发起砍价和好友助力砍价的完整记录",
+        "columns": {
+            "bargain_id":        {},
+            "initiator_id":      {},
+            "product_id":        {},
+            "original_price":    {},
+            "current_price":     {},
+            "target_price":      {},
+            "helper_count":      {},
+            "status":            {"enum": ["进行中", "成功", "失败", "已过期"]},
+            "create_dt":         {},
+            "expire_dt":         {},
+        },
+    },
+    "dwd_bargain_help_log": {
+        "description": "砍价助力日志：好友参与砍价助力的行为记录",
+        "columns": {
+            "help_id":           {},
+            "bargain_id":        {},
+            "helper_id":         {},
+            "cut_amount":        {},
+            "help_dt":           {},
+        },
+    },
+    "dwd_seckill_queue_log": {
+        "description": "秒杀排队日志：用户参与秒杀的排队和结果记录",
+        "columns": {
+            "queue_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "promotion_id":      {},
+            "queue_dt":          {},
+            "result":            {"enum": ["抢到", "未抢到", "放弃", "超时"]},
+            "order_id":          {"nullable": True},
+        },
+    },
+
+    # ── 外卖 / 即时零售域 ─────────────────────────────────────────────────────
+    "dwd_instant_order_detail": {
+        "description": "即时零售订单明细：1 小时达/半日达订单的配送记录",
+        "columns": {
+            "instant_order_id":  {},
+            "order_id":          {},
+            "user_id":           {},
+            "store_id":          {},
+            "rider_id":          {"nullable": True},
+            "promise_minutes":   {},
+            "actual_minutes":    {"nullable": True},
+            "is_on_time":        {"enum": [0, 1], "nullable": True},
+            "order_dt":          {},
+            "deliver_dt":        {"nullable": True},
+        },
+    },
+    "dwd_rider_track_log": {
+        "description": "骑手轨迹日志：配送骑手 GPS 轨迹采样记录",
+        "columns": {
+            "track_id":          {},
+            "rider_id":          {},
+            "instant_order_id":  {},
+            "latitude":          {},
+            "longitude":         {},
+            "track_dt":          {},
+            "speed_kmh":         {"nullable": True},
+        },
+    },
+
+    # ── 订阅 / SVIP 域 ────────────────────────────────────────────────────────
+    "dwd_svip_benefit_use_log": {
+        "description": "SVIP 权益使用日志：超级会员专属权益（运费券/折扣/专属客服）的使用记录",
+        "columns": {
+            "use_id":            {},
+            "user_id":           {},
+            "benefit_type":      {"enum": ["免邮券", "专属折扣", "优先退款", "专属客服", "生日礼"]},
+            "order_id":          {"nullable": True},
+            "benefit_value":     {},
+            "use_dt":            {},
+        },
+    },
+    "dwd_auto_renew_log": {
+        "description": "自动续费日志：会员到期自动扣费的执行记录",
+        "columns": {
+            "renew_id":          {},
+            "user_id":           {},
+            "plan_id":           {},
+            "amount":            {},
+            "payment_method_id": {},
+            "status":            {"enum": ["成功", "失败_余额不足", "失败_卡失效", "已取消"]},
+            "renew_dt":          {},
+            "next_expire_dt":    {"nullable": True},
+        },
+    },
+
+    # ── 内容电商 / 种草域 ─────────────────────────────────────────────────────
+    "dwd_kol_cooperation_detail": {
+        "description": "KOL 合作明细：与网红/博主的推广合作记录，含佣金和效果",
+        "columns": {
+            "coop_id":           {},
+            "kol_id":            {},
+            "merchant_id":       {},
+            "product_id":        {},
+            "coop_type":         {"enum": ["CPS", "CPM", "固定费", "换购"]},
+            "content_platform":  {"enum": ["微博", "小红书", "抖音", "B站", "微信"]},
+            "publish_dt":        {},
+            "click_count":       {},
+            "order_count":       {},
+            "gmv":               {},
+            "commission":        {},
+        },
+    },
+    "dwd_product_qa_detail": {
+        "description": "商品问答明细：用户对商品提问和商家/买家回答的记录",
+        "columns": {
+            "qa_id":             {},
+            "product_id":        {},
+            "asker_id":          {},
+            "answerer_id":       {"nullable": True},
+            "answer_type":       {"enum": ["商家", "买家", "系统"], "nullable": True},
+            "ask_dt":            {},
+            "answer_dt":         {"nullable": True},
+            "helpful_count":     {},
+        },
+    },
+
+    # ── 大促专项域 ────────────────────────────────────────────────────────────
+    "dwd_double11_order_detail": {
+        "description": "双十一订单明细：双十一大促期间的订单记录，含预售和尾款信息",
+        "columns": {
+            "d11_order_id":      {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "is_presale":        {"enum": [0, 1]},
+            "presale_deposit":   {"nullable": True},
+            "final_amount":      {},
+            "promotion_id":      {},
+            "order_dt":          {},
+        },
+    },
+    "dwd_618_order_detail": {
+        "description": "618 大促订单明细：618 促销活动的订单记录",
+        "columns": {
+            "order_618_id":      {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "promo_discount":    {},
+            "platform_subsidy":  {},
+            "merchant_discount": {},
+            "final_amount":      {},
+            "order_dt":          {},
+        },
+    },
+
+    # ── 企业内控域 ────────────────────────────────────────────────────────────
+    "dwd_permission_change_log": {
+        "description": "权限变更日志：内部员工权限授予/撤销的操作记录",
+        "columns": {
+            "change_id":         {},
+            "employee_id":       {},
+            "resource_type":     {"enum": ["报表", "数据库", "系统功能", "审批权限"]},
+            "resource_name":     {},
+            "action_type":       {"enum": ["grant", "revoke", "modify"]},
+            "operator_id":       {},
+            "change_dt":         {},
+        },
+    },
+    "dwd_approval_flow_log": {
+        "description": "审批流程日志：内部业务审批的每个节点状态记录",
+        "columns": {
+            "flow_id":           {},
+            "business_type":     {"enum": ["采购申请", "费用报销", "促销审批", "价格调整", "合同审签"]},
+            "applicant_id":      {},
+            "approver_id":       {},
+            "node_name":         {},
+            "node_status":       {"enum": ["待审批", "已通过", "已拒绝", "已撤回"]},
+            "submit_dt":         {},
+            "approve_dt":        {"nullable": True},
+            "comment":           {"nullable": True},
+        },
+    },
+
+    # ── 跨境 / 进口域 ─────────────────────────────────────────────────────────
+    "dwd_customs_clearance_log": {
+        "description": "海关报关日志：跨境商品进口的报关和清关记录",
+        "columns": {
+            "clearance_id":      {},
+            "product_id":        {},
+            "supplier_id":       {},
+            "batch_no":          {},
+            "declared_value":    {},
+            "tax_amount":        {},
+            "clearance_status":  {"enum": ["报关中", "已清关", "查验中", "退回"]},
+            "submit_dt":         {},
+            "clearance_dt":      {"nullable": True},
+        },
+    },
+    "dwd_bonded_warehouse_detail": {
+        "description": "保税仓明细：保税区商品入出库和状态变更记录",
+        "columns": {
+            "record_id":         {},
+            "warehouse_id":      {},
+            "product_id":        {},
+            "operation_type":    {"enum": ["入区", "出区", "转正", "退回", "销毁"]},
+            "quantity":          {},
+            "operation_dt":      {},
+            "operator_id":       {},
+        },
+    },
+
+    # ── 平台治理域 ────────────────────────────────────────────────────────────
+    "dwd_merchant_penalty_log": {
+        "description": "商家处罚日志：违规商家的处罚记录，含扣分和限制措施",
+        "columns": {
+            "penalty_id":        {},
+            "merchant_id":       {},
+            "violation_type":    {"enum": ["虚假宣传", "违规促销", "侵权", "延迟发货", "差评干预"]},
+            "penalty_type":      {"enum": ["警告", "扣分", "限流", "下架商品", "封店"]},
+            "score_deducted":    {"nullable": True},
+            "effective_days":    {"nullable": True},
+            "penalty_dt":        {},
+        },
+    },
+    "dwd_product_audit_log": {
+        "description": "商品审核日志：新品上架审核和日常巡检的审核记录",
+        "columns": {
+            "audit_id":          {},
+            "product_id":        {},
+            "merchant_id":       {},
+            "audit_type":        {"enum": ["新品上架", "日常巡检", "投诉触发", "定期复审"]},
+            "audit_result":      {"enum": ["通过", "拒绝", "整改后通过", "下架"]},
+            "auditor_id":        {"nullable": True},
+            "reject_reason":     {"nullable": True},
+            "audit_dt":          {},
+        },
+    },
+
+    # ── 用户画像 / 标签域 ─────────────────────────────────────────────────────
+    "dwd_user_label_assign_log": {
+        "description": "用户标签打标日志：用户标签的分配和更新记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "label_id":          {},
+            "action_type":       {"enum": ["add", "remove", "update"]},
+            "score":             {"nullable": True},
+            "assign_dt":         {},
+            "expire_dt":         {"nullable": True},
+        },
+    },
+    "dwd_rfm_score_detail": {
+        "description": "RFM 评分明细：用户每次 RFM 评分计算结果的历史记录",
+        "columns": {
+            "score_id":          {},
+            "user_id":           {},
+            "r_score":           {},
+            "f_score":           {},
+            "m_score":           {},
+            "segment_id":        {},
+            "calc_date":         {},
+        },
+    },
+    "dwd_user_lifetime_value": {
+        "description": "用户生命周期价值明细：用户 LTV 预测值和实际值的周期性记录",
+        "columns": {
+            "record_id":         {},
+            "user_id":           {},
+            "predicted_ltv":     {},
+            "actual_ltv_30d":    {},
+            "actual_ltv_90d":    {},
+            "actual_ltv_365d":   {},
+            "calc_date":         {},
+        },
+    },
+
+    # ── 财务核算域 ────────────────────────────────────────────────────────────
+    "dwd_revenue_recognition": {
+        "description": "收入确认明细：按订单粒度的收入确认和分摊记录（ASC 606 口径）",
+        "columns": {
+            "record_id":         {},
+            "order_id":          {},
+            "merchant_id":       {},
+            "revenue_type":      {"enum": ["商品收入", "佣金收入", "广告收入", "会员收入", "物流收入"]},
+            "gross_amount":      {},
+            "tax_amount":        {},
+            "net_amount":        {},
+            "recognize_dt":      {},
+        },
+    },
+    "dwd_cost_allocation": {
+        "description": "成本分摊明细：物流、营销、客服成本的订单级分摊记录",
+        "columns": {
+            "record_id":         {},
+            "order_id":          {},
+            "cost_type":         {"enum": ["物流成本", "营销成本", "客服成本", "仓储成本", "支付手续费"]},
+            "cost_amount":       {},
+            "alloc_method":      {"enum": ["按单量", "按金额", "按重量", "直接归因"]},
+            "alloc_date":        {},
+        },
+    },
+    "dwd_gross_profit_detail": {
+        "description": "毛利明细：订单 / 商品粒度的毛利计算结果",
+        "columns": {
+            "record_id":         {},
+            "order_item_id":     {},
+            "product_id":        {},
+            "merchant_id":       {},
+            "revenue":           {},
+            "cogs":              {},
+            "gross_profit":      {},
+            "gross_margin":      {},
+            "calc_date":         {},
+        },
+    },
+
+    # ── 商品运营域 ────────────────────────────────────────────────────────────
+    "dwd_product_label_assign_log": {
+        "description": "商品标签打标日志：算法/运营对商品打标签的记录",
+        "columns": {
+            "log_id":            {},
+            "product_id":        {},
+            "label_id":          {},
+            "label_type":        {"enum": ["新品", "爆款", "滞销", "清仓", "季节性", "专供"]},
+            "action_type":       {"enum": ["add", "remove"]},
+            "assign_dt":         {},
+            "operator_id":       {"nullable": True},
+        },
+    },
+    "dwd_product_rank_log": {
+        "description": "商品排名日志：商品在品类/搜索/推荐位的排名变动记录",
+        "columns": {
+            "log_id":            {},
+            "product_id":        {},
+            "rank_type":         {"enum": ["品类销量榜", "搜索排名", "好评榜", "新品榜"]},
+            "rank_position":     {},
+            "prev_position":     {"nullable": True},
+            "record_date":       {},
+        },
+    },
+    "dwd_sku_availability_log": {
+        "description": "SKU 可售状态日志：商品因库存/审核/违规等原因上下架的记录",
+        "columns": {
+            "log_id":            {},
+            "product_id":        {},
+            "status":            {"enum": ["可售", "库存不足", "已下架", "审核中", "违规下架"]},
+            "trigger_reason":    {},
+            "change_dt":         {},
+            "operator_id":       {"nullable": True},
+        },
+    },
+
+    # ── 数据集成域 ────────────────────────────────────────────────────────────
+    "dwd_cdc_change_log": {
+        "description": "CDC 变更日志：通过 CDC（Debezium/Canal）捕获的源表变更记录",
+        "columns": {
+            "change_id":         {},
+            "source_table":      {},
+            "operation":         {"enum": ["INSERT", "UPDATE", "DELETE"]},
+            "pk_value":          {},
+            "before_data":       {"nullable": True},
+            "after_data":        {},
+            "binlog_file":       {},
+            "binlog_pos":        {},
+            "change_dt":         {},
+        },
+    },
+    "dwd_data_sync_log": {
+        "description": "数据同步日志：跨系统数据同步任务的执行记录（CRM/ERP/WMS）",
+        "columns": {
+            "sync_id":           {},
+            "source_system":     {"enum": ["CRM", "ERP", "WMS", "OMS", "PMS"]},
+            "target_table":      {},
+            "sync_rows":         {},
+            "status":            {"enum": ["success", "partial", "failed"]},
+            "sync_dt":           {},
+            "duration_ms":       {},
+        },
+    },
+
+    # ── 售后深度域 ────────────────────────────────────────────────────────────
+    "dwd_warranty_claim_detail": {
+        "description": "保修申请明细：家电/3C 商品的保修服务申请记录",
+        "columns": {
+            "claim_id":          {},
+            "order_id":          {},
+            "user_id":           {},
+            "product_id":        {},
+            "issue_desc":        {},
+            "service_type":      {"enum": ["上门维修", "寄修", "换新", "退款"]},
+            "status":            {"enum": ["受理中", "派工中", "维修中", "已完成"]},
+            "apply_dt":          {},
+            "complete_dt":       {"nullable": True},
+        },
+    },
+    "dwd_nps_survey_detail": {
+        "description": "NPS 调研明细：用户净推荐值调研的填写记录",
+        "columns": {
+            "survey_id":         {},
+            "user_id":           {},
+            "order_id":          {"nullable": True},
+            "nps_score":         {"enum": [0,1,2,3,4,5,6,7,8,9,10]},
+            "category":          {"enum": ["贬损者", "被动者", "推荐者"]},
+            "feedback":          {"nullable": True},
+            "survey_dt":         {},
+        },
+    },
+
+    # ── 跨境 / 汇率域 ─────────────────────────────────────────────────────────
+    "dwd_fx_rate_log": {
+        "description": "汇率变动日志：跨境业务使用的每日汇率快照记录",
+        "columns": {
+            "rate_id":           {},
+            "currency_id":       {},
+            "rate_date":         {},
+            "open_rate":         {},
+            "close_rate":        {},
+            "high_rate":         {},
+            "low_rate":          {},
+        },
+    },
+    "dwd_cross_border_order_detail": {
+        "description": "跨境订单明细：海外购/跨境出口订单的完整记录",
+        "columns": {
+            "cb_order_id":       {},
+            "order_id":          {},
+            "user_id":           {},
+            "destination_country":{},
+            "currency_id":       {},
+            "foreign_amount":    {},
+            "cny_amount":        {},
+            "customs_status":    {"enum": ["未报关", "报关中", "已清关", "扣押查验"]},
+            "order_dt":          {},
+        },
+    },
+
+    # ── 门店运营深度域 ────────────────────────────────────────────────────────
+    "dwd_store_staff_attendance": {
+        "description": "门店员工考勤明细：线下门店员工的出勤记录",
+        "columns": {
+            "attendance_id":     {},
+            "store_id":          {},
+            "employee_id":       {},
+            "check_in_dt":       {},
+            "check_out_dt":      {"nullable": True},
+            "attendance_type":   {"enum": ["正常", "迟到", "早退", "缺勤", "调休"]},
+        },
+    },
+    "dwd_store_revenue_detail": {
+        "description": "门店营收明细：线下门店每日营业收入的汇总记录",
+        "columns": {
+            "record_id":         {},
+            "store_id":          {},
+            "record_date":       {},
+            "total_revenue":     {},
+            "order_count":       {},
+            "avg_ticket":        {},
+            "foot_traffic":      {"nullable": True},
+        },
+    },
+    "dwd_user_device_bind_log": {
+        "description": "用户设备绑定日志：用户账号与终端设备的绑定/解绑记录",
+        "columns": {
+            "log_id":            {},
+            "user_id":           {},
+            "device_id":         {},
+            "action_type":       {"enum": ["bind", "unbind"]},
+            "platform_id":       {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_session_detail": {
+        "description": "会话明细：用户每次 App/Web 访问的会话级汇总，含访问深度和时长",
+        "columns": {
+            "session_id":        {},
+            "user_id":           {"nullable": True},
+            "device_id":         {},
+            "platform_id":       {},
+            "channel_id":        {"nullable": True},
+            "page_count":        {},
+            "stay_seconds":      {},
+            "has_order":         {"enum": [0, 1]},
+            "start_dt":          {},
+            "end_dt":            {"nullable": True},
+        },
+    },
+    "dwd_order_cancel_detail": {
+        "description": "订单取消明细：用户/系统取消订单的原因和时间记录",
+        "columns": {
+            "cancel_id":         {},
+            "order_id":          {},
+            "user_id":           {},
+            "cancel_by":         {"enum": ["用户主动", "超时自动", "库存不足", "商家取消", "风控拦截"]},
+            "cancel_stage":      {"enum": ["未付款", "已付款待发货", "已发货"]},
+            "refund_amount":     {},
+            "cancel_dt":         {},
+        },
+    },
+    "dwd_payment_installment_detail": {
+        "description": "分期付款明细：用户使用花呗/白条分期的还款计划和实际还款记录",
+        "columns": {
+            "installment_id":    {},
+            "order_id":          {},
+            "user_id":           {},
+            "total_amount":      {},
+            "periods":           {"enum": [3, 6, 9, 12, 24]},
+            "period_no":         {},
+            "due_amount":        {},
+            "due_date":          {},
+            "pay_date":          {"nullable": True},
+            "status":            {"enum": ["待还款", "已还款", "逾期", "提前还清"]},
+        },
+    },
+    "dwd_review_reply_detail": {
+        "description": "评价回复明细：商家/买家对商品评价的回复记录",
+        "columns": {
+            "reply_id":          {},
+            "comment_id":        {},
+            "replier_id":        {},
+            "replier_type":      {"enum": ["商家", "买家", "平台"]},
+            "reply_content":     {},
+            "reply_dt":          {},
+            "is_public":         {"enum": [0, 1]},
+        },
+    },
+    "dwd_bundle_order_detail": {
+        "description": "套装/组合商品订单明细：购买套装商品的拆单记录",
+        "columns": {
+            "bundle_id":         {},
+            "order_item_id":     {},
+            "bundle_product_id": {},
+            "sub_product_id":    {},
+            "quantity":          {},
+            "allocated_price":   {},
+            "order_dt":          {},
+        },
+    },
+    "dwd_wallet_transaction_detail": {
+        "description": "钱包交易明细：用户平台钱包的充值/消费/提现流水",
+        "columns": {
+            "txn_id":            {},
+            "user_id":           {},
+            "txn_type":          {"enum": ["充值", "消费", "退款入账", "提现", "奖励入账", "过期扣除"]},
+            "amount":            {},
+            "balance_after":     {},
+            "ref_order_id":      {"nullable": True},
+            "txn_dt":            {},
+        },
+    },
+    "dwd_store_task_log": {
+        "description": "门店任务日志：门店接收和完成运营任务（如陈列/促销）的记录",
+        "columns": {
+            "task_id":           {},
+            "store_id":          {},
+            "task_type":         {"enum": ["陈列检查", "促销布置", "库存盘点", "培训考核"]},
+            "assigned_dt":       {},
+            "deadline_dt":       {},
+            "complete_dt":       {"nullable": True},
+            "status":            {"enum": ["待完成", "已完成", "逾期", "已取消"]},
+            "operator_id":       {},
+        },
+    },
+    "dwd_inventory_reserve_detail": {
+        "description": "库存预占明细：订单创建时预占库存和释放的记录",
+        "columns": {
+            "reserve_id":        {},
+            "order_id":          {},
+            "product_id":        {},
+            "warehouse_id":      {},
+            "reserved_qty":      {},
+            "reserve_dt":        {},
+            "release_dt":        {"nullable": True},
+            "release_reason":    {"enum": ["发货释放", "取消释放", "超时释放"], "nullable": True},
+        },
+    },
+    "dwd_supplier_quality_rating": {
+        "description": "供应商质量评分明细：每批次到货后对供应商的质量评分记录",
+        "columns": {
+            "rating_id":         {},
+            "supplier_id":       {},
+            "po_id":             {},
+            "quality_score":     {"enum": [1, 2, 3, 4, 5]},
+            "delivery_score":    {"enum": [1, 2, 3, 4, 5]},
+            "service_score":     {"enum": [1, 2, 3, 4, 5]},
+            "rater_id":          {},
+            "rating_dt":         {},
+        },
+    },
+    "dwd_category_operation_log": {
+        "description": "品类运营操作日志：运营人员对品类配置（排序/精选/屏蔽）的变更记录",
+        "columns": {
+            "log_id":            {},
+            "category_id":       {},
+            "operation":         {"enum": ["置顶", "推荐", "屏蔽", "调整顺序", "修改描述"]},
+            "operator_id":       {},
+            "old_value":         {"nullable": True},
+            "new_value":         {},
+            "log_dt":            {},
+        },
+    },
+    "dwd_logistics_cost_detail": {
+        "description": "物流费用明细：每笔订单的物流成本核算记录，含承运费和耗材费",
+        "columns": {
+            "cost_id":           {},
+            "order_id":          {},
+            "logistics_id":      {},
+            "warehouse_id":      {},
+            "freight_cost":      {},
+            "packaging_cost":    {},
+            "insurance_cost":    {"nullable": True},
+            "total_cost":        {},
+            "settle_dt":         {"nullable": True},
+        },
+    },
+    "dwd_channel_attribution_detail": {
+        "description": "渠道归因明细：订单的多触点渠道归因记录，含首触/末触/线性归因",
+        "columns": {
+            "attribution_id":    {},
+            "order_id":          {},
+            "user_id":           {},
+            "channel_id":        {},
+            "touch_type":        {"enum": ["首触", "末触", "线性", "时间衰减", "位置归因"]},
+            "attributed_revenue":{},
+            "touch_dt":          {},
+        },
+    },
+    "dwd_product_exposure_log": {
+        "description": "商品曝光日志：商品在各页面位置的展示记录，用于曝光转化漏斗分析",
+        "columns": {
+            "expose_id":         {},
+            "product_id":        {},
+            "user_id":           {"nullable": True},
+            "page_type":         {"enum": ["首页", "分类页", "搜索结果页", "推荐位", "活动页"]},
+            "position":          {},
+            "platform_id":       {},
+            "rec_algo_id":       {"nullable": True},
+            "log_dt":            {},
+        },
+    },
+}
+
+
+def build_registry(dim: dict, dwd: dict) -> dict:
+    """合并 DIM 和 DWD 表，生成 schema.registry.json 格式。"""
+    tables = {}
+    tables.update(dim)
+    tables.update(dwd)
+    return {"tables": tables}
+
+
+if __name__ == "__main__":
+    registry = build_registry(DIM_TABLES, DWD_TABLES)
+    total = len(registry["tables"])
+    n_dim = len(DIM_TABLES)
+    n_dwd = len(DWD_TABLES)
+
+    out_path = Path(__file__).parent / "large_registry.json"
+    out_path.write_text(
+        json.dumps(registry, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"生成完成：{total} 张表（DIM={n_dim}, DWD={n_dwd}）")
+    print(f"输出路径：{out_path}")

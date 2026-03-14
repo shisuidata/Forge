@@ -87,8 +87,12 @@ class SchemaRetriever:
             for col in col_names:
                 if col.endswith("_id"):
                     stem = col[:-3]   # 去掉 _id 后缀，如 user_id → user
-                    # 尝试单数和复数两种形式（order → orders，product → products）
-                    for ref in (stem, stem + "s"):
+                    # 候选引用：单数/复数 × 无前缀/常见前缀（dim_ / dwd_ / ods_）
+                    candidates = [stem, stem + "s"]
+                    for prefix in ("dim_", "dwd_", "ods_", "dws_", "ads_"):
+                        candidates.append(prefix + stem)
+                        candidates.append(prefix + stem + "s")
+                    for ref in candidates:
                         if ref in table_set and ref != table:
                             fks[table].add(ref)
                             break

@@ -1,0 +1,756 @@
+# 电商业务通用语义层 — 指标定义
+# 覆盖交易、用户、商品、营销、物流、内容、财务七大业务域
+# 对应 tests/fixtures/large_registry.json（200 张表场景）
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 交易域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+gmv:
+  metric_class: atomic
+  label: GMV（成交总额）
+  description: 所有已提交订单的总成交金额，含已取消订单，口径为下单金额
+  measure: dwd_order_detail.total_amount
+  aggregation: sum
+  period_col: dwd_order_detail.order_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+    - dim_user.region_id
+    - dim_category.category_name
+    - dim_merchant.merchant_name
+
+pay_gmv:
+  metric_class: atomic
+  label: 支付 GMV（实付总额）
+  description: 已完成支付的订单实付金额之和，不含取消/未付款订单
+  measure: dwd_order_detail.pay_amount
+  aggregation: sum
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+    - dim_payment_method.method_name
+    - dim_category.category_name
+
+order_count:
+  metric_class: atomic
+  label: 订单量
+  description: 所有已提交订单的去重数量
+  measure: dwd_order_detail.order_id
+  aggregation: count_distinct
+  period_col: dwd_order_detail.order_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+    - dim_merchant.merchant_name
+    - dim_user.region_id
+
+paid_order_count:
+  metric_class: atomic
+  label: 支付订单量
+  description: 已完成支付的订单数量
+  measure: dwd_order_detail.order_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+
+completed_order_count:
+  metric_class: atomic
+  label: 完成订单量
+  description: 状态为"已完成"的订单数量，为最严口径
+  measure: dwd_order_detail.order_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status = '已完成'"
+  period_col: dwd_order_detail.complete_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_merchant.merchant_name
+    - dim_category.category_name
+
+cancelled_order_count:
+  metric_class: atomic
+  label: 取消订单量
+  description: 状态为"已取消"的订单数量
+  measure: dwd_order_detail.order_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status = '已取消'"
+  period_col: dwd_order_detail.order_dt
+  dimensions:
+    - dim_channel.channel_name
+
+discount_amount_total:
+  metric_class: atomic
+  label: 优惠金额
+  description: 订单中各类优惠（活动折扣 + 优惠券）的总减免金额
+  measure: dwd_order_detail.discount_amount
+  aggregation: sum
+  qualifiers:
+    - "dwd_order_detail.order_status != '已取消'"
+  period_col: dwd_order_detail.order_dt
+  dimensions:
+    - dim_promotion.promo_type
+    - dim_channel.channel_name
+
+freight_revenue:
+  metric_class: atomic
+  label: 运费收入
+  description: 用户支付的运费总金额（不含免邮订单）
+  measure: dwd_order_detail.freight_amount
+  aggregation: sum
+  qualifiers:
+    - "dwd_order_detail.freight_amount > 0"
+  period_col: dwd_order_detail.order_dt
+  dimensions:
+    - dim_region.region_name
+    - dim_logistics_company.company_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 用户域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+buying_user_count:
+  metric_class: atomic
+  label: 购买用户数
+  description: 统计周期内至少完成一笔支付的去重用户数
+  measure: dwd_order_detail.user_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_user.region_id
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+    - dim_vip_level.level_name
+
+new_user_count:
+  metric_class: atomic
+  label: 新用户注册数
+  description: 统计周期内新完成注册的用户数
+  measure: dwd_user_register_log.user_id
+  aggregation: count_distinct
+  period_col: dwd_user_register_log.register_dt
+  dimensions:
+    - dwd_user_register_log.register_type
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+
+new_buying_user_count:
+  metric_class: atomic
+  label: 新购用户数
+  description: 统计周期内完成首次购买的用户数（历史上从未下过支付订单）
+  measure: dwd_order_detail.user_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+
+repurchase_user_count:
+  metric_class: atomic
+  label: 复购用户数
+  description: 统计周期内支付订单数 >= 2 的去重用户数
+  measure: dwd_order_detail.user_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_user.region_id
+    - dim_vip_level.level_name
+
+active_user_count:
+  metric_class: atomic
+  label: 活跃用户数（DAU/MAU）
+  description: 统计周期内产生任意行为（浏览/搜索/下单）的去重用户数
+  measure: dwd_page_view_log.user_id
+  aggregation: count_distinct
+  period_col: dwd_page_view_log.log_dt
+  dimensions:
+    - dim_platform.platform_name
+    - dim_channel.channel_name
+
+login_user_count:
+  metric_class: atomic
+  label: 登录用户数
+  description: 统计周期内成功登录的去重用户数
+  measure: dwd_user_login_log.user_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_user_login_log.login_status = 'success'"
+  period_col: dwd_user_login_log.login_dt
+  dimensions:
+    - dim_platform.platform_name
+    - dwd_user_login_log.login_type
+
+churned_user_count:
+  metric_class: atomic
+  label: 流失用户数
+  description: 上一自然月有购买、当月未购买的用户数（MoM 流失口径）
+  measure: dwd_order_detail.user_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_user.region_id
+    - dim_vip_level.level_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 商品域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+product_sales_qty:
+  metric_class: atomic
+  label: 商品销售件数
+  description: 已完成支付的订单中商品的销售数量（SKU 粒度）
+  measure: dwd_order_item_detail.quantity
+  aggregation: sum
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_item_detail.order_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+    - dim_brand.brand_name
+    - dim_merchant.merchant_name
+
+product_gmv:
+  metric_class: atomic
+  label: 商品 GMV
+  description: SKU 级别的成交金额，按实际成交价 × 数量计算
+  measure: dwd_order_item_detail.actual_amount
+  aggregation: sum
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_item_detail.order_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+    - dim_brand.brand_name
+
+product_view_count:
+  metric_class: atomic
+  label: 商品详情页浏览量（PV）
+  description: 商品详情页的总浏览次数
+  measure: dwd_product_view_log.log_id
+  aggregation: count
+  period_col: dwd_product_view_log.log_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+    - dim_platform.platform_name
+
+product_view_user_count:
+  metric_class: atomic
+  label: 商品详情页浏览用户数（UV）
+  description: 浏览商品详情页的去重用户数
+  measure: dwd_product_view_log.user_id
+  aggregation: count_distinct
+  period_col: dwd_product_view_log.log_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+
+product_buying_user_count:
+  metric_class: atomic
+  label: 商品购买用户数
+  description: 购买该商品的去重用户数
+  measure: dwd_order_item_detail.user_id
+  aggregation: count_distinct
+  qualifiers:
+    - "dwd_order_detail.order_status IN ('待发货','待收货','已完成')"
+  period_col: dwd_order_item_detail.order_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+
+favorite_count:
+  metric_class: atomic
+  label: 商品收藏数
+  description: 用户对商品执行收藏操作的次数
+  measure: dwd_favorite_log.fav_id
+  aggregation: count
+  qualifiers:
+    - "dwd_favorite_log.action_type = 'collect'"
+  period_col: dwd_favorite_log.log_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_platform.platform_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 营销域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+coupon_issue_count:
+  metric_class: atomic
+  label: 优惠券发放量
+  description: 统计周期内发放的优惠券数量
+  measure: dwd_coupon_issue_detail.issue_id
+  aggregation: count
+  period_col: dwd_coupon_issue_detail.issue_dt
+  dimensions:
+    - dim_coupon.coupon_type
+    - dim_promotion.promotion_name
+
+coupon_use_count:
+  metric_class: atomic
+  label: 优惠券使用量
+  description: 统计周期内被实际用于下单的优惠券数量
+  measure: dwd_coupon_use_detail.coupon_use_id
+  aggregation: count
+  qualifiers:
+    - "dwd_coupon_use_detail.action_type = 'use'"
+  period_col: dwd_coupon_use_detail.action_dt
+  dimensions:
+    - dim_coupon.coupon_type
+    - dim_promotion.promotion_name
+
+coupon_discount_amount:
+  metric_class: atomic
+  label: 优惠券减免金额
+  description: 统计周期内优惠券实际减免的总金额
+  measure: dwd_coupon_use_detail.discount_amount
+  aggregation: sum
+  qualifiers:
+    - "dwd_coupon_use_detail.action_type = 'use'"
+  period_col: dwd_coupon_use_detail.action_dt
+  dimensions:
+    - dim_coupon.coupon_type
+
+ad_impression_count:
+  metric_class: atomic
+  label: 广告曝光量
+  description: 广告位对用户展示的总次数（含未登录用户）
+  measure: dwd_ad_impression_log.impression_id
+  aggregation: count
+  period_col: dwd_ad_impression_log.log_dt
+  dimensions:
+    - dim_ad_placement.placement_name
+    - dim_platform.platform_name
+
+ad_click_count:
+  metric_class: atomic
+  label: 广告点击量
+  description: 用户点击广告的总次数
+  measure: dwd_ad_click_log.click_id
+  aggregation: count
+  period_col: dwd_ad_click_log.log_dt
+  dimensions:
+    - dim_ad_placement.placement_name
+    - dim_platform.platform_name
+
+ad_cost:
+  metric_class: atomic
+  label: 广告花费
+  description: 统计周期内广告实际消耗的费用总额
+  measure: dwd_ad_budget_detail.spent_amount
+  aggregation: sum
+  period_col: dwd_ad_budget_detail.date_id
+  dimensions:
+    - dim_ad_placement.placement_name
+    - dim_merchant.merchant_name
+
+ad_order_count:
+  metric_class: atomic
+  label: 广告带来的订单量
+  description: 用户点击广告后发生购买转化的订单数
+  measure: dwd_ad_convert_log.order_id
+  aggregation: count_distinct
+  period_col: dwd_ad_convert_log.convert_dt
+  dimensions:
+    - dim_ad_placement.placement_name
+
+ad_revenue:
+  metric_class: atomic
+  label: 广告带来的 GMV
+  description: 广告点击归因的订单成交金额
+  measure: dwd_ad_convert_log.order_amount
+  aggregation: sum
+  period_col: dwd_ad_convert_log.convert_dt
+  dimensions:
+    - dim_ad_placement.placement_name
+    - dim_merchant.merchant_name
+
+push_send_count:
+  metric_class: atomic
+  label: 推送发送量
+  description: 统计周期内成功下发的推送消息数量
+  measure: dwd_push_send_log.push_id
+  aggregation: count
+  qualifiers:
+    - "dwd_push_send_log.send_status = 'success'"
+  period_col: dwd_push_send_log.send_dt
+  dimensions:
+    - dwd_push_send_log.push_type
+
+push_click_count:
+  metric_class: atomic
+  label: 推送点击量
+  description: 用户点击推送消息的次数
+  measure: dwd_push_click_log.click_id
+  aggregation: count
+  period_col: dwd_push_click_log.click_dt
+  dimensions:
+    - dim_platform.platform_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 物流域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+on_time_delivery_count:
+  metric_class: atomic
+  label: 准时送达订单量
+  description: 实际送达时间早于或等于承诺送达时间的订单数
+  measure: dwd_delivery_detail.delivery_id
+  aggregation: count
+  qualifiers:
+    - "dwd_delivery_detail.is_on_time = 1"
+  period_col: dwd_delivery_detail.actual_dt
+  dimensions:
+    - dim_logistics_company.company_name
+    - dim_city.city_name
+
+total_delivery_count:
+  metric_class: atomic
+  label: 已签收订单量
+  description: 已完成签收的订单总数（分母，用于计算准时率）
+  measure: dwd_delivery_detail.delivery_id
+  aggregation: count
+  qualifiers:
+    - "dwd_delivery_detail.actual_dt IS NOT NULL"
+  period_col: dwd_delivery_detail.actual_dt
+  dimensions:
+    - dim_logistics_company.company_name
+    - dim_city.city_name
+
+return_goods_count:
+  metric_class: atomic
+  label: 退货单量
+  description: 已发起退货申请的订单数（含退款中和已完成退货）
+  measure: dwd_return_goods_detail.return_id
+  aggregation: count
+  period_col: dwd_refund_detail.apply_dt
+  dimensions:
+    - dim_return_reason.reason_type
+    - dim_category.category_name
+    - dim_merchant.merchant_name
+
+refund_amount:
+  metric_class: atomic
+  label: 退款金额
+  description: 统计周期内已成功退款的总金额
+  measure: dwd_refund_detail.refund_amount
+  aggregation: sum
+  qualifiers:
+    - "dwd_refund_detail.refund_status = '已退款'"
+  period_col: dwd_refund_detail.complete_dt
+  dimensions:
+    - dim_after_sale_type.type_name
+    - dim_return_reason.reason_type
+    - dim_merchant.merchant_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 内容 / 直播域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+live_gmv:
+  metric_class: atomic
+  label: 直播 GMV
+  description: 直播间内完成支付的订单总金额
+  measure: dwd_live_order_detail.pay_amount
+  aggregation: sum
+  period_col: dwd_live_order_detail.order_dt
+  dimensions:
+    - dim_anchor.anchor_name
+    - dim_anchor.anchor_level
+    - dim_platform.platform_name
+    - dim_live_category.cat_name
+
+live_order_count:
+  metric_class: atomic
+  label: 直播间订单量
+  description: 直播间内下单的订单数量
+  measure: dwd_live_order_detail.live_order_id
+  aggregation: count
+  period_col: dwd_live_order_detail.order_dt
+  dimensions:
+    - dim_anchor.anchor_name
+    - dim_platform.platform_name
+
+live_watch_user_count:
+  metric_class: atomic
+  label: 直播观看人数（UV）
+  description: 统计周期内观看直播的去重用户数
+  measure: dwd_live_watch_log.user_id
+  aggregation: count_distinct
+  period_col: dwd_live_watch_log.enter_dt
+  dimensions:
+    - dim_anchor.anchor_name
+    - dim_platform.platform_name
+
+review_count:
+  metric_class: atomic
+  label: 商品评价数
+  description: 统计周期内提交的商品评价总数
+  measure: dwd_comment_detail.comment_id
+  aggregation: count
+  period_col: dwd_comment_detail.comment_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+    - dim_merchant.merchant_name
+
+positive_review_count:
+  metric_class: atomic
+  label: 好评数
+  description: 评分 4-5 星的评价数量
+  measure: dwd_comment_detail.comment_id
+  aggregation: count
+  qualifiers:
+    - "dwd_comment_detail.comment_type = '好评'"
+  period_col: dwd_comment_detail.comment_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+    - dim_merchant.merchant_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 财务域 ── 原子指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+gross_profit_amount:
+  metric_class: atomic
+  label: 毛利额
+  description: 商品销售收入减去成本（COGS）后的毛利润
+  measure: dwd_gross_profit_detail.gross_profit
+  aggregation: sum
+  period_col: dwd_gross_profit_detail.calc_date
+  dimensions:
+    - dim_category.category_name
+    - dim_brand.brand_name
+    - dim_merchant.merchant_name
+
+revenue_amount:
+  metric_class: atomic
+  label: 营收额
+  description: 已确认的平台收入（含自营商品收入、佣金、广告等）
+  measure: dwd_revenue_recognition.net_amount
+  aggregation: sum
+  period_col: dwd_revenue_recognition.recognize_dt
+  dimensions:
+    - dwd_revenue_recognition.revenue_type
+    - dim_merchant.merchant_name
+
+commission_amount:
+  metric_class: atomic
+  label: 佣金收入
+  description: 平台向 POP 商家收取的交易佣金总额
+  measure: dwd_merchant_settle_detail.commission_amount
+  aggregation: sum
+  period_col: dwd_merchant_settle_detail.settle_dt
+  dimensions:
+    - dim_merchant.merchant_name
+    - dim_category.category_name
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 衍生指标
+# ══════════════════════════════════════════════════════════════════════════════
+
+avg_order_value:
+  metric_class: derivative
+  label: 客单价（AOV）
+  description: 平均每笔支付订单的实付金额
+  numerator: pay_gmv
+  denominator: paid_order_count
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+    - dim_user.region_id
+  notes: |
+    分子 pay_gmv 和分母 paid_order_count 均限定已支付状态，口径一致
+
+repurchase_rate:
+  metric_class: derivative
+  label: 复购率
+  description: 统计周期内下过 ≥2 笔支付订单的用户占全部购买用户的比例
+  numerator: repurchase_user_count
+  denominator: buying_user_count
+  period_col: dwd_order_detail.pay_dt
+  dimensions:
+    - dim_user.region_id
+    - dim_vip_level.level_name
+  notes: |
+    分子：支付订单 ≥2 笔的用户数（复购定义）
+    分母：支付订单 ≥1 笔的用户数
+    两侧均限定相同时间窗口，无 status 过滤差异
+
+new_user_purchase_rate:
+  metric_class: derivative
+  label: 新用户首购转化率
+  description: 统计周期内新注册用户中完成首次购买的比例
+  numerator: new_buying_user_count
+  denominator: new_user_count
+  period_col: dwd_user_register_log.register_dt
+  dimensions:
+    - dim_channel.channel_name
+    - dim_platform.platform_name
+  notes: |
+    分子分母均以注册时间为基准，统一在同一时间窗口内统计
+
+payment_conversion_rate:
+  metric_class: derivative
+  label: 支付转化率
+  description: 购买用户数除以活跃用户数，衡量流量变现效率
+  numerator: buying_user_count
+  denominator: active_user_count
+  period_col: dwd_page_view_log.log_dt
+  dimensions:
+    - dim_platform.platform_name
+    - dim_channel.channel_name
+  notes: |
+    分子（购买用户）以 pay_dt 为时间基准，分母（活跃用户）以 log_dt 为基准
+    统一取同一自然日/月的数据，两侧时间窗口对齐
+
+product_conversion_rate:
+  metric_class: derivative
+  label: 商品购买转化率（PDR→Order）
+  description: 浏览商品详情页的用户中实际购买的比例
+  numerator: product_buying_user_count
+  denominator: product_view_user_count
+  period_col: dwd_product_view_log.log_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+  notes: |
+    分子以 order_dt 统计，分母以 log_dt 统计，统一取同一时间窗口
+    注意：非严格同一批用户，是聚合级别的转化率估算
+
+ad_click_through_rate:
+  metric_class: derivative
+  label: 广告点击率（CTR）
+  description: 广告点击量除以曝光量，衡量广告素材吸引力
+  numerator: ad_click_count
+  denominator: ad_impression_count
+  period_col: dwd_ad_impression_log.log_dt
+  dimensions:
+    - dim_ad_placement.placement_name
+    - dim_platform.platform_name
+
+ad_roi:
+  metric_class: derivative
+  label: 广告 ROI
+  description: 广告带来的 GMV 除以广告花费，衡量广告投入产出比
+  numerator: ad_revenue
+  denominator: ad_cost
+  period_col: dwd_ad_budget_detail.date_id
+  dimensions:
+    - dim_ad_placement.placement_name
+    - dim_merchant.merchant_name
+  notes: |
+    分子 ad_revenue 以 convert_dt 统计，分母 ad_cost 以 date_id 统计
+    通常以天或周为统计粒度，保证归因窗口一致（点击后 7 天内的转化）
+
+return_rate:
+  metric_class: derivative
+  label: 退货率
+  description: 退货单量除以完成订单量，衡量商品质量和用户满意度
+  numerator: return_goods_count
+  denominator: completed_order_count
+  period_col: dwd_order_detail.complete_dt
+  dimensions:
+    - dim_category.category_name
+    - dim_merchant.merchant_name
+    - dim_return_reason.reason_type
+  notes: |
+    分子退货申请时间（apply_dt），分母订单完成时间（complete_dt），
+    存在时间偏差；建议统一以订单完成月为基准，匹配同月完成订单的退货率
+
+on_time_delivery_rate:
+  metric_class: derivative
+  label: 准时配送率
+  description: 准时送达的订单量占全部已签收订单量的比例
+  numerator: on_time_delivery_count
+  denominator: total_delivery_count
+  period_col: dwd_delivery_detail.actual_dt
+  dimensions:
+    - dim_logistics_company.company_name
+    - dim_city.city_name
+
+coupon_use_rate:
+  metric_class: derivative
+  label: 优惠券核销率
+  description: 被实际使用的优惠券数量占发放总量的比例
+  numerator: coupon_use_count
+  denominator: coupon_issue_count
+  period_col: dwd_coupon_issue_detail.issue_dt
+  dimensions:
+    - dim_coupon.coupon_type
+    - dim_promotion.promotion_name
+  notes: |
+    分子使用时间（action_dt）和分母发放时间（issue_dt）可能跨月
+    建议以优惠券发放月为基准，统计该批次券的最终核销率
+
+positive_review_rate:
+  metric_class: derivative
+  label: 好评率
+  description: 好评数（4-5星）占总评价数的比例
+  numerator: positive_review_count
+  denominator: review_count
+  period_col: dwd_comment_detail.comment_dt
+  dimensions:
+    - dim_product.product_name
+    - dim_category.category_name
+    - dim_merchant.merchant_name
+
+gross_margin:
+  metric_class: derivative
+  label: 毛利率
+  description: 毛利额除以营收额，衡量盈利能力
+  numerator: gross_profit_amount
+  denominator: revenue_amount
+  period_col: dwd_gross_profit_detail.calc_date
+  dimensions:
+    - dim_category.category_name
+    - dim_brand.brand_name
+  notes: |
+    分子（gross_profit）和分母（revenue）使用不同数据源，
+    gross_profit 来自 dwd_gross_profit_detail，revenue 来自 dwd_revenue_recognition
+    建议以同一会计周期（月/季）为统计粒度确保口径一致
+
+push_click_rate:
+  metric_class: derivative
+  label: 推送点击率
+  description: 推送消息的点击量除以发送量
+  numerator: push_click_count
+  denominator: push_send_count
+  period_col: dwd_push_send_log.send_dt
+  dimensions:
+    - dwd_push_send_log.push_type
+    - dim_platform.platform_name
+
+live_conversion_rate:
+  metric_class: derivative
+  label: 直播间下单转化率
+  description: 直播间内下单的用户数除以观看用户数
+  numerator: live_order_count
+  denominator: live_watch_user_count
+  period_col: dwd_live_watch_log.enter_dt
+  dimensions:
+    - dim_anchor.anchor_name
+    - dim_platform.platform_name
+  notes: |
+    分子为订单数（非用户数），分母为观看 UV，严格来说是"下单率"而非"转化率"
+    若要计算用户粒度转化率，需要将 live_order_count 改为去重购买用户数
