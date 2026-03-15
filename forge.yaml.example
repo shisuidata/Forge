@@ -28,17 +28,27 @@ embedding:
 # ── 数据库连接 ────────────────────────────────────────────────────────────────
 database:
   url: ""
-  # 示例：
-  #   sqlite:///./demo/forge_demo.db
+  # 测试数据集示例：
+  #   sqlite:///./tests/datasets/small/database.db     ← 4 张表小库
+  #   sqlite:///./tests/datasets/large/database.db     ← 200 张表电商数仓
+  # 生产示例：
   #   postgresql://user:pass@localhost:5432/mydb
-  #   mysql+pymysql://user:pass@localhost:3306/mydb
 
 # ── Registry 文件路径 ─────────────────────────────────────────────────────────
+# 三套测试数据集可选，取消注释切换：
 registry:
-  schema_path:          "registry/data/schema.registry.json"              # forge sync 自动生成，记录表结构
-  metrics_path:         "registry/data/metrics.registry.yaml"             # 指标语义层，对话式维护
-  disambiguations_path: "registry/data/disambiguations.registry.yaml"     # 业务歧义消除规则，人工/自动维护
-  conventions_path:     "registry/data/field_conventions.registry.yaml"   # 字段使用约定，人工维护
+  # ── small（4 张表）──
+  # schema_path:          "tests/datasets/small/schema.registry.json"
+  # metrics_path:         "tests/datasets/small/metrics.registry.yaml"
+
+  # ── large（200 张表电商数仓，默认）──
+  schema_path:          "tests/datasets/large/schema.registry.json"
+  metrics_path:         "tests/datasets/large/metrics.registry.yaml"
+  disambiguations_path: "tests/datasets/large/disambiguations.registry.yaml"
+  conventions_path:     "tests/datasets/large/field_conventions.registry.yaml"
+
+  # ── spider（Spider2-Lite，学术 benchmark）──
+  # schema_path:          "tests/datasets/spider/schema.registry.json"
 
 # ── Staging 目录（用户交互确认暂存区）─────────────────────────────────────────
 staging:

@@ -9,15 +9,17 @@ from typing import Literal
 
 @dataclass
 class MethodConfig:
-    id: str                                   # "f"
+    id: str                                   # "l"
     label: str                                # used in reports
     mode: Literal["forge", "sql"]             # forge = compile via Forge DSL; sql = direct SQL
     system_prompt: str | None = None          # 旧式：硬编码完整 prompt（已冻结的历史版本）
     registry_context: str | None = None      # 新式：只提供 schema，prompt 由 build_system() 动态生成
+    cases_file: str | None = None            # 测试用例路径（None = 使用 runner 默认）
+    dataset: str | None = None               # 数据集名称（"small" | "large" | "spider"）
     model: str = "MiniMax-M2.5-highspeed"
     runs: int = 5
     notes: str = ""
-    use_semantic_lib: bool = False            # 是否启用语义消歧库对问题进行预处理
+    use_semantic_lib: bool = False
 
     def __post_init__(self):
         if self.system_prompt is None and self.registry_context is None:
@@ -25,11 +27,10 @@ class MethodConfig:
 
 
 def load(method_id: str) -> MethodConfig:
-    """Load a method config by its single-char id (e.g. 'f')."""
+    """Load a method config by its single-char id (e.g. 'l')."""
     try:
         mod = importlib.import_module(f"methods.method_{method_id}")
     except ModuleNotFoundError:
-        # Try relative import when running from tests/accuracy/
         import sys
         methods_dir = Path(__file__).parent
         if str(methods_dir.parent) not in sys.path:
@@ -41,6 +42,8 @@ def load(method_id: str) -> MethodConfig:
         mode=mod.MODE,
         system_prompt=getattr(mod, "SYSTEM_PROMPT", None),
         registry_context=getattr(mod, "REGISTRY_CONTEXT", None),
+        cases_file=getattr(mod, "CASES_FILE", None),
+        dataset=getattr(mod, "DATASET", None),
         model=getattr(mod, "MODEL", "MiniMax-M2.5-highspeed"),
         runs=getattr(mod, "RUNS", 5),
         notes=getattr(mod, "NOTES", ""),

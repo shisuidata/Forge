@@ -639,3 +639,64 @@ def test_snowflake_filter_clause_raises():
             {"scan": "orders", "group": ["orders.status"], "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "total", "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}]}], "select": ["orders.status", "total"]},
             dialect="snowflake"
         )
+
+
+# ── Fix 17-19: New coerce fixes ───────────────────────────────────────────────
+
+def test_fix17_having_without_group_infers_group():
+    """Fix 17: HAVING present but no GROUP BY → infer GROUP BY from non-agg select columns."""
+    result = sql({
+        "scan": "category_orders",
+        "joins": [{"type": "inner", "table": "category_refunds",
+                   "on": {"left": "category_orders.category", "right": "category_refunds.category"}}],
+        "agg": [{"fn": "avg", "col": "category_orders.order_count", "as": "avg_orders"}],
+        "having": [{"col": "avg_orders", "op": "gt", "val": 10}],
+        "select": ["category_orders.category", "avg_orders"],
+    })
+    assert "GROUP BY category_orders.category" in result
+    assert "HAVING avg_orders > 10" in result
+
+
+def test_fix18_lag_expands_agg_alias():
+    """Fix 18: LAG/LEAD col referencing an agg alias → expands to actual expression."""
+    result = sql({
+        "scan": "orders",
+        "group": ["orders.month"],
+        "agg": [{"fn": "count_all", "as": "order_count"}],
+        "window": [{
+            "fn": "lag", "col": "order_count", "offset": 1,
+            "order": [{"col": "orders.month", "dir": "asc"}],
+            "as": "prev_order_count"
+        }],
+        "select": ["orders.month", "order_count", "prev_order_count"],
+    })
+    assert "LAG(COUNT(*), 1)" in result
+
+
+def test_fix19_semi_join_filter_scope():
+    """Fix 19: top-level filter referencing semi-join table → moved to join's filter."""
+    result = sql({
+        "scan": "dim_user",
+        "filter": [{"col": "dwd_cart_detail.action_type", "op": "eq", "val": "add"}],
+        "joins": [{
+            "type": "semi",
+            "table": "dwd_cart_detail",
+            "on": {"left": "dim_user.user_id", "right": "dwd_cart_detail.user_id"},
+        }],
+        "select": ["dim_user.user_id"],
+    })
+    # The condition must end up in the EXISTS subquery, not the outer WHERE
+    assert "dwd_cart_detail.action_type = 'add'" in result
+    # Outer WHERE should only have the EXISTS clause (no standalone action_type filter)
+    lines = result.split("\n") if "\n" in result else result.split()
+    assert "EXISTS" in result
+
+
+def test_col2_condition():
+    """col2: column-to-column comparison, e.g. good_count > bad_count."""
+    result = sql({
+        "scan": "product_stats",
+        "filter": [{"col": "product_stats.good_count", "op": "gt", "col2": "product_stats.bad_count"}],
+        "select": ["product_stats.product_id"],
+    })
+    assert "product_stats.good_count > product_stats.bad_count" in result

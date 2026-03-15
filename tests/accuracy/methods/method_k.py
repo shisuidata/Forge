@@ -319,6 +319,79 @@ having 中的 col 必须是 agg 定义的别名（as 字段），不能是原始
 - anti join 用于"不存在于右表"，不要用 NOT IN
 - semi join 用于"存在于右表"（编译为 EXISTS，天然去重）
 
+## 常见误区（高频错误，务必避免）
+
+### 误区1：统计金额时表选错
+
+| 统计维度 | 正确表与字段 | 错误做法 |
+|---------|------------|---------|
+| 按品类/商品统计销售额 | `SUM(dwd_order_item_detail.actual_amount)` | ❌ `SUM(dwd_order_detail.total_amount)` |
+| 按用户统计总消费金额 | `SUM(dwd_order_detail.total_amount) GROUP BY user_id` | ❌ `SUM(dwd_order_item_detail.actual_amount)` |
+
+原因：`dwd_order_detail.total_amount` 是整笔订单的金额（用户维度正确），`dwd_order_item_detail.actual_amount` 是单商品明细金额（品类/商品维度正确）。**两者不可互换。**
+
+当 scan 是 `dwd_order_item_detail` 时，JOIN 用户信息必须直接使用 `dwd_order_item_detail.user_id`：
+❌ 错误：`dwd_order_item_detail` → (JOIN `dwd_order_detail`) → JOIN `dim_user`（多余中转，会改变数据）
+✅ 正确：`dwd_order_item_detail` → JOIN `dim_user` ON `dwd_order_item_detail.user_id = dim_user.user_id`（直接）
+
+### 误区2：「客单价在X到Y之间」误解为人均
+
+❌ 错误：用 CTE 先算每用户 AVG，再 HAVING avg_amount BETWEEN X AND Y
+✅ 正确：直接 filter `dwd_order_detail.total_amount BETWEEN X AND Y`（筛选单笔订单金额）
+
+「客单价在500到2000之间的订单」= 订单金额在这个范围内的订单，不是用户的平均消费金额。
+
+### 误区2b：按品类/品牌分组时缺少 ID 字段
+
+`dim_category` 和 `dim_brand` 中存在同名条目（不同 ID 共享相同名称）。只按名称分组会错误地合并不同类目。
+
+**GROUP BY 和 PARTITION BY 都必须包含 ID：**
+❌ 错误：`"group": ["dim_category.category_name"]`
+✅ 正确：`"group": ["dim_category.category_id", "dim_category.category_name"]`
+
+❌ 错误：`"partition": ["dim_category.category_name"]`
+✅ 正确：`"partition": ["dim_category.category_id", "dim_category.category_name"]`
+
+同理，对 `dim_brand` 按品牌分组/分区时也应包含 `brand_id`。
+
+### 误区3：「退款率超过N%」阈值写错
+
+❌ 错误：HAVING > 15（把百分比当整数）
+✅ 正确：HAVING > 0.15（退款率是0到1之间的小数，15% = 0.15）
+
+退款率计算：分子 = COUNT(DISTINCT dwd_refund_detail.order_id)，分母 = COUNT(DISTINCT dwd_order_detail.order_id)
+JOIN 方式：在订单层 LEFT JOIN 退款表，这样没有退款的订单也被计数。
+
+### 误区4：LAG/LEAD 窗口的时间排序方向错误 + 多余 ROW_NUMBER 过滤
+
+❌ 错误1：lag 窗口用 `ORDER BY time_col DESC`
+✅ 正确1：lag/lead 窗口**必须** `ORDER BY time_col ASC`（时间升序）
+  - lag offset=1 获取时间较早的上一行（历史值），要用 ASC
+  - lead offset=1 获取时间较晚的下一行（未来值），也要用 ASC
+  - 用 DESC 会颠倒"前/后"关系
+
+❌ 错误2：加 ROW_NUMBER/qualify 只保留每组最新一行
+✅ 正确2：不加 qualify，输出所有行，lag 列对首行自然返回 NULL
+
+### 误区5：时序 LAG/LEAD 需先按月聚合时忘记用 CTE
+
+「每品类按月统计订单量，以及下一个月的订单量（LEAD）」= 先 CTE 聚合到月粒度，再在 CTE 结果上做 LEAD：
+
+```json
+{"cte": [{"name": "monthly_stats", "query": {
+    "scan": "...",
+    "group": ["dim_category.category_id", "dim_category.category_name", {"expr": "strftime('%Y-%m', order_dt)", "as": "month"}],
+    "agg": [...],
+    "select": [...]
+}}],
+ "scan": "monthly_stats",
+ "window": [{"fn": "lead", "col": "order_count", "offset": 1,
+    "partition": ["category_id"], "order": [{"col": "month", "dir": "asc"}], "as": "next_month_count"}],
+ "select": [...]}
+```
+
+❌ 错误：在订单明细表上直接做 LEAD（每行是一笔订单，不是月汇总）
+
 ## 输出约束
 
 - **select 必填**，至少一个字段
@@ -326,10 +399,14 @@ having 中的 col 必须是 agg 定义的别名（as 字段），不能是原始
 - "每组前N名"用 window + qualify，window 别名**必须加到 select 中**
 - 输出合法 JSON：无注释，无尾逗号，所有字符串用双引号
 
-**生成前核查（3 条）：**
+**生成前核查（4 条）：**
 1. 问题中的**明确限定条件**（VIP等级、已完成、具体日期范围、is_active、order_status 等字段值）是否都有对应 filter？
 2. 是否有主观描述词（高消费/热销/优质）**无明确数字**？→ 只排序，不加 HAVING
 3. select 中所有字段的所属表是否都在 scan/joins 中？
+4. filter 中的 order_status 过滤是否合理？
+   - **纯维度统计**（"各品类总销售额"、"各商品销售量"、"各品类订单数"）→ 不加 order_status 过滤
+   - **用户行为分析**（"消费轨迹"、"下单时间间隔"、"消费金额对比"）→ 默认加 `order_status = '已完成'`
+   - 问题里明确说了 order_status 关键词时，严格按问题来
 
 只输出 JSON 对象，不要任何解释，不要 markdown 代码块。
 """

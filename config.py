@@ -85,10 +85,11 @@ class Config:
     DATABASE_URL: str = _env("DATABASE_URL", "database", "url")
 
     # ── Registry 路径 ──────────────────────────────────────────────────────────
-    REGISTRY_PATH:         Path = Path(_env("REGISTRY_PATH",         "registry", "schema_path",          default="registry/data/schema.registry.json"))
-    METRICS_PATH:          Path = Path(_env("METRICS_PATH",          "registry", "metrics_path",         default="registry/data/metrics.registry.yaml"))
-    DISAMBIGUATIONS_PATH:  Path = Path(_env("DISAMBIGUATIONS_PATH",  "registry", "disambiguations_path", default="registry/data/disambiguations.registry.yaml"))
-    CONVENTIONS_PATH:      Path = Path(_env("CONVENTIONS_PATH",      "registry", "conventions_path",     default="registry/data/field_conventions.registry.yaml"))
+    # 默认指向 large 测试数据集；可通过 forge.yaml 的 registry.* 或环境变量覆盖
+    REGISTRY_PATH:         Path = Path(_env("REGISTRY_PATH",         "registry", "schema_path",          default="tests/datasets/large/schema.registry.json"))
+    METRICS_PATH:          Path = Path(_env("METRICS_PATH",          "registry", "metrics_path",         default="tests/datasets/large/metrics.registry.yaml"))
+    DISAMBIGUATIONS_PATH:  Path = Path(_env("DISAMBIGUATIONS_PATH",  "registry", "disambiguations_path", default="tests/datasets/large/disambiguations.registry.yaml"))
+    CONVENTIONS_PATH:      Path = Path(_env("CONVENTIONS_PATH",      "registry", "conventions_path",     default="tests/datasets/large/field_conventions.registry.yaml"))
 
     # ── Staging 目录（用户确认后的歧义消除暂存区）──────────────────────────────
     STAGING_DIR: Path = Path(_env("STAGING_DIR", "staging", "dir", default=".forge/staging"))

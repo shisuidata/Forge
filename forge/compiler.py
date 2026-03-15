@@ -128,6 +128,34 @@ def _coerce(q: dict) -> dict:
     14. 当 scan 为 CTE 名时，select/agg.col/group 中的 table.col 引用
         若 table 不是 CTE 名，则剥离 table. 前缀
         原因：CTE 输出列不保留原表前缀，引用 products.category 会报 "no such column"
+    15. joins 元素中的 filter 属性 → 提取到顶层 filter
+        模型有时在 semi/anti join 定义中加入 filter 字段，如 {"type":"semi","filter":[...]}
+        → 将 filter 条件移至顶层 q["filter"]，join 内删除该属性
+    16. filter/having 中的 expr 条件 → 直接编译为 "expr op val"
+        模型有时生成 {"expr":"CAST(x AS FLOAT)/CAST(y AS FLOAT)","op":"gt","val":0.15}
+        → _condition() 支持 expr key，编译为表达式比较
+    17. HAVING 存在但缺少 GROUP BY → 从 select 非聚合列推断 GROUP BY
+        模型有时写了 HAVING 但忘了 GROUP BY（常见于 CTE 最终查询 JOIN 两个 CTE 后过滤比率）
+    18. window lag/lead col 为 agg alias → 展开为原始聚合表达式
+        模型有时生成 LAG(order_count) 其中 order_count 是 COUNT(*) 的别名
+        → LAG(COUNT(*), 1)（在含 GROUP BY 的查询中合法）
+    19. 顶层 filter 引用 semi/anti join 专属表 → 移至对应 join 的 filter
+        模型有时把 semi/anti join 内部条件（如 cart.action_type='add'）放在顶层 filter
+        → 该表不在主 FROM 作用域，条件移入对应 semi/anti join 的 filter（编译进 EXISTS 子查询）
+    20. filter/having 中 {"$preset": "YYYY-MM-DD"} → 转为 {"$date": "YYYY-MM-DD"}
+        模型有时把固定日期字符串用 $preset 包装，但该值不是合法的 preset 名
+        → 若 $preset 值看起来是 ISO-8601 日期，转为 $date
+    21. filter/having 条件中缺少 op 字段 → 删除该条件（避免 schema 校验失败）
+        模型偶尔生成 {"col": "x"} 这样只有 col 没有 op 的残缺条件
+        → 删除该条件以保证编译继续进行（相比直接失败更安全）
+    22. filter/having 条件 val: {"col": "x"} → col2: "x"（列与列比较）
+        模型有时把右侧列引用放在 val 字段，如 {"col":"good_count","op":"gt","val":{"col":"bad_count"}}
+        → {"col":"good_count","op":"gt","col2":"bad_count"}（利用 col2 支持直接编译）
+    23. filter/having 条件 col_right → col2（列与列比较别名统一）
+        模型有时生成 {"col":"good_count","op":"gt","col_right":"bad_count"}
+        → {"col":"good_count","op":"gt","col2":"bad_count"}
+    24. agg items 中 "expr" 字段 → "col"（CASE WHEN 表达式支持）
+        模型有时生成 {"fn":"sum","expr":"CASE WHEN...","as":"..."} 而非 {"fn":"sum","col":"CASE WHEN...","as":"..."}
     """
     q = dict(q)  # 浅拷贝，避免修改调用方的原始对象
 
@@ -166,10 +194,14 @@ def _coerce(q: dict) -> dict:
     # 场景：模型在 agg 项中混入 having、where 等非法字段，导致 schema 校验失败
     _VALID_AGG_FIELDS = {"fn", "col", "as", "separator", "filter"}
     if q.get("agg"):
-        q["agg"] = [
-            {k: v for k, v in item.items() if k in _VALID_AGG_FIELDS}
-            for item in q["agg"]
-        ]
+        cleaned_agg = []
+        for item in q["agg"]:
+            # 修复 24：agg 中 "expr" 字段 → "col"（CASE WHEN 表达式）
+            if "expr" in item and "col" not in item:
+                item = dict(item)
+                item["col"] = item.pop("expr")
+            cleaned_agg.append({k: v for k, v in item.items() if k in _VALID_AGG_FIELDS})
+        q["agg"] = cleaned_agg
 
     # 修复 4：count_all 不允许有 col 字段
     if q.get("agg"):
@@ -311,6 +343,127 @@ def _coerce(q: dict) -> dict:
                     new_win.append(w)
                 q["window"] = new_win
 
+    # 修复 15：inner/left/right/full join 中的 filter 属性 → 提取到顶层 filter
+    # 场景：模型在普通 join 中附加 filter 字段，该表在 FROM 作用域内，条件可直接移至 WHERE
+    # 注意：semi/anti join 的 filter 留在 join 内（由 _join() 并入 EXISTS/NOT EXISTS 子查询）
+    if q.get("joins"):
+        new_joins = []
+        top_filter: list = list(q.get("filter", []))
+        for join_item in q["joins"]:
+            if (isinstance(join_item, dict)
+                    and "filter" in join_item
+                    and join_item.get("type") not in ("semi", "anti")):
+                join_item = dict(join_item)
+                extra = join_item.pop("filter")
+                if isinstance(extra, list):
+                    top_filter.extend(extra)
+                elif isinstance(extra, dict):
+                    top_filter.append(extra)
+            new_joins.append(join_item)
+        q["joins"] = new_joins
+        if top_filter:
+            q["filter"] = top_filter
+
+    # 修复 17：HAVING 存在但缺少 GROUP BY → 从 select 的非聚合/非窗口列推断 GROUP BY
+    # 场景：模型在 CTE 最终查询中使用 HAVING 但忘写 GROUP BY（如 JOIN 两个 CTE 后 HAVING ratio > 0.2）
+    if q.get("having") and not q.get("group"):
+        agg_aliases_h    = {a["as"] for a in q.get("agg", [])    if "as" in a}
+        window_aliases_h = {w["as"] for w in q.get("window", []) if "as" in w}
+        known_aliases_h  = agg_aliases_h | window_aliases_h
+        inferred_group: list = []
+        seen_group: set = set()
+        for item in q.get("select", []):
+            if isinstance(item, str) and item not in known_aliases_h and item not in seen_group:
+                inferred_group.append(item)
+                seen_group.add(item)
+        if inferred_group:
+            q["group"] = inferred_group
+
+    # 修复 19：顶层 filter 中引用 semi/anti join 专属表的条件 → 移至对应 join 的 filter
+    # 场景：模型把 semi/anti join 内部的过滤条件（如 dwd_cart_detail.action_type='add'）
+    #       错误地放在顶层 filter，而该表不在主 FROM/JOIN 作用域内，导致 SQL 引用不存在的列
+    if q.get("filter") and q.get("joins"):
+        _main_tables: set = {q.get("scan", "")}
+        for _j in q.get("joins", []):
+            if _j.get("type") not in ("semi", "anti"):
+                _main_tables.add(_j.get("table", ""))
+        # 找出仅出现在 semi/anti join 中、不在主作用域的表
+        _semi_anti_map: dict[str, int] = {}  # table_name → join index (first occurrence)
+        for _i, _j in enumerate(q.get("joins", [])):
+            if _j.get("type") in ("semi", "anti"):
+                _tbl = _j.get("table", "")
+                if _tbl not in _main_tables and _tbl not in _semi_anti_map:
+                    _semi_anti_map[_tbl] = _i
+        if _semi_anti_map:
+            _keep_filter: list = []
+            _move_to_join: dict[int, list] = {}
+            for _cond in q.get("filter", []):
+                _moved = False
+                if isinstance(_cond, dict) and "col" in _cond:
+                    _col_ref = _cond["col"]
+                    if "." in _col_ref:
+                        _tbl_ref = _col_ref.split(".")[0]
+                        if _tbl_ref in _semi_anti_map:
+                            _ji = _semi_anti_map[_tbl_ref]
+                            _move_to_join.setdefault(_ji, []).append(_cond)
+                            _moved = True
+                if not _moved:
+                    _keep_filter.append(_cond)
+            if _move_to_join:
+                q["filter"] = _keep_filter
+                _new_joins = list(q.get("joins", []))
+                for _ji, _extra_conds in _move_to_join.items():
+                    _jj = dict(_new_joins[_ji])
+                    _jj["filter"] = list(_jj.get("filter", [])) + _extra_conds
+                    _new_joins[_ji] = _jj
+                q["joins"] = _new_joins
+
+    # 修复 20：filter/having 中 {"$preset": "YYYY-MM-DD"} → 转为 {"$date": "..."}
+    # 场景：模型用 {"$preset": "2025-11-01"} 而 "2025-11-01" 不是合法 preset 名
+    _ISO_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+    _VALID_PRESETS = {
+        "today", "yesterday", "last_7_days", "last_30_days",
+        "this_month", "last_month", "this_quarter", "this_year",
+    }
+
+    def _coerce_val(v):
+        """将值中的非法 $preset 日期字符串转为 $date。"""
+        if isinstance(v, dict) and "$preset" in v:
+            p = v["$preset"]
+            if p not in _VALID_PRESETS and _ISO_DATE_RE.match(str(p)):
+                return {"$date": p}
+        return v
+
+    def _coerce_cond_val(cond: dict) -> dict:
+        if "or" in cond:
+            return {"or": [_coerce_cond_val(c) for c in cond["or"]]}
+        if "and" in cond:
+            return {"and": [_coerce_cond_val(c) for c in cond["and"]]}
+        if "val" in cond:
+            cond = dict(cond)
+            cond["val"] = _coerce_val(cond["val"])
+        for bound in ("lo", "hi"):
+            if bound in cond:
+                cond = dict(cond)
+                cond[bound] = _coerce_val(cond[bound])
+        return cond
+
+    for field in ("filter", "having"):
+        if q.get(field):
+            q[field] = [_coerce_cond_val(c) for c in q[field]]
+
+    # 修复 21：filter/having 条件中缺少 op 字段 → 删除该条件
+    # 场景：模型生成 {"col": "x"} 没有 op，导致 schema 校验失败
+    def _has_valid_op(cond: dict) -> bool:
+        """判断条件是否含有效的 op，或为 or/and 组。"""
+        if "or" in cond or "and" in cond:
+            return True
+        return "op" in cond
+
+    for field in ("filter", "having"):
+        if q.get(field):
+            q[field] = [c for c in q[field] if _has_valid_op(c)]
+
     # 修复 7：qualify 引用的 window 别名未在 select 中时，自动补齐
     # 解决：模型使用 window + qualify 时遗漏 rank alias，导致外层 WHERE 引用未定义列。
     # 机制：qualify 编译为 SELECT * FROM (inner_sql) WHERE alias = val，
@@ -331,11 +484,33 @@ def _coerce(q: dict) -> dict:
 
 
 def _coerce_condition(cond: dict) -> dict:
-    """递归修复条件中的 between val 数组格式。"""
+    """递归修复条件中的 between val 数组格式；透传 expr 条件（修复 16）。"""
     if "or" in cond:
         return {"or": [_coerce_condition(c) for c in cond["or"]]}
     if "and" in cond:
         return {"and": [_coerce_condition(c) for c in cond["and"]]}
+    # 修复 16：expr 条件 → 将 expr 值折叠为 col，通过 schema 校验
+    # {"expr":"CAST(x AS FLOAT)/...","op":"gt","val":0.15}
+    # → {"col":"CAST(x AS FLOAT)/...","op":"gt","val":0.15}
+    # schema 要求 col 字段（字符串），而 _condition() 将 col 直接作为 SQL 左值输出，语义一致
+    if "expr" in cond and "col" not in cond:
+        cond = dict(cond)
+        cond["col"] = cond.pop("expr")
+        return cond
+    # 修复 22：val: {"col": "other_col"} → col2: "other_col"（列与列比较）
+    # 模型有时把右侧列引用放在 val 字段，如 {"col":"good_count","op":"gt","val":{"col":"bad_count"}}
+    # → {"col":"good_count","op":"gt","col2":"bad_count"}
+    if (isinstance(cond.get("val"), dict)
+            and "col" in cond.get("val", {})
+            and len(cond.get("val", {})) == 1):
+        cond = dict(cond)
+        cond["col2"] = cond.pop("val")["col"]
+        return cond
+    # 修复 23：col_right → col2（模型有时用 col_right 代替 col2）
+    if "col_right" in cond and "col2" not in cond:
+        cond = dict(cond)
+        cond["col2"] = cond.pop("col_right")
+        return cond
     if (cond.get("op") == "between"
             and "val" in cond
             and isinstance(cond["val"], list)
@@ -636,11 +811,25 @@ def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
     # 合并 map：agg 优先（agg 别名可能被 window col 引用，已在 win_map 构建时展开）
     expand_map = {**agg_map, **win_map}
 
+    # expr 对象中 table.alias 形式 → 先剥离 table. 前缀再展开
+    # 场景：模型在 expr 中用 cte_name.window_alias 引用同级窗口别名，
+    # 或用 other_table.agg_alias 引用本层聚合别名（两者均需展开为完整表达式）
+    def _pre_strip_table_prefix(s: str, known_aliases: set) -> str:
+        for alias in sorted(known_aliases, key=len, reverse=True):
+            # 将 word.alias 替换为 alias（word = 任意标识符，不含操作符/括号）
+            s = re.sub(
+                r'[A-Za-z_]\w*\.' + re.escape(alias) + r'\b',
+                alias,
+                s
+            )
+        return s
+
     exprs = []
     for col in q["select"]:
         if isinstance(col, dict):
-            # expr 对象：展开其中引用的 agg/window 别名后再输出
-            expanded = _expand_aliases(col["expr"], expand_map)
+            # expr 对象：先剥离 table.alias 前缀，再展开 agg/window 别名
+            pre = _pre_strip_table_prefix(col["expr"], set(expand_map.keys()))
+            expanded = _expand_aliases(pre, expand_map)
             exprs.append(f"{expanded} AS {col['as']}")
         elif col in agg_map:
             exprs.append(f"{agg_map[col]} AS {col}")
@@ -782,7 +971,11 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
         call = f"NTILE({n})"
     elif fn in ("lag", "lead"):
         # 导航函数：col 必填，offset/default 可选，按位置顺序追加
-        args: list[str] = [w["col"]]
+        # 若 col 是 agg 别名，展开为原始聚合表达式（如 order_count → COUNT(*)）
+        _lag_col = w["col"]
+        if agg_map and _lag_col in agg_map:
+            _lag_col = agg_map[_lag_col]
+        args: list[str] = [_lag_col]
         if "offset" in w:
             args.append(str(w["offset"]))
             if "default" in w:
@@ -867,10 +1060,27 @@ def _join(join: dict, dialect: str = "sqlite",
         )
 
     if isinstance(on, list):
-        if jtype in ("anti", "semi"):
-            raise ValueError(
-                f"{jtype} join 不支持多条件 on。"
-                "anti/semi join 需要明确的等值键，请使用单条件 on 格式。"
+        if jtype == "anti":
+            # 多条件 anti join：LEFT JOIN 多键 + IS NULL 检测第一个右键
+            eq_parts = [f"{c['left']} = {c['right']}" for c in on
+                        if isinstance(c, dict) and "left" in c and "right" in c]
+            null_check = on[0]["right"]  # 用第一个右键做 IS NULL 检测
+            on_clause = " AND ".join(eq_parts)
+            return (
+                f"LEFT JOIN {table} ON {on_clause}",
+                [f"{null_check} IS NULL"],
+            )
+        if jtype == "semi":
+            # 多条件 semi join：EXISTS 子查询内包含所有等值条件 + filter
+            eq_parts = [f"{c['left']} = {c['right']}" for c in on
+                        if isinstance(c, dict) and "left" in c and "right" in c]
+            semi_conds = eq_parts + [
+                _condition(fc, dialect, nullable_cols)
+                for fc in join.get("filter", [])
+            ]
+            return (
+                None,
+                [f"EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(semi_conds)})"],
             )
         on_clause = " AND ".join(_condition(c, dialect, nullable_cols) for c in on)
         keyword = _JOIN_KEYWORDS[jtype]
@@ -889,9 +1099,13 @@ def _join(join: dict, dialect: str = "sqlite",
 
     if jtype == "semi":
         # EXISTS 子查询：只检查关联关系是否存在，不拉取右表列
+        # 若 join 带 filter，将过滤条件并入 EXISTS 的 WHERE 子句
+        semi_conds = [f"{left} = {right}"]
+        for fc in join.get("filter", []):
+            semi_conds.append(_condition(fc, dialect, nullable_cols))
         return (
             None,
-            [f"EXISTS (SELECT 1 FROM {table} WHERE {left} = {right})"],
+            [f"EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(semi_conds)})"],
         )
 
     keyword = _JOIN_KEYWORDS[jtype]
@@ -926,8 +1140,21 @@ def _condition(cond: dict, dialect: str = "sqlite",
     if "and" in cond:
         return "(" + " AND ".join(_condition(c, dialect, nullable_cols) for c in cond["and"]) + ")"
 
+    # ExprCondition（修复 16）：{"expr": "...", "op": "...", "val": ...}
+    # 模型生成原始 SQL 表达式作为比较左侧（如 CAST(a.x AS FLOAT) / CAST(b.y AS FLOAT)）
+    if "expr" in cond and "col" not in cond:
+        expr_str = cond["expr"]
+        op = cond["op"]
+        symbol = _OP_SYMBOLS.get(op, op)
+        return f"{expr_str} {symbol} {_val(cond['val'], dialect)}"
+
     col = cond["col"]
     op  = cond["op"]
+
+    # col2：列与列比较，如 good_count > bad_count
+    if "col2" in cond:
+        symbol = _OP_SYMBOLS.get(op, op)
+        return f"{col} {symbol} {cond['col2']}"
 
     if op == "is_null":
         return f"{col} IS NULL"
@@ -953,6 +1180,9 @@ def _condition(cond: dict, dialect: str = "sqlite",
 
     # 标准比较运算符，从映射表取符号
     symbol = _OP_SYMBOLS[op]
+    if "val" not in cond:
+        # val 缺失（模型生成残缺条件），回退为 IS NOT NULL（保守处理）
+        return f"{col} IS NOT NULL"
     return f"{col} {symbol} {_val(cond['val'], dialect)}"
 
 

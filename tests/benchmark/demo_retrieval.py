@@ -30,7 +30,7 @@ from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 
-REGISTRY_PATH    = ROOT / "schema.registry.json"
+REGISTRY_PATH    = ROOT / "registry" / "data" / "schema.registry.json"
 EMBED_CACHE_PATH = ROOT / ".forge" / "schema_embeddings.pkl"
 
 # MiniMax OpenAI-compatible endpoint（用于 embedding）

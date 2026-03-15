@@ -1,0 +1,322 @@
+[
+  {
+    "id": "C01",
+    "category": "基础过滤",
+    "difficulty": 1,
+    "question": "查找所有 VIP 用户的姓名和城市",
+    "reference_sql": "SELECT name, city FROM users WHERE is_vip = 1 ORDER BY id",
+    "notes": "简单等值过滤"
+  },
+  {
+    "id": "C02",
+    "category": "基础过滤",
+    "difficulty": 1,
+    "question": "查找所有状态为 completed 且金额超过 500 元的订单 id 和金额",
+    "reference_sql": "SELECT id, total_amount FROM orders WHERE status = 'completed' AND total_amount > 500 ORDER BY id",
+    "notes": "多条件 AND，严格大于"
+  },
+  {
+    "id": "C03",
+    "category": "基础过滤",
+    "difficulty": 1,
+    "question": "查找来自北京或上海的用户姓名和注册日期",
+    "reference_sql": "SELECT name, created_at FROM users WHERE city IN ('北京', '上海') ORDER BY id",
+    "notes": "IN 操作符"
+  },
+  {
+    "id": "C04",
+    "category": "基础过滤",
+    "difficulty": 1,
+    "question": "查找所有已取消订单的 id、用户 id 和金额",
+    "reference_sql": "SELECT id, user_id, total_amount FROM orders WHERE status = 'cancelled' ORDER BY id",
+    "notes": "单值过滤"
+  },
+  {
+    "id": "C05",
+    "category": "基础过滤",
+    "difficulty": 1,
+    "question": "查找成本价在 50 到 200 元之间的商品名称和品类",
+    "reference_sql": "SELECT name, category FROM products WHERE cost_price BETWEEN 50 AND 200 ORDER BY id",
+    "notes": "BETWEEN 操作符"
+  },
+  {
+    "id": "C06",
+    "category": "多表JOIN",
+    "difficulty": 2,
+    "question": "查询每笔已完成订单的用户姓名、城市和订单金额",
+    "reference_sql": "SELECT u.name, u.city, o.total_amount FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' ORDER BY o.id",
+    "notes": "INNER JOIN + WHERE"
+  },
+  {
+    "id": "C07",
+    "category": "多表JOIN",
+    "difficulty": 2,
+    "question": "列出所有用户及其订单总数（没有下单的用户也需要显示，订单数为 0）",
+    "reference_sql": "SELECT u.name, COUNT(o.id) AS order_count FROM users u LEFT JOIN orders o ON o.user_id = u.id GROUP BY u.id, u.name ORDER BY u.id",
+    "notes": "LEFT JOIN，无订单用户显示 0"
+  },
+  {
+    "id": "C08",
+    "category": "多表JOIN",
+    "difficulty": 2,
+    "question": "查询所有从未下过订单的用户姓名和城市",
+    "reference_sql": "SELECT u.name, u.city FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id IS NULL ORDER BY u.id",
+    "notes": "ANTI JOIN 模式"
+  },
+  {
+    "id": "C09",
+    "category": "多表JOIN",
+    "difficulty": 2,
+    "question": "查询每条订单明细的商品名称、品类、数量和单价",
+    "reference_sql": "SELECT p.name, p.category, oi.quantity, oi.unit_price FROM order_items oi INNER JOIN products p ON oi.product_id = p.id ORDER BY oi.id",
+    "notes": "order_items JOIN products"
+  },
+  {
+    "id": "C10",
+    "category": "多表JOIN",
+    "difficulty": 2,
+    "question": "查询至少购买过一次电子产品的用户姓名（去重，按名字排序）",
+    "reference_sql": "SELECT DISTINCT u.name FROM users u INNER JOIN orders o ON o.user_id = u.id INNER JOIN order_items oi ON oi.order_id = o.id INNER JOIN products p ON oi.product_id = p.id WHERE p.category = '电子产品' ORDER BY u.name",
+    "notes": "三表 JOIN + DISTINCT，SEMI JOIN 也可接受"
+  },
+  {
+    "id": "C11",
+    "category": "聚合+GROUPBY",
+    "difficulty": 2,
+    "question": "统计每个城市的用户数量，按数量降序排列",
+    "reference_sql": "SELECT city, COUNT(*) AS user_count FROM users GROUP BY city ORDER BY user_count DESC, city",
+    "notes": "简单 COUNT GROUP BY"
+  },
+  {
+    "id": "C12",
+    "category": "聚合+GROUPBY",
+    "difficulty": 2,
+    "question": "统计每个商品品类的平均成本价，只显示平均成本价超过 100 元的品类，按平均成本降序",
+    "reference_sql": "SELECT category, AVG(cost_price) AS avg_cost FROM products GROUP BY category HAVING AVG(cost_price) > 100 ORDER BY avg_cost DESC",
+    "notes": "GROUP BY + HAVING 数值阈值"
+  },
+  {
+    "id": "C13",
+    "category": "聚合+GROUPBY",
+    "difficulty": 2,
+    "question": "统计每个用户的已完成订单总金额，按总金额降序排列",
+    "reference_sql": "SELECT u.name, SUM(o.total_amount) AS total_spent FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' GROUP BY u.id, u.name ORDER BY total_spent DESC",
+    "notes": "JOIN + SUM GROUP BY"
+  },
+  {
+    "id": "C14",
+    "category": "聚合+GROUPBY",
+    "difficulty": 2,
+    "question": "统计每个商品品类的总销售量（order_items 中的 quantity 之和）和总销售额，按总销售额降序",
+    "reference_sql": "SELECT p.category, SUM(oi.quantity) AS total_qty, SUM(oi.quantity * oi.unit_price) AS total_revenue FROM order_items oi INNER JOIN products p ON oi.product_id = p.id GROUP BY p.category ORDER BY total_revenue DESC",
+    "notes": "表达式聚合，量价合计"
+  },
+  {
+    "id": "C15",
+    "category": "聚合+GROUPBY",
+    "difficulty": 2,
+    "question": "统计下单次数超过 2 次的用户 id 和下单次数",
+    "reference_sql": "SELECT user_id, COUNT(*) AS order_count FROM orders GROUP BY user_id HAVING COUNT(*) > 2 ORDER BY order_count DESC, user_id",
+    "notes": "HAVING COUNT 严格大于"
+  },
+  {
+    "id": "C16",
+    "category": "排名TopN",
+    "difficulty": 2,
+    "question": "查询已完成订单消费总额最高的前 3 名用户姓名和消费总额",
+    "reference_sql": "SELECT u.name, SUM(o.total_amount) AS total_spent FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' GROUP BY u.id, u.name ORDER BY total_spent DESC LIMIT 3",
+    "notes": "ORDER BY + LIMIT"
+  },
+  {
+    "id": "C17",
+    "category": "排名TopN",
+    "difficulty": 3,
+    "question": "查询每个商品品类中销售额最高的商品名称和销售额",
+    "reference_sql": "SELECT category, name, revenue FROM (SELECT p.category, p.name, SUM(oi.quantity * oi.unit_price) AS revenue, ROW_NUMBER() OVER (PARTITION BY p.category ORDER BY SUM(oi.quantity * oi.unit_price) DESC) AS rn FROM order_items oi INNER JOIN products p ON oi.product_id = p.id GROUP BY p.id, p.name, p.category) AS _q WHERE rn = 1 ORDER BY category",
+    "notes": "per-group TopN，window + qualify"
+  },
+  {
+    "id": "C18",
+    "category": "排名TopN",
+    "difficulty": 2,
+    "question": "查询金额最高的 5 笔已完成订单的 id、用户 id、金额和日期",
+    "reference_sql": "SELECT id, user_id, total_amount, created_at FROM orders WHERE status = 'completed' ORDER BY total_amount DESC LIMIT 5",
+    "notes": "ORDER BY + LIMIT"
+  },
+  {
+    "id": "C19",
+    "category": "排名TopN",
+    "difficulty": 3,
+    "question": "给所有商品按成本价排名（相同成本价并列），显示商品名、成本价和排名",
+    "reference_sql": "SELECT name, cost_price, RANK() OVER (ORDER BY cost_price DESC) AS price_rank FROM products ORDER BY price_rank, id",
+    "notes": "全局 RANK()"
+  },
+  {
+    "id": "C20",
+    "category": "排名TopN",
+    "difficulty": 3,
+    "question": "查询每个城市已完成订单消费总额最高的用户姓名、城市和消费总额",
+    "reference_sql": "SELECT name, city, total_spent FROM (SELECT u.name, u.city, SUM(o.total_amount) AS total_spent, ROW_NUMBER() OVER (PARTITION BY u.city ORDER BY SUM(o.total_amount) DESC) AS rn FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' GROUP BY u.id, u.name, u.city) AS _q WHERE rn = 1 ORDER BY city",
+    "notes": "per-city TopN"
+  },
+  {
+    "id": "C21",
+    "category": "窗口函数",
+    "difficulty": 3,
+    "question": "统计每个品类的总销售额，并计算各品类占总销售额的百分比（保留2位小数）",
+    "reference_sql": "SELECT p.category, SUM(oi.quantity * oi.unit_price) AS revenue, ROUND(SUM(oi.quantity * oi.unit_price) * 100.0 / SUM(SUM(oi.quantity * oi.unit_price)) OVER (), 2) AS pct FROM order_items oi INNER JOIN products p ON oi.product_id = p.id GROUP BY p.category ORDER BY revenue DESC",
+    "notes": "SUM OVER() 全局总计"
+  },
+  {
+    "id": "C22",
+    "category": "窗口函数",
+    "difficulty": 3,
+    "question": "列出每个用户按时间顺序的已完成订单金额，以及上一笔订单金额（没有上一笔则为 NULL）",
+    "reference_sql": "SELECT u.name, o.created_at, o.total_amount, LAG(o.total_amount, 1) OVER (PARTITION BY o.user_id ORDER BY o.created_at ASC) AS prev_amount FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' ORDER BY o.user_id, o.created_at",
+    "notes": "LAG 导航函数"
+  },
+  {
+    "id": "C23",
+    "category": "窗口函数",
+    "difficulty": 3,
+    "question": "计算每个用户已完成订单的累计消费金额（按时间顺序滚动累加）",
+    "reference_sql": "SELECT u.name, o.created_at, o.total_amount, SUM(o.total_amount) OVER (PARTITION BY o.user_id ORDER BY o.created_at ASC) AS running_total FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' ORDER BY o.user_id, o.created_at",
+    "notes": "SUM OVER PARTITION BY + ORDER BY"
+  },
+  {
+    "id": "C24",
+    "category": "窗口函数",
+    "difficulty": 3,
+    "question": "给所有已完成订单按金额排名（dense_rank，相同金额并列），显示订单 id、金额和名次",
+    "reference_sql": "SELECT id, total_amount, DENSE_RANK() OVER (ORDER BY total_amount DESC) AS amount_rank FROM orders WHERE status = 'completed' ORDER BY amount_rank, id",
+    "notes": "全局 DENSE_RANK"
+  },
+  {
+    "id": "C25",
+    "category": "窗口函数",
+    "difficulty": 3,
+    "question": "查询每个用户最近一笔已完成订单的 id、金额和日期",
+    "reference_sql": "SELECT user_id, id, total_amount, created_at FROM (SELECT o.user_id, o.id, o.total_amount, o.created_at, ROW_NUMBER() OVER (PARTITION BY o.user_id ORDER BY o.created_at DESC) AS rn FROM orders o WHERE o.status = 'completed') AS _q WHERE rn = 1 ORDER BY user_id",
+    "notes": "per-user latest，ROW_NUMBER + qualify"
+  },
+  {
+    "id": "C26",
+    "category": "CTE多步",
+    "difficulty": 3,
+    "question": "统计复购率：复购用户定义为有 2 笔及以上已完成订单的用户，分母为所有有过已完成订单的用户",
+    "reference_sql": "WITH user_orders AS (SELECT user_id, COUNT(*) AS cnt FROM orders WHERE status = 'completed' GROUP BY user_id) SELECT ROUND(COUNT(CASE WHEN cnt >= 2 THEN 1 END) * 1.0 / COUNT(*), 4) AS repurchase_rate FROM user_orders",
+    "notes": "CTE + 条件计数"
+  },
+  {
+    "id": "C27",
+    "category": "CTE多步",
+    "difficulty": 3,
+    "question": "找出已完成订单消费总额超过 1500 元的用户姓名、城市和消费总额，按总额降序",
+    "reference_sql": "WITH totals AS (SELECT user_id, SUM(total_amount) AS total_spent FROM orders WHERE status = 'completed' GROUP BY user_id) SELECT u.name, u.city, t.total_spent FROM totals t INNER JOIN users u ON t.user_id = u.id WHERE t.total_spent > 1500 ORDER BY t.total_spent DESC",
+    "notes": "CTE 聚合后二次过滤"
+  },
+  {
+    "id": "C28",
+    "category": "CTE多步",
+    "difficulty": 3,
+    "question": "计算每个商品的毛利率（(均价-成本)/均价×100），均价为 order_items 中该商品的平均成交单价，按毛利率降序",
+    "reference_sql": "WITH avg_price AS (SELECT product_id, AVG(unit_price) AS avg_sell FROM order_items GROUP BY product_id) SELECT p.name, p.category, ROUND((ap.avg_sell - p.cost_price) / ap.avg_sell * 100, 2) AS margin_pct FROM avg_price ap INNER JOIN products p ON ap.product_id = p.id ORDER BY margin_pct DESC",
+    "notes": "CTE 计算均价，再派生指标"
+  },
+  {
+    "id": "C29",
+    "category": "CTE多步",
+    "difficulty": 3,
+    "question": "统计每个城市 VIP 用户的平均消费总额（先算每个 VIP 用户的总消费，再按城市取平均），按平均消费降序",
+    "reference_sql": "WITH vip_totals AS (SELECT u.city, u.id, SUM(o.total_amount) AS total_spent FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE u.is_vip = 1 AND o.status = 'completed' GROUP BY u.id, u.city) SELECT city, ROUND(AVG(total_spent), 2) AS avg_vip_spent FROM vip_totals GROUP BY city ORDER BY avg_vip_spent DESC",
+    "notes": "两步聚合：用户级→城市级"
+  },
+  {
+    "id": "C30",
+    "category": "CTE多步",
+    "difficulty": 3,
+    "question": "找出已完成订单消费总额高于所有用户平均消费总额的用户，显示姓名和消费总额",
+    "reference_sql": "WITH totals AS (SELECT user_id, SUM(total_amount) AS total_spent FROM orders WHERE status = 'completed' GROUP BY user_id), avg_t AS (SELECT AVG(total_spent) AS avg_spent FROM totals) SELECT u.name, t.total_spent FROM totals t INNER JOIN users u ON t.user_id = u.id CROSS JOIN avg_t WHERE t.total_spent > avg_t.avg_spent ORDER BY t.total_spent DESC",
+    "notes": "双 CTE：用户总额 vs 全局均值"
+  },
+  {
+    "id": "C31",
+    "category": "时序",
+    "difficulty": 2,
+    "question": "统计 2023 年全年每个月的已完成订单总金额，按月份排序",
+    "reference_sql": "SELECT STRFTIME('%Y-%m', created_at) AS month, SUM(total_amount) AS monthly_revenue FROM orders WHERE created_at >= '2023-01-01' AND created_at < '2024-01-01' AND status = 'completed' GROUP BY month ORDER BY month",
+    "notes": "月度分组，固定年份"
+  },
+  {
+    "id": "C32",
+    "category": "时序",
+    "difficulty": 2,
+    "question": "查询 2023 年第四季度（10 月到 12 月）注册的用户姓名和注册日期",
+    "reference_sql": "SELECT name, created_at FROM users WHERE created_at >= '2023-10-01' AND created_at < '2024-01-01' ORDER BY created_at",
+    "notes": "季度日期范围"
+  },
+  {
+    "id": "C33",
+    "category": "时序",
+    "difficulty": 2,
+    "question": "统计 2024 年 1 月和 2 月各有多少笔已完成订单",
+    "reference_sql": "SELECT STRFTIME('%Y-%m', created_at) AS month, COUNT(*) AS order_count FROM orders WHERE created_at >= '2024-01-01' AND created_at < '2024-03-01' AND status = 'completed' GROUP BY month ORDER BY month",
+    "notes": "固定月份范围统计"
+  },
+  {
+    "id": "C34",
+    "category": "时序",
+    "difficulty": 2,
+    "question": "查询 2023 年下半年（7 月到 12 月）已完成订单消费额最高的前 3 名用户和消费额",
+    "reference_sql": "SELECT u.name, SUM(o.total_amount) AS h2_spent FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.created_at >= '2023-07-01' AND o.created_at < '2024-01-01' AND o.status = 'completed' GROUP BY u.id, u.name ORDER BY h2_spent DESC LIMIT 3",
+    "notes": "半年时间窗口 + TOP N"
+  },
+  {
+    "id": "C35",
+    "category": "时序",
+    "difficulty": 2,
+    "question": "比较 2023 年上半年和下半年的已完成订单总数",
+    "reference_sql": "SELECT CASE WHEN created_at < '2023-07-01' THEN '2023上半年' ELSE '2023下半年' END AS half_year, COUNT(*) AS order_count FROM orders WHERE created_at >= '2023-01-01' AND created_at < '2024-01-01' AND status = 'completed' GROUP BY half_year ORDER BY half_year",
+    "notes": "CASE WHEN 分组，上下半年对比"
+  },
+  {
+    "id": "C36",
+    "category": "综合复合",
+    "difficulty": 3,
+    "question": "统计 VIP 用户购买电子产品的消费总额（按 order_items 中 quantity×unit_price 计算，只统计已完成订单），按总额降序",
+    "reference_sql": "SELECT u.name, SUM(oi.quantity * oi.unit_price) AS electronics_spent FROM users u INNER JOIN orders o ON o.user_id = u.id INNER JOIN order_items oi ON oi.order_id = o.id INNER JOIN products p ON oi.product_id = p.id WHERE u.is_vip = 1 AND p.category = '电子产品' AND o.status = 'completed' GROUP BY u.id, u.name ORDER BY electronics_spent DESC",
+    "notes": "四表 JOIN + 多条件过滤 + 聚合"
+  },
+  {
+    "id": "C37",
+    "category": "综合复合",
+    "difficulty": 3,
+    "question": "找出每个商品品类销售额排名前 2 的商品，显示品类、商品名、销售额和排名",
+    "reference_sql": "SELECT category, name, revenue, rnk FROM (SELECT p.category, p.name, SUM(oi.quantity * oi.unit_price) AS revenue, RANK() OVER (PARTITION BY p.category ORDER BY SUM(oi.quantity * oi.unit_price) DESC) AS rnk FROM order_items oi INNER JOIN products p ON oi.product_id = p.id GROUP BY p.id, p.name, p.category) AS _q WHERE rnk <= 2 ORDER BY category, rnk",
+    "notes": "per-category Top2，RANK + qualify"
+  },
+  {
+    "id": "C38",
+    "category": "综合复合",
+    "difficulty": 3,
+    "question": "对比 VIP 用户和非 VIP 用户的复购率（≥2 笔已完成订单算复购）和平均订单额",
+    "reference_sql": "WITH stats AS (SELECT u.is_vip, u.id, COUNT(o.id) AS order_count, AVG(o.total_amount) AS avg_order FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' GROUP BY u.id, u.is_vip) SELECT is_vip, ROUND(AVG(avg_order), 2) AS avg_order_value, ROUND(COUNT(CASE WHEN order_count >= 2 THEN 1 END) * 1.0 / COUNT(*), 4) AS repurchase_rate FROM stats GROUP BY is_vip ORDER BY is_vip DESC",
+    "notes": "VIP/非VIP对比，CTE + 复合聚合"
+  },
+  {
+    "id": "C39",
+    "category": "综合复合",
+    "difficulty": 3,
+    "question": "查询 2023 年有已完成订单但 2024 年没有已完成订单的用户姓名和 2023 年消费总额，按消费总额降序",
+    "reference_sql": "WITH u2023 AS (SELECT user_id, SUM(total_amount) AS total_2023 FROM orders WHERE created_at >= '2023-01-01' AND created_at < '2024-01-01' AND status = 'completed' GROUP BY user_id), u2024 AS (SELECT DISTINCT user_id FROM orders WHERE created_at >= '2024-01-01' AND status = 'completed') SELECT u.name, u2023.total_2023 FROM u2023 INNER JOIN users u ON u2023.user_id = u.id LEFT JOIN u2024 ON u2023.user_id = u2024.user_id WHERE u2024.user_id IS NULL ORDER BY u2023.total_2023 DESC",
+    "notes": "跨年用户流失，CTE + ANTI JOIN"
+  },
+  {
+    "id": "C40",
+    "category": "综合复合",
+    "difficulty": 3,
+    "question": "统计每个用户最近一笔已完成订单的金额与其历史已完成订单平均金额的差值，按差值降序",
+    "reference_sql": "WITH last_order AS (SELECT user_id, total_amount AS last_amount FROM (SELECT user_id, total_amount, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn FROM orders WHERE status = 'completed') AS _q WHERE rn = 1), avg_order AS (SELECT user_id, AVG(total_amount) AS avg_amount FROM orders WHERE status = 'completed' GROUP BY user_id) SELECT u.name, lo.last_amount, ROUND(ao.avg_amount, 2) AS avg_amount, ROUND(lo.last_amount - ao.avg_amount, 2) AS diff FROM last_order lo INNER JOIN avg_order ao ON lo.user_id = ao.user_id INNER JOIN users u ON lo.user_id = u.id ORDER BY diff DESC",
+    "notes": "最近一单 vs 历史均值，双 CTE + 窗口"
+  }
+]

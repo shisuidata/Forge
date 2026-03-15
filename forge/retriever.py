@@ -359,11 +359,32 @@ class SchemaRetriever:
             )
             # 也尝试 label 中的关键词（"客单价" → "客单" "单价"）
             if not hit:
-                for chunk in re.split(r'[（）\s/（）、,，]', label):
+                for chunk in re.split(r'[（）\s/（）、,，()]', label):
                     chunk = chunk.strip().lower()
                     if len(chunk) >= 2 and chunk in q_lower:
                         hit = True
                         break
+
+            # 滑动 n-gram（长度 ≥ 3）：覆盖复合词，如"首购转化"在"首购转化率"中
+            if not hit:
+                label_clean = re.sub(r'\s', '', label.lower())
+                for n in range(3, min(len(label_clean) + 1, 6)):
+                    for i in range(len(label_clean) - n + 1):
+                        sub = label_clean[i : i + n]
+                        if sub in q_lower:
+                            hit = True
+                            break
+                    if hit:
+                        break
+
+            # 步长-2 双字节 bigram 覆盖：label 每隔 2 个字符取一对，全部命中则视为匹配
+            # 解决 label 中各词散落在问题里的情况，如"门店营收"→["门店","营收"]均在"各门店近7天营收"中
+            if not hit:
+                cjk_label = re.sub(r'[^\u4e00-\u9fff]', '', label.lower())
+                bigrams = [cjk_label[i : i + 2] for i in range(0, len(cjk_label) - 1, 2)
+                           if len(cjk_label[i : i + 2]) == 2]
+                if bigrams and all(b in q_lower for b in bigrams):
+                    hit = True
 
             if not hit:
                 continue

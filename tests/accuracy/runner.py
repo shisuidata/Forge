@@ -141,11 +141,13 @@ def run_method(method_id: str, fresh: bool = False,
     max_workers     = workers_override or 10
     model           = MINIMAX_MODEL  # env var takes precedence
 
-    if not CASES_FILE.exists():
-        print(f"❌ 找不到 {CASES_FILE}，请先运行 generate_cases.py", file=sys.stderr)
+    # 用例文件优先级：method 文件声明 > --cases 参数 > 默认 cases.json
+    cases_path = Path(cfg.cases_file) if cfg.cases_file else CASES_FILE
+    if not cases_path.exists():
+        print(f"❌ 找不到测试用例 {cases_path}", file=sys.stderr)
         sys.exit(1)
 
-    cases = json.loads(CASES_FILE.read_text())
+    cases = json.loads(cases_path.read_text())
 
     if fresh:
         existing: dict = {}

@@ -44,8 +44,9 @@ DB_PATH    = BENCH_DIR / "benchmark.db"
 GOLD_DIR   = BENCH_DIR / "gold"
 CASES_PATH = BENCH_DIR / "cases.json"
 RESULTS_DIR = BENCH_DIR / "results"
-REGISTRY_PATH = ROOT / "schema.registry.json"
+REGISTRY_PATH = ROOT / "registry" / "data" / "schema.registry.json"
 EMBED_CACHE_PATH = ROOT / ".forge" / "schema_embeddings.pkl"
+BENCHMARK_REGISTRY_PATH = BENCH_DIR / "benchmark.registry.json"
 
 MINIMAX_API_KEY  = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic")
@@ -383,10 +384,12 @@ def _call_openai(client, system: str, messages: list, tools: list) -> tuple[dict
         model=LLM_MODEL,
         messages=oai_messages,
         tools=oai_tools,
-        tool_choice="required",
+        tool_choice="auto",   # "required" causes empty choices on some models (e.g. GLM-5)
         max_tokens=2048,
         temperature=0,
     )
+    if not resp.choices:
+        return None, "模型返回空 choices（不支持 tool_choice=required，已改 auto）"
     choice = resp.choices[0]
     if choice.message.tool_calls:
         tc = choice.message.tool_calls[0]
@@ -699,6 +702,8 @@ def run_method(
 
 
 def main() -> None:
+    global REGISTRY_PATH, EMBED_CACHE_PATH
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--method",  choices=["forge", "direct", "both"], default="both")
     parser.add_argument("--fresh",   action="store_true", help="清除旧结果重跑")
@@ -707,11 +712,30 @@ def main() -> None:
                         help="禁用 schema 检索，使用全量 schema（对照组）")
     parser.add_argument("--top-k",   type=int, default=RETRIEVAL_TOP_K,
                         help=f"每次检索返回的表数量（默认 {RETRIEVAL_TOP_K}）")
+    parser.add_argument("--registry", type=str, default=None,
+                        help="指定 registry 文件路径（默认自动从 benchmark.db 生成）")
     args = parser.parse_args()
 
     if not CASES_PATH.exists():
         print(f"❌ 找不到 {CASES_PATH}", file=sys.stderr)
         sys.exit(1)
+
+    # 确定使用哪份 registry
+    if args.registry:
+        REGISTRY_PATH = Path(args.registry)
+    elif BENCHMARK_REGISTRY_PATH.exists():
+        REGISTRY_PATH = BENCHMARK_REGISTRY_PATH
+        print(f"  [registry] 使用 benchmark 专用 registry: {REGISTRY_PATH}", flush=True)
+    else:
+        # 从 benchmark.db 自动生成
+        print("  [registry] 从 benchmark.db 生成专用 registry …", flush=True)
+        from registry.sync import run_sync
+        run_sync(f"sqlite:///{DB_PATH}", str(BENCHMARK_REGISTRY_PATH))
+        REGISTRY_PATH = BENCHMARK_REGISTRY_PATH
+        print(f"  [registry] 已生成: {REGISTRY_PATH}", flush=True)
+
+    # 专用 embedding 缓存，避免与主项目的 200 张表缓存冲突
+    EMBED_CACHE_PATH = BENCH_DIR / ".forge_embed_cache.pkl"
 
     cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))
 
