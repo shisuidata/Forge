@@ -200,10 +200,20 @@ def run_method(method_id: str, fresh: bool = False,
     else:
         _enrich = lambda q: q
 
+    if cfg.registry_context is not None:
+        # 新式：每次调用动态生成 prompt，始终反映 agent/prompts.py 当前版本
+        from agent.prompts import build_system as _build_system
+        def _get_system(question: str) -> str:
+            return _build_system(cfg.registry_context, question=question)
+    else:
+        # 旧式：使用方法文件中冻结的 SYSTEM_PROMPT
+        def _get_system(question: str) -> str:
+            return cfg.system_prompt
+
     def dispatch(task):
         case, run_idx = task
         question = _enrich(case["question"])
-        result = dispatch_fn(client, question, cfg.system_prompt, model)
+        result = dispatch_fn(client, question, _get_system(question), model)
         return case, run_idx, result
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:

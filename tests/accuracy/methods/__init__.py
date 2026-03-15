@@ -12,11 +12,16 @@ class MethodConfig:
     id: str                                   # "f"
     label: str                                # used in reports
     mode: Literal["forge", "sql"]             # forge = compile via Forge DSL; sql = direct SQL
-    system_prompt: str                        # full system prompt
+    system_prompt: str | None = None          # 旧式：硬编码完整 prompt（已冻结的历史版本）
+    registry_context: str | None = None      # 新式：只提供 schema，prompt 由 build_system() 动态生成
     model: str = "MiniMax-M2.5-highspeed"
     runs: int = 5
     notes: str = ""
     use_semantic_lib: bool = False            # 是否启用语义消歧库对问题进行预处理
+
+    def __post_init__(self):
+        if self.system_prompt is None and self.registry_context is None:
+            raise ValueError(f"Method '{self.id}': 必须提供 SYSTEM_PROMPT（旧式）或 REGISTRY_CONTEXT（新式）之一")
 
 
 def load(method_id: str) -> MethodConfig:
@@ -34,7 +39,8 @@ def load(method_id: str) -> MethodConfig:
         id=mod.METHOD_ID,
         label=mod.LABEL,
         mode=mod.MODE,
-        system_prompt=mod.SYSTEM_PROMPT,
+        system_prompt=getattr(mod, "SYSTEM_PROMPT", None),
+        registry_context=getattr(mod, "REGISTRY_CONTEXT", None),
         model=getattr(mod, "MODEL", "MiniMax-M2.5-highspeed"),
         runs=getattr(mod, "RUNS", 5),
         notes=getattr(mod, "NOTES", ""),
