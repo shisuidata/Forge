@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% set active = "staging" %}
+{% block title %}Staging — Forge 管理后台{% endblock %}
+{% block heading %}Staging 歧义确认队列{% endblock %}
+
+{% block content %}
+
+{# ── flash ─────────────────────────────────────────────────────────────────── #}
+{% if flash %}
+<div class="mb-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
+  {{ flash }}
+</div>
+{% endif %}
+
+{# ── pending records ───────────────────────────────────────────────────────── #}
+<section class="mb-10">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">
+      待合并记录
+      <span class="text-xs font-normal text-gray-400 ml-1">来自用户对话中的歧义澄清确认</span>
+    </h2>
+    {% if records %}
+    <form method="post" action="/admin/staging/promote-all">
+      <button type="submit"
+              class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700 transition-colors">
+        全部合并 → Registry
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if records %}
+  <div class="space-y-4">
+    {% for r in records %}
+    <div class="bg-white rounded-lg border border-gray-200 p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-gray-900">{{ r.label or r.key }}</span>
+            <span class="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{{ r.key }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-2 mt-3 text-xs text-gray-600">
+            <div>
+              <p class="font-semibold text-gray-400 uppercase mb-0.5">原始问题</p>
+              <p>{{ r.original_question }}</p>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-400 uppercase mb-0.5">用户回复</p>
+              <p>{{ r.user_response }}</p>
+            </div>
+            <div class="col-span-2">
+              <p class="font-semibold text-gray-400 uppercase mb-0.5">澄清提示</p>
+              <p class="italic text-gray-500">{{ r.clarification_prompt }}</p>
+            </div>
+            {% if r.context %}
+            <div class="col-span-2">
+              <p class="font-semibold text-gray-400 uppercase mb-0.5">计划注入内容</p>
+              <p class="font-mono bg-gray-50 rounded px-2 py-1 text-gray-700 whitespace-pre-line">{{ r.context }}</p>
+            </div>
+            {% endif %}
+            <div>
+              <p class="font-semibold text-gray-400 uppercase mb-0.5">触发词</p>
+              <div class="flex flex-wrap gap-1">
+                {% for t in (r.triggers or []) %}
+                <span class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-mono">{{ t }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-400 uppercase mb-0.5">确认时间</p>
+              <p>{{ r.confirmed_at or r._filename }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col gap-2 shrink-0">
+          <form method="post" action="/admin/staging/promote/{{ r._filename }}">
+            <button type="submit"
+                    class="bg-green-600 text-white text-xs px-3 py-1.5 rounded-md hover:bg-green-700 transition-colors w-full">
+              合并入库
+            </button>
+          </form>
+          <form method="post" action="/admin/staging/discard/{{ r._filename }}">
+            <button type="submit"
+                    class="bg-white border border-gray-300 text-gray-600 text-xs px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors w-full">
+              丢弃
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+    <p class="text-4xl mb-3">✓</p>
+    <p>没有待合并的记录</p>
+    <p class="text-xs mt-1">用户在对话中确认歧义消除后，记录会自动出现在这里</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ── done records ──────────────────────────────────────────────────────────── #}
+{% if done_records %}
+<section>
+  <h2 class="text-base font-semibold text-gray-700 mb-3">
+    已处理记录
+    <span class="text-xs font-normal text-gray-400 ml-1">已合并或丢弃的历史记录</span>
+  </h2>
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left">规则 key</th>
+          <th class="px-4 py-3 text-left">原始问题</th>
+          <th class="px-4 py-3 text-left">确认时间</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for r in done_records %}
+        <tr class="hover:bg-gray-50 text-gray-500">
+          <td class="px-4 py-3 font-mono text-xs">{{ r.key }}</td>
+          <td class="px-4 py-3 text-xs">{{ r.original_question or '—' }}</td>
+          <td class="px-4 py-3 text-xs">{{ r.confirmed_at or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

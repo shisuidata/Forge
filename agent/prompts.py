@@ -8,14 +8,17 @@ Forge Agent 系统提示词模块。
 系统提示词设计原则：
     1. 角色明确：LLM 只生成 Forge JSON，永远不直接输出 SQL
     2. 规则优先：约束表格比段落描述更易被 LLM 遵循
-    3. 错误友好：明确告知如何处理编译错误和歧义情况
-    4. 语言统一：始终用中文回复，降低数据团队的使用门槛
+    3. 按需加载：复杂例子（OR/TopN/LAG/CTE）仅在问题触发时才注入，减轻弱模型的上下文压力
+    4. 错误友好：明确告知如何处理编译错误和歧义情况
+    5. 语言统一：始终用中文回复，降低数据团队的使用门槛
 """
 from __future__ import annotations
 
-# ── 核心系统提示词（静态部分）─────────────────────────────────────────────────
-# 每次 LLM 调用时不变，与动态注册表上下文拼接后一起传入
-SYSTEM = """\
+import functools
+from pathlib import Path
+
+# ── 静态 Section：角色与工具规则 ──────────────────────────────────────────────
+_ROLE = """\
 你是 Forge，一个面向数据团队的 AI 数据查询助手。
 
 ## 核心职责
@@ -26,9 +29,15 @@ SYSTEM = """\
 ## 工具使用规则
 
 **generate_forge_query** — 当用户提出数据查询需求时调用。
-**define_metric** — 当用户定义业务指标（如"复购率是指…"）时调用。
-**其他情况**（问候、澄清、闲聊）— 直接用文字回复，不调用工具。
+**define_metric** — 当用户**主动**描述并确认业务指标定义（如"复购率是指…"）时调用，直接保存入库。
+**propose_metric_definition** — 当用户查询的指标在 Registry 中**不存在**，但可从数据库字段推断其定义时调用。
+  → 生成提案展示给用户，用户确认后才入库，用户否认则放弃。
+  → **不要**在用户已明确定义的情况下使用此工具；也不要在完全无法推断时强行猜测，应先澄清。
+**其他情况**（问候、澄清、闲聊）— 直接用文字回复，不调用工具。\
+"""
 
+# ── 静态 Section：Forge JSON 约束表 ──────────────────────────────────────────
+_DSL_CONSTRAINTS = """\
 ## Forge JSON 关键约束
 
 | 规则 | 说明 |
@@ -56,95 +65,11 @@ SYSTEM = """\
 | 有 join 时用 table.col 格式 | 避免字段名歧义 |
 | sort.dir 必填 | asc 或 desc，无默认值 |
 | lag/lead default 为 null | default 值若为空用 JSON null，如 `"default": null` |
-| 日期格式 | {"$date": "YYYY-MM-DD"} |
+| 日期格式 | {"$date": "YYYY-MM-DD"} |\
+"""
 
-## 复合过滤条件（OR 内嵌 AND）
-
-filter 是**数组**，`{"or":[...]}` 是数组的一个元素，不能把 `{"or":[...]}` 直接作为 filter 的值。
-
-表达 `(A AND B) OR C`：
-
-```json
-"filter": [
-  {
-    "or": [
-      {"col": "users.name", "op": "like", "val": "%明%"},
-      {"and": [
-        {"col": "users.created_at", "op": "gte", "val": "2024-01-01"},
-        {"col": "users.is_vip",     "op": "eq",  "val": 1}
-      ]}
-    ]
-  }
-]
-```
-
-❌ 错误写法：`"filter": {"or": [...]}` （filter 不能是 dict）
-
-## per-group TopN（分组内排名过滤）
-
-用 qualify 字段过滤窗口函数结果，实现"每组取前 N 名"：
-
-```json
-{
-  "scan": "products",
-  "select": ["products.name", "products.category", "products.cost_price", "cost_rank"],
-  "window": [{"fn": "dense_rank", "partition": ["products.category"],
-              "order": [{"col": "products.cost_price", "dir": "desc"}], "as": "cost_rank"}],
-  "qualify": [{"col": "cost_rank", "op": "lte", "val": 3}]
-}
-```
-
-## 时序导航（LAG / LEAD）
-
-LAG/LEAD **必须有 partition**，否则会跨用户取行，语义错误。
-
-```json
-{
-  "scan": "orders",
-  "joins": [{"type": "inner", "table": "users", "on": {"left": "orders.user_id", "right": "users.id"}}],
-  "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
-  "window": [{
-    "fn": "lag",
-    "col": "orders.total_amount",
-    "offset": 1,
-    "default": null,
-    "partition": ["orders.user_id"],
-    "order": [{"col": "orders.created_at", "dir": "asc"}],
-    "as": "prev_amount"
-  }],
-  "select": ["users.name", "orders.created_at", "orders.total_amount", "prev_amount"]
-}
-```
-
-## CTE 用法（多步聚合）
-
-`cte` 仅用于"子查询结果需要再次 join 或 filter"的场景，不用于简单聚合。
-
-**关键**：有 `cte` 的 Forge JSON 仍然必须有顶层 `scan` 和 `select`。\
-`cte` 定义命名子查询，主查询（`scan`/`filter`/`agg`/`select`）把这些名字当表用。
-
-```json
-{
-  "cte": [
-    {
-      "name": "order_counts",
-      "query": {
-        "scan": "orders",
-        "group": ["orders.user_id"],
-        "agg": [{"fn": "count_all", "as": "order_count"}],
-        "select": ["orders.user_id", "order_count"]
-      }
-    }
-  ],
-  "scan": "order_counts",
-  "filter": [{"col": "order_count", "op": "gte", "val": 2}],
-  "select": ["order_counts.user_id", "order_count"]
-}
-```
-
-❌ 错误（只有 cte，无顶层 scan）：`{"cte": [...]}`\
-✅ 正确：`{"cte": [...], "scan": "cte名称", "select": [...]}`
-
+# ── 静态 Section：查询澄清 / 错误处理 / 语言 ─────────────────────────────────
+_QUERY_RULES = """\
 ## 查询澄清
 
 当用户问题存在关键歧义（如指标定义不明确、时间范围未指定）时，\
@@ -157,19 +82,64 @@ LAG/LEAD **必须有 partition**，否则会跨用户取行，语义错误。
 
 ## 回复语言
 
-始终用中文回复。生成查询时不需要解释 Forge JSON 细节，只说明查询逻辑即可。
+始终用中文回复。生成查询时不需要解释 Forge JSON 细节，只说明查询逻辑即可。\
 """
 
+# ── 按需加载的示例（关键词 → 文件名）────────────────────────────────────────
+_EXAMPLES_DIR = Path(__file__).parent / "prompt_examples"
 
-def build_system(registry_context: str) -> str:
+_EXAMPLE_TRIGGERS: list[tuple[list[str], str]] = [
+    # (触发关键词列表, 文件名)
+    (["or", "或者", "任意", "其中一个"], "filter_or.md"),
+    (["每个", "每组", "每类", "各品类", "各组", "topn", "前3", "前5", "前10", "前n"], "topn.md"),
+    (["lag", "lead", "上一", "上次", "环比", "前一", "前次", "时序"], "window_lag.md"),
+    (["cte", "子查询", "多步", "先计算", "先统计", "再过滤", "再筛选"], "cte.md"),
+]
+
+
+@functools.lru_cache(maxsize=16)
+def _load_example(name: str) -> str:
+    """读取 prompt_examples/*.md，结果缓存。"""
+    path = _EXAMPLES_DIR / name
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def _detect_needed_examples(question: str | None) -> list[str]:
+    """根据问题关键词决定注入哪些示例，返回文件名列表（保持固定顺序）。"""
+    if not question:
+        return []
+    q = question.lower()
+    seen: list[str] = []
+    for keywords, filename in _EXAMPLE_TRIGGERS:
+        if any(kw in q for kw in keywords):
+            seen.append(filename)
+    return seen
+
+
+def build_system(registry_context: str, question: str | None = None) -> str:
     """
-    将静态系统提示词与动态注册表上下文拼接，生成完整的 system prompt。
+    组装完整的 system prompt。
 
     Args:
         registry_context: 由 llm._registry_context() 生成的表结构 + 指标信息文本。
                           每次 LLM 调用前实时读取，确保 LLM 始终使用最新的 schema。
+        question:         当前用户问题（可选）。有值时按需注入相关示例 section，
+                          减少无关示例对弱模型的干扰。
 
     Returns:
         完整的 system prompt 字符串，直接传给 LLM API 的 system 参数。
     """
-    return f"{SYSTEM}\n\n## 当前数据库结构\n\n{registry_context}"
+    sections: list[str] = [_ROLE, _DSL_CONSTRAINTS]
+
+    for example_name in _detect_needed_examples(question):
+        content = _load_example(example_name)
+        if content:
+            sections.append(content)
+
+    sections.append(_QUERY_RULES)
+    sections.append(f"## 当前数据库结构\n\n{registry_context}")
+
+    return "\n\n".join(sections)

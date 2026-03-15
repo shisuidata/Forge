@@ -1,7 +1,17 @@
 """
-Feishu Bot handler.
-Receives im.message.receive_v1 events and card action callbacks.
-Sends interactive cards for SQL review.
+飞书机器人消息处理模块。
+
+职责：
+    - 接收 im.message.receive_v1 事件，将用户消息转发给 Forge Agent
+    - 接收卡片交互回调（approve / cancel），触发 SQL 执行或取消
+    - 发送 SQL 审核卡片（含「执行」/「取消」按钮）
+
+接入模式：
+    长连接模式（默认，无需公网）：通过 lark_oapi WebSocket 长连接接收事件。
+    HTTP Webhook 模式（需公网 + verification_token + encrypt_key）：
+        配置 forge.yaml 中的 feishu.verification_token 和 feishu.encrypt_key，
+        并在飞书开放平台将事件回调 URL 设为 http://<your-host>:8000/webhook。
+        长连接模式两个字段均可留空。
 """
 from __future__ import annotations
 import json

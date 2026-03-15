@@ -1,57 +1,102 @@
 """
 Forge 全局配置模块。
 
-所有运行时配置从环境变量读取，支持通过 .env 文件覆盖。
-配置项按职责分为五组：Feishu 集成、LLM、数据库、注册表路径、服务器。
+优先级（高 → 低）：
+    1. 环境变量 / .env 文件      ← 适合生产/CI，覆盖敏感值
+    2. forge.yaml               ← 推荐日常开发配置入口
+    3. 硬编码默认值
 
 使用方式：
     from config import cfg
-    cfg.DATABASE_URL   # 读取数据库 URL
-    cfg.REGISTRY_PATH  # 读取结构层注册表路径（Path 对象）
+    cfg.LLM_MODEL       # 读取模型 ID
+    cfg.FEISHU_APP_ID   # 读取飞书 App ID
+    cfg.REGISTRY_PATH   # 注册表路径（Path 对象）
 """
+from __future__ import annotations
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
-# 优先加载项目根目录下的 .env 文件；若文件不存在则静默跳过
+# 优先加载 .env（环境变量级别最高）
 load_dotenv()
 
 
+def _load_yaml_cfg() -> dict:
+    """读取 forge.yaml，返回嵌套 dict；文件不存在或解析失败时返回空 dict。"""
+    try:
+        import yaml
+        p = Path(__file__).parent / "forge.yaml"
+        if p.exists():
+            return yaml.safe_load(p.read_text()) or {}
+    except Exception:
+        pass
+    return {}
+
+
+_yaml = _load_yaml_cfg()
+
+
+def _y(*keys: str, default: str = "") -> str:
+    """从 forge.yaml 按路径取值，任一键不存在则返回 default。"""
+    node = _yaml
+    for k in keys:
+        if not isinstance(node, dict):
+            return default
+        node = node.get(k, {})
+    return str(node) if node not in ({}, None, "") else default
+
+
+def _env(var: str, *yaml_keys: str, default: str = "") -> str:
+    """env var → forge.yaml → default，三级降级。"""
+    return os.getenv(var) or _y(*yaml_keys, default=default)
+
+
 class Config:
-    # ── Feishu 机器人集成 ─────────────────────────────────────────────────────
-    # App ID / App Secret：飞书开放平台应用凭证，用于调用飞书 API
-    FEISHU_APP_ID:             str = os.getenv("FEISHU_APP_ID", "")
-    FEISHU_APP_SECRET:         str = os.getenv("FEISHU_APP_SECRET", "")
-    # 事件订阅验证 Token：飞书推送事件时验证请求合法性
-    FEISHU_VERIFICATION_TOKEN: str = os.getenv("FEISHU_VERIFICATION_TOKEN", "")
-    # 消息加密密钥：启用加密推送时使用，不加密可留空
-    FEISHU_ENCRYPT_KEY:        str = os.getenv("FEISHU_ENCRYPT_KEY", "")
+    # ── 飞书机器人 ─────────────────────────────────────────────────────────────
+    FEISHU_APP_ID:             str = _env("FEISHU_APP_ID",             "feishu", "app_id")
+    FEISHU_APP_SECRET:         str = _env("FEISHU_APP_SECRET",         "feishu", "app_secret")
+    FEISHU_VERIFICATION_TOKEN: str = _env("FEISHU_VERIFICATION_TOKEN", "feishu", "verification_token")
+    FEISHU_ENCRYPT_KEY:        str = _env("FEISHU_ENCRYPT_KEY",        "feishu", "encrypt_key")
 
-    # ── LLM 配置 ──────────────────────────────────────────────────────────────
-    # LLM_PROVIDER：选择后端驱动，"anthropic" 使用官方 SDK，其余值走 OpenAI 兼容接口
-    LLM_PROVIDER:  str = os.getenv("LLM_PROVIDER", "anthropic")   # anthropic | openai
-    LLM_API_KEY:   str = os.getenv("LLM_API_KEY", "")
-    LLM_MODEL:     str = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
-    # LLM_BASE_URL：仅 OpenAI 兼容模式下使用，留空则默认 api.openai.com
-    LLM_BASE_URL:  str = os.getenv("LLM_BASE_URL", "")
+    # ── LLM ───────────────────────────────────────────────────────────────────
+    # 优先读 LLM_* 通用变量，若未设置则自动 fallback 到 MINIMAX_* 变量
+    LLM_PROVIDER:  str = _env("LLM_PROVIDER",  "llm", "provider",  default="anthropic")
+    LLM_API_KEY:   str = (
+        _env("LLM_API_KEY",  "llm", "api_key")
+        or os.getenv("MINIMAX_API_KEY", "")
+    )
+    LLM_MODEL:     str = (
+        _env("LLM_MODEL",    "llm", "model",    default="")
+        or os.getenv("MINIMAX_MODEL", "claude-sonnet-4-6")
+    )
+    LLM_BASE_URL:  str = (
+        _env("LLM_BASE_URL", "llm", "base_url")
+        or os.getenv("MINIMAX_BASE_URL", "")
+    )
 
-    # ── 数据库连接 ────────────────────────────────────────────────────────────
-    # 支持 SQLAlchemy 所有方言，例如：
-    #   sqlite:///./forge_demo.db
-    #   postgresql://user:pass@host:5432/dbname
-    #   mysql+pymysql://user:pass@host:3306/dbname
-    DATABASE_URL:  str = os.getenv("DATABASE_URL", "")
+    # ── Embedding ─────────────────────────────────────────────────────────────
+    EMBED_API_KEY:   str = _env("EMBED_API_KEY",   "embedding", "api_key")   or _env("LLM_API_KEY", "llm", "api_key")
+    EMBED_BASE_URL:  str = _env("EMBED_BASE_URL",  "embedding", "base_url",  default="https://api.minimaxi.com/v1")
+    EMBED_MODEL:     str = _env("EMBED_MODEL",     "embedding", "model",     default="embo-01")
+    RETRIEVAL_TOP_K: int = int(_env("RETRIEVAL_TOP_K", "embedding", "top_k", default="5"))
 
-    # ── 注册表文件路径 ─────────────────────────────────────────────────────────
-    # REGISTRY_PATH：结构层，由 forge sync 自动生成，记录表名和字段名
-    # METRICS_PATH ：语义层，人工维护或由 LLM 辅助编写，记录业务指标定义
-    REGISTRY_PATH: Path = Path(os.getenv("REGISTRY_PATH", "schema.registry.json"))
-    METRICS_PATH:  Path = Path(os.getenv("METRICS_PATH",  "metrics.registry.yaml"))
+    # ── 数据库 ─────────────────────────────────────────────────────────────────
+    DATABASE_URL: str = _env("DATABASE_URL", "database", "url")
 
-    # ── Web 服务器 ────────────────────────────────────────────────────────────
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    # ── Registry 路径 ──────────────────────────────────────────────────────────
+    REGISTRY_PATH:         Path = Path(_env("REGISTRY_PATH",         "registry", "schema_path",          default="registry/data/schema.registry.json"))
+    METRICS_PATH:          Path = Path(_env("METRICS_PATH",          "registry", "metrics_path",         default="registry/data/metrics.registry.yaml"))
+    DISAMBIGUATIONS_PATH:  Path = Path(_env("DISAMBIGUATIONS_PATH",  "registry", "disambiguations_path", default="registry/data/disambiguations.registry.yaml"))
+    CONVENTIONS_PATH:      Path = Path(_env("CONVENTIONS_PATH",      "registry", "conventions_path",     default="registry/data/field_conventions.registry.yaml"))
+
+    # ── Staging 目录（用户确认后的歧义消除暂存区）──────────────────────────────
+    STAGING_DIR: Path = Path(_env("STAGING_DIR", "staging", "dir", default=".forge/staging"))
+
+    # ── Web 服务器 ─────────────────────────────────────────────────────────────
+    HOST: str = _env("HOST", "server", "host", default="0.0.0.0")
+    PORT: int = int(_env("PORT", "server", "port", default="8000"))
 
 
-# 全局单例，整个应用中唯一的配置对象
+# 全局单例
 cfg = Config()

@@ -286,6 +286,11 @@
               "minItems": 2
             }
           ]
+        },
+        "filter": {
+          "type": "array",
+          "description": "Extra filter conditions on the joined table (semi/anti only). Compiled into EXISTS/NOT EXISTS subquery WHERE clause.",
+          "items": { "$ref": "#/definitions/Condition" }
         }
       }
     },
@@ -310,7 +315,8 @@
         },
         "val": { "$ref": "#/definitions/ScalarVal" },
         "lo":  { "$ref": "#/definitions/BoundVal" },
-        "hi":  { "$ref": "#/definitions/BoundVal" }
+        "hi":  { "$ref": "#/definitions/BoundVal" },
+        "col2": { "type": "string", "description": "Right-hand column for col-vs-col comparison, e.g. good_count > bad_count. Use instead of val when comparing two columns directly." }
       }
     },
 

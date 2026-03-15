@@ -50,7 +50,12 @@ def _get_retriever() -> tuple[SchemaRetriever | None, object | None]:
     try:
         registry = json.loads(cfg.REGISTRY_PATH.read_text())
         cache_path = cfg.REGISTRY_PATH.parent / ".forge" / "schema_embeddings.pkl"
-        r = SchemaRetriever(registry, cache_path=cache_path)
+        metrics_registry: dict = {}
+        try:
+            metrics_registry = yaml.safe_load(cfg.METRICS_PATH.read_text()) or {}
+        except Exception:
+            pass
+        r = SchemaRetriever(registry, cache_path=cache_path, metrics_registry=metrics_registry)
 
         embed_key  = getattr(cfg, "EMBED_API_KEY",  None) or getattr(cfg, "LLM_API_KEY", None)
         embed_url  = getattr(cfg, "EMBED_BASE_URL", None) or "https://api.minimaxi.com/v1"
@@ -187,6 +192,39 @@ def _registry_context(question: str | None = None) -> str:
         # metrics.registry.yaml 不存在或解析失败时静默忽略，不影响表结构上下文
         pass
 
+    # ── 歧义消除规则（与当前问题相关的条目）─────────────────────────────────
+    try:
+        disambiguations: dict = yaml.safe_load(
+            cfg.DISAMBIGUATIONS_PATH.read_text()
+        ) or {}
+        matched_dis: list[str] = []
+        q_lower = (question or "").lower()
+        for key, rule in disambiguations.items():
+            triggers = rule.get("triggers", [])
+            if any(str(t).lower() in q_lower for t in triggers):
+                matched_dis.append(f"  【{rule.get('label', key)}】{rule.get('context', '').strip()}")
+        if matched_dis:
+            lines.append("\n业务歧义说明（根据问题自动匹配）：")
+            lines.extend(matched_dis)
+    except Exception:
+        pass
+
+    # ── 字段使用约定（与当前问题相关的条目）─────────────────────────────────
+    try:
+        conventions: dict = yaml.safe_load(cfg.CONVENTIONS_PATH.read_text()) or {}
+        matched_conv: list[str] = []
+        for key, rule in conventions.items():
+            applies_to = rule.get("applies_to", [])
+            # 当问题中出现字段名（去掉 table. 前缀后的列名）或表名时注入
+            col_names = {a.split(".")[-1] for a in applies_to} | {a.split(".")[0] for a in applies_to}
+            if any(c.lower() in q_lower for c in col_names if len(c) >= 3):
+                matched_conv.append(f"  【{rule.get('label', key)}】{rule.get('convention', '').strip()}")
+        if matched_conv:
+            lines.append("\n字段使用约定（根据问题自动匹配）：")
+            lines.extend(matched_conv)
+    except Exception:
+        pass
+
     return "\n".join(lines)
 
 
@@ -257,6 +295,37 @@ _DEFINE_METRIC_TOOL = {
 }
 
 
+_PROPOSE_METRIC_TOOL = {
+    # 当用户查询的指标在语义层中不存在时，模型根据业务理解主动提案，
+    # 展示给用户确认后再由 confirm_metric_definition() 持久化入库。
+    "name": "propose_metric_definition",
+    "description": (
+        "当用户查询的业务指标在 Registry 中尚未定义时，根据数据库字段和业务常识"
+        "主动提出一个指标定义草案，供用户确认。确认后自动入库，无需用户手动填写。"
+        "注意：此工具仅提案，不保存；只有在用户明确回复「确认」/「是」/「对」后才入库。"
+    ),
+    "input_schema": {
+        "type": "object",
+        "required": ["name", "metric_class", "label", "description", "proposal_summary"],
+        "properties": {
+            "name":             {"type": "string",  "description": "指标标识符，snake_case"},
+            "metric_class":     {"type": "string",  "enum": ["atomic", "derivative"]},
+            "label":            {"type": "string",  "description": "中文显示名，如「门店近7日营收」"},
+            "description":      {"type": "string",  "description": "完整自然语言定义"},
+            "proposal_summary": {"type": "string",  "description": "向用户展示的确认提示，简明说明分子/分母或度量字段的业务含义"},
+            "measure":          {"type": "string",  "description": "【atomic】度量字段，table.column"},
+            "aggregation":      {"type": "string",  "enum": ["sum", "count", "count_distinct", "avg", "min", "max"]},
+            "qualifiers":       {"type": "array",   "items": {"type": "string"}},
+            "period_col":       {"type": "string"},
+            "dimensions":       {"type": "array",   "items": {"type": "string"}},
+            "numerator":        {"type": "string",  "description": "【derivative】分子原子指标 name"},
+            "denominator":      {"type": "string",  "description": "【derivative】分母原子指标 name"},
+            "notes":            {"type": "string"},
+        },
+    },
+}
+
+
 def _build_tools(registry: dict) -> list[dict]:
     """
     根据当前 schema registry 动态构建工具列表。
@@ -277,6 +346,7 @@ def _build_tools(registry: dict) -> list[dict]:
             "input_schema": build_tool_schema(registry),
         },
         _DEFINE_METRIC_TOOL,
+        _PROPOSE_METRIC_TOOL,
     ]
 
 
@@ -295,7 +365,10 @@ def _call_anthropic(messages: list[dict], system: str, tools: list[dict]) -> dic
         统一格式的响应字典，参见模块文档。
     """
     import anthropic
-    client = anthropic.Anthropic(api_key=cfg.LLM_API_KEY)
+    kwargs: dict = {"api_key": cfg.LLM_API_KEY}
+    if cfg.LLM_BASE_URL:
+        kwargs["base_url"] = cfg.LLM_BASE_URL
+    client = anthropic.Anthropic(**kwargs)
     response = client.messages.create(
         model=cfg.LLM_MODEL,
         max_tokens=2048,
@@ -375,13 +448,12 @@ def call(history: list[Any]) -> dict:
         {"tool": str, "input": dict}  — LLM 调用了工具
         {"tool": None, "text": str}   — LLM 直接文字回复
     """
-    # 每次调用前实时读取 registry，动态生成带列名枚举约束的 tool schema
+    # 每次调用前实时读取 registry
     registry: dict = {}
     try:
         registry = json.loads(cfg.REGISTRY_PATH.read_text())
     except Exception:
         pass
-    tools = _build_tools(registry)
 
     # 提取最新的用户问题，用于 schema 向量检索（精简 context）
     current_question: str | None = None
@@ -390,7 +462,17 @@ def call(history: list[Any]) -> dict:
             current_question = m.content
             break
 
-    system = build_system(_registry_context(question=current_question))
+    # 用检索到的相关表构建 tool schema（避免全量 200 张表撑爆 context window）
+    filtered_registry = registry
+    retriever, q_embed_fn = _get_retriever()
+    if current_question and retriever:
+        top_k = getattr(cfg, "RETRIEVAL_TOP_K", 10)
+        selected_tables = retriever.retrieve(current_question, q_embed_fn, top_k=top_k)
+        tables_info = registry.get("tables", {})
+        filtered_registry = {"tables": {t: tables_info[t] for t in selected_tables if t in tables_info}}
+
+    tools = _build_tools(filtered_registry)
+    system = build_system(_registry_context(question=current_question), question=current_question)
     messages = [{"role": m.role, "content": m.content} for m in history]
     if cfg.LLM_PROVIDER == "anthropic":
         return _call_anthropic(messages, system, tools)

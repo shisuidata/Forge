@@ -6,10 +6,12 @@ __pycache__/
 *.egg-info/
 dist/
 .env
+forge.yaml
 demo/*.db
 .DS_Store
 .claude/
 .forge/
+docs/conversation-logs/
 
 tests/accuracy/results/
 tests/spider2/data/

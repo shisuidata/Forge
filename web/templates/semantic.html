@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% set active = "semantic" %}
+{% block title %}语义规则 — Forge 管理后台{% endblock %}
+{% block heading %}语义规则库{% endblock %}
+
+{% block content %}
+
+{# ── flash message ─────────────────────────────────────────────────────────── #}
+{% if flash %}
+<div class="mb-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
+  {{ flash }}
+</div>
+{% endif %}
+
+{# ── disambiguations ───────────────────────────────────────────────────────── #}
+<section class="mb-10">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">
+      歧义消除规则
+      <span class="text-xs font-normal text-gray-400 ml-1">
+        disambiguations.registry.yaml · 触发词命中时自动注入 LLM 上下文
+      </span>
+    </h2>
+  </div>
+  {% if disambiguations %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left w-40">规则</th>
+          <th class="px-4 py-3 text-left w-52">触发词</th>
+          <th class="px-4 py-3 text-left">注入说明</th>
+          <th class="px-4 py-3 text-center w-28">澄清</th>
+          <th class="px-4 py-3 text-center w-20">状态</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for key, rule in disambiguations.items() %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <p class="font-medium text-gray-900">{{ rule.label or key }}</p>
+            <p class="font-mono text-xs text-gray-400">{{ key }}</p>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1">
+              {% for t in (rule.triggers or []) %}
+              <span class="bg-blue-50 text-blue-700 text-xs px-1.5 py-0.5 rounded font-mono">{{ t }}</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td class="px-4 py-3 text-gray-600 text-xs leading-relaxed whitespace-pre-line">{{ (rule.context or '') | truncate(150) }}</td>
+          <td class="px-4 py-3 text-center">
+            {% if rule.requires_clarification %}
+            <span class="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded-full">需确认</span>
+            {% else %}
+            <span class="text-gray-300 text-xs">自动注入</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-center">
+            {% if rule.confirmed_by_users %}
+            <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">已验证</span>
+            {% else %}
+            <span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">草稿</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-400 italic">暂无歧义消除规则。可通过 registry/data/disambiguations.registry.yaml 手动添加，
+    或通过 <code class="bg-gray-100 px-1 rounded font-mono">forge sync-staging</code> 自动合并用户确认记录。</p>
+  {% endif %}
+</section>
+
+{# ── field conventions ─────────────────────────────────────────────────────── #}
+<section>
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">
+      字段使用约定
+      <span class="text-xs font-normal text-gray-400 ml-1">
+        field_conventions.registry.yaml · 字段名匹配时自动注入
+      </span>
+    </h2>
+  </div>
+  {% if conventions %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left w-40">约定</th>
+          <th class="px-4 py-3 text-left w-52">适用字段</th>
+          <th class="px-4 py-3 text-left">约定内容</th>
+          <th class="px-4 py-3 text-center w-20">状态</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for key, rule in conventions.items() %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <p class="font-medium text-gray-900">{{ rule.label or key }}</p>
+            <p class="font-mono text-xs text-gray-400">{{ key }}</p>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1">
+              {% for f in (rule.applies_to or []) %}
+              <span class="bg-purple-50 text-purple-700 text-xs px-1.5 py-0.5 rounded font-mono">{{ f }}</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td class="px-4 py-3 text-gray-600 text-xs leading-relaxed whitespace-pre-line">{{ (rule.convention or '') | truncate(150) }}</td>
+          <td class="px-4 py-3 text-center">
+            {% if rule.confirmed_by_users %}
+            <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">已验证</span>
+            {% else %}
+            <span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">草稿</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-gray-400 italic">暂无字段约定。可通过 registry/data/field_conventions.registry.yaml 手动添加。</p>
+  {% endif %}
+</section>
+
+{% endblock %}

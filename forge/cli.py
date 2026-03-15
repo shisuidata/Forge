@@ -6,6 +6,7 @@ Forge 命令行入口。
     forge compile -             从 stdin 读取 Forge JSON 并编译
     forge sync                  连接数据库，将表结构同步到 schema.registry.json
     forge sync --db <url>       用指定的数据库 URL 覆盖 config 中的 DATABASE_URL
+    forge sync-staging          将 .forge/staging/ 中的歧义确认记录合并入 disambiguations.registry.yaml
 
 典型用法：
     # 编译 JSON 文件
@@ -19,6 +20,9 @@ Forge 命令行入口。
 
     # 指定数据库 URL
     forge sync --db postgresql://user:pass@localhost:5432/mydb
+
+    # 将用户对话中积累的歧义确认记录合并入语义库
+    forge sync-staging
 """
 
 import argparse
@@ -47,6 +51,12 @@ def main() -> None:
         metavar="URL",
         default=None,
         help="数据库 URL，优先级高于 config.DATABASE_URL",
+    )
+
+    # ── sync-staging 子命令 ───────────────────────────────────────────────────
+    subparsers.add_parser(
+        "sync-staging",
+        help="将 .forge/staging/ 中的歧义确认记录合并入 disambiguations.registry.yaml",
     )
 
     args = parser.parse_args()
@@ -80,6 +90,27 @@ def main() -> None:
         registry = run_sync(database_url, cfg.REGISTRY_PATH)
         table_count = len(registry.get("tables", {}))
         print(f"已同步 {table_count} 张表 → {cfg.REGISTRY_PATH}")
+
+    # ── sync-staging 处理 ────────────────────────────────────────────────────
+    elif args.command == "sync-staging":
+        from config import cfg
+        from registry.staging_sync import promote_staged
+
+        staging_dir = cfg.STAGING_DIR
+        if not staging_dir.exists():
+            print(f"Staging 目录为空或不存在：{staging_dir}")
+            sys.exit(0)
+
+        pending = list(staging_dir.glob("*.json"))
+        if not pending:
+            print(f"没有待合并的记录（{staging_dir}）")
+            sys.exit(0)
+
+        stats = promote_staged(staging_dir, cfg.DISAMBIGUATIONS_PATH)
+        print(
+            f"合并完成 → {cfg.DISAMBIGUATIONS_PATH}\n"
+            f"  新增: {stats['added']}  更新: {stats['updated']}  跳过: {stats['skipped']}"
+        )
 
 
 if __name__ == "__main__":

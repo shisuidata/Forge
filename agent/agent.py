@@ -24,11 +24,14 @@ Forge Agent 核心调度模块。
 
 AgentResponse.action 值说明：
     message              LLM 文字回复
+    clarification        Agent 需要用户补充信息（pending_intent 已记录原始问题）
     sql_review           SQL 已生成，等待用户 approve/cancel
     approved             用户已确认 SQL（approve() 返回）
     cancelled            用户已取消（cancel() 返回）
     metric_saved         指标已保存
     metric_clarification 模型提出指标定义草案，等待用户确认（confirm_metric_definition）
+    cache_verified       用户确认查询结果准确（cache_verify() 返回）
+    cache_rejected       用户标记查询结果不准确（cache_reject() 返回）
     error                处理失败（含具体错误信息）
 """
 from __future__ import annotations
@@ -41,7 +44,8 @@ from config import cfg
 from forge.compiler import compile_query
 from forge.cache import cache
 from registry.validator import validate_metric
-from agent.session import store
+from registry.staging_sync import write_staging_record
+from agent.session import store, IntentSpec
 from agent import llm
 
 # 编译失败后最多重试次数（不含首次尝试）
@@ -100,7 +104,28 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         AgentResponse，action 字段指示上层如何处理响应。
     """
     session = store.get(user_id)
-    session.add("user", user_text)
+
+    # ── 澄清轮次：若有待补充的 intent，将用户回复合并入原始问题后继续 ──────────
+    if session.pending_intent is not None:
+        intent = session.pending_intent
+        session.pending_intent = None
+        # 将用户的补充信息附加到原始问题，构建更完整的查询描述
+        enriched = f"{intent.original_question}（补充说明：{user_text}）"
+        session.add("user", enriched)
+    else:
+        # ── 首次消息：检测是否需要发起澄清 ──────────────────────────────────
+        clarification = _check_clarification_needed(user_text)
+        if clarification:
+            # 保存待澄清的 intent，返回澄清问题给用户
+            session.pending_intent = IntentSpec(
+                original_question=user_text,
+                clarification_prompt=clarification["prompt"],
+                ambiguity_keys=clarification["keys"],
+            )
+            session.add("user", user_text)
+            session.add("assistant", clarification["prompt"])
+            return AgentResponse(text=clarification["prompt"], action="clarification")
+        session.add("user", user_text)
 
     # ── 带编译重试的 agent loop ───────────────────────────────────────────────
     for attempt in range(1 + MAX_RETRIES):
@@ -134,7 +159,10 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                     session.add("assistant", err)
                     return AgentResponse(text=err, action="error")
 
-            # 编译成功：存入 session 的 pending 槽位，等待用户 approve/cancel
+            # 编译成功：若本次查询是由澄清轮次触发的，将确认写入 staging
+            _maybe_write_staging(session, user_text, forge_json)
+
+            # 存入 session 的 pending 槽位，等待用户 approve/cancel
             session.pending_sql   = sql
             session.pending_forge = forge_json
             session.add("assistant", f"[SQL ready for review]\n{sql}")
@@ -331,6 +359,115 @@ def reject_metric_proposal(user_id: str) -> AgentResponse:
     session = store.get(user_id)
     session.pending_metric_proposal = None
     return AgentResponse(text="已取消指标提案，请重新描述您的需求。", action="cancelled")
+
+
+# ── Staging 写入 ─────────────────────────────────────────────────────────────
+
+def _maybe_write_staging(session, user_text: str, forge_json: dict) -> None:
+    """
+    若本次查询是由澄清轮次驱动（session 中曾有 pending_intent），
+    将用户的澄清回复 + 原始问题写入 staging，供后续 sync-staging 合并入 registry。
+
+    在 process() 编译成功时调用。session.pending_intent 此时已被清空，
+    因此额外传入 user_text 作为上下文补充。
+
+    只在 session 历史中能检测到澄清对话模式时才写入（避免误触发）。
+    """
+    # 从 history 中检测：倒数找 action=clarification 的模式
+    # 简单启发式：如果倒数第 3 条是 assistant（澄清问），倒数第 2 条是 user（用户回答）
+    hist = session.history
+    if len(hist) < 3:
+        return
+
+    # 找澄清提示（assistant）和用户回答（user）的对
+    clarification_prompt = ""
+    for i in range(len(hist) - 1, 0, -1):
+        if hist[i].role == "user" and hist[i - 1].role == "assistant":
+            prev_assistant = hist[i - 1].content
+            # 判断是否是澄清提示（包含「补充」「请问」「说明」等词）
+            if any(kw in prev_assistant for kw in ["请问", "补充", "指的是", "是否", "请确认"]):
+                clarification_prompt = prev_assistant
+                break
+
+    if not clarification_prompt:
+        return
+
+    # 提取原始问题（enriched 格式：原始问题 + 补充说明：user_text）
+    current_q = ""
+    for msg in reversed(hist):
+        if msg.role == "user" and "补充说明" in msg.content:
+            # 格式："{original}（补充说明：{user_text}）"
+            parts = msg.content.split("（补充说明：")
+            current_q = parts[0].strip()
+            break
+
+    if not current_q:
+        return
+
+    # 写入 staging
+    try:
+        import re as _re
+        key = _re.sub(r'[^\w]', '_', current_q[:30]).strip('_').lower()
+        key = f"user_confirmed_{key}"
+        write_staging_record(
+            staging_dir=cfg.STAGING_DIR,
+            key=key,
+            label=f"用户确认：{current_q[:20]}...",
+            triggers=current_q.split()[:5],      # 取前5个词作为触发词
+            context=f"用户补充说明：{user_text}",
+            original_question=current_q,
+            clarification_prompt=clarification_prompt,
+            user_response=user_text,
+            ambiguity_keys=[],
+        )
+    except Exception:
+        pass  # staging 写入失败不影响主流程
+
+
+# ── 澄清检测 ──────────────────────────────────────────────────────────────────
+
+def _check_clarification_needed(question: str) -> dict | None:
+    """
+    检查用户问题是否触发了需要澄清的歧义规则（requires_clarification=true）。
+
+    读取 disambiguations.registry.yaml，对 requires_clarification=true 的条目做
+    触发词匹配。若命中，返回澄清问题文本和触发的规则 key；否则返回 None。
+
+    Returns:
+        {"prompt": "澄清问题文本", "keys": ["rule_key_1", ...]}
+        或 None（无需澄清时）
+    """
+    try:
+        disambiguations: dict = yaml.safe_load(cfg.DISAMBIGUATIONS_PATH.read_text()) or {}
+    except Exception:
+        return None
+
+    q_lower = question.lower()
+    matched_keys: list[str] = []
+    clarification_parts: list[str] = []
+
+    for key, rule in disambiguations.items():
+        if not rule.get("requires_clarification", False):
+            continue
+        triggers = rule.get("triggers", [])
+        if any(str(t).lower() in q_lower for t in triggers):
+            matched_keys.append(key)
+            clarification = rule.get("clarification_question", "")
+            if clarification:
+                clarification_parts.append(clarification)
+
+    if not matched_keys:
+        return None
+
+    if clarification_parts:
+        prompt = "\n".join(clarification_parts)
+    else:
+        prompt = "为了给您准确的结果，请补充以下信息：\n" + "\n".join(
+            f"• {disambiguations[k].get('label', k)}：{disambiguations[k].get('context', '').splitlines()[0]}"
+            for k in matched_keys
+        )
+
+    return {"prompt": prompt, "keys": matched_keys}
 
 
 # ── 注册表辅助 ────────────────────────────────────────────────────────────────

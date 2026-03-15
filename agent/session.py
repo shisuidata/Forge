@@ -25,6 +25,24 @@ class Message:
 
 
 @dataclass
+class IntentSpec:
+    """
+    Agent 在向用户发出澄清问题后保存的中间状态。
+
+    当 Agent 检测到问题存在歧义、需要用户补充信息时，
+    将原始问题和已识别的歧义点记录在此，等待用户回复后继续推进。
+
+    Attributes:
+        original_question: 用户的原始问题（澄清前）
+        clarification_prompt: Agent 向用户提出的澄清问题文本
+        ambiguity_keys: 触发本次澄清的歧义规则 key 列表（来自 disambiguations.registry.yaml）
+    """
+    original_question:    str
+    clarification_prompt: str
+    ambiguity_keys:       list[str] = field(default_factory=list)
+
+
+@dataclass
 class Session:
     """
     单用户的对话状态容器。
@@ -38,10 +56,11 @@ class Session:
     """
     user_id:                 str
     history:                 list[Message] = field(default_factory=list)
-    pending_sql:             str | None  = None
-    pending_forge:           dict | None = None
-    pending_metric_proposal: dict | None = None
-    pending_cache_id:        str | None  = None   # Stage 2 反馈：等待用户确认结果准确性
+    pending_sql:             str | None       = None
+    pending_forge:           dict | None      = None
+    pending_metric_proposal: dict | None      = None
+    pending_cache_id:        str | None       = None   # Stage 2 反馈：等待用户确认结果准确性
+    pending_intent:          IntentSpec | None = None  # 澄清轮次：等待用户补充信息
 
     def add(self, role: Literal["user", "assistant"], content: str) -> None:
         """

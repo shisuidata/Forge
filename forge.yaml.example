@@ -1,0 +1,50 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Forge 统一配置文件                                                       ║
+# ║  修改后无需重启，下次启动自动生效。                                         ║
+# ║  环境变量（.env）优先级高于此文件，可用于覆盖敏感信息。                        ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+# ── 飞书机器人 ────────────────────────────────────────────────────────────────
+feishu:
+  app_id:             ""           # 飞书开放平台 App ID，格式 cli_xxxxxxxx
+  app_secret:         ""           # 飞书 App Secret
+  verification_token: ""           # 事件订阅验证 Token（HTTP 模式用，长连接可留空）
+  encrypt_key:        ""           # 消息加密密钥（不加密留空）
+
+# ── LLM 模型 ─────────────────────────────────────────────────────────────────
+llm:
+  provider:  "anthropic"           # anthropic | openai（openai 兼容所有接口）
+  api_key:   ""                    # API Key（建议放 .env，不要提交到 git）
+  model:     "claude-sonnet-4-6"  # 模型 ID
+  base_url:  ""                    # 仅 openai 模式需要，如 https://api.deepseek.com/v1
+
+# ── Embedding 模型（RAG 召回用）────────────────────────────────────────────────
+embedding:
+  api_key:   ""                    # 留空则复用 llm.api_key
+  base_url:  "https://api.minimaxi.com/v1"
+  model:     "embo-01"
+  top_k:     5                     # 每次查询最多召回几张表
+
+# ── 数据库连接 ────────────────────────────────────────────────────────────────
+database:
+  url: ""
+  # 示例：
+  #   sqlite:///./demo/forge_demo.db
+  #   postgresql://user:pass@localhost:5432/mydb
+  #   mysql+pymysql://user:pass@localhost:3306/mydb
+
+# ── Registry 文件路径 ─────────────────────────────────────────────────────────
+registry:
+  schema_path:          "registry/data/schema.registry.json"              # forge sync 自动生成，记录表结构
+  metrics_path:         "registry/data/metrics.registry.yaml"             # 指标语义层，对话式维护
+  disambiguations_path: "registry/data/disambiguations.registry.yaml"     # 业务歧义消除规则，人工/自动维护
+  conventions_path:     "registry/data/field_conventions.registry.yaml"   # 字段使用约定，人工维护
+
+# ── Staging 目录（用户交互确认暂存区）─────────────────────────────────────────
+staging:
+  dir: ".forge/staging"   # 存放待入库的用户确认歧义消除记录
+
+# ── Web 服务器（Admin UI）─────────────────────────────────────────────────────
+server:
+  host: "0.0.0.0"
+  port: 8000
