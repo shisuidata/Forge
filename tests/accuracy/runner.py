@@ -36,7 +36,7 @@ from forge.compiler import compile_query  # noqa: E402
 
 ACCURACY_DIR = Path(__file__).parent
 RESULTS_DIR  = ACCURACY_DIR / "results"
-CASES_FILE   = RESULTS_DIR / "cases.json"
+CASES_FILE   = RESULTS_DIR / "cases.json"   # default; override with --cases
 
 MINIMAX_API_KEY  = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic")
@@ -270,7 +270,14 @@ def main() -> None:
                         help="覆盖每方法运行次数")
     parser.add_argument("--workers", type=int, default=None,
                         help="覆盖并发 worker 数")
+    parser.add_argument("--cases", type=str, default=None,
+                        help="测试用例文件路径（默认 results/cases.json），如 results/cases_large.json")
     args = parser.parse_args()
+
+    global CASES_FILE
+    if args.cases:
+        p = Path(args.cases)
+        CASES_FILE = p if p.is_absolute() else ACCURACY_DIR / args.cases
 
     from methods import list_methods  # noqa: E402
 

@@ -226,10 +226,17 @@ def main() -> None:
                         help="方法 id（如 'f'）")
     parser.add_argument("--scores", default=None,
                         help="指定评分 JSON 文件路径（可选）")
+    parser.add_argument("--cases", default=None,
+                        help="测试用例文件（默认 results/cases.json），如 results/cases_large.json")
     # 兼容旧的位置参数（直接传 scores 文件）
     parser.add_argument("scores_file", nargs="?", default=None,
                         help="[旧格式兼容] 直接传入 scores 文件路径")
     args = parser.parse_args()
+
+    global CASES_FILE
+    if args.cases:
+        p = Path(args.cases)
+        CASES_FILE = p if p.is_absolute() else ACCURACY_DIR / args.cases
 
     if args.method:
         run_new(args.method, args.scores or args.scores_file)
