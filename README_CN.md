@@ -204,18 +204,40 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ## 项目结构
 
 ```
-forge/          — 编译引擎：JSON Schema 验证 + 确定性 SQL 编译器
-agent/          — Agent 循环、LLM 客户端、飞书 Bot、会话管理、审计日志
-registry/       — Schema 同步、指标注册表、字段验证器
-web/            — 后台管理 UI：Registry 管理、审计日志、系统配置
+forge/
+  ├── compiler.py     — 确定性编译器：Forge JSON → SQL（3 方言，14 个容错修复）
+  ├── retriever.py    — 四层召回：指标直接匹配 → embedding → 列名 → FK 扩展
+  ├── executor.py     — SQL 执行器
+  ├── cache.py        — SQL 查询缓存（精确 + 模糊，双阶段用户反馈）
+  └── chart.py        — 图表生成（pyecharts 交互 + matplotlib 静态）
+
+agent/
+  ├── agent.py        — Agent 调度（查询 / 指标定义 / 缓存反馈）
+  └── session.py      — 会话状态
+
+web/
+  └── feishu.py       — 飞书 WebSocket Bot（每用户串行队列 + 交互卡片）
+
+demo/
+  └── seed_large.py   — 200 张表电商数仓 mock 数据
+
 tests/
-  ├── accuracy/ — 提示词基准测试：40 用例 × 9 方法 × 5 次运行
-  └── *.py      — 编译器单元测试
-main.py         — FastAPI 入口
-config.py       — 环境变量配置
-docs/           — 架构文档、DSL 规范、部署指南
+  ├── accuracy/       — 自有 40 题基准（10 个版本）
+  └── spider2/        — Spider2-Lite SQLite 子集（123 题）
+
+docs/devlog/          — 开发日志
+main.py               — FastAPI 入口
 ```
+
+## 开发日志
+
+| 篇 | 日期 | 主题 |
+|---|---|---|
+| [Day 0 · 开发实录](docs/devlog/forge-dev-story.md) | 2026-03 | 为什么做这件事；错误分类框架；核心洞见 |
+| [Day 1 · 历史债 / 地面泥潭](docs/devlog/day1_2026-03-15.md) | 2026-03-15 | SQL 设计哲学、四层召回演进、飞书 Bot 踩坑、SQL 缓存双阶段反馈 |
 
 ## 当前状态
 
-编译引擎完成。Agent、飞书 Bot、Registry 管理、审计日志均已可用。当前基准：**8.82 / 10**（Method J+语义库，40 用例）。
+编译引擎完成，49 个单元测试全绿。飞书 Bot 可用（WebSocket 长连接，交互卡片，SQL 语法高亮，图表生成）。SQL 查询缓存已集成（双阶段用户反馈 → verified 条目构成组织知识库）。
+
+当前基准：**8.82 / 10**（Method J+语义库，40 用例 LLM Judge）。

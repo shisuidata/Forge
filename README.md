@@ -46,6 +46,7 @@
 - [基准测试](#基准测试)
 - [工程洞察](#工程洞察)
 - [快速开始](#快速开始)
+- [开发日志](#开发日志)
 
 ---
 
@@ -554,23 +555,38 @@ python tests/spider2/runner.py --limit 20
 forge/
   ├── schema.json          — Forge DSL 格式定义（JSON Schema）
   ├── compiler.py          — 确定性编译器：Forge JSON → SQL（3 方言，14 个容错修复）
-  ├── retriever.py         — Schema 向量检索器（embedding + BM25-lite 降级）
+  ├── retriever.py         — Schema 向量检索器（四层召回：指标匹配 → embedding → 列名 → FK 扩展）
+  ├── executor.py          — SQL 执行器（execute_with_data 返回 cols + rows）
+  ├── cache.py             — SQL 查询缓存（精确 + 模糊匹配，双阶段用户反馈）
+  ├── chart.py             — 图表生成（pyecharts 交互 + matplotlib 静态）
   ├── schema_builder.py    — 动态构建 tool schema（注入枚举约束）
   └── cli.py               — CLI 入口
+
+agent/
+  ├── agent.py             — Agent 调度（查询 / 指标定义 / 缓存反馈）
+  ├── session.py           — 会话状态（pending_sql / pending_cache_id）
+  └── llm.py               — LLM 客户端（RAG 过滤 tool schema）
+
+web/
+  ├── feishu.py            — 飞书 WebSocket Bot（每用户串行队列 + 交互卡片）
+  └── static/charts/       — pyecharts 交互图表 HTML
 
 registry/
   └── sync.py              — forge sync：直连数据库生成 Registry
 
+demo/
+  └── seed_large.py        — 200 张表电商数仓 mock 数据（134,577 行）
+
 tests/
-  ├── test_compiler.py     — 编译器单元测试（38 个用例）
+  ├── test_compiler.py     — 编译器单元测试（49 个用例）
   ├── accuracy/            — 自有 40 题基准（LLM judge + EA，10 个版本）
-  │   ├── cases.json       — 题目 + reference SQL
-  │   ├── runner.py        — 多方法对比运行器
-  │   └── results/         — 各版本运行结果
   ├── text-to-sql-failures/— 针对性失败案例（JOIN 陷阱、聚合陷阱等）
   └── spider2/             — Spider2-Lite SQLite 子集测试（123 题）
-      ├── runner.py        — 全流程运行器（EA 内嵌 + raw SQL 兜底）
-      └── results/         — SQL 文件 + 运行日志
+
+docs/
+  ├── devlog/              — 开发日志
+  ├── architecture.md      — 架构设计
+  └── dsl-semantics.md     — DSL 形式化语义文档
 ```
 
 ---
@@ -584,3 +600,14 @@ tests/
 | 自有用例（MiniMax，EA） | 40 | Execution Accuracy | **65.0%** |
 | Spider2-Lite SQLite | 123 | Execution Accuracy | **9.2%** |
 | Spider2-Lite SQLite | 123 | 编译成功率 | **97.6%** |
+
+---
+
+## 开发日志
+
+真实的建造记录，包括走错的路、自我怀疑的时刻，和偶尔出现的顿悟。
+
+| 篇 | 日期 | 主题 |
+|---|---|---|
+| [Day 0 · 开发实录](docs/devlog/forge-dev-story.md) | 2026-03 | 为什么做这件事；错误分类；核心洞见的形成过程 |
+| [Day 1 · 历史债 / 地面泥潭](docs/devlog/day1_2026-03-15.md) | 2026-03-15 | SQL 的设计哲学、四层召回演进、飞书 Bot 工程坑、SQL 缓存双阶段反馈 |
