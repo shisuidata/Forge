@@ -23,12 +23,13 @@ Forge Agent 核心调度模块。
         → 直接透传 text 内容
 
 AgentResponse.action 值说明：
-    message       LLM 文字回复
-    sql_review    SQL 已生成，等待用户 approve/cancel
-    approved      用户已确认 SQL（approve() 返回）
-    cancelled     用户已取消（cancel() 返回）
-    metric_saved  指标已保存
-    error         处理失败（含具体错误信息）
+    message              LLM 文字回复
+    sql_review           SQL 已生成，等待用户 approve/cancel
+    approved             用户已确认 SQL（approve() 返回）
+    cancelled            用户已取消（cancel() 返回）
+    metric_saved         指标已保存
+    metric_clarification 模型提出指标定义草案，等待用户确认（confirm_metric_definition）
+    error                处理失败（含具体错误信息）
 """
 from __future__ import annotations
 import json
@@ -38,6 +39,7 @@ import yaml
 
 from config import cfg
 from forge.compiler import compile_query
+from forge.cache import cache
 from registry.validator import validate_metric
 from agent.session import store
 from agent import llm
@@ -138,6 +140,20 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             session.add("assistant", f"[SQL ready for review]\n{sql}")
             return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review")
 
+        # ── 提案模式：模型猜测指标定义，等待用户确认 ─────────────────────────
+        if result["tool"] == "propose_metric_definition":
+            proposal = result["input"]
+            summary  = proposal.pop("proposal_summary", "")
+            session.pending_metric_proposal = proposal
+            text = (
+                f"📋 **指标定义提案**\n\n"
+                f"我根据数据库结构，推测了以下定义：\n\n"
+                f"{summary}\n\n"
+                "如确认无误，请回复「确认」；如需调整，请直接描述修改意见。"
+            )
+            session.add("assistant", text)
+            return AgentResponse(text=text, action="metric_clarification")
+
         # ── 定义模式：提取指标并校验保存 ─────────────────────────────────────
         if result["tool"] == "define_metric":
             metric = result["input"]
@@ -174,8 +190,7 @@ def approve(user_id: str) -> AgentResponse:
     """
     用户确认 pending SQL，将其从 session 中取出并返回。
 
-    调用方负责实际的 SQL 执行（数据库驱动、权限控制等不在 Agent 范围内）。
-    取出后立即清空 pending 状态，防止重复确认。
+    同时将查询写入缓存（pending 状态），等待 Stage 2 用户对结果的准确性反馈。
 
     Args:
         user_id: 飞书 open_id。
@@ -184,13 +199,35 @@ def approve(user_id: str) -> AgentResponse:
         action=approved 并携带 sql；若无 pending SQL 则返回 action=error。
     """
     session = store.get(user_id)
-    sql = session.pending_sql
+    sql        = session.pending_sql
+    forge_json = session.pending_forge
     if not sql:
         return AgentResponse(text="没有待确认的 SQL。", action="error")
+
     # 清空 pending 状态，保证状态机的单向流转
     session.pending_sql   = None
     session.pending_forge = None
+
+    # Stage 1 完成：写入缓存（pending），等待 Stage 2 结果反馈
+    if forge_json:
+        question = _last_user_question(session)
+        cache_id = cache.add_pending(
+            question=question,
+            question_emb=None,   # 无 embedding 时退化为精确匹配
+            forge_json=forge_json,
+            sql=sql,
+        )
+        session.pending_cache_id = cache_id or None
+
     return AgentResponse(text="✅ SQL 已确认，开始执行。", sql=sql, action="approved")
+
+
+def _last_user_question(session) -> str:
+    """从 session 历史中取出最后一条真实用户提问（跳过系统注入消息）。"""
+    for msg in reversed(session.history):
+        if msg.role == "user" and not msg.content.startswith("[系统]"):
+            return msg.content
+    return ""
 
 
 def cancel(user_id: str) -> AgentResponse:
@@ -207,6 +244,93 @@ def cancel(user_id: str) -> AgentResponse:
     session.pending_sql   = None
     session.pending_forge = None
     return AgentResponse(text="已取消。", action="cancelled")
+
+
+# ── 查询结果准确性反馈（Stage 2）─────────────────────────────────────────────
+
+def cache_verify(user_id: str) -> AgentResponse:
+    """
+    Stage 2 👍：用户确认查询结果准确，将缓存条目升级为 verified。
+
+    verified 条目可在后续问题中通过 embedding 相似度命中，直接复用 SQL。
+    高频 verified 条目还可作为语义层指标的候选定义（suggest_metrics）。
+    """
+    session = store.get(user_id)
+    cache_id = session.pending_cache_id
+    if not cache_id:
+        return AgentResponse(text="没有待反馈的查询缓存。", action="error")
+    session.pending_cache_id = None
+    cache.verify(cache_id)
+    return AgentResponse(
+        text="✅ 已记录，该查询已加入缓存，下次相似问题可直接复用。",
+        action="cache_verified",
+    )
+
+
+def cache_reject(user_id: str) -> AgentResponse:
+    """
+    Stage 2 👎：用户标记查询结果不准确，将缓存条目软删除为 rejected。
+    """
+    session = store.get(user_id)
+    cache_id = session.pending_cache_id
+    if not cache_id:
+        return AgentResponse(text="没有待反馈的查询缓存。", action="error")
+    session.pending_cache_id = None
+    cache.reject(cache_id)
+    return AgentResponse(
+        text="已记录，感谢反馈，该查询结果不会被缓存。",
+        action="cache_rejected",
+    )
+
+
+# ── 指标提案确认 / 拒绝 ──────────────────────────────────────────────────────
+
+def confirm_metric_definition(user_id: str) -> AgentResponse:
+    """
+    用户确认模型提出的指标定义草案，校验后持久化入库。
+
+    Args:
+        user_id: 飞书 open_id。
+
+    Returns:
+        action=metric_saved 表示保存成功；action=error 表示校验失败或无待确认项。
+    """
+    session = store.get(user_id)
+    proposal = session.pending_metric_proposal
+    if not proposal:
+        return AgentResponse(text="没有待确认的指标定义。", action="error")
+
+    name = proposal.get("name", "")
+    validation_err, validation_warn = _validate_and_save(proposal, name)
+    session.pending_metric_proposal = None   # 清空，无论成功或失败
+
+    if validation_err:
+        err_text = (
+            "⚠ 指标定义校验未通过，未保存：\n"
+            + "\n".join(f"• {e}" for e in validation_err)
+            + "\n\n请修正后重新定义。"
+        )
+        session.add("assistant", err_text)
+        return AgentResponse(text=err_text, action="error")
+
+    label = proposal.get("label", name)
+    text  = f"✅ 已保存指标「{label}」，下次查询时直接可用。"
+    if validation_warn:
+        text += "\n\n" + "\n".join(f"⚠ {w}" for w in validation_warn)
+    session.add("assistant", text)
+    return AgentResponse(text=text, action="metric_saved")
+
+
+def reject_metric_proposal(user_id: str) -> AgentResponse:
+    """
+    用户拒绝模型提出的指标定义草案，清空 pending 状态。
+
+    Args:
+        user_id: 飞书 open_id。
+    """
+    session = store.get(user_id)
+    session.pending_metric_proposal = None
+    return AgentResponse(text="已取消指标提案，请重新描述您的需求。", action="cancelled")
 
 
 # ── 注册表辅助 ────────────────────────────────────────────────────────────────

@@ -30,15 +30,18 @@ class Session:
     单用户的对话状态容器。
 
     Attributes:
-        user_id:       飞书 open_id，作为全局唯一标识
-        history:       对话历史，最多保留最近 20 条（超出后从头部丢弃）
-        pending_sql:   待用户确认的 SQL 字符串；None 表示当前无待确认项
-        pending_forge: 生成 pending_sql 所对应的 Forge JSON；与 pending_sql 同步清空
+        user_id:                 飞书 open_id，作为全局唯一标识
+        history:                 对话历史，最多保留最近 20 条（超出后从头部丢弃）
+        pending_sql:             待用户确认的 SQL 字符串；None 表示当前无待确认项
+        pending_forge:           生成 pending_sql 所对应的 Forge JSON；与 pending_sql 同步清空
+        pending_metric_proposal: 待用户确认的指标定义提案（猜测→确认→入库流程）
     """
-    user_id:       str
-    history:       list[Message] = field(default_factory=list)
-    pending_sql:   str | None  = None
-    pending_forge: dict | None = None
+    user_id:                 str
+    history:                 list[Message] = field(default_factory=list)
+    pending_sql:             str | None  = None
+    pending_forge:           dict | None = None
+    pending_metric_proposal: dict | None = None
+    pending_cache_id:        str | None  = None   # Stage 2 反馈：等待用户确认结果准确性
 
     def add(self, role: Literal["user", "assistant"], content: str) -> None:
         """
