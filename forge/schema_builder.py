@@ -14,14 +14,15 @@
     │ filter/group/sort/window 的 col  │ 严格枚举（table.col 全集）           │
     │ agg.col                          │ 保持 string（支持算术表达式）         │
     │ agg.fn / join.type / sort.dir    │ 严格枚举（固定值域）                  │
-    │ val                              │ oneOf 类型系统（string/number/bool/  │
+    │ val                              │ anyOf 类型系统（string/number/bool/  │
     │                                  │   null/array/$date/$preset）        │
-    │ select                           │ oneOf string | expr 对象             │
+    │ select                           │ anyOf string | expr 对象             │
     └──────────────────────────────────┴────────────────────────────────────┘
 
 接口：
-    build_tool_schema(registry) -> dict
+    build_tool_schema(registry, strict=False) -> dict
         registry: schema.registry.json 解析后的 dict
+        strict:   True = DeepSeek strict mode（anyOf 替代 oneOf，所有属性必填/可为 null）
         返回：generate_forge_query 工具的 input_schema dict
 """
 from __future__ import annotations
@@ -57,12 +58,16 @@ def _parse_registry(registry: dict) -> tuple[list[str], list[str], dict[str, lis
     return table_names, col_refs, col_enums
 
 
-def build_tool_schema(registry: dict) -> dict:
+def build_tool_schema(registry: dict, strict: bool = False) -> dict:
     """
     从 schema registry 动态生成 generate_forge_query 工具的 input_schema。
 
     Args:
         registry: schema.registry.json 解析后的 dict
+        strict:   True 时输出 DeepSeek strict mode 兼容 schema：
+                  - oneOf 替换为 anyOf（DeepSeek strict 仅支持 anyOf）
+                  - 所有 object 属性均在 required 中，可选属性类型为 anyOf[T, null]
+                  需同时将 base_url 切换到 https://api.deepseek.com/beta
 
     Returns:
         JSON Schema dict，可直接用作 Anthropic tool 的 input_schema
@@ -70,56 +75,59 @@ def build_tool_schema(registry: dict) -> dict:
     """
     table_names, col_refs, col_enums = _parse_registry(registry)
 
-    # ── val 的 oneOf 类型系统 ───────────────────────────────────────────────────
-    # 把已知枚举值注入到 string 分支的 description，给模型以提示但不强制约束
+    # strict 模式辅助：anyOf 替代 oneOf；可选字段包裹为 nullable
+    def _of(*schemas):
+        return {"anyOf": list(schemas)} if strict else {"oneOf": list(schemas)}
+
+    def _null(schema: dict) -> dict:
+        """可选字段 → anyOf[schema, null]（strict 模式专用）"""
+        return {"anyOf": [schema, {"type": "null"}]} if strict else schema
+
+    # ── val 的类型系统 ──────────────────────────────────────────────────────────
     enum_hint = ""
     if col_enums:
         parts = [f"{col}: {vals}" for col, vals in col_enums.items()]
         enum_hint = f" Known enum values — {'; '.join(parts)}."
 
-    scalar_val = {
-        "oneOf": [
-            {"type": "string",
-             "description": "String value." + enum_hint},
-            {"type": "number"},
-            {"type": "boolean"},
-            {"type": "null",
-             "description": "Use for LAG/LEAD default when no prior/next row should yield NULL."},
-            {"type": "array",
-             "description": "List of values for 'in' operator.",
-             "items": {"type": ["string", "number"]}},
-            {"type": "object",
-             "required": ["$date"],
-             "additionalProperties": False,
-             "description": "Date literal.",
-             "properties": {
-                 "$date": {"type": "string",
-                           "description": "ISO-8601 date: YYYY-MM-DD"}
-             }},
-            {"type": "object",
-             "required": ["$preset"],
-             "additionalProperties": False,
-             "description": "Relative date preset.",
-             "properties": {
-                 "$preset": {
-                     "type": "string",
-                     "enum": ["today", "yesterday", "last_7_days", "last_30_days",
-                              "this_month", "last_month", "this_quarter", "this_year"]
-                 }
-             }},
-        ]
-    }
+    scalar_val = _of(
+        {"type": "string",
+         "description": "String value." + enum_hint},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "null",
+         "description": "Use for LAG/LEAD default when no prior/next row should yield NULL."},
+        {"type": "array",
+         "description": "List of values for 'in' operator.",
+         "items": {"type": ["string", "number"]}},
+        {"type": "object",
+         "required": ["$date"],
+         "additionalProperties": False,
+         "description": "Date literal.",
+         "properties": {
+             "$date": {"type": "string",
+                       "description": "ISO-8601 date: YYYY-MM-DD"}
+         }},
+        {"type": "object",
+         "required": ["$preset"],
+         "additionalProperties": False,
+         "description": "Relative date preset.",
+         "properties": {
+             "$preset": {
+                 "type": "string",
+                 "enum": ["today", "yesterday", "last_7_days", "last_30_days",
+                          "this_month", "last_month", "this_quarter", "this_year"]
+             }
+         }},
+    )
 
-    bound_val = {
-        "oneOf": [
-            {"type": "number"},
-            {"type": "string"},
-            {"type": "object",
-             "required": ["$date"],
-             "additionalProperties": False,
-             "properties": {"$date": {"type": "string"}}}
-        ]
-    }
+    bound_val = _of(
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "object",
+         "required": ["$date"],
+         "additionalProperties": False,
+         "properties": {"$date": {"type": "string"}}}
+    )
 
     # ── 基础 schema 块 ─────────────────────────────────────────────────────────
 
@@ -139,23 +147,27 @@ def build_tool_schema(registry: dict) -> dict:
         },
     }
 
+    # simple_condition — strict 模式下 val/lo/hi/col2 均列入 required（nullable）
+    _sc_props: dict = {
+        "col": col_field,
+        "op": {
+            "type": "string",
+            "enum": ["eq", "neq", "gt", "gte", "lt", "lte",
+                     "in", "like", "is_null", "is_not_null", "between"],
+        },
+        "val": _null({**scalar_val, "description": "Filter value. Use {\"$date\":\"YYYY-MM-DD\"} for dates."}),
+        "lo": _null({**bound_val,
+                     "description": "Lower bound for 'between'. Use {\"$date\":\"...\"} for dates."}),
+        "hi": _null({**bound_val,
+                     "description": "Upper bound for 'between'."}),
+        "col2": _null({"type": "string",
+                       "description": "Right-hand column for col-vs-col comparison (e.g. sales > avg_sales)."}),
+    }
     simple_condition = {
         "type": "object",
-        "required": ["col", "op"],
+        "required": list(_sc_props.keys()) if strict else ["col", "op"],
         "additionalProperties": False,
-        "properties": {
-            "col": col_field,
-            "op": {
-                "type": "string",
-                "enum": ["eq", "neq", "gt", "gte", "lt", "lte",
-                         "in", "like", "is_null", "is_not_null", "between"],
-            },
-            "val": scalar_val,
-            "lo": {**bound_val,
-                   "description": "Lower bound for 'between'. Use {\"$date\":\"...\"} for dates."},
-            "hi": {**bound_val,
-                   "description": "Upper bound for 'between'."},
-        },
+        "properties": _sc_props,
     }
 
     and_condition = {
@@ -178,13 +190,13 @@ def build_tool_schema(registry: dict) -> dict:
         "properties": {
             "or": {
                 "type": "array",
-                "items": {"oneOf": [simple_condition, and_condition]},
+                "items": _of(simple_condition, and_condition),
                 "minItems": 2,
             },
         },
     }
 
-    condition = {"oneOf": [simple_condition, or_condition]}
+    condition = _of(simple_condition, or_condition)
 
     # ── Aggregation ────────────────────────────────────────────────────────────
 
@@ -221,9 +233,15 @@ def build_tool_schema(registry: dict) -> dict:
 
     # ── Window functions ───────────────────────────────────────────────────────
 
+    _wr_props: dict = {
+        "fn": {"type": "string", "enum": ["row_number", "rank", "dense_rank"]},
+        "partition": _null({"type": "array", "items": col_field}),
+        "order": _null({"type": "array", "items": sort_key}),
+        "as": {"type": "string"},
+    }
     window_ranking = {
         "type": "object",
-        "required": ["fn", "as"],
+        "required": list(_wr_props.keys()) if strict else ["fn", "as"],
         "additionalProperties": False,
         "description": (
             "Ranking functions — no input column. "
@@ -231,73 +249,68 @@ def build_tool_schema(registry: dict) -> dict:
             "rank: ties share same number, next rank skips (1,1,3). "
             "dense_rank: ties share same number, no gap (1,1,2)."
         ),
-        "properties": {
-            "fn": {"type": "string", "enum": ["row_number", "rank", "dense_rank"]},
-            "partition": {"type": "array", "items": col_field},
-            "order": {"type": "array", "items": sort_key},
-            "as": {"type": "string"},
-        },
+        "properties": _wr_props,
     }
 
+    _wa_props: dict = {
+        "fn": {"type": "string", "enum": ["sum", "avg", "count", "min", "max"]},
+        "col": col_field,
+        "partition": _null({"type": "array", "items": col_field}),
+        "order": _null({"type": "array", "items": sort_key}),
+        "as": {"type": "string"},
+    }
     window_agg = {
         "type": "object",
-        "required": ["fn", "col", "as"],
+        "required": list(_wa_props.keys()) if strict else ["fn", "col", "as"],
         "additionalProperties": False,
         "description": "Aggregate window: SUM/AVG/COUNT/MIN/MAX OVER (...).",
-        "properties": {
-            "fn": {"type": "string", "enum": ["sum", "avg", "count", "min", "max"]},
-            "col": col_field,
-            "partition": {"type": "array", "items": col_field},
-            "order": {"type": "array", "items": sort_key},
-            "as": {"type": "string"},
-        },
+        "properties": _wa_props,
     }
 
+    _wn_props: dict = {
+        "fn": {"type": "string", "enum": ["lag", "lead"]},
+        "col": col_field,
+        "offset": _null({"type": "integer", "minimum": 1}),
+        "default": _null(scalar_val),
+        "partition": _null({"type": "array", "items": col_field}),
+        "order": {"type": "array", "items": sort_key, "minItems": 1},
+        "as": {"type": "string"},
+    }
     window_nav = {
         "type": "object",
-        "required": ["fn", "col", "as"],
+        "required": list(_wn_props.keys()) if strict else ["fn", "col", "as"],
         "additionalProperties": False,
         "description": (
             "Navigation: LAG / LEAD. partition is required to avoid cross-user row access. "
             "default: set to a meaningful value (e.g. 'first_order') when the question requires it; "
             "omit or use null when no prior/next row should yield NULL."
         ),
-        "properties": {
-            "fn": {"type": "string", "enum": ["lag", "lead"]},
-            "col": col_field,
-            "offset": {"type": "integer", "minimum": 1},
-            "default": scalar_val,
-            "partition": {"type": "array", "items": col_field},
-            "order": {"type": "array", "items": sort_key, "minItems": 1},
-            "as": {"type": "string"},
-        },
+        "properties": _wn_props,
     }
 
     # ── select item ────────────────────────────────────────────────────────────
 
-    select_item = {
-        "oneOf": [
-            {
-                "type": "string",
-                "description": "Column reference, agg alias, or window alias.",
-            },
-            {
-                "type": "object",
-                "required": ["expr", "as"],
-                "additionalProperties": False,
-                "description": "Computed expression, e.g. {\"expr\": \"quantity * unit_price\", \"as\": \"revenue\"}.",
-                "properties": {
-                    "expr": {
-                        "type": "string",
-                        "description": "Arithmetic or CASE expression, passed verbatim into SQL.",
-                    },
-                    "as": {"type": "string"},
+    select_item = _of(
+        {
+            "type": "string",
+            "description": "Column reference, agg alias, or window alias.",
+        },
+        {
+            "type": "object",
+            "required": ["expr", "as"],
+            "additionalProperties": False,
+            "description": "Computed expression, e.g. {\"expr\": \"quantity * unit_price\", \"as\": \"revenue\"}.",
+            "properties": {
+                "expr": {
+                    "type": "string",
+                    "description": "Arithmetic or CASE expression, passed verbatim into SQL.",
                 },
+                "as": {"type": "string"},
             },
-        ]
-    }
+        },
+    )
 
-    # ── joins.on: single equality or multi-condition array ─────────────────────
+    # ── joins ──────────────────────────────────────────────────────────────────
 
     on_single = {
         "type": "object",
@@ -312,121 +325,133 @@ def build_tool_schema(registry: dict) -> dict:
 
     on_multi = {
         "type": "array",
-        "description": "Multi-condition join (inner/left/right/full only). Conditions are AND-combined.",
+        "description": "Multi-condition join. Conditions are AND-combined.",
         "items": simple_condition,
         "minItems": 2,
     }
 
+    _join_props: dict = {
+        "type": {
+            "type": "string",
+            "enum": ["inner", "left", "right", "full", "anti", "semi", "cross"],
+            "description": (
+                "inner=default; anti=NOT IN alternative (safer, no NULL trap); "
+                "semi=EXISTS alternative; cross=CROSS JOIN for scalar CTEs (no ON needed)."
+            ),
+        },
+        "table": {"type": "string", "enum": table_names},
+        "on": _null(_of(on_single, on_multi)),
+    }
+    join_item = {
+        "type": "object",
+        "required": list(_join_props.keys()) if strict else ["type", "table"],
+        "additionalProperties": False,
+        "properties": _join_props,
+    }
+
+    # ── CTE item ───────────────────────────────────────────────────────────────
+
+    cte_item = {
+        "type": "object",
+        "required": ["name", "query"],
+        "additionalProperties": False,
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "CTE name, used as scan or join table in the main query.",
+            },
+            "query": {
+                "type": "object",
+                "description": "A nested Forge query object (must have scan + select).",
+            },
+        },
+    }
+
     # ── Top-level schema ───────────────────────────────────────────────────────
+
+    _top_props: dict = {
+        "scan": {
+            "type": "string",
+            "enum": table_names,
+            "description": "Primary table (scan target).",
+        },
+        "joins": _null({
+            "type": "array",
+            "items": join_item,
+        }),
+        "filter": _null({
+            "type": "array",
+            "description": "Row-level filters (WHERE). Top-level items are AND-combined.",
+            "items": condition,
+        }),
+        "group": _null({
+            "type": "array",
+            "description": "Group-by keys.",
+            "items": col_field,
+        }),
+        "agg": _null({
+            "type": "array",
+            "description": "Aggregate expressions. count_all has no col; all others require col.",
+            "items": _of(agg_with_col, agg_count_all),
+        }),
+        "having": _null({
+            "type": "array",
+            "description": (
+                "Post-aggregate filters (HAVING). "
+                "col must be an agg alias (defined in agg[].as), not a raw column or expression. "
+                "Top-level items are AND-combined."
+            ),
+            "items": condition,
+        }),
+        "select": {
+            "type": "array",
+            "description": "Output columns. Can be table.col refs, agg aliases, window aliases, or {\"expr\":\"...\",\"as\":\"alias\"} computed expressions.",
+            "items": select_item,
+            "minItems": 1,
+        },
+        "window": _null({
+            "type": "array",
+            "items": _of(window_ranking, window_agg, window_nav),
+        }),
+        "qualify": _null({
+            "type": "array",
+            "description": "Post-window filter for per-group TopN (e.g. rank <= 3).",
+            "items": simple_condition,
+            "minItems": 1,
+        }),
+        "sort": _null({
+            "type": "array",
+            "items": sort_key,
+        }),
+        "limit": _null({
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum rows to return. Use the exact number from the user's question.",
+        }),
+        "offset": _null({
+            "type": "integer",
+            "minimum": 0,
+            "description": "Rows to skip (for pagination).",
+        }),
+        "explain": _null({
+            "type": "string",
+            "description": "Your intent description. Not compiled. Helps error recovery.",
+        }),
+        "cte": _null({
+            "type": "array",
+            "description": (
+                "Common Table Expressions (WITH clause). Use ONLY when a subquery result "
+                "must be joined or filtered in a second step. "
+                "Do NOT use for simple aggregations or filtering — just use filter/agg directly. "
+                "Do NOT use for ranking/TopN — use window + qualify instead."
+            ),
+            "items": cte_item,
+        }),
+    }
 
     return {
         "type": "object",
-        "required": ["scan", "select"],
+        "required": list(_top_props.keys()) if strict else ["scan", "select"],
         "additionalProperties": False,
-        "properties": {
-            "scan": {
-                "type": "string",
-                "enum": table_names,
-                "description": "Primary table (scan target).",
-            },
-            "joins": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["type", "table", "on"],
-                    "additionalProperties": False,
-                    "properties": {
-                        "type": {
-                            "type": "string",
-                            "enum": ["inner", "left", "right", "full", "anti", "semi"],
-                            "description": "inner=default; anti=NOT IN alternative; semi=EXISTS alternative.",
-                        },
-                        "table": {"type": "string", "enum": table_names},
-                        "on": {"oneOf": [on_single, on_multi]},
-                    },
-                },
-            },
-            "filter": {
-                "type": "array",
-                "description": "Row-level filters (WHERE). Top-level items are AND-combined.",
-                "items": condition,
-            },
-            "group": {
-                "type": "array",
-                "description": "Group-by keys.",
-                "items": col_field,
-            },
-            "agg": {
-                "type": "array",
-                "description": "Aggregate expressions. count_all has no col; all others require col.",
-                "items": {"oneOf": [agg_with_col, agg_count_all]},
-            },
-            "having": {
-                "type": "array",
-                "description": (
-                    "Post-aggregate filters (HAVING). "
-                    "col must be an agg alias (defined in agg[].as), not a raw column or expression. "
-                    "Top-level items are AND-combined."
-                ),
-                "items": condition,
-            },
-            "select": {
-                "type": "array",
-                "description": "Output columns. Can be table.col refs, agg aliases, window aliases, or {\"expr\":\"...\",\"as\":\"alias\"} computed expressions.",
-                "items": select_item,
-                "minItems": 1,
-            },
-            "window": {
-                "type": "array",
-                "items": {"oneOf": [window_ranking, window_agg, window_nav]},
-            },
-            "qualify": {
-                "type": "array",
-                "description": "Post-window filter for per-group TopN (e.g. rank <= 3).",
-                "items": simple_condition,
-                "minItems": 1,
-            },
-            "sort": {
-                "type": "array",
-                "items": sort_key,
-            },
-            "limit": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Maximum rows to return. Use the exact number from the user's question.",
-            },
-            "offset": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Rows to skip (for pagination).",
-            },
-            "explain": {
-                "type": "string",
-                "description": "Your intent description. Not compiled. Helps error recovery.",
-            },
-            "cte": {
-                "type": "array",
-                "description": (
-                    "Common Table Expressions (WITH clause). Use ONLY when a subquery result "
-                    "must be joined or filtered in a second step. "
-                    "Do NOT use for simple aggregations or filtering — just use filter/agg directly. "
-                    "Do NOT use for ranking/TopN — use window + qualify instead."
-                ),
-                "items": {
-                    "type": "object",
-                    "required": ["name", "query"],
-                    "additionalProperties": False,
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "CTE name, used as scan or join table in the main query.",
-                        },
-                        "query": {
-                            "type": "object",
-                            "description": "A nested Forge query object (must have scan + select).",
-                        },
-                    },
-                },
-            },
-        },
+        "properties": _top_props,
     }

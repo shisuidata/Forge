@@ -174,6 +174,77 @@ def _call_model_oai(api_key: str, base_url: str, system: str, question: str,
                 raise
 
 
+def _call_model_oai_tools(api_key: str, base_url: str, system: str, question: str,
+                          model: str, tool_schema: dict,
+                          _retries: int = 5, _backoff: float = 10.0) -> dict | None:
+    """
+    OpenAI-compatible tool calling（strict mode）。
+    返回 tool_calls[0].function.arguments 解析后的 dict，或 None。
+    """
+    import requests as _req
+    url = base_url.rstrip("/") + "/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": question},
+        ],
+        "tools": [{
+            "type": "function",
+            "function": {
+                "name": "generate_forge_query",
+                "description": "根据自然语言查询需求生成 Forge JSON 查询结构。",
+                "parameters": tool_schema,
+                "strict": True,
+            },
+        }],
+        "tool_choice": {"type": "function", "function": {"name": "generate_forge_query"}},
+    }
+    for attempt in range(_retries):
+        try:
+            resp = _req.post(url, headers=headers, json=payload, timeout=120)
+            if resp.status_code == 429:
+                wait = _backoff * (2 ** attempt)
+                tqdm.write(f"  ⚠ 限速，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            body = resp.json()
+            msg = body["choices"][0]["message"]
+            if msg.get("tool_calls"):
+                return json.loads(msg["tool_calls"][0]["function"]["arguments"])
+            return None
+        except Exception as e:
+            if attempt < _retries - 1:
+                wait = _backoff * (2 ** attempt)
+                tqdm.write(f"  ⚠ OAI tools 调用失败 {e}，等待 {wait:.0f}s 后重试")
+                time.sleep(wait)
+            else:
+                raise
+
+
+def run_forge_oai_strict(api_key: str, base_url: str, question: str,
+                         system: str, model: str, registry: dict) -> dict:
+    """
+    DeepSeek strict tool calling → Forge JSON → SQL。
+    base_url 应指向 https://api.deepseek.com/beta/v1。
+    """
+    from forge.schema_builder import build_tool_schema as _bts
+    tool_schema = _bts(registry, strict=True)
+    try:
+        forge_json = _call_model_oai_tools(api_key, base_url, system, question, model, tool_schema)
+    except Exception as e:
+        return {"forge_json": None, "sql": None, "error": f"工具调用失败: {e}"}
+    if forge_json is None:
+        return {"forge_json": None, "sql": None, "error": "模型未返回 tool_calls"}
+    try:
+        sql = compile_query(forge_json)
+        return {"forge_json": forge_json, "sql": sql, "error": None}
+    except Exception as e:
+        return {"forge_json": forge_json, "sql": None, "error": f"编译失败: {e}"}
+
+
 def run_forge_oai(api_key: str, base_url: str, question: str,
                   system: str, model: str) -> dict:
     """OpenAI-compatible: Call model → parse Forge JSON → compile to SQL."""
@@ -268,9 +339,10 @@ def run_method(method_id: str, fresh: bool = False,
         if not oai_api_key:
             print(f"❌ OpenAI provider 需要 API Key（方法文件 API_KEY 或环境变量 DEEPSEEK_API_KEY）", file=sys.stderr)
             sys.exit(1)
+        mode_label = "strict tool calling" if cfg.strict_tools else "text completion"
         print(f"\n🔬 {cfg.label}")
         print(f"   Provider：openai-compat  模型：{oai_model}  并发：{max_workers}  每用例：{runs_per_method} 次")
-        print(f"   Endpoint：{oai_base_url}")
+        print(f"   Endpoint：{oai_base_url}  模式：{mode_label}")
         print(f"   待执行：{len(tasks)} 次 API 调用\n")
     else:
         # Anthropic SDK（MiniMax / 原生 Claude 等）
@@ -328,13 +400,27 @@ def run_method(method_id: str, fresh: bool = False,
             return cfg.system_prompt
 
     if is_oai:
-        _forge_fn = run_forge_oai if cfg.mode == "forge" else run_sql_oai
-        def dispatch(task):
-            case, run_idx = task
-            question = _enrich(case["question"])
-            result = _forge_fn(oai_api_key, oai_base_url, question,
-                               _get_system(question), oai_model)
-            return case, run_idx, result
+        if cfg.strict_tools and cfg.mode == "forge":
+            # strict tool calling 需要 registry 来生成 schema
+            import json as _json
+            _reg_path = Path(cfg.cases_file).parent / "schema.registry.json" if cfg.cases_file else None
+            _registry: dict = {}
+            if _reg_path and _reg_path.exists():
+                _registry = _json.loads(_reg_path.read_text())
+            def dispatch(task):
+                case, run_idx = task
+                question = _enrich(case["question"])
+                result = run_forge_oai_strict(oai_api_key, oai_base_url, question,
+                                              _get_system(question), oai_model, _registry)
+                return case, run_idx, result
+        else:
+            _forge_fn = run_forge_oai if cfg.mode == "forge" else run_sql_oai
+            def dispatch(task):
+                case, run_idx = task
+                question = _enrich(case["question"])
+                result = _forge_fn(oai_api_key, oai_base_url, question,
+                                   _get_system(question), oai_model)
+                return case, run_idx, result
     else:
         dispatch_fn = run_forge if cfg.mode == "forge" else run_sql
         def dispatch(task):

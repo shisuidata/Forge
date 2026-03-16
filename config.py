@@ -74,6 +74,7 @@ class Config:
         _env("LLM_BASE_URL", "llm", "base_url")
         or os.getenv("MINIMAX_BASE_URL", "")
     )
+    LLM_STRICT_TOOLS: bool = _env("LLM_STRICT_TOOLS", "llm", "strict_tools", default="false").lower() == "true"
 
     # ── Embedding ─────────────────────────────────────────────────────────────
     EMBED_API_KEY:   str = _env("EMBED_API_KEY",   "embedding", "api_key")   or _env("LLM_API_KEY", "llm", "api_key")

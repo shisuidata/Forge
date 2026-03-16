@@ -23,6 +23,7 @@ class MethodConfig:
     runs: int = 5
     notes: str = ""
     use_semantic_lib: bool = False
+    strict_tools: bool = False   # True = DeepSeek beta strict tool calling
 
     def __post_init__(self):
         if self.system_prompt is None and self.registry_context is None:
@@ -54,6 +55,7 @@ def load(method_id: str) -> MethodConfig:
         runs=getattr(mod, "RUNS", 5),
         notes=getattr(mod, "NOTES", ""),
         use_semantic_lib=getattr(mod, "USE_SEMANTIC_LIB", False),
+        strict_tools=getattr(mod, "STRICT_TOOLS", False),
     )
 
 

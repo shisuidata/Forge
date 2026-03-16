@@ -343,7 +343,7 @@ def _build_tools(registry: dict) -> list[dict]:
         {
             "name": "generate_forge_query",
             "description": "根据自然语言查询需求生成 Forge JSON 查询结构。",
-            "input_schema": build_tool_schema(registry),
+            "input_schema": build_tool_schema(registry, strict=cfg.LLM_STRICT_TOOLS),
         },
         _DEFINE_METRIC_TOOL,
         _PROPOSE_METRIC_TOOL,
@@ -399,25 +399,34 @@ def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
     """
     import httpx, json as _json
 
+    # strict mode：切换到 DeepSeek beta 端点，并在 function 定义里加 "strict": true
+    strict = cfg.LLM_STRICT_TOOLS
     base_url = cfg.LLM_BASE_URL or "https://api.openai.com/v1"
+    if strict and "deepseek.com" in base_url:
+        # beta 端点路径与正式相同，只是 host 变为 api.deepseek.com/beta
+        base_url = base_url.replace("api.deepseek.com", "api.deepseek.com/beta").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = base_url + "/v1" if "/v1" not in base_url else base_url
+
     headers = {
         "Authorization": f"Bearer {cfg.LLM_API_KEY}",
         "Content-Type": "application/json",
     }
+
+    def _tool_def(t: dict) -> dict:
+        fn: dict = {
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": t["input_schema"],  # OpenAI 叫 parameters
+        }
+        if strict:
+            fn["strict"] = True
+        return {"type": "function", "function": fn}
+
     payload = {
         "model": cfg.LLM_MODEL,
         "messages": [{"role": "system", "content": system}] + messages,
-        "tools": [
-            {
-                "type": "function",
-                "function": {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "parameters": t["input_schema"],  # OpenAI 叫 parameters
-                },
-            }
-            for t in tools
-        ],
+        "tools": [_tool_def(t) for t in tools],
         "tool_choice": "auto",
     }
     r = httpx.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=30)
