@@ -3,14 +3,19 @@
     "dim_user": {
       "description": "用户维度表：注册用户基础信息，含等级、渠道、城市等属性",
       "columns": {
-        "user_id": {},
-        "user_name": {},
+        "user_id": {
+          "description": "用户唯一标识"
+        },
+        "user_name": {
+          "description": "用户昵称"
+        },
         "gender": {
           "enum": [
             "male",
             "female",
             "unknown"
-          ]
+          ],
+          "description": "性别"
         },
         "age_group": {
           "enum": [
@@ -19,25 +24,39 @@
             "35-44",
             "45-54",
             "55+"
-          ]
+          ],
+          "description": "年龄段"
         },
-        "vip_level_id": {},
-        "region_id": {},
-        "channel_id": {},
-        "register_date": {},
+        "vip_level_id": {
+          "description": "会员等级ID"
+        },
+        "region_id": {
+          "description": "所在地区ID"
+        },
+        "channel_id": {
+          "description": "注册来源渠道ID"
+        },
+        "register_date": {
+          "description": "注册日期"
+        },
         "is_active": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否活跃用户"
         },
-        "risk_level_id": {}
+        "risk_level_id": {
+          "description": "风险等级ID"
+        }
       }
     },
     "dim_vip_level": {
       "description": "VIP 等级维度：用户会员级别定义，含权益和升级阈值",
       "columns": {
-        "vip_level_id": {},
+        "vip_level_id": {
+          "description": "会员等级ID"
+        },
         "level_name": {
           "enum": [
             "普通",
@@ -45,15 +64,21 @@
             "金卡",
             "铂金",
             "钻石"
-          ]
+          ],
+          "description": "等级名称（普通/银卡/金卡/铂金/钻石）"
         },
-        "min_points": {},
-        "discount_rate": {},
+        "min_points": {
+          "description": "升级所需最低积分"
+        },
+        "discount_rate": {
+          "description": "折扣率"
+        },
         "free_shipping": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否享受免运费"
         }
       }
     },
@@ -97,66 +122,97 @@
     "dim_product": {
       "description": "商品维度表：SKU 级别商品信息，含品类、品牌、上架状态",
       "columns": {
-        "product_id": {},
-        "product_name": {},
-        "category_id": {},
-        "brand_id": {},
-        "supplier_id": {},
-        "unit_price": {},
-        "cost_price": {},
+        "product_id": {
+          "description": "商品ID"
+        },
+        "product_name": {
+          "description": "商品名称"
+        },
+        "category_id": {
+          "description": "品类ID"
+        },
+        "brand_id": {
+          "description": "品牌ID"
+        },
+        "supplier_id": {
+          "description": "供应商ID"
+        },
+        "unit_price": {
+          "description": "商品售价"
+        },
+        "cost_price": {
+          "description": "商品成本价"
+        },
         "status": {
           "enum": [
             "on_sale",
             "off_shelf",
             "pre_sale",
             "discontinued"
-          ]
+          ],
+          "description": "商品状态（on_sale在售/off_shelf下架/pre_sale预售/discontinued停产）"
         },
         "is_imported": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否进口商品"
         },
         "weight_kg": {
-          "nullable": true
+          "nullable": true,
+          "description": "重量（千克）"
         }
       }
     },
     "dim_category": {
       "description": "商品品类维度：三级品类体系（大类 / 中类 / 小类）",
       "columns": {
-        "category_id": {},
-        "category_name": {},
+        "category_id": {
+          "description": "品类ID"
+        },
+        "category_name": {
+          "description": "品类名称"
+        },
         "parent_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "父品类ID（多级分类）"
         },
         "level": {
           "enum": [
             1,
             2,
             3
-          ]
+          ],
+          "description": "品类层级（1一级/2二级/3三级）"
         },
         "is_leaf": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否叶子节点（最细粒度品类）"
         }
       }
     },
     "dim_brand": {
       "description": "品牌维度：商品品牌信息，含国别、授权状态",
       "columns": {
-        "brand_id": {},
-        "brand_name": {},
-        "country": {},
+        "brand_id": {
+          "description": "品牌ID"
+        },
+        "brand_name": {
+          "description": "品牌名称"
+        },
+        "country": {
+          "description": "品牌所属国家"
+        },
         "is_authorized": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否官方授权品牌"
         },
         "brand_level": {
           "enum": [
@@ -164,7 +220,8 @@
             "国内知名",
             "新兴",
             "白牌"
-          ]
+          ],
+          "description": "品牌档次（国际/国内知名/新兴/白牌）"
         }
       }
     },
@@ -215,10 +272,15 @@
     "dim_region": {
       "description": "地域维度：省市区三级行政区划",
       "columns": {
-        "region_id": {},
-        "region_name": {},
+        "region_id": {
+          "description": "地区ID"
+        },
+        "region_name": {
+          "description": "地区名称"
+        },
         "parent_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "上级地区ID"
         },
         "level": {
           "enum": [
@@ -226,7 +288,8 @@
             "province",
             "city",
             "district"
-          ]
+          ],
+          "description": "行政层级（省/市/区县）"
         },
         "tier": {
           "enum": [
@@ -236,7 +299,8 @@
             "三线",
             "其他"
           ],
-          "nullable": true
+          "nullable": true,
+          "description": "城市线级（一线/二线/三线/四线及以下）"
         }
       }
     },
@@ -302,8 +366,12 @@
     "dim_channel": {
       "description": "流量渠道维度：用户来源渠道，含自然流量和付费渠道",
       "columns": {
-        "channel_id": {},
-        "channel_name": {},
+        "channel_id": {
+          "description": "渠道ID"
+        },
+        "channel_name": {
+          "description": "渠道名称"
+        },
         "channel_type": {
           "enum": [
             "organic",
@@ -312,11 +380,15 @@
             "email",
             "affiliate",
             "direct"
-          ]
+          ],
+          "description": "渠道类型（自然搜索/付费搜索/社交/直播/APP推送等）"
         },
-        "platform_id": {},
+        "platform_id": {
+          "description": "所属平台ID"
+        },
         "cost_per_click": {
-          "nullable": true
+          "nullable": true,
+          "description": "每次点击成本（CPC）"
         }
       }
     },
@@ -1210,13 +1282,24 @@
     "dwd_order_detail": {
       "description": "订单明细事实表：用户每笔订单的完整信息，含金额、状态、来源渠道",
       "columns": {
-        "order_id": {},
-        "user_id": {},
-        "merchant_id": {},
-        "channel_id": {},
-        "platform_id": {},
+        "order_id": {
+          "description": "订单ID"
+        },
+        "user_id": {
+          "description": "下单用户ID"
+        },
+        "merchant_id": {
+          "description": "商家ID"
+        },
+        "channel_id": {
+          "description": "下单来源渠道ID"
+        },
+        "platform_id": {
+          "description": "平台ID"
+        },
         "promotion_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "使用的促销活动ID"
         },
         "order_status": {
           "enum": [
@@ -1226,81 +1309,142 @@
             "已完成",
             "已取消",
             "售后中"
-          ]
+          ],
+          "description": "订单状态（待付款/待发货/待收货/已完成/已取消）"
         },
-        "total_amount": {},
-        "discount_amount": {},
-        "coupon_amount": {},
-        "freight_amount": {},
-        "pay_amount": {},
-        "order_dt": {},
+        "total_amount": {
+          "description": "订单原始总金额（GMV）"
+        },
+        "discount_amount": {
+          "description": "折扣优惠金额"
+        },
+        "coupon_amount": {
+          "description": "券抵扣金额"
+        },
+        "freight_amount": {
+          "description": "运费"
+        },
+        "pay_amount": {
+          "description": "实际支付金额"
+        },
+        "order_dt": {
+          "description": "下单时间"
+        },
         "pay_dt": {
-          "nullable": true
+          "nullable": true,
+          "description": "支付时间"
         },
         "complete_dt": {
-          "nullable": true
+          "nullable": true,
+          "description": "订单完成时间"
         },
         "warehouse_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "发货仓库ID"
         }
       }
     },
     "dwd_order_item_detail": {
       "description": "订单商品明细事实表：订单内每个 SKU 的购买记录，含数量、单价、优惠",
       "columns": {
-        "order_item_id": {},
-        "order_id": {},
-        "product_id": {},
-        "user_id": {},
-        "quantity": {},
-        "unit_price": {},
-        "discount_rate": {},
-        "actual_amount": {},
+        "order_item_id": {
+          "description": "订单明细行ID"
+        },
+        "order_id": {
+          "description": "所属订单ID"
+        },
+        "product_id": {
+          "description": "商品ID"
+        },
+        "user_id": {
+          "description": "购买用户ID"
+        },
+        "quantity": {
+          "description": "购买数量"
+        },
+        "unit_price": {
+          "description": "商品单价（销售价）"
+        },
+        "discount_rate": {
+          "description": "商品折扣率"
+        },
+        "actual_amount": {
+          "description": "该行实付金额"
+        },
         "coupon_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "使用的优惠券ID"
         },
         "is_gift": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否赠品"
         },
-        "order_dt": {}
+        "order_dt": {
+          "description": "下单时间"
+        }
       }
     },
     "dwd_payment_detail": {
       "description": "支付明细事实表：每笔支付流水，含支付方式、状态、耗时",
       "columns": {
-        "payment_id": {},
-        "order_id": {},
-        "user_id": {},
-        "payment_method_id": {},
-        "pay_amount": {},
+        "payment_id": {
+          "description": "支付记录ID"
+        },
+        "order_id": {
+          "description": "关联订单ID"
+        },
+        "user_id": {
+          "description": "支付用户ID"
+        },
+        "payment_method_id": {
+          "description": "支付方式ID"
+        },
+        "pay_amount": {
+          "description": "支付金额"
+        },
         "pay_status": {
           "enum": [
             "成功",
             "失败",
             "超时",
             "撤销"
-          ]
+          ],
+          "description": "支付状态（成功/失败/超时/撤销）"
         },
-        "pay_dt": {},
+        "pay_dt": {
+          "description": "支付时间"
+        },
         "callback_dt": {
-          "nullable": true
+          "nullable": true,
+          "description": "支付回调时间"
         },
         "third_party_txn_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "第三方支付流水号"
         }
       }
     },
     "dwd_refund_detail": {
       "description": "退款明细事实表：退款申请和处理记录，含退款金额和原因",
       "columns": {
-        "refund_id": {},
-        "order_id": {},
-        "user_id": {},
-        "after_sale_type_id": {},
-        "refund_amount": {},
+        "refund_id": {
+          "description": "退款记录ID"
+        },
+        "order_id": {
+          "description": "关联订单ID"
+        },
+        "user_id": {
+          "description": "退款用户ID"
+        },
+        "after_sale_type_id": {
+          "description": "售后类型ID"
+        },
+        "refund_amount": {
+          "description": "退款金额"
+        },
         "refund_status": {
           "enum": [
             "申请中",
@@ -1308,13 +1452,19 @@
             "退款中",
             "已退款",
             "拒绝"
-          ]
+          ],
+          "description": "退款状态（申请中/审核通过/退款中/已退款/拒绝）"
         },
-        "apply_dt": {},
+        "apply_dt": {
+          "description": "退款申请时间"
+        },
         "complete_dt": {
-          "nullable": true
+          "nullable": true,
+          "description": "退款完成时间"
         },
-        "reason_id": {}
+        "reason_id": {
+          "description": "退款原因ID"
+        }
       }
     },
     "dwd_return_goods_detail": {
@@ -1346,22 +1496,36 @@
     "dwd_cart_detail": {
       "description": "购物车明细事实表：用户加购/删除购物车行为记录",
       "columns": {
-        "cart_id": {},
-        "user_id": {},
-        "product_id": {},
+        "cart_id": {
+          "description": "购物车记录ID"
+        },
+        "user_id": {
+          "description": "用户ID"
+        },
+        "product_id": {
+          "description": "商品ID"
+        },
         "action_type": {
           "enum": [
             "add",
             "remove",
             "update_qty",
             "checkout"
-          ]
+          ],
+          "description": "操作类型（add加购/remove删除/update_qty改数量/checkout结算）"
         },
-        "quantity": {},
-        "action_dt": {},
-        "platform_id": {},
+        "quantity": {
+          "description": "操作数量"
+        },
+        "action_dt": {
+          "description": "操作时间"
+        },
+        "platform_id": {
+          "description": "操作平台ID"
+        },
         "channel_id": {
-          "nullable": true
+          "nullable": true,
+          "description": "来源渠道ID"
         }
       }
     },
@@ -1739,10 +1903,18 @@
     "dwd_comment_detail": {
       "description": "商品评价明细事实表：用户对已购商品的图文评价",
       "columns": {
-        "comment_id": {},
-        "order_item_id": {},
-        "user_id": {},
-        "product_id": {},
+        "comment_id": {
+          "description": "评价记录ID"
+        },
+        "order_item_id": {
+          "description": "关联订单明细ID"
+        },
+        "user_id": {
+          "description": "评价用户ID"
+        },
+        "product_id": {
+          "description": "被评价商品ID"
+        },
         "rating": {
           "enum": [
             1,
@@ -1750,33 +1922,40 @@
             3,
             4,
             5
-          ]
+          ],
+          "description": "评分（1-5星）"
         },
         "comment_type": {
           "enum": [
             "好评",
             "中评",
             "差评"
-          ]
+          ],
+          "description": "评价类型（好评/中评/差评）"
         },
         "has_image": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否含图片"
         },
         "has_video": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否含视频"
         },
-        "comment_dt": {},
+        "comment_dt": {
+          "description": "评价时间"
+        },
         "is_anonymous": {
           "enum": [
             0,
             1
-          ]
+          ],
+          "description": "是否匿名评价"
         }
       }
     },

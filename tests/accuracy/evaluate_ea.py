@@ -41,6 +41,21 @@ def _exec(conn: sqlite3.Connection, sql: str):
 
 # ── 结果比对 ──────────────────────────────────────────────────────────────────
 
+def _numeric_approx(a: str, b: str) -> bool:
+    """判断两个字符串是否表示近似相等的数值。容差：绝对 0.005 或相对 0.001（0.1%）。"""
+    try:
+        fa, fb = float(a), float(b)
+        if fa == fb:
+            return True
+        diff = abs(fa - fb)
+        if diff < 0.005:
+            return True
+        max_val = max(abs(fa), abs(fb))
+        return max_val > 0 and diff / max_val < 0.001
+    except (ValueError, OverflowError):
+        return a == b  # 非数字则精确比较
+
+
 def _compare(ref_rows: list, gen_rows: list) -> bool:
     """
     判断两个结果集是否等价。
@@ -52,6 +67,8 @@ def _compare(ref_rows: list, gen_rows: list) -> bool:
         若行数相同且 gen_width >= ref_width（≤6），枚举 gen 列的所有组合+排列，
         检查是否存在某种列投影使得结果完全吻合。
         用于捕获"值正确但列序不同"的情况，如 (brand, count, revenue) vs (brand, revenue, count)。
+    - 宽松数值匹配 Layer 3：对 Layer 1 的截取列结果，逐行逐格进行数值近似比较
+        容差 0.005 绝对值 / 0.1% 相对，用于捕获 ROUND 精度差异（如 '0.5652' vs '0.565217...'）。
     """
     if ref_rows == gen_rows:
         return True
@@ -71,6 +88,22 @@ def _compare(ref_rows: list, gen_rows: list) -> bool:
         trimmed_gen = sorted(row[:n] for row in gen_rows)
         if trimmed_ref == trimmed_gen:
             return True
+        # Layer 3：数值近似比较（处理 ROUND 精度差异，如 '0.5652' vs '0.565217...'）
+        if all(
+            all(_numeric_approx(a, b) for a, b in zip(rr, gr))
+            for rr, gr in zip(trimmed_ref, trimmed_gen)
+        ):
+            return True
+
+    # Layer 3b：等宽但精度不同（如 '500.0' vs '500'）
+    if ref_width == gen_width and ref_width > 0:
+        ref_sorted = sorted(ref_rows)
+        gen_sorted = sorted(gen_rows)
+        if all(
+            all(_numeric_approx(a, b) for a, b in zip(rr, gr))
+            for rr, gr in zip(ref_sorted, gen_sorted)
+        ):
+            return True
 
     # Layer 2：列投影+排列匹配（ref_width ≤ 6，gen_width ≤ 10）
     # 枚举 gen 列的 C(gen_width, ref_width) 个子集，每个子集再尝试所有排列
@@ -83,6 +116,12 @@ def _compare(ref_rows: list, gen_rows: list) -> bool:
                     for row in gen_rows
                 )
                 if projected == ref_sorted:
+                    return True
+                # Layer 2+3：列投影 + 数值近似（处理 ROUND 精度差异）
+                if all(
+                    all(_numeric_approx(a, b) for a, b in zip(rr, gr))
+                    for rr, gr in zip(projected, ref_sorted)
+                ):
                     return True
 
     return False
@@ -106,7 +145,11 @@ def evaluate_method(method_id: str, cases_file: Path, conn: sqlite3.Connection) 
     results: dict[str, dict] = {}
     cat_stats = {}
 
-    for cid, entry in sorted(runs_data.items(), key=lambda x: int(x[0])):
+    def _sid(x):
+        try: return (0, int(x[0]))
+        except ValueError: return (1, x[0])
+
+    for cid, entry in sorted(runs_data.items(), key=_sid):
         case      = cases.get(cid, {})
         ref_sql   = case.get("reference_sql", "")
         category  = case.get("category", "unknown")

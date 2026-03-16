@@ -42,6 +42,15 @@ MINIMAX_API_KEY  = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic")
 MINIMAX_MODEL    = os.environ.get("MINIMAX_MODEL", "MiniMax-M2.5-highspeed")
 
+# Fallback：限速时自动切换（key 和 model 可各自独立覆盖）
+MINIMAX_FALLBACK_KEY   = os.environ.get("MINIMAX_FALLBACK_KEY", "sk-api-FFEJeUuX8L5NY4P5XuiHj8bcyslSTWxTDiuH7j9AoRs5SKo66dfpjcDNW0GBEZav28JhFYi72tM2Fi2EaYrhoQybMr4LpFB0CIC0sEEQcHrYpWbzR3VlfYw")
+MINIMAX_FALLBACK_MODEL = os.environ.get("MINIMAX_FALLBACK_MODEL", "MiniMax-M2.5")
+
+# OpenAI-compatible provider（SiliconFlow / DeepSeek 官方）
+DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL    = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+
 
 # ── API 调用 ──────────────────────────────────────────────────────────────────
 
@@ -63,18 +72,31 @@ def _clean_json(raw: str) -> str:
 
 
 def _call_model(client: anthropic.Anthropic, system: str, question: str,
-                model: str, max_tokens: int = 2048,
-                _retries: int = 5, _backoff: float = 10.0) -> str:
+                model: str, max_tokens: int = 3000,
+                _retries: int = 5, _backoff: float = 10.0,
+                _fallback_client: anthropic.Anthropic | None = None,
+                _fallback_model: str | None = None) -> str:
+    cur_client, cur_model = client, model
     for attempt in range(_retries):
         try:
-            msg = client.messages.create(
-                model=model,
+            msg = cur_client.messages.create(
+                model=cur_model,
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": question}],
             )
             return _extract_text(msg.content)
-        except anthropic.InternalServerError as e:
+        except anthropic.RateLimitError:
+            if _fallback_client is not None and cur_client is client:
+                tqdm.write(f"  ⚡ 主账号限速，切换到 fallback（{_fallback_model}）")
+                cur_client = _fallback_client
+                cur_model  = _fallback_model or model
+                # 不消耗 attempt，立即重试
+                continue
+            wait = _backoff * (2 ** attempt)
+            tqdm.write(f"  ⚠ 限速，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
+            time.sleep(wait)
+        except anthropic.InternalServerError:
             if attempt < _retries - 1:
                 wait = _backoff * (2 ** attempt)
                 tqdm.write(f"  ⚠ API 500，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
@@ -84,9 +106,13 @@ def _call_model(client: anthropic.Anthropic, system: str, question: str,
 
 
 def run_forge(client: anthropic.Anthropic, question: str,
-              system: str, model: str) -> dict:
+              system: str, model: str,
+              fallback_client: anthropic.Anthropic | None = None,
+              fallback_model: str | None = None) -> dict:
     """Call model → parse Forge JSON → compile to SQL."""
-    raw = _clean_json(_call_model(client, system, question, model))
+    raw = _clean_json(_call_model(client, system, question, model,
+                                  _fallback_client=fallback_client,
+                                  _fallback_model=fallback_model))
     try:
         forge_json = json.loads(raw)
     except json.JSONDecodeError as e:
@@ -101,9 +127,74 @@ def run_forge(client: anthropic.Anthropic, question: str,
 
 
 def run_sql(client: anthropic.Anthropic, question: str,
-            system: str, model: str) -> dict:
+            system: str, model: str,
+            fallback_client: anthropic.Anthropic | None = None,
+            fallback_model: str | None = None) -> dict:
     """Call model → return raw SQL."""
-    sql = _call_model(client, system, question, model)
+    sql = _call_model(client, system, question, model,
+                      _fallback_client=fallback_client,
+                      _fallback_model=fallback_model)
+    return {"forge_json": None, "sql": sql, "error": None}
+
+
+# ── OpenAI-compatible API 调用（SiliconFlow / DeepSeek 官方等）────────────────
+
+def _call_model_oai(api_key: str, base_url: str, system: str, question: str,
+                    model: str, max_tokens: int = 4096,
+                    _retries: int = 5, _backoff: float = 10.0) -> str:
+    """直接 HTTP 调用 OpenAI-compatible /chat/completions。"""
+    import requests as _req
+    url = base_url.rstrip("/") + "/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": question},
+        ],
+    }
+    for attempt in range(_retries):
+        try:
+            resp = _req.post(url, headers=headers, json=payload, timeout=120)
+            if resp.status_code == 429:
+                wait = _backoff * (2 ** attempt)
+                tqdm.write(f"  ⚠ 限速，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            body = resp.json()
+            return body["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            if attempt < _retries - 1:
+                wait = _backoff * (2 ** attempt)
+                tqdm.write(f"  ⚠ OAI 调用失败 {e}，等待 {wait:.0f}s 后重试")
+                time.sleep(wait)
+            else:
+                raise
+
+
+def run_forge_oai(api_key: str, base_url: str, question: str,
+                  system: str, model: str) -> dict:
+    """OpenAI-compatible: Call model → parse Forge JSON → compile to SQL."""
+    raw = _clean_json(_call_model_oai(api_key, base_url, system, question, model))
+    try:
+        forge_json = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return {"forge_json": None, "sql": None,
+                "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}"}
+    try:
+        sql = compile_query(forge_json)
+        return {"forge_json": forge_json, "sql": sql, "error": None}
+    except Exception as e:
+        return {"forge_json": forge_json, "sql": None,
+                "error": f"编译失败: {e}"}
+
+
+def run_sql_oai(api_key: str, base_url: str, question: str,
+                system: str, model: str) -> dict:
+    """OpenAI-compatible: Call model → return raw SQL."""
+    sql = _call_model_oai(api_key, base_url, system, question, model)
     return {"forge_json": None, "sql": sql, "error": None}
 
 
@@ -139,7 +230,6 @@ def run_method(method_id: str, fresh: bool = False,
     cfg = load(method_id)
     runs_per_method = runs_override or cfg.runs
     max_workers     = workers_override or 10
-    model           = MINIMAX_MODEL  # env var takes precedence
 
     # 用例文件优先级：method 文件声明 > --cases 参数 > 默认 cases.json
     cases_path = Path(cfg.cases_file) if cfg.cases_file else CASES_FILE
@@ -155,8 +245,6 @@ def run_method(method_id: str, fresh: bool = False,
     else:
         existing = load_runs(method_id)
 
-    dispatch_fn = run_forge if cfg.mode == "forge" else run_sql
-
     # 构建待执行任务
     tasks: list[tuple] = []
     for case in cases:
@@ -170,11 +258,37 @@ def run_method(method_id: str, fresh: bool = False,
         _print_stats(method_id, existing)
         return
 
-    print(f"\n🔬 {cfg.label}")
-    print(f"   模型：{model}  |  并发：{max_workers}  |  每用例：{runs_per_method} 次")
-    print(f"   待执行：{len(tasks)} 次 API 调用\n")
-
-    client = anthropic.Anthropic(api_key=MINIMAX_API_KEY, base_url=MINIMAX_BASE_URL)
+    # ── provider 路由 ──────────────────────────────────────────────────────────
+    is_oai = cfg.llm_provider == "openai"
+    if is_oai:
+        # OpenAI-compatible（DeepSeek / SiliconFlow 等）
+        oai_api_key  = cfg.api_key  or DEEPSEEK_API_KEY
+        oai_base_url = cfg.base_url or DEEPSEEK_BASE_URL
+        oai_model    = cfg.model
+        if not oai_api_key:
+            print(f"❌ OpenAI provider 需要 API Key（方法文件 API_KEY 或环境变量 DEEPSEEK_API_KEY）", file=sys.stderr)
+            sys.exit(1)
+        print(f"\n🔬 {cfg.label}")
+        print(f"   Provider：openai-compat  模型：{oai_model}  并发：{max_workers}  每用例：{runs_per_method} 次")
+        print(f"   Endpoint：{oai_base_url}")
+        print(f"   待执行：{len(tasks)} 次 API 调用\n")
+    else:
+        # Anthropic SDK（MiniMax / 原生 Claude 等）
+        model = cfg.model if cfg.model != "MiniMax-M2.5-highspeed" else MINIMAX_MODEL
+        client = anthropic.Anthropic(
+            api_key=cfg.api_key or MINIMAX_API_KEY,
+            base_url=cfg.base_url or MINIMAX_BASE_URL,
+        )
+        fallback_client = (
+            anthropic.Anthropic(api_key=MINIMAX_FALLBACK_KEY, base_url=MINIMAX_BASE_URL)
+            if MINIMAX_FALLBACK_KEY else None
+        )
+        fallback_model = MINIMAX_FALLBACK_MODEL if MINIMAX_FALLBACK_KEY else None
+        print(f"\n🔬 {cfg.label}")
+        print(f"   模型：{model}  |  并发：{max_workers}  |  每用例：{runs_per_method} 次")
+        print(f"   待执行：{len(tasks)} 次 API 调用\n")
+        if fallback_client:
+            print(f"   Fallback：{fallback_model}（主账号限速时自动切换）")
 
     # 初始化结果 buf（合并已有结果）
     buf: dict[str, dict] = {}
@@ -204,19 +318,32 @@ def run_method(method_id: str, fresh: bool = False,
 
     if cfg.registry_context is not None:
         # 新式：每次调用动态生成 prompt，始终反映 agent/prompts.py 当前版本
+        # mode="benchmark"：直接输出 JSON，不使用工具调用
         from agent.prompts import build_system as _build_system
         def _get_system(question: str) -> str:
-            return _build_system(cfg.registry_context, question=question)
+            return _build_system(cfg.registry_context, question=question, mode="benchmark")
     else:
         # 旧式：使用方法文件中冻结的 SYSTEM_PROMPT
         def _get_system(question: str) -> str:
             return cfg.system_prompt
 
-    def dispatch(task):
-        case, run_idx = task
-        question = _enrich(case["question"])
-        result = dispatch_fn(client, question, _get_system(question), model)
-        return case, run_idx, result
+    if is_oai:
+        _forge_fn = run_forge_oai if cfg.mode == "forge" else run_sql_oai
+        def dispatch(task):
+            case, run_idx = task
+            question = _enrich(case["question"])
+            result = _forge_fn(oai_api_key, oai_base_url, question,
+                               _get_system(question), oai_model)
+            return case, run_idx, result
+    else:
+        dispatch_fn = run_forge if cfg.mode == "forge" else run_sql
+        def dispatch(task):
+            case, run_idx = task
+            question = _enrich(case["question"])
+            result = dispatch_fn(client, question, _get_system(question), model,
+                                 fallback_client=fallback_client,
+                                 fallback_model=fallback_model)
+            return case, run_idx, result
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_map = {pool.submit(dispatch, t): t for t in tasks}

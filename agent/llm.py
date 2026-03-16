@@ -434,7 +434,36 @@ def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
 
 # ── 公开调用接口 ──────────────────────────────────────────────────────────────
 
-def call(history: list[Any]) -> dict:
+def _extract_hint_tables(error: str, registry: dict) -> list[str]:
+    """
+    从编译错误信息中提取缺失的表名，用于二次召回。
+
+    捕获的模式：
+      - "unknown table: dim_brand"
+      - "no such column: dwd_order_item_detail.actual_amount"
+      - 报错路径里出现的 table.column 格式
+    """
+    all_tables = set(registry.get("tables", {}).keys())
+    found: list[str] = []
+    seen: set[str] = set()
+
+    import re as _re
+    # 匹配 table.column 格式，提取 table 部分
+    for m in _re.finditer(r'\b([a-z][a-z0-9_]+)\.[a-z][a-z0-9_]+', error):
+        t = m.group(1)
+        if t in all_tables and t not in seen:
+            seen.add(t)
+            found.append(t)
+    # 匹配独立的表名（unknown table: xxx）
+    for m in _re.finditer(r'(?:table|表)[：:\s]+([a-z][a-z0-9_]+)', error, _re.IGNORECASE):
+        t = m.group(1)
+        if t in all_tables and t not in seen:
+            seen.add(t)
+            found.append(t)
+    return found
+
+
+def call(history: list[Any], extra_tables: list[str] | None = None) -> dict:
     """
     LLM 统一调用入口。
 
@@ -442,7 +471,8 @@ def call(history: list[Any]) -> dict:
     每次调用前实时读取注册表上下文，确保 LLM 始终使用最新的表结构和指标定义。
 
     Args:
-        history: Session.recent() 返回的 Message 列表，包含最近 N 条对话记录。
+        history:      Session.recent() 返回的 Message 列表，包含最近 N 条对话记录。
+        extra_tables: 强制追加到检索结果的表名列表（用于错误驱动二次召回）。
 
     Returns:
         {"tool": str, "input": dict}  — LLM 调用了工具
@@ -468,6 +498,13 @@ def call(history: list[Any]) -> dict:
     if current_question and retriever:
         top_k = getattr(cfg, "RETRIEVAL_TOP_K", 10)
         selected_tables = retriever.retrieve(current_question, q_embed_fn, top_k=top_k)
+        # 错误驱动二次召回：追加缺失表（去重，保持顺序）
+        if extra_tables:
+            seen = set(selected_tables)
+            for t in extra_tables:
+                if t not in seen:
+                    selected_tables.append(t)
+                    seen.add(t)
         tables_info = registry.get("tables", {})
         filtered_registry = {"tables": {t: tables_info[t] for t in selected_tables if t in tables_info}}
 
@@ -478,3 +515,50 @@ def call(history: list[Any]) -> dict:
         return _call_anthropic(messages, system, tools)
     else:
         return _call_openai(messages, system, tools)
+
+
+def call_with_retry(history: list[Any], compile_fn=None) -> tuple[dict, str | None]:
+    """
+    带编译错误重试的 LLM 调用。
+
+    第一次调用 call()，若 compile_fn 返回编译错误，
+    从错误中提取缺失表名，扩充 schema 后重试一次。
+
+    Args:
+        history:    对话历史。
+        compile_fn: callable(forge_json) -> (sql, error_str | None)
+                    传 None 则等同于普通 call()，不做重试。
+
+    Returns:
+        (llm_result, sql_or_none)
+    """
+    result = call(history)
+
+    if compile_fn is None or result.get("tool") != "generate_forge_query":
+        return result, None
+
+    forge_json = result.get("input", {})
+    sql, error = compile_fn(forge_json)
+    if not error:
+        return result, sql
+
+    # 从错误里提取缺失的表，读取 registry
+    try:
+        registry = json.loads(cfg.REGISTRY_PATH.read_text())
+    except Exception:
+        return result, None
+
+    hint_tables = _extract_hint_tables(error, registry)
+    if not hint_tables:
+        return result, None  # 无法提取提示，放弃重试
+
+    # 二次调用，追加缺失表
+    result2 = call(history, extra_tables=hint_tables)
+    if result2.get("tool") != "generate_forge_query":
+        return result, None
+
+    sql2, error2 = compile_fn(result2.get("input", {}))
+    if not error2:
+        return result2, sql2
+
+    return result, None  # 两次都失败，返回第一次结果供上层处理

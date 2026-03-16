@@ -17,6 +17,9 @@ class MethodConfig:
     cases_file: str | None = None            # 测试用例路径（None = 使用 runner 默认）
     dataset: str | None = None               # 数据集名称（"small" | "large" | "spider"）
     model: str = "MiniMax-M2.5-highspeed"
+    llm_provider: str = "anthropic"          # "anthropic" | "openai" (OpenAI-compatible)
+    api_key: str | None = None               # 覆盖 env var；None = 使用环境变量
+    base_url: str | None = None              # 覆盖 env var；None = 使用环境变量
     runs: int = 5
     notes: str = ""
     use_semantic_lib: bool = False
@@ -45,6 +48,9 @@ def load(method_id: str) -> MethodConfig:
         cases_file=getattr(mod, "CASES_FILE", None),
         dataset=getattr(mod, "DATASET", None),
         model=getattr(mod, "MODEL", "MiniMax-M2.5-highspeed"),
+        llm_provider=getattr(mod, "LLM_PROVIDER", "anthropic"),
+        api_key=getattr(mod, "API_KEY", None) or None,
+        base_url=getattr(mod, "BASE_URL", None) or None,
         runs=getattr(mod, "RUNS", 5),
         notes=getattr(mod, "NOTES", ""),
         use_semantic_lib=getattr(mod, "USE_SEMANTIC_LIB", False),

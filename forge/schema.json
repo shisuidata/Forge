@@ -255,19 +255,19 @@
 
     "Join": {
       "type": "object",
-      "required": ["type", "table", "on"],
+      "required": ["type", "table"],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["inner", "left", "right", "full", "anti", "semi"],
-          "description": "anti = LEFT JOIN ... WHERE right.id IS NULL. semi = EXISTS subquery pattern."
+          "enum": ["inner", "left", "right", "full", "anti", "semi", "cross"],
+          "description": "anti = LEFT JOIN ... WHERE right.id IS NULL. semi = EXISTS subquery pattern. cross = CROSS JOIN (no ON clause, used to reference scalar CTE values like averages)."
         },
         "table": {
           "type": "string"
         },
         "on": {
-          "description": "Join condition: single equality {left, right} or multi-condition array (inner/left/right/full only).",
+          "description": "Join condition: single equality {left, right} or multi-condition array (inner/left/right/full only). Not required for cross joins.",
           "oneOf": [
             {
               "type": "object",

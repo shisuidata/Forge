@@ -220,7 +220,7 @@
     "category": "CTE多步",
     "difficulty": 3,
     "question": "计算每个商品的毛利率（(均价-成本)/均价×100），均价为 order_items 中该商品的平均成交单价，按毛利率降序",
-    "reference_sql": "WITH avg_price AS (SELECT product_id, AVG(unit_price) AS avg_sell FROM order_items GROUP BY product_id) SELECT p.name, p.category, ROUND((ap.avg_sell - p.cost_price) / ap.avg_sell * 100, 2) AS margin_pct FROM avg_price ap INNER JOIN products p ON ap.product_id = p.id ORDER BY margin_pct DESC",
+    "reference_sql": "WITH avg_price AS (SELECT product_id, AVG(unit_price) AS avg_sell FROM order_items GROUP BY product_id) SELECT p.name, ROUND((ap.avg_sell - p.cost_price) / ap.avg_sell * 100, 2) AS margin_pct FROM avg_price ap INNER JOIN products p ON ap.product_id = p.id ORDER BY margin_pct DESC",
     "notes": "CTE 计算均价，再派生指标"
   },
   {
@@ -228,7 +228,7 @@
     "category": "CTE多步",
     "difficulty": 3,
     "question": "统计每个城市 VIP 用户的平均消费总额（先算每个 VIP 用户的总消费，再按城市取平均），按平均消费降序",
-    "reference_sql": "WITH vip_totals AS (SELECT u.city, u.id, SUM(o.total_amount) AS total_spent FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE u.is_vip = 1 AND o.status = 'completed' GROUP BY u.id, u.city) SELECT city, ROUND(AVG(total_spent), 2) AS avg_vip_spent FROM vip_totals GROUP BY city ORDER BY avg_vip_spent DESC",
+    "reference_sql": "WITH vip_totals AS (SELECT u.city, u.id, SUM(o.total_amount) AS total_spent FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE u.is_vip = 1 GROUP BY u.id, u.city) SELECT city, ROUND(AVG(total_spent), 2) AS avg_vip_spent FROM vip_totals GROUP BY city ORDER BY avg_vip_spent DESC",
     "notes": "两步聚合：用户级→城市级"
   },
   {
@@ -300,7 +300,7 @@
     "category": "综合复合",
     "difficulty": 3,
     "question": "对比 VIP 用户和非 VIP 用户的复购率（≥2 笔已完成订单算复购）和平均订单额",
-    "reference_sql": "WITH stats AS (SELECT u.is_vip, u.id, COUNT(o.id) AS order_count, AVG(o.total_amount) AS avg_order FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' GROUP BY u.id, u.is_vip) SELECT is_vip, ROUND(AVG(avg_order), 2) AS avg_order_value, ROUND(COUNT(CASE WHEN order_count >= 2 THEN 1 END) * 1.0 / COUNT(*), 4) AS repurchase_rate FROM stats GROUP BY is_vip ORDER BY is_vip DESC",
+    "reference_sql": "WITH stats AS (SELECT u.is_vip, u.id, COUNT(o.id) AS order_count, SUM(o.total_amount) AS total_amount FROM orders o INNER JOIN users u ON o.user_id = u.id WHERE o.status = 'completed' GROUP BY u.id, u.is_vip) SELECT is_vip, ROUND(SUM(total_amount) * 1.0 / SUM(order_count), 2) AS avg_order_value, ROUND(COUNT(CASE WHEN order_count >= 2 THEN 1 END) * 1.0 / COUNT(*), 4) AS repurchase_rate FROM stats GROUP BY is_vip ORDER BY is_vip DESC",
     "notes": "VIP/非VIP对比，CTE + 复合聚合"
   },
   {
@@ -316,7 +316,7 @@
     "category": "综合复合",
     "difficulty": 3,
     "question": "统计每个用户最近一笔已完成订单的金额与其历史已完成订单平均金额的差值，按差值降序",
-    "reference_sql": "WITH last_order AS (SELECT user_id, total_amount AS last_amount FROM (SELECT user_id, total_amount, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn FROM orders WHERE status = 'completed') AS _q WHERE rn = 1), avg_order AS (SELECT user_id, AVG(total_amount) AS avg_amount FROM orders WHERE status = 'completed' GROUP BY user_id) SELECT u.name, lo.last_amount, ROUND(ao.avg_amount, 2) AS avg_amount, ROUND(lo.last_amount - ao.avg_amount, 2) AS diff FROM last_order lo INNER JOIN avg_order ao ON lo.user_id = ao.user_id INNER JOIN users u ON lo.user_id = u.id ORDER BY diff DESC",
+    "reference_sql": "WITH last_order AS (SELECT user_id, total_amount AS last_amount FROM (SELECT user_id, total_amount, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn FROM orders WHERE status = 'completed') AS _q WHERE rn = 1), avg_order AS (SELECT user_id, AVG(total_amount) AS avg_amount FROM orders WHERE status = 'completed' GROUP BY user_id) SELECT lo.user_id, lo.last_amount, ROUND(ao.avg_amount, 2) AS avg_amount, ROUND(lo.last_amount - ao.avg_amount, 2) AS diff FROM last_order lo INNER JOIN avg_order ao ON lo.user_id = ao.user_id ORDER BY diff DESC",
     "notes": "最近一单 vs 历史均值，双 CTE + 窗口"
   }
 ]

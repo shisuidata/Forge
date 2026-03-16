@@ -9,7 +9,8 @@ Forge DSL → SQL 编译器。
     → having(HAVING) → select(SELECT) → sort(ORDER BY) → limit(LIMIT) → offset(OFFSET)
 
 特殊 join 处理：
-    anti join  → LEFT JOIN … WHERE right_key IS NULL  （避免 NOT IN 的 NULL 陷阱）
+    anti join  → 无 filter：LEFT JOIN … WHERE right_key IS NULL
+                 有 filter：WHERE NOT EXISTS (SELECT 1 FROM … WHERE … AND filter_conds)
     semi join  → WHERE EXISTS (SELECT 1 FROM … WHERE …) （不产生 JOIN 关键字）
 
 窗口函数（window 字段）：
@@ -30,7 +31,7 @@ import jsonschema
 _SCHEMA_PATH = pathlib.Path(__file__).parent / "schema.json"
 _SCHEMA = json.loads(_SCHEMA_PATH.read_text())
 
-# 标准 JOIN 类型到 SQL 关键字的映射；anti/semi 由 _join() 单独处理
+# 标准 JOIN 类型到 SQL 关键字的映射；anti/semi/cross 由 _join() 单独处理
 _JOIN_KEYWORDS = {
     "inner": "INNER JOIN",
     "left":  "LEFT JOIN",
@@ -657,7 +658,17 @@ def _compile(q: dict, dialect: str = "sqlite",
         clauses.append("GROUP BY " + ", ".join(_group_item(g) for g in q["group"]))
 
     # HAVING：聚合后的行级过滤，条件间 AND 连接
-    having_parts = [_condition(c, dialect, nullable_cols) for c in q.get("having", [])]
+    # 注意：SQLite 中 HAVING alias 若与原表字段同名，会被解析为原始列而非聚合结果
+    # 解决方案：将 HAVING 条件中引用的 agg 别名替换为完整聚合表达式
+    _having_agg_map: dict[str, str] = {
+        agg["as"]: _agg_expr(agg, dialect) for agg in q.get("agg", [])
+    }
+    def _having_condition(c: dict) -> str:
+        """编译 HAVING 条件，将 agg 别名替换为完整聚合表达式。"""
+        if isinstance(c, dict) and "col" in c and c.get("col") in _having_agg_map:
+            c = dict(c, col=_having_agg_map[c["col"]])
+        return _condition(c, dialect, nullable_cols)
+    having_parts = [_having_condition(c) for c in q.get("having", [])]
     if having_parts:
         clauses.append("HAVING " + " AND ".join(having_parts))
 
@@ -1043,7 +1054,11 @@ def _join(join: dict, dialect: str = "sqlite",
     """
     jtype = join["type"]
     table = join["table"]
-    on    = join["on"]
+    on    = join.get("on")
+
+    # ── CROSS JOIN（无 ON 条件，用于标量 CTE 如平均值）─────────────────────
+    if jtype == "cross":
+        return f"CROSS JOIN {table}", []
 
     # ── 多条件 join（array）─────────────────────────────────────────────────
     # MySQL 不支持 FULL OUTER JOIN，提前报错
@@ -1061,15 +1076,28 @@ def _join(join: dict, dialect: str = "sqlite",
 
     if isinstance(on, list):
         if jtype == "anti":
-            # 多条件 anti join：LEFT JOIN 多键 + IS NULL 检测第一个右键
+            # 多条件 anti join
             eq_parts = [f"{c['left']} = {c['right']}" for c in on
                         if isinstance(c, dict) and "left" in c and "right" in c]
-            null_check = on[0]["right"]  # 用第一个右键做 IS NULL 检测
-            on_clause = " AND ".join(eq_parts)
-            return (
-                f"LEFT JOIN {table} ON {on_clause}",
-                [f"{null_check} IS NULL"],
-            )
+            filter_conds = join.get("filter", [])
+            if filter_conds:
+                # 有 filter：用 NOT EXISTS，精确排除右表中满足条件的行
+                not_exists_conds = eq_parts + [
+                    _condition(fc, dialect, nullable_cols)
+                    for fc in filter_conds
+                ]
+                return (
+                    None,
+                    [f"NOT EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(not_exists_conds)})"],
+                )
+            else:
+                # 无 filter：LEFT JOIN IS NULL（等同于 NOT EXISTS 无条件版本）
+                null_check = on[0]["right"]
+                on_clause = " AND ".join(eq_parts)
+                return (
+                    f"LEFT JOIN {table} ON {on_clause}",
+                    [f"{null_check} IS NULL"],
+                )
         if jtype == "semi":
             # 多条件 semi join：EXISTS 子查询内包含所有等值条件 + filter
             eq_parts = [f"{c['left']} = {c['right']}" for c in on
@@ -1091,11 +1119,24 @@ def _join(join: dict, dialect: str = "sqlite",
     right = on["right"]
 
     if jtype == "anti":
-        # LEFT JOIN 保留主表所有行，IS NULL 筛选出在右表中无匹配的行
-        return (
-            f"LEFT JOIN {table} ON {left} = {right}",
-            [f"{right} IS NULL"],
-        )
+        filter_conds = join.get("filter", [])
+        if filter_conds:
+            # 有 filter：用 NOT EXISTS，精确排除右表中满足条件的行
+            # 例：从未写过差评 → NOT EXISTS (SELECT 1 FROM t WHERE t.user_id = u.user_id AND t.type = '差评')
+            not_exists_conds = [f"{left} = {right}"] + [
+                _condition(fc, dialect, nullable_cols)
+                for fc in filter_conds
+            ]
+            return (
+                None,
+                [f"NOT EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(not_exists_conds)})"],
+            )
+        else:
+            # 无 filter：LEFT JOIN IS NULL（保留原有语义，排除右表中任何匹配行）
+            return (
+                f"LEFT JOIN {table} ON {left} = {right}",
+                [f"{right} IS NULL"],
+            )
 
     if jtype == "semi":
         # EXISTS 子查询：只检查关联关系是否存在，不拉取右表列

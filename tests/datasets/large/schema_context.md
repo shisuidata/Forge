@@ -13,9 +13,14 @@ dim_vip_level(vip_level_id, level_name, min_points, discount_rate, free_shipping
 # 订单域
 dwd_order_detail(order_id, user_id, merchant_id, channel_id, platform_id, promotion_id, order_status, total_amount, discount_amount, coupon_amount, freight_amount, pay_amount, order_dt)
   order_status: '待付款'|'待发货'|'待收货'|'已完成'|'已取消'
+  total_amount: 订单原始总金额（统计用户消费总额、客单价时用此字段）
+  pay_amount: 实付金额（已扣除折扣券）
+  注意：统计销售额/消费总额/客单价 → 用 total_amount；精确到明细行 → 用 order_item_detail.actual_amount
 
 dwd_order_item_detail(order_item_id, order_id, product_id, user_id, quantity, unit_price, discount_rate, actual_amount, is_gift, order_dt)
+  actual_amount: 该商品行实际金额（= quantity × unit_price × (1 - discount_rate)），按商品维度统计销售额时用此字段
   is_gift: 0|1
+  注意：统计商品/品类销售量（quantity）或销售额（actual_amount）时，如果题目没有说"已完成"，不要通过 JOIN dwd_order_detail 加 order_status 过滤
 
 dwd_payment_detail(payment_id, order_id, user_id, payment_method_id, pay_amount, pay_status, pay_dt)
   pay_status: '成功'|'失败'|'超时'|'撤销'
@@ -29,7 +34,7 @@ dwd_cart_detail(cart_id, user_id, product_id, action_type, quantity, action_dt, 
 # 商品域
 dim_product(product_id, product_name, category_id, brand_id, supplier_id, unit_price, cost_price, status, is_imported)
   status: 'on_sale'|'off_shelf'|'pre_sale'|'discontinued'
-  is_imported: 0|1
+  is_imported: 0|1（注意：is_imported 在 dim_product，不在 dim_brand）
 
 dim_category(category_id, category_name, parent_id, level, is_leaf)
   level: 1|2|3

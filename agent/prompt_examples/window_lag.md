@@ -1,6 +1,72 @@
+## 窗口函数
+
+窗口函数放在顶层 `window` 数组，**不要放在 `agg` 里**。有三类：
+
+| 类型 | fn | 必须有 col？ | 说明 |
+|------|----|----|------|
+| 排名 | row_number / rank / dense_rank / percent_rank / cume_dist / ntile | ❌ 不需要 | 只计排名 |
+| 聚合窗口 | sum / avg / count / min / max | ✅ 必须有 | 指定聚合哪一列 |
+| 导航 | lag / lead / first_value / last_value | ✅ 必须有 | 取上下行的值 |
+
+**❌ 最常见错误：WindowAgg 忘写 `col`**
+```json
+// ❌ 错误：sum window 缺 col
+{"fn": "sum", "partition": ["user_id"], "order": [{"col": "created_at", "dir": "asc"}], "as": "running_total"}
+
+// ✅ 正确：必须指定要累加哪一列
+{"fn": "sum", "col": "orders.total_amount", "partition": ["orders.user_id"], "order": [{"col": "orders.created_at", "dir": "asc"}], "as": "running_total"}
+```
+
+**格式规则**：
+- `partition` 是字符串数组（❌ `"partition": "字段"` → ✅ `"partition": ["字段"]`）
+- `order` 是排序对象数组（❌ `"order": {"col":"..."}` → ✅ `"order": [{"col":"...", "dir":"asc"}]`）
+
+## 按月统计 + LAG/LEAD（必须用 CTE）
+
+**关键限制**：SQLite 的窗口函数 ORDER BY 不能引用 SELECT 别名（如 `month`）。
+按月统计 + 环比/预测，必须先用 CTE 算好月份，再在外层做窗口函数。
+
+```json
+{
+  "cte": [
+    {
+      "name": "monthly",
+      "query": {
+        "scan": "orders",
+        "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+        "group": [
+          "orders.channel_id",
+          {"expr": "STRFTIME('%Y-%m', orders.created_at)", "as": "month"}
+        ],
+        "agg": [{"fn": "count_all", "as": "order_count"}],
+        "select": ["orders.channel_id", "month", "order_count"]
+      }
+    }
+  ],
+  "scan": "monthly",
+  "window": [{
+    "fn": "lag",
+    "col": "monthly.order_count",
+    "offset": 1,
+    "default": null,
+    "partition": ["monthly.channel_id"],
+    "order": [{"col": "monthly.month", "dir": "asc"}],
+    "as": "prev_month_count"
+  }],
+  "select": ["monthly.channel_id", "monthly.month", "monthly.order_count", "prev_month_count"]
+}
+```
+
+❌ 错误（window ORDER BY 引用 SELECT 别名）：以下两种都会报 "no such column"：
+- 同层查询里 `order: [{"col": "month"}]` — `month` 是 STRFTIME 别名
+- `order: [{"col": "refund_rate"}]` — `refund_rate` 是本层 `select` 中计算的 expr 别名
+
+**规则**：`window[].order` 只能引用 FROM 表的原始列或 CTE 子查询里已 SELECT 出来的列，不能引用本层 SELECT 新定义的 expr 别名。解决方法：把需要排序的计算列放进 CTE 先算好。
+
 ## 时序导航（LAG / LEAD）
 
 LAG/LEAD **必须有 partition**，否则会跨用户取行，语义错误。
+LAG/LEAD 的 `order` **必须用 `"dir": "asc"`**（时间升序，才能取到"上一条"）；用 `desc` 会取到错误方向的行。
 
 ```json
 {

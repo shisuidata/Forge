@@ -174,9 +174,13 @@ class SchemaRetriever:
                 col_parts: list[str] = []
                 items = cols.items() if isinstance(cols, dict) else [(c, {}) for c in cols]
                 for col_name, meta in items:
-                    if isinstance(meta, dict) and meta.get("enum"):
-                        vals = ", ".join(str(v) for v in meta["enum"][:8])
-                        col_parts.append(f"{col_name} ({vals})")
+                    if isinstance(meta, dict):
+                        hints = []
+                        if meta.get("description"):
+                            hints.append(meta["description"])
+                        if meta.get("enum"):
+                            hints.append(", ".join(str(v) for v in meta["enum"][:6]))
+                        col_parts.append(f"{col_name} ({'; '.join(hints)})" if hints else col_name)
                     else:
                         col_parts.append(col_name)
 
@@ -273,6 +277,10 @@ class SchemaRetriever:
         if top_k >= len(self.tables):
             return list(self.tables)
 
+        # 动态 top_k：根据问题中实体数量自动调整召回数
+        # 每识别到一个独立实体词（"品牌" "退款" "渠道"）+1，上限为 top_k * 2
+        top_k = self._dynamic_top_k(question, top_k)
+
         # Phase 0：指标名称直接匹配（规范语义层假设）
         # 若问题命中已注册的业务指标，直接从其定义中提取所需表，精度最高
         metric_tables = self._retrieve_by_metrics(question)
@@ -300,6 +308,36 @@ class SchemaRetriever:
 
         # Phase 3：FK 扩展
         return self._expand_fks(merged)
+
+    def _dynamic_top_k(self, question: str, base_k: int) -> int:
+        """
+        根据问题复杂度动态调整 top_k。
+
+        策略：统计问题中出现的"域关键词"数量——
+        每多一个不同域（用户/订单/商品/评价/退款/购物车/渠道/品牌/品类），
+        top_k 加 1，最终值在 [base_k, base_k * 2] 区间内。
+
+        目的：简单查询（单表）不引入噪声表；复杂多维查询不漏召。
+        """
+        domain_keywords = [
+            ('用户', '会员', 'vip', 'user'),
+            ('订单', '成交', '下单', 'order'),
+            ('商品', '产品', 'product', '货品'),
+            ('评价', '评分', '好评', '差评', 'comment', 'rating'),
+            ('退款', '售后', 'refund'),
+            ('购物车', '加购', 'cart'),
+            ('渠道', '来源', 'channel'),
+            ('品牌', 'brand'),
+            ('品类', '分类', 'category'),
+            ('支付', '付款', 'payment'),
+        ]
+        q = question.lower()
+        hit_domains = sum(
+            1 for domain in domain_keywords
+            if any(kw in q for kw in domain)
+        )
+        adjusted = base_k + max(0, hit_domains - 1)
+        return min(adjusted, base_k * 2)
 
     def _retrieve_by_embedding(
         self,
@@ -465,24 +503,32 @@ class SchemaRetriever:
         )
         return ranked[:top_k]
 
-    def _expand_fks(self, tables: list[str]) -> list[str]:
+    def _expand_fks(self, tables: list[str], depth: int = 2) -> list[str]:
         """
-        FK 图扩展：对已选表集合，加入它们直接引用的父表。
+        FK 图扩展：BFS 扩展 `depth` 层直接引用的父表。
 
-        只扩展一层（直接 FK），避免过度膨胀。
-        已在列表中的表不重复添加，扩展的表附加在原列表末尾。
+        depth=2 覆盖典型星型模型的多跳链路：
+            [dwd_order_item_detail]
+              → 第 1 层：dwd_order_detail, dim_product
+              → 第 2 层：dim_user, dim_channel（来自 dwd_order_detail）
+                         dim_category, dim_brand（来自 dim_product）
 
-        例：[order_items] → [order_items, orders, products]
-            [orders]      → [orders, users]
+        已在列表中的表不重复添加，扩展的表按层次附加在原列表末尾。
         """
         seen: set[str] = set(tables)
-        expanded = list(tables)
-        for table in list(tables):   # 遍历原始列表，不递归扩展新加入的表
-            for ref in self._fks.get(table, set()):
-                if ref not in seen:
-                    seen.add(ref)
-                    expanded.append(ref)
-        return expanded
+        frontier = list(tables)
+
+        for _ in range(depth):
+            next_frontier: list[str] = []
+            for table in frontier:
+                for ref in self._fks.get(table, set()):
+                    if ref not in seen:
+                        seen.add(ref)
+                        next_frontier.append(ref)
+            frontier = next_frontier
+
+        # 保持原始顺序，扩展表追加在后
+        return list(tables) + [t for t in seen if t not in set(tables)]
 
     def _build_idf(self) -> None:
         """预计算语料 IDF 权重（BM25-lite 使用）。"""
@@ -548,7 +594,8 @@ class SchemaRetriever:
         """
         lines = ["你可以查询以下数据库表（SQLite）：", ""]
         tables_info = self.registry.get("tables", self.registry)
-        enum_hints: list[str] = []
+        enum_hints: list[str] = []    # 有枚举值的字段
+        desc_hints: list[str] = []    # 仅有描述、无枚举的字段
 
         for table_name in table_names:
             info = tables_info.get(table_name, {})
@@ -556,22 +603,35 @@ class SchemaRetriever:
                 lines.append(table_name)
                 continue
 
+            # 表描述（内联在表名后）
+            table_desc = info.get("description", "")
             cols = info.get("columns", {})
             col_names: list[str] = []
             items = cols.items() if isinstance(cols, dict) else [(c, {}) for c in cols]
             for col_name, meta in items:
                 col_names.append(col_name)
-                if isinstance(meta, dict) and meta.get("enum"):
-                    vals = " | ".join(
-                        f"'{v}'" if isinstance(v, str) else str(v)
-                        for v in meta["enum"]
-                    )
-                    enum_hints.append(f"- {table_name}.{col_name}: {vals}")
+                if isinstance(meta, dict):
+                    if meta.get("enum"):
+                        vals = " | ".join(
+                            f"'{v}'" if isinstance(v, str) else str(v)
+                            for v in meta["enum"]
+                        )
+                        hint = f"- {table_name}.{col_name}: {vals}"
+                        if meta.get("description"):
+                            hint += f"  # {meta['description']}"
+                        enum_hints.append(hint)
+                    elif meta.get("description"):
+                        desc_hints.append(f"- {table_name}.{col_name}: {meta['description']}")
 
-            lines.append(f"{table_name} ({', '.join(col_names)})")
+            table_line = f"{table_name} ({', '.join(col_names)})"
+            if table_desc:
+                table_line += f"  -- {table_desc}"
+            lines.append(table_line)
 
         if enum_hints:
             lines += ["", "字段枚举值："] + enum_hints
+        if desc_hints:
+            lines += ["", "字段说明："] + desc_hints
 
         return "\n".join(lines)
 

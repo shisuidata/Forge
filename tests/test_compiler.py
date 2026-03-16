@@ -214,7 +214,7 @@ def test_having_filters_after_group():
         "having": [{"col": "n", "op": "gt", "val": 5}],
         "select": ["orders.user_id", "n"],
     })
-    assert "HAVING n > 5" in result
+    assert "HAVING COUNT(orders.id) > 5" in result  # alias expanded to expr to avoid SQLite ambiguity
     # HAVING must come after GROUP BY
     assert result.index("GROUP BY") < result.index("HAVING")
 
@@ -654,7 +654,7 @@ def test_fix17_having_without_group_infers_group():
         "select": ["category_orders.category", "avg_orders"],
     })
     assert "GROUP BY category_orders.category" in result
-    assert "HAVING avg_orders > 10" in result
+    assert "HAVING AVG(category_orders.order_count) > 10" in result  # alias expanded
 
 
 def test_fix18_lag_expands_agg_alias():
