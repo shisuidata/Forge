@@ -583,7 +583,7 @@ demo/
   └── seed_large.py        — 200 张表电商数仓 mock 数据（134,577 行）
 
 tests/
-  ├── test_compiler.py     — 编译器单元测试（49 个用例）
+  ├── test_compiler.py     — 编译器单元测试（53 个用例）
   ├── accuracy/            — 自有 40 题基准（LLM judge + EA，10 个版本）
   ├── text-to-sql-failures/— 针对性失败案例（JOIN 陷阱、聚合陷阱等）
   └── spider2/             — Spider2-Lite SQLite 子集测试（123 题）
@@ -606,6 +606,9 @@ docs/
 | 自有用例（b_large，直出 SQL） | 40 | LLM Judge | **8.25 / 10** |
 | 自有用例（b_large_sem，直出+语义库） | 40 | LLM Judge | **8.33 / 10** |
 | 自有用例（MiniMax，EA） | 40 | Execution Accuracy | **65.0%** |
+| 自有用例（Method M，Claude，small） | 40 | Execution Accuracy | **95.0%** |
+| 自有用例（Method O，DeepSeek V3，small） | 40 | Execution Accuracy | **95.0%** |
+| 自有用例（Method N，DeepSeek V3，large） | 40 | Execution Accuracy | **65.0%** |
 | Spider2-Lite SQLite | 123 | Execution Accuracy | **9.2%** |
 | Spider2-Lite SQLite | 123 | 编译成功率 | **97.6%** |
 
@@ -619,3 +622,4 @@ docs/
 |---|---|---|
 | [Day 0 · 开发实录](docs/devlog/forge-dev-story.md) | 2026-03 | 为什么做这件事；错误分类；核心洞见的形成过程 |
 | [Day 1 · 历史债 / 地面泥潭](docs/devlog/day1_2026-03-15.md) | 2026-03-15 | SQL 的设计哲学、四层召回演进、飞书 Bot 工程坑、SQL 缓存双阶段反馈 |
+| [Day 2 · CROSS JOIN / HAVING 别名 / EA 95%](docs/devlog/day2_2026-03-16.md) | 2026-03-16 | CROSS JOIN 标量 CTE 模式、HAVING alias 展开修复、DeepSeek strict tool calling 实验（schema 2x 膨胀，不可行）、M/O/N 三组 EA 基准 |

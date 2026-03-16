@@ -258,9 +258,10 @@ main.py               — FastAPI 入口
 |---|---|---|
 | [Day 0 · 开发实录](docs/devlog/forge-dev-story.md) | 2026-03 | 为什么做这件事；错误分类框架；核心洞见 |
 | [Day 1 · 历史债 / 地面泥潭](docs/devlog/day1_2026-03-15.md) | 2026-03-15 | SQL 设计哲学、四层召回演进、飞书 Bot 踩坑、SQL 缓存双阶段反馈 |
+| [Day 2 · CROSS JOIN / HAVING 别名 / EA 95%](docs/devlog/day2_2026-03-16.md) | 2026-03-16 | CROSS JOIN 标量 CTE 模式、HAVING alias 展开、DeepSeek strict tool calling 实验、M/O/N 三组 EA 基准 |
 
 ## 当前状态
 
-编译引擎完成，49 个单元测试全绿。飞书 Bot 可用（WebSocket 长连接，交互卡片，SQL 语法高亮，图表生成）。SQL 查询缓存已集成（双阶段用户反馈 → verified 条目构成组织知识库）。
+编译引擎完成，53 个单元测试全绿。飞书 Bot 可用（WebSocket 长连接，交互卡片，SQL 语法高亮，图表生成）。SQL 查询缓存已集成（双阶段用户反馈 → verified 条目构成组织知识库）。
 
-当前基准：**8.82 / 10**（Method J+语义库，40 用例 LLM Judge）。
+当前基准：**8.82 / 10**（Method J+语义库，40 用例 LLM Judge）；**95%**（Method M/O，small 数据集 EA，Claude + DeepSeek V3）；**65%**（Method N，large 200 表数仓 × DeepSeek V3）。
