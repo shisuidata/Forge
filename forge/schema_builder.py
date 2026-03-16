@@ -80,8 +80,18 @@ def build_tool_schema(registry: dict, strict: bool = False) -> dict:
         return {"anyOf": list(schemas)} if strict else {"oneOf": list(schemas)}
 
     def _null(schema: dict) -> dict:
-        """可选字段 → anyOf[schema, null]（strict 模式专用）"""
-        return {"anyOf": [schema, {"type": "null"}]} if strict else schema
+        """可选字段 → anyOf[schema, null]（strict 模式专用）。
+        若 schema 本身已是 anyOf，直接展平而非嵌套，避免 DeepSeek strict
+        要求每个 anyOf 分支必须有 type 字段的限制。
+        """
+        if not strict:
+            return schema
+        if "anyOf" in schema:
+            branches = schema["anyOf"]
+            if not any(b.get("type") == "null" for b in branches):
+                branches = list(branches) + [{"type": "null"}]
+            return {"anyOf": branches}
+        return {"anyOf": [schema, {"type": "null"}]}
 
     # ── val 的类型系统 ──────────────────────────────────────────────────────────
     enum_hint = ""
@@ -350,6 +360,16 @@ def build_tool_schema(registry: dict, strict: bool = False) -> dict:
     }
 
     # ── CTE item ───────────────────────────────────────────────────────────────
+    # strict 模式下，CTE 子查询用 $ref 引用 $defs/ForgeSubQuery，避免裸 object。
+    # 非 strict 模式下，子查询保持为自由 object（不展开，节省 token）。
+
+    if strict:
+        _query_field: dict = {"$ref": "#/$defs/ForgeSubQuery"}
+    else:
+        _query_field = {
+            "type": "object",
+            "description": "A nested Forge query object (must have scan + select).",
+        }
 
     cte_item = {
         "type": "object",
@@ -360,10 +380,7 @@ def build_tool_schema(registry: dict, strict: bool = False) -> dict:
                 "type": "string",
                 "description": "CTE name, used as scan or join table in the main query.",
             },
-            "query": {
-                "type": "object",
-                "description": "A nested Forge query object (must have scan + select).",
-            },
+            "query": _query_field,
         },
     }
 
@@ -449,9 +466,23 @@ def build_tool_schema(registry: dict, strict: bool = False) -> dict:
         }),
     }
 
-    return {
+    top_schema: dict = {
         "type": "object",
         "required": list(_top_props.keys()) if strict else ["scan", "select"],
         "additionalProperties": False,
         "properties": _top_props,
     }
+
+    if strict:
+        # ForgeSubQuery：CTE 子查询定义（不含 cte 字段，避免无限递归）
+        _sub_props: dict = {k: v for k, v in _top_props.items() if k != "cte"}
+        top_schema["$defs"] = {
+            "ForgeSubQuery": {
+                "type": "object",
+                "required": list(_sub_props.keys()),
+                "additionalProperties": False,
+                "properties": _sub_props,
+            }
+        }
+
+    return top_schema
