@@ -8,9 +8,12 @@ SQL 执行器 — 连接数据库执行 SQL 并返回格式化结果。
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from config import cfg
+
+logger = logging.getLogger(__name__)
 
 
 def execute(sql: str, max_rows: int = 50) -> str:
@@ -39,6 +42,7 @@ def execute(sql: str, max_rows: int = 50) -> str:
             rows   = result.fetchmany(max_rows + 1)
             cols   = list(result.keys())
     except Exception as exc:
+        logger.error("SQL execution failed: %s", exc)
         return f"⚠ 执行失败：{exc}"
 
     if not rows:
@@ -91,6 +95,7 @@ def execute_with_data(
             rows   = result.fetchmany(max_rows + 1)
             cols   = list(result.keys())
     except Exception as exc:
+        logger.error("SQL execution failed: %s", exc)
         return f"⚠ 执行失败：{exc}", [], []
 
     if not rows:

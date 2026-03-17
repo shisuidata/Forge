@@ -1,0 +1,13 @@
+services:
+  forge:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - ./registry:/app/registry
+      - forge-data:/app/.forge
+    restart: unless-stopped
+
+volumes:
+  forge-data:

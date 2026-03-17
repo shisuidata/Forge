@@ -9,9 +9,12 @@
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ── 图表存储路径 ──────────────────────────────────────────────────────────────
 
@@ -194,7 +197,8 @@ def _setup_font() -> None:
             plt.rcParams["font.sans-serif"] = [name]
             plt.rcParams["axes.unicode_minus"] = False
             return
-        except Exception:
+        except (KeyError, ValueError, RuntimeError) as exc:
+            logger.debug("Font %s not available: %s", name, exc)
             continue
 
 
@@ -273,9 +277,8 @@ def generate_image(cols: list[str], rows: list[tuple], query_hint: str = "") -> 
         plt.close(fig)
         return buf.getvalue()
 
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    except Exception as exc:
+        logger.warning("Chart image generation failed: %s", exc, exc_info=True)
         return None
 
 
@@ -312,7 +315,6 @@ def generate(cols: list[str], rows: list[tuple], query_hint: str = "") -> str | 
         (CHART_DIR / filename).write_text(html, encoding="utf-8")
         return filename
 
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    except Exception as exc:
+        logger.warning("Chart generation failed: %s", exc, exc_info=True)
         return None

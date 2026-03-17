@@ -18,6 +18,7 @@ GET  /admin/settings                 → current config (secrets masked)
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from datetime import date
@@ -34,6 +35,8 @@ from config import cfg
 from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -44,7 +47,8 @@ def _load_schema() -> dict:
     """Load structural layer (schema.registry.json)."""
     try:
         return json.loads(cfg.REGISTRY_PATH.read_text())
-    except Exception:
+    except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+        logger.warning("Failed to load schema registry: %s", exc)
         return {}
 
 
@@ -52,7 +56,8 @@ def _load_metrics() -> dict:
     """Load semantic layer (metrics.registry.yaml)."""
     try:
         return yaml.safe_load(cfg.METRICS_PATH.read_text()) or {}
-    except Exception:
+    except (FileNotFoundError, OSError, yaml.YAMLError) as exc:
+        logger.warning("Failed to load metrics registry: %s", exc)
         return {}
 
 
@@ -169,11 +174,13 @@ async def delete_metric(name: str):
 async def semantic_page(request: Request, flash: str = ""):
     try:
         disambiguations = yaml.safe_load(cfg.DISAMBIGUATIONS_PATH.read_text()) or {}
-    except Exception:
+    except (FileNotFoundError, OSError, yaml.YAMLError) as exc:
+        logger.warning("Failed to load disambiguations: %s", exc)
         disambiguations = {}
     try:
         conventions = yaml.safe_load(cfg.CONVENTIONS_PATH.read_text()) or {}
-    except Exception:
+    except (FileNotFoundError, OSError, yaml.YAMLError) as exc:
+        logger.warning("Failed to load conventions: %s", exc)
         conventions = {}
     return templates.TemplateResponse(
         "semantic.html",
@@ -194,16 +201,16 @@ async def staging_page(request: Request, flash: str = ""):
                 r = json.loads(fp.read_text())
                 r["_filename"] = fp.name
                 records.append(r)
-            except Exception:
-                pass
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.debug("Skipping malformed staging file %s: %s", fp.name, exc)
         done_dir = staging_dir / "done"
         if done_dir.exists():
             for fp in sorted(done_dir.glob("*.json"), reverse=True)[:20]:
                 try:
                     r = json.loads(fp.read_text())
                     done_records.append(r)
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, OSError) as exc:
+                    logger.debug("Skipping malformed done file %s: %s", fp.name, exc)
 
     return templates.TemplateResponse(
         "staging.html",

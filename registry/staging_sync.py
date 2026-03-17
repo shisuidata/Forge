@@ -34,11 +34,14 @@ Staging 文件格式（每个文件一条记录）：
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 # staging 文件中允许写入 disambiguations.yaml 的字段白名单
@@ -81,8 +84,9 @@ def promote_staged(
     for fp in sorted(staging_dir.glob("*.json")):
         try:
             record: dict = json.loads(fp.read_text())
-        except Exception:
-            continue   # 损坏的文件跳过
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Skipping malformed staging file %s: %s", fp.name, exc)
+            continue
 
         key = record.get("key", "").strip()
         if not key:

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 import threading
 import uuid
@@ -26,6 +27,8 @@ from typing import Any
 import numpy as np
 
 from config import cfg
+
+logger = logging.getLogger(__name__)
 
 _DB_PATH = Path(cfg.REGISTRY_PATH).parent / ".forge" / "sql_cache.db"
 
@@ -85,7 +88,8 @@ class SQLCache:
     def schema_hash() -> str:
         try:
             return hashlib.md5(cfg.REGISTRY_PATH.read_bytes()).hexdigest()[:16]
-        except Exception:
+        except (FileNotFoundError, OSError) as exc:
+            logger.debug("Cannot compute schema hash: %s", exc)
             return "unknown"
 
     # ── 查询 ─────────────────────────────────────────────────────────────────

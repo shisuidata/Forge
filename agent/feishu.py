@@ -55,7 +55,8 @@ def _on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
     try:
         content = json.loads(msg.content)
         text = content.get("text", "").strip()
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        logger.debug("Failed to parse message content: %s", exc)
         return
 
     if not text:

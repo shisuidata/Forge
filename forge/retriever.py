@@ -211,7 +211,12 @@ class SchemaRetriever:
             embed_fn: 接受 list[str]，返回 np.ndarray shape (n, d)
         """
         texts = [self.table_texts[t] for t in self.tables]
-        raw = embed_fn(texts)
+        # 分批调用 embedding API（部分 API 对单次请求条数有限制）
+        batch_size = 32
+        parts = []
+        for i in range(0, len(texts), batch_size):
+            parts.append(embed_fn(texts[i:i + batch_size]))
+        raw = np.concatenate(parts, axis=0)
         self._embeddings = self._normalize(np.array(raw, dtype=np.float32))
 
         if self.cache_path:

@@ -1,20 +1,28 @@
 """
-对话会话管理 — 内存存储，每个飞书用户对应一个独立 Session。
+对话会话管理 — SQLite 持久化 + 内存缓存。
 
 设计原则：
-    - 轻量：纯内存，无数据库依赖，服务重启后会话自动清空
+    - 持久化：对话历史写入 SQLite，服务重启后自动恢复
     - 隔离：不同用户的上下文严格隔离，SessionStore 以 user_id 为键
     - 节流：每个 Session 最多保留最近 20 条消息，防止 token 过载
-    - 状态：pending_sql / pending_forge 记录等待用户确认的 SQL，
-            approve()/cancel() 在读取后立即清空，保证状态单向流转
+    - 状态：pending_* 字段为瞬态字段，不持久化（重启后需用户重新发起）
 
 会话生命周期：
-    get(user_id)  → 不存在则创建新 Session，存在则返回已有 Session
-    clear(user_id)→ 删除该用户的 Session（如用户发送"重置"命令时）
+    get(user_id)  → 先查内存缓存，miss 时从 SQLite 恢复；均不存在则新建
+    clear(user_id)→ 同时删除内存和 SQLite 中的记录
 """
 from __future__ import annotations
+
+import json
+import logging
+import sqlite3
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_DB_PATH = Path(".forge/sessions.db")
 
 
 @dataclass
@@ -61,6 +69,7 @@ class Session:
     pending_metric_proposal: dict | None      = None
     pending_cache_id:        str | None       = None   # Stage 2 反馈：等待用户确认结果准确性
     pending_intent:          IntentSpec | None = None  # 澄清轮次：等待用户补充信息
+    _on_change:              object           = None   # Callable[[], None] | None，持久化回调
 
     def add(self, role: Literal["user", "assistant"], content: str) -> None:
         """
@@ -68,10 +77,13 @@ class Session:
 
         超过 20 条时自动裁剪头部，保留最近 20 条。
         20 条的上限对应约 10 轮对话，在保证上下文连贯性的同时控制 token 消耗。
+        持久化通过 _on_change 回调自动触发。
         """
         self.history.append(Message(role=role, content=content))
         if len(self.history) > 20:
             self.history = self.history[-20:]
+        if self._on_change:
+            self._on_change()
 
     def recent(self, n: int = 10) -> list[Message]:
         """
@@ -83,41 +95,112 @@ class Session:
         return self.history[-n:]
 
 
+def _serialize_history(history: list[Message]) -> str:
+    return json.dumps(
+        [{"role": m.role, "content": m.content} for m in history],
+        ensure_ascii=False,
+    )
+
+
+def _deserialize_history(raw: str) -> list[Message]:
+    try:
+        items = json.loads(raw)
+        return [Message(role=m["role"], content=m["content"]) for m in items]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return []
+
+
 class SessionStore:
     """
-    全局会话存储，以 user_id 为键管理所有 Session 实例。
+    全局会话存储，SQLite 持久化 + 内存缓存。
 
-    线程安全说明：
-        当前实现为简单 dict，适用于单进程 asyncio 服务。
-        若需多进程部署，应替换为 Redis 等共享存储。
+    对话历史在每次 add() 后写入 SQLite。
+    pending_* 瞬态字段仅在内存中维护，不持久化。
     """
 
-    def __init__(self) -> None:
-        # 内部字典：user_id → Session
+    def __init__(self, db_path: Path | str | None = None) -> None:
         self._sessions: dict[str, Session] = {}
+        self._db_path = Path(db_path) if db_path else _DEFAULT_DB_PATH
+        self._conn: sqlite3.Connection | None = None
+        self._init_db()
+
+    def _init_db(self) -> None:
+        try:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS sessions ("
+                "  user_id    TEXT PRIMARY KEY,"
+                "  history    TEXT NOT NULL DEFAULT '[]',"
+                "  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))"
+                ")"
+            )
+            self._conn.commit()
+        except (sqlite3.Error, OSError) as exc:
+            logger.warning("Session DB init failed, falling back to memory-only: %s", exc)
+            self._conn = None
+
+    def _persist(self, session: Session | None) -> None:
+        if self._conn is None or session is None:
+            return
+        try:
+            self._conn.execute(
+                "INSERT INTO sessions (user_id, history, updated_at) "
+                "VALUES (?, ?, datetime('now','localtime')) "
+                "ON CONFLICT(user_id) DO UPDATE SET "
+                "  history = excluded.history, updated_at = excluded.updated_at",
+                (session.user_id, _serialize_history(session.history)),
+            )
+            self._conn.commit()
+        except sqlite3.Error as exc:
+            logger.warning("Session persist failed for %s: %s", session.user_id, exc)
+
+    def _load_from_db(self, user_id: str) -> Session | None:
+        if self._conn is None:
+            return None
+        try:
+            row = self._conn.execute(
+                "SELECT history FROM sessions WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if row:
+                history = _deserialize_history(row[0])
+                return Session(user_id=user_id, history=history)
+        except sqlite3.Error as exc:
+            logger.warning("Session load failed for %s: %s", user_id, exc)
+        return None
 
     def get(self, user_id: str) -> Session:
         """
-        获取指定用户的 Session。若不存在则自动创建并注册。
-
-        Args:
-            user_id: 飞书 open_id 或其他唯一用户标识。
-
-        Returns:
-            该用户的 Session 实例（首次调用时为空历史）。
+        获取指定用户的 Session。
+        查找顺序：内存缓存 → SQLite → 新建。
         """
         if user_id not in self._sessions:
-            self._sessions[user_id] = Session(user_id=user_id)
+            restored = self._load_from_db(user_id)
+            if restored:
+                self._sessions[user_id] = restored
+                logger.debug("Session restored from DB for %s (%d messages)",
+                             user_id, len(restored.history))
+            else:
+                self._sessions[user_id] = Session(user_id=user_id)
+            # 注入持久化回调：每次 add() 后自动写入 SQLite
+            sess = self._sessions[user_id]
+            sess._on_change = lambda uid=user_id: self._persist(self._sessions.get(uid))  # type: ignore[assignment]
         return self._sessions[user_id]
 
-    def clear(self, user_id: str) -> None:
-        """
-        删除指定用户的 Session，释放内存并重置对话上下文。
+    def save(self, user_id: str) -> None:
+        """显式持久化指定用户的 Session。供外部在 add() 后调用。"""
+        if user_id in self._sessions:
+            self._persist(self._sessions[user_id])
 
-        Args:
-            user_id: 要清除的用户 ID。若不存在则静默忽略。
-        """
+    def clear(self, user_id: str) -> None:
+        """删除指定用户的 Session（内存 + SQLite）。"""
         self._sessions.pop(user_id, None)
+        if self._conn:
+            try:
+                self._conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+                self._conn.commit()
+            except sqlite3.Error as exc:
+                logger.warning("Session clear failed for %s: %s", user_id, exc)
 
 
 # 模块级全局单例，由 agent.py 和 web/router.py 共享引用

@@ -98,68 +98,46 @@ def _coerce(q: dict) -> dict:
 
     修复项（仅限格式规范化，不猜测语义意图）：
     1. filter/having 为 dict 时自动包装为列表
-       模型有时生成 "filter": {"or":[...]} 而非 "filter": [{"or":[...]}]
     2. between 条件中 val 为 [lo, hi] 数组时拆分为 lo/hi 字段
-       模型有时生成 {"op":"between","val":[500,2000]} 而非 {"lo":500,"hi":2000}
-    3. window default=None 转为 null（保持 JSON 语义，_val() 后续转 NULL）
+    3. window default=None 转为 null（保持 JSON 语义）
     4. agg 中 count_all + col 字段共存时，删除多余的 col
-       模型有时生成 {"fn":"count_all","col":"t.id","as":"..."} 而非 {"fn":"count_all","as":"..."}
     5. group 存在时，select 里的非聚合/非窗口/非 group_expr 别名字段自动补齐到 group
-       模型有时 GROUP BY user_id 但 SELECT 里包含 name、city 等未 GROUP 的列
     6. having 中出现 fn 字段（内联聚合表达式）→ 替换为对应 agg alias
-       模型有时生成 {"col":"orders.total_amount","fn":"avg","op":"gt","val":800}
-       而非 {"col":"avg_amount","op":"gt","val":800}
     7. qualify 引用的 window 别名未在 select 中时，自动补齐
-       模型在 window + qualify 组合中有时遗漏 rank alias，导致外层 WHERE 引用未定义列
-    8. 顶层 "query" 为 JSON 字符串时解包（模型有时把整个 Forge JSON 放进 "query" 字段）
-       模型有时生成 {"explain":"...", "query": "{\"scan\":\"orders\",...}"}
-       → 将 "query" 字符串解析后作为实际查询
+    8. 顶层 "query" 为 JSON 字符串时解包
     9. select 中字符串含内联别名（"expr AS alias"）→ 转为 expr 对象
-       模型有时生成 "STRFTIME('%Y-%m', orders.created_at) as month"
-       → {"expr":"STRFTIME('%Y-%m', orders.created_at)","as":"month"}
-       内联别名写入 GROUP BY 时会产生 SQL 语法错误
     10. 有 agg/group 但缺少 select 时，自动从 group + agg 别名生成 select
-        CTE 子查询最常见：模型提供了 scan/filter/group/agg 但忘了写 select
     11. 顶层缺少 scan 但有 cte 时，自动推断 scan 为最后一个 CTE 名
-        模型有时生成 CTE 列表但忘了在主查询里设置 scan
-    12. 清理 agg items 中的非法字段（如 having、where 等模型伪造字段）
-        schema 对 agg item 有严格约束，非法字段会导致校验失败
+    12. 清理 agg items 中的非法字段
     13. select expr 字符串中出现 count_all() → 替换为 COUNT(*)
-        模型有时在 expr 中内联 count_all()，该函数名不是合法 SQL 函数
-    14. 当 scan 为 CTE 名时，select/agg.col/group 中的 table.col 引用
-        若 table 不是 CTE 名，则剥离 table. 前缀
-        原因：CTE 输出列不保留原表前缀，引用 products.category 会报 "no such column"
+    14. 当 scan 为 CTE 名时，剥离 table.col 中的 table. 前缀
     15. joins 元素中的 filter 属性 → 提取到顶层 filter
-        模型有时在 semi/anti join 定义中加入 filter 字段，如 {"type":"semi","filter":[...]}
-        → 将 filter 条件移至顶层 q["filter"]，join 内删除该属性
-    16. filter/having 中的 expr 条件 → 直接编译为 "expr op val"
-        模型有时生成 {"expr":"CAST(x AS FLOAT)/CAST(y AS FLOAT)","op":"gt","val":0.15}
-        → _condition() 支持 expr key，编译为表达式比较
-    17. HAVING 存在但缺少 GROUP BY → 从 select 非聚合列推断 GROUP BY
-        模型有时写了 HAVING 但忘了 GROUP BY（常见于 CTE 最终查询 JOIN 两个 CTE 后过滤比率）
+    16. filter/having 中的 expr 条件 → col（由 _coerce_condition 处理）
+    17. HAVING 存在但缺少 GROUP BY → 从 select 非聚合列推断
     18. window lag/lead col 为 agg alias → 展开为原始聚合表达式
-        模型有时生成 LAG(order_count) 其中 order_count 是 COUNT(*) 的别名
-        → LAG(COUNT(*), 1)（在含 GROUP BY 的查询中合法）
     19. 顶层 filter 引用 semi/anti join 专属表 → 移至对应 join 的 filter
-        模型有时把 semi/anti join 内部条件（如 cart.action_type='add'）放在顶层 filter
-        → 该表不在主 FROM 作用域，条件移入对应 semi/anti join 的 filter（编译进 EXISTS 子查询）
-    20. filter/having 中 {"$preset": "YYYY-MM-DD"} → 转为 {"$date": "YYYY-MM-DD"}
-        模型有时把固定日期字符串用 $preset 包装，但该值不是合法的 preset 名
-        → 若 $preset 值看起来是 ISO-8601 日期，转为 $date
-    21. filter/having 条件中缺少 op 字段 → 删除该条件（避免 schema 校验失败）
-        模型偶尔生成 {"col": "x"} 这样只有 col 没有 op 的残缺条件
-        → 删除该条件以保证编译继续进行（相比直接失败更安全）
-    22. filter/having 条件 val: {"col": "x"} → col2: "x"（列与列比较）
-        模型有时把右侧列引用放在 val 字段，如 {"col":"good_count","op":"gt","val":{"col":"bad_count"}}
-        → {"col":"good_count","op":"gt","col2":"bad_count"}（利用 col2 支持直接编译）
-    23. filter/having 条件 col_right → col2（列与列比较别名统一）
-        模型有时生成 {"col":"good_count","op":"gt","col_right":"bad_count"}
-        → {"col":"good_count","op":"gt","col2":"bad_count"}
-    24. agg items 中 "expr" 字段 → "col"（CASE WHEN 表达式支持）
-        模型有时生成 {"fn":"sum","expr":"CASE WHEN...","as":"..."} 而非 {"fn":"sum","col":"CASE WHEN...","as":"..."}
+    20. filter/having 中 {"$preset": "YYYY-MM-DD"} → {"$date": "YYYY-MM-DD"}
+    21. filter/having 条件中缺少 op 字段 → 删除该条件
+    22. filter/having 条件 val: {"col": "x"} → col2: "x"（由 _coerce_condition 处理）
+    23. filter/having 条件 col_right → col2（由 _coerce_condition 处理）
+    24. agg items 中 "expr" 字段 → "col"
     """
     q = dict(q)  # 浅拷贝，避免修改调用方的原始对象
+    q = _coerce_toplevel(q)
+    q = _coerce_filters(q)
+    q = _coerce_agg(q)
+    q = _coerce_having_agg_refs(q)
+    q = _coerce_select(q)
+    q = _coerce_group(q)
+    q = _coerce_cte_refs(q)
+    q = _coerce_joins(q)
+    q = _coerce_filter_vals(q)
+    q = _coerce_window_qualify(q)
+    return q
 
+
+def _coerce_toplevel(q: dict) -> dict:
+    """顶层结构修复。处理修复 8（query 字符串解包）、修复 11（scan 从 CTE 推断）。"""
     # 修复 8：顶层 "query" 为 JSON 字符串时解包
     # 场景：模型把完整 Forge JSON 嵌套在 "query" 字段里，且顶层缺少必填的 scan/select。
     # 此修复仅在顶层无 scan 且 query 是字符串时生效，不影响正常 union/CTE 中的 query dict。
@@ -178,6 +156,11 @@ def _coerce(q: dict) -> dict:
     if "scan" not in q and q.get("cte"):
         q["scan"] = q["cte"][-1]["name"]
 
+    return q
+
+
+def _coerce_filters(q: dict) -> dict:
+    """过滤条件基础规范化。处理修复 1（dict→list）、修复 2（between val 拆分）。"""
     # 修复 1：filter/having 为 dict 时包装为列表
     for field in ("filter", "having"):
         if isinstance(q.get(field), dict):
@@ -191,6 +174,11 @@ def _coerce(q: dict) -> dict:
         if fixed:
             q[field] = fixed
 
+    return q
+
+
+def _coerce_agg(q: dict) -> dict:
+    """聚合项清理。处理修复 12（非法字段清理）、修复 24（expr→col）、修复 4（count_all col 删除）。"""
     # 修复 12：清理 agg items 中的非法字段
     # 场景：模型在 agg 项中混入 having、where 等非法字段，导致 schema 校验失败
     _VALID_AGG_FIELDS = {"fn", "col", "as", "separator", "filter"}
@@ -213,6 +201,11 @@ def _coerce(q: dict) -> dict:
             fixed_agg.append(agg_item)
         q["agg"] = fixed_agg
 
+    return q
+
+
+def _coerce_having_agg_refs(q: dict) -> dict:
+    """HAVING 内联聚合函数替换。处理修复 6（having fn→agg alias）。"""
     # 修复 6：having 中出现内联聚合函数 → 替换为 agg alias
     if q.get("having") and q.get("agg"):
         # 构建 (fn, col) → alias 查找表；count_all 的 col 为空字符串
@@ -223,6 +216,11 @@ def _coerce(q: dict) -> dict:
                 agg_lookup[key] = agg_item["as"]
         q["having"] = [_coerce_having_fn(c, agg_lookup) for c in q["having"]]
 
+    return q
+
+
+def _coerce_select(q: dict) -> dict:
+    """SELECT 规范化与自动生成。处理修复 9（内联别名）、修复 10（自动生成 select）、修复 13（count_all→COUNT(*)）。"""
     # 修复 9：select 中的字符串含内联别名（"expr AS alias"）→ 转为 expr 对象
     # 场景：模型把 SELECT 的 AS 子句写进字符串，如 "STRFTIME('%Y-%m', t.col) as month"
     # 若不处理，fix 5 会把含 "." 的整个字符串（含 " as month"）加入 GROUP BY，产生语法错误
@@ -250,6 +248,24 @@ def _coerce(q: dict) -> dict:
         if auto_select:
             q["select"] = auto_select
 
+    # 修复 13：select expr 字符串中出现 count_all() → 替换为 COUNT(*)
+    # 场景：模型在 expr 中内联 count_all()，SQLite 不认识该函数名
+    if q.get("select"):
+        fixed_sel = []
+        for item in q["select"]:
+            if isinstance(item, dict) and "expr" in item:
+                item = dict(item)
+                item["expr"] = re.sub(
+                    r'\bcount_all\s*\(\s*\)', 'COUNT(*)', item["expr"], flags=re.IGNORECASE
+                )
+            fixed_sel.append(item)
+        q["select"] = fixed_sel
+
+    return q
+
+
+def _coerce_group(q: dict) -> dict:
+    """GROUP BY 补全与推断。处理修复 5（select 维度列补入 group）、修复 17（从 having 推断 group）。"""
     # 修复 5：group 存在时，补全 select 中缺失的维度列到 group
     if q.get("group") is not None and q.get("agg"):
         agg_aliases    = {a["as"] for a in q.get("agg", [])    if "as" in a}
@@ -276,19 +292,11 @@ def _coerce(q: dict) -> dict:
                 group_set.add(sel_item)
         q["group"] = current_group
 
-    # 修复 13：select expr 字符串中出现 count_all() → 替换为 COUNT(*)
-    # 场景：模型在 expr 中内联 count_all()，SQLite 不认识该函数名
-    if q.get("select"):
-        fixed_sel = []
-        for item in q["select"]:
-            if isinstance(item, dict) and "expr" in item:
-                item = dict(item)
-                item["expr"] = re.sub(
-                    r'\bcount_all\s*\(\s*\)', 'COUNT(*)', item["expr"], flags=re.IGNORECASE
-                )
-            fixed_sel.append(item)
-        q["select"] = fixed_sel
+    return q
 
+
+def _coerce_cte_refs(q: dict) -> dict:
+    """CTE 列引用前缀剥离。处理修复 14（scan 为 CTE 名时，剥离 table.col 中非 CTE 的 table. 前缀）。"""
     # 修复 14：当 scan 为 CTE 名时，外层列引用中的 table.col 去掉 table. 前缀
     # 场景：模型在 CTE 内 GROUP BY products.category，然后外层 SELECT products.category
     #       CTE 输出列名不带表前缀，SQLite 报 "no such column: products.category"
@@ -344,6 +352,11 @@ def _coerce(q: dict) -> dict:
                     new_win.append(w)
                 q["window"] = new_win
 
+    return q
+
+
+def _coerce_joins(q: dict) -> dict:
+    """JOIN 过滤条件修复。处理修复 15（join filter→顶层）、修复 17（having 推断 group）、修复 19（semi/anti filter 迁移）。"""
     # 修复 15：inner/left/right/full join 中的 filter 属性 → 提取到顶层 filter
     # 场景：模型在普通 join 中附加 filter 字段，该表在 FROM 作用域内，条件可直接移至 WHERE
     # 注意：semi/anti join 的 filter 留在 join 内（由 _join() 并入 EXISTS/NOT EXISTS 子查询）
@@ -419,52 +432,68 @@ def _coerce(q: dict) -> dict:
                     _new_joins[_ji] = _jj
                 q["joins"] = _new_joins
 
+    return q
+
+
+# 修复 20 使用的常量和辅助函数（模块级别，避免每次调用重建）
+_ISO_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_VALID_PRESETS = {
+    "today", "yesterday", "last_7_days", "last_30_days",
+    "this_month", "last_month", "this_quarter", "this_year",
+}
+
+
+def _coerce_val(v):
+    """将值中的非法 $preset 日期字符串转为 $date。"""
+    if isinstance(v, dict) and "$preset" in v:
+        p = v["$preset"]
+        if p not in _VALID_PRESETS and _ISO_DATE_RE.match(str(p)):
+            return {"$date": p}
+    return v
+
+
+def _coerce_cond_val(cond: dict) -> dict:
+    """递归修复条件中的 $preset → $date 值。"""
+    if "or" in cond:
+        return {"or": [_coerce_cond_val(c) for c in cond["or"]]}
+    if "and" in cond:
+        return {"and": [_coerce_cond_val(c) for c in cond["and"]]}
+    if "val" in cond:
+        cond = dict(cond)
+        cond["val"] = _coerce_val(cond["val"])
+    for bound in ("lo", "hi"):
+        if bound in cond:
+            cond = dict(cond)
+            cond[bound] = _coerce_val(cond[bound])
+    return cond
+
+
+def _has_valid_op(cond: dict) -> bool:
+    """判断条件是否含有效的 op，或为 or/and 组。"""
+    if "or" in cond or "and" in cond:
+        return True
+    return "op" in cond
+
+
+def _coerce_filter_vals(q: dict) -> dict:
+    """过滤条件值修复与清理。处理修复 20（$preset→$date）、修复 21（缺少 op 的条件删除）。"""
     # 修复 20：filter/having 中 {"$preset": "YYYY-MM-DD"} → 转为 {"$date": "..."}
     # 场景：模型用 {"$preset": "2025-11-01"} 而 "2025-11-01" 不是合法 preset 名
-    _ISO_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
-    _VALID_PRESETS = {
-        "today", "yesterday", "last_7_days", "last_30_days",
-        "this_month", "last_month", "this_quarter", "this_year",
-    }
-
-    def _coerce_val(v):
-        """将值中的非法 $preset 日期字符串转为 $date。"""
-        if isinstance(v, dict) and "$preset" in v:
-            p = v["$preset"]
-            if p not in _VALID_PRESETS and _ISO_DATE_RE.match(str(p)):
-                return {"$date": p}
-        return v
-
-    def _coerce_cond_val(cond: dict) -> dict:
-        if "or" in cond:
-            return {"or": [_coerce_cond_val(c) for c in cond["or"]]}
-        if "and" in cond:
-            return {"and": [_coerce_cond_val(c) for c in cond["and"]]}
-        if "val" in cond:
-            cond = dict(cond)
-            cond["val"] = _coerce_val(cond["val"])
-        for bound in ("lo", "hi"):
-            if bound in cond:
-                cond = dict(cond)
-                cond[bound] = _coerce_val(cond[bound])
-        return cond
-
     for field in ("filter", "having"):
         if q.get(field):
             q[field] = [_coerce_cond_val(c) for c in q[field]]
 
     # 修复 21：filter/having 条件中缺少 op 字段 → 删除该条件
     # 场景：模型生成 {"col": "x"} 没有 op，导致 schema 校验失败
-    def _has_valid_op(cond: dict) -> bool:
-        """判断条件是否含有效的 op，或为 or/and 组。"""
-        if "or" in cond or "and" in cond:
-            return True
-        return "op" in cond
-
     for field in ("filter", "having"):
         if q.get(field):
             q[field] = [c for c in q[field] if _has_valid_op(c)]
 
+    return q
+
+
+def _coerce_window_qualify(q: dict) -> dict:
+    """窗口函数与 qualify 修复。处理修复 7（qualify 引用的 window 别名补入 select）。"""
     # 修复 7：qualify 引用的 window 别名未在 select 中时，自动补齐
     # 解决：模型使用 window + qualify 时遗漏 rank alias，导致外层 WHERE 引用未定义列。
     # 机制：qualify 编译为 SELECT * FROM (inner_sql) WHERE alias = val，

@@ -36,6 +36,7 @@ AgentResponse.action 值说明：
 """
 from __future__ import annotations
 import json
+import logging
 from datetime import date
 
 import yaml
@@ -47,6 +48,8 @@ from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
 from agent.session import store, IntentSpec
 from agent import llm
+
+logger = logging.getLogger(__name__)
 
 # 编译失败后最多重试次数（不含首次尝试）
 # 设为 2：首次失败 → 第 1 次重试 → 第 2 次重试 → 放弃
@@ -420,8 +423,8 @@ def _maybe_write_staging(session, user_text: str, forge_json: dict) -> None:
             user_response=user_text,
             ambiguity_keys=[],
         )
-    except Exception:
-        pass  # staging 写入失败不影响主流程
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        logger.warning("Failed to write staging record: %s", exc)
 
 
 # ── 澄清检测 ──────────────────────────────────────────────────────────────────
@@ -439,7 +442,8 @@ def _check_clarification_needed(question: str) -> dict | None:
     """
     try:
         disambiguations: dict = yaml.safe_load(cfg.DISAMBIGUATIONS_PATH.read_text()) or {}
-    except Exception:
+    except (FileNotFoundError, OSError, yaml.YAMLError) as exc:
+        logger.debug("Disambiguations not available for clarification check: %s", exc)
         return None
 
     q_lower = question.lower()
@@ -497,14 +501,16 @@ def _validate_and_save(metric: dict, name: str) -> tuple[list[str], list[str]]:
     # 读取结构层（容错：文件不存在时使用空字典，跳过字段合法性检查）
     try:
         structural = json.loads(cfg.REGISTRY_PATH.read_text())
-    except Exception:
+    except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+        logger.debug("Schema registry not available for validation: %s", exc)
         structural = {}
 
     # 读取现有指标列表（用于衍生指标的引用检查）
     path = cfg.METRICS_PATH
     try:
         existing: dict = yaml.safe_load(path.read_text()) or {}
-    except Exception:
+    except (FileNotFoundError, OSError, yaml.YAMLError) as exc:
+        logger.debug("Metrics registry not available for validation: %s", exc)
         existing = {}
 
     result = validate_metric(metric, structural, metric_name=name, all_metrics=existing)

@@ -2,11 +2,17 @@
 Tests for agent.session — Session and SessionStore state management.
 """
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agent.session import Message, Session, SessionStore
+
+
+def _tmp_store() -> SessionStore:
+    """创建使用临时数据库的 SessionStore，避免测试间数据污染。"""
+    return SessionStore(db_path=Path(tempfile.mktemp(suffix=".db")))
 
 
 # ── Message ───────────────────────────────────────────────────────────────────
@@ -85,14 +91,14 @@ def test_session_pending_sql_set_and_clear():
 # ── SessionStore ──────────────────────────────────────────────────────────────
 
 def test_store_get_creates_new_session():
-    store = SessionStore()
+    store = _tmp_store()
     s = store.get("alice")
     assert isinstance(s, Session)
     assert s.user_id == "alice"
 
 
 def test_store_get_returns_same_session():
-    store = SessionStore()
+    store = _tmp_store()
     s1 = store.get("bob")
     s1.add("user", "hi")
     s2 = store.get("bob")
@@ -101,7 +107,7 @@ def test_store_get_returns_same_session():
 
 
 def test_store_different_users_isolated():
-    store = SessionStore()
+    store = _tmp_store()
     store.get("alice").add("user", "alice msg")
     store.get("bob").add("user", "bob msg")
     assert store.get("alice").history[0].content == "alice msg"
@@ -109,7 +115,7 @@ def test_store_different_users_isolated():
 
 
 def test_store_clear_removes_session():
-    store = SessionStore()
+    store = _tmp_store()
     store.get("carol").add("user", "hello")
     store.clear("carol")
     # get after clear returns fresh session
@@ -118,17 +124,47 @@ def test_store_clear_removes_session():
 
 
 def test_store_clear_nonexistent_no_error():
-    store = SessionStore()
+    store = _tmp_store()
     store.clear("nobody")  # must not raise
 
 
 def test_store_clear_only_removes_target_user():
-    store = SessionStore()
+    store = _tmp_store()
     store.get("alice").add("user", "stay")
     store.get("bob").add("user", "go")
     store.clear("bob")
     assert len(store.get("alice").history) == 1
     assert len(store.get("bob").history) == 0
+
+
+# ── Session persistence ──────────────────────────────────────────────────────
+
+def test_store_persists_and_restores():
+    """验证 Session 历史在新 SessionStore 实例中可恢复。"""
+    import tempfile
+    db = Path(tempfile.mktemp(suffix=".db"))
+    store1 = SessionStore(db_path=db)
+    store1.get("dave").add("user", "persisted msg")
+    store1.get("dave").add("assistant", "reply")
+
+    # 模拟重启：新建 store 指向同一 db
+    store2 = SessionStore(db_path=db)
+    restored = store2.get("dave")
+    assert len(restored.history) == 2
+    assert restored.history[0].content == "persisted msg"
+    assert restored.history[1].role == "assistant"
+
+
+def test_store_clear_also_removes_from_db():
+    """验证 clear 后重启不会恢复已清除的 Session。"""
+    import tempfile
+    db = Path(tempfile.mktemp(suffix=".db"))
+    store1 = SessionStore(db_path=db)
+    store1.get("eve").add("user", "temp")
+    store1.clear("eve")
+
+    store2 = SessionStore(db_path=db)
+    assert len(store2.get("eve").history) == 0
 
 
 # ── Session preserves role ordering ───────────────────────────────────────────

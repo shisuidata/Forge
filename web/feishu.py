@@ -74,8 +74,8 @@ def _user_worker(open_id: str, q: queue.Queue) -> None:
             logger.exception("dispatch error for %s: %s", open_id, exc)
             try:
                 _send_info_card(open_id, f"❌ 处理出错：{exc}", template="red")
-            except Exception:
-                pass
+            except Exception as send_exc:
+                logger.warning("Failed to send error card to %s: %s", open_id, send_exc)
         finally:
             q.task_done()
 

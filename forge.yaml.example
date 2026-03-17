@@ -21,8 +21,8 @@ llm:
 # ── Embedding 模型（RAG 召回用）────────────────────────────────────────────────
 embedding:
   api_key:   ""                    # 留空则复用 llm.api_key
-  base_url:  "https://api.minimaxi.com/v1"
-  model:     "embo-01"
+  base_url:  "https://api.siliconflow.cn/v1"
+  model:     "BAAI/bge-m3"
   top_k:     5                     # 每次查询最多召回几张表
 
 # ── 数据库连接 ────────────────────────────────────────────────────────────────

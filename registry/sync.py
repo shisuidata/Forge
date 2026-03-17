@@ -37,9 +37,12 @@ Registry 结构层同步模块。
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect
+
+logger = logging.getLogger(__name__)
 
 
 _ENUM_MAX_DISTINCT = 30   # 去重值 ≤ 此数的字符串列自动采样为枚举
@@ -104,8 +107,8 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
                             vals = [row[0] for row in conn.execute(vals_sql)]
                             table_cols[col_name] = {"enum": vals}
                             continue
-                    except Exception:
-                        pass  # 采样失败静默跳过，降级为无元数据
+                    except Exception as exc:
+                        logger.debug("Enum sampling failed for %s.%s: %s", table_name, col_name, exc)
 
                 # 整数型 flag/状态列（如 is_vip）：跳过 id 和外键，只采样小基数非 ID 整数
                 is_id_col = col_name == "id" or col_name.endswith("_id")
@@ -125,8 +128,8 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
                             vals = [row[0] for row in conn.execute(vals_sql)]
                             table_cols[col_name] = {"enum": vals}
                             continue
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Enum sampling failed for %s.%s: %s", table_name, col_name, exc)
 
                 table_cols[col_name] = {}
 
@@ -206,8 +209,8 @@ def run_sync(database_url: str, registry_path: Path) -> dict:
     if registry_path.exists():
         try:
             existing = json.loads(registry_path.read_text())
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Failed to read existing registry, starting fresh: %s", exc)
 
     registry = _merge(existing, live_tables)
     registry_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False))
