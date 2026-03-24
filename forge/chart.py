@@ -375,3 +375,81 @@ def generate(cols: list[str], rows: list[tuple], query_hint: str = "") -> str | 
     except Exception as exc:
         logger.warning("Chart generation failed: %s", exc, exc_info=True)
         return None
+
+
+def generate_from_spec(
+    spec: dict,
+    cols: list[str],
+    rows: list[tuple],
+) -> str | None:
+    """
+    从 ChartSpec 生成交互图表，支持标注和高亮。
+
+    Args:
+        spec:  ChartSpec.to_dict()，含 chart_type / title / annotations / config
+        cols:  列名
+        rows:  数据行
+
+    Returns:
+        生成的 HTML 文件名，失败返回 None。
+    """
+    if not rows or len(cols) < 1:
+        return None
+
+    try:
+        from pyecharts import options as opts
+
+        chart_type = spec.get("chart_type", "bar")
+        title      = spec.get("title", "查询结果")
+        annotations = spec.get("annotations", [])
+        config     = spec.get("config", {})
+
+        # 用现有的图表生成函数
+        if chart_type == "pie":
+            embed = _make_pie(title, cols, rows)
+        elif chart_type == "line":
+            embed = _make_line(title, cols, rows)
+        elif chart_type == "scatter":
+            embed = _make_bar(title, cols, rows)  # 暂降级为 bar
+        else:
+            embed = _make_bar(title, cols, rows)
+
+        # 注入标注（通过 JS 后处理 ECharts 实例）
+        annotation_js = ""
+        if annotations:
+            highlight_names = [a["name"] for a in annotations if a.get("highlight")]
+            notes = [f'{a["name"]}: {a.get("note", "")}' for a in annotations if a.get("note")]
+
+            if highlight_names or notes:
+                annotation_js = """
+<script>
+(function() {
+  var charts = document.querySelectorAll('.chart-container');
+  charts.forEach(function(dom) {
+    var inst = echarts.getInstanceByDom(dom);
+    if (!inst) return;
+    var opt = inst.getOption();
+
+    // 标注标题
+    var subtitle = %s;
+    if (subtitle.length > 0) {
+      inst.setOption({
+        title: { subtext: subtitle.join(' | '), subtextStyle: { color: '#94a3b8', fontSize: 11 } }
+      });
+    }
+  });
+})();
+</script>""" % repr(notes)
+
+        html = _build_html(embed, title)
+        # 在 </body> 前插入标注 JS
+        if annotation_js:
+            html = html.replace("</body>", annotation_js + "\n</body>")
+
+        filename = f"{uuid.uuid4().hex[:12]}.html"
+        (CHART_DIR / filename).write_text(html, encoding="utf-8")
+        return filename
+
+    except Exception as exc:
+        logger.warning("Chart from spec failed: %s", exc, exc_info=True)
+        return None

@@ -456,20 +456,110 @@ JSON 格式：
         return AnalysisReport(_stage="analyze", summary=text)
 
     def _run_visualization(self, run: PipelineRun, input_artifact: Artifact | None) -> ChartSpec:
-        """执行可视化阶段（暂用简单规则，后续升级为 Agent）。"""
-        if isinstance(input_artifact, QueryResult) and input_artifact.columns:
-            from forge.chart import _recommend
-            chart_type = _recommend(input_artifact.columns, input_artifact.rows)
-            return ChartSpec(
-                _stage="chart",
-                chart_type=chart_type,
-                title=run.question[:40],
+        """执行可视化阶段：LLM 生成 ChartSpec，包含图表类型、标注、高亮。"""
+        from agent import llm
+
+        # 收集可用信息
+        data_prompt = ""
+        analysis_context = ""
+        if isinstance(input_artifact, QueryResult):
+            data_prompt = input_artifact.to_prompt()
+        elif isinstance(input_artifact, AnalysisReport):
+            analysis_context = (
+                f"分析结论：{input_artifact.summary}\n"
+                f"趋势：{input_artifact.trend_direction}\n"
+                f"异常点：{', '.join(input_artifact.anomalies)}\n"
             )
-        return ChartSpec(_stage="chart", chart_type="bar", title=run.question[:40])
+            # 往前找 QueryResult
+            for sr in run.stages:
+                if isinstance(sr.artifact, QueryResult):
+                    data_prompt = sr.artifact.to_prompt()
+                    break
+                elif isinstance(sr.artifact, dict) and sr.artifact.get("_type") == "query_result":
+                    qr = QueryResult.from_dict(sr.artifact)
+                    data_prompt = qr.to_prompt()
+                    break
+
+        if not data_prompt:
+            from forge.chart import _recommend
+            return ChartSpec(_stage="chart", chart_type="bar", title=run.question[:40])
+
+        messages = [{
+            "role": "user",
+            "content": (
+                f"为以下数据设计最佳可视化方案：\n\n"
+                f"{data_prompt}\n\n"
+                f"用户问题：{run.question}\n"
+                f"{analysis_context}"
+            ),
+        }]
+
+        system = """你是一位数据可视化设计师。根据数据和分析结论，选择最佳图表类型并设计标注。
+
+规则：
+- 时间序列数据 → 折线图（line）
+- 分类对比 → 柱状图（bar），≤8 个类别且是占比 → 饼图（pie）
+- 相关性 → 散点图（scatter）
+- 如果有异常数据点或分析标记的重点城市/指标，添加到 annotations
+- annotations 格式：[{"name": "北京", "note": "环比下滑23%", "highlight": true}]
+
+用 JSON 格式回复（不要代码块标记）：
+{"chart_type": "bar|line|pie|scatter", "title": "图表标题", "annotations": [...], "config_hints": {"sort": "desc", "show_avg_line": true}}"""
+
+        result = llm.call(messages, system_override=system)
+        text = result.get("text", "")
+
+        try:
+            import re
+            m = re.search(r'\{[\s\S]+\}', text)
+            if m:
+                data = json.loads(m.group())
+                return ChartSpec(
+                    _stage="chart",
+                    chart_type=data.get("chart_type", "bar"),
+                    title=data.get("title", run.question[:40]),
+                    annotations=data.get("annotations", []),
+                    config=data.get("config_hints", {}),
+                )
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        # 降级：规则推荐
+        from forge.chart import _recommend
+        if isinstance(input_artifact, QueryResult):
+            ct = _recommend(input_artifact.columns, input_artifact.rows)
+        else:
+            ct = "bar"
+        return ChartSpec(_stage="chart", chart_type=ct, title=run.question[:40])
 
     def _run_report(self, run: PipelineRun, input_artifact: Artifact | None) -> Artifact:
-        """执行报告生成阶段（暂用占位）。"""
-        return Artifact(_stage="summary", _type="report_text")
+        """执行报告生成阶段：汇总所有 Artifact 生成文字报告。"""
+        from agent import llm
+
+        # 收集所有阶段的输出
+        parts = [f"用户问题：{run.question}\n"]
+        for sr in run.stages:
+            if sr.artifact and sr.stage != "summary":
+                art = sr.artifact if isinstance(sr.artifact, Artifact) else Artifact.from_dict(sr.artifact)
+                parts.append(f"--- {sr.stage} 阶段输出 ---\n{art.to_prompt()}\n")
+
+        messages = [{"role": "user", "content": "\n".join(parts)}]
+        system = """你是一位数据分析报告撰写者。根据查询结果和分析输出，撰写一份简洁的分析报告。
+
+格式要求：
+- 开头一句话核心结论
+- 2-3 段正文，每段有小标题
+- 用具体数字支撑每个论点
+- 最后给出 1-2 条可行建议
+- 语言风格：专业、简洁、直接
+- 用 Markdown 格式"""
+
+        result = llm.call(messages, system_override=system)
+        text = result.get("text", "")
+
+        report = Artifact(_stage="summary", _type="report_text")
+        report.content = text  # type: ignore[attr-defined]
+        return report
 
 
 # ── 全局单例 ──────────────────────────────────────────────────────────────────
