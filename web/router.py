@@ -56,6 +56,11 @@ router = APIRouter()
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
+# 注册自定义 filter：JSON 输出保留中文（不转义为 \uXXXX）
+def _tojson_cn(value):
+    return json.dumps(value, ensure_ascii=False)
+templates.env.filters["tojson_cn"] = _tojson_cn
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

@@ -45,7 +45,7 @@
         </div>
         <p class="text-sm text-gray-800">
           {% if c.value is mapping %}
-            {{ c.value | tojson }}
+            {{ c.value | tojson_cn }}
           {% else %}
             {{ c.value }}
           {% endif %}
@@ -152,7 +152,7 @@
         <tr class="text-gray-500">
           <td class="px-4 py-3 text-xs">{{ c.source }}</td>
           <td class="px-4 py-3 text-xs font-mono">{{ c.category }}/{{ c.key }}</td>
-          <td class="px-4 py-3 text-xs">{{ c.value if c.value is string else c.value | tojson }}</td>
+          <td class="px-4 py-3 text-xs">{{ c.value if c.value is string else c.value | tojson_cn }}</td>
           <td class="px-4 py-3 text-xs">{{ c.created_at[:16].replace("T"," ") if c.created_at else "" }}</td>
         </tr>
         {% endfor %}
