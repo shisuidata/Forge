@@ -72,6 +72,7 @@ class WorkingMemoryBuffer:
         scene: str,
         user_id: str,
         current_query: str = "",
+        team_id: str = "",
     ) -> tuple[list[dict[str, str]], str]:
         """
         按场景构建 LLM 输入。
@@ -119,6 +120,7 @@ class WorkingMemoryBuffer:
             knowledge_context = self._smp.get_knowledge_text(
                 user_id,
                 max_items=config.smp_max_items,
+                team_id=team_id,
             )
         except Exception as exc:
             logger.debug("SMP knowledge retrieval failed: %s", exc)

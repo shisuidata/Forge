@@ -72,16 +72,22 @@ class MemoryManager:
         scene: str,
         user_id: str,
         query: str = "",
+        team_id: str = "",
     ) -> tuple[list[dict[str, str]], str]:
         """
         按场景构建 LLM 输入。
 
         Returns:
             (messages, knowledge_context)
-            messages:          LLM messages 数组
-            knowledge_context: 追加到 system prompt 的知识文本
         """
-        return self.wmb.build(scene, user_id, query)
+        # 自动获取 team_id（如果未传入）
+        if not team_id:
+            try:
+                from agent.tenant import tenants
+                team_id = tenants.get_team(user_id)
+            except Exception:
+                pass
+        return self.wmb.build(scene, user_id, query, team_id=team_id)
 
     # ── 状态管理 ──────────────────────────────────────────────────────────────
 

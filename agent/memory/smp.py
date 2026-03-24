@@ -48,6 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_smp_org  ON memory_smp(scope, category) WHERE sco
 """
 
 ORG_USER_ID = "__org__"
+TEAM_PREFIX = "__team__"    # team scope 的 user_id 格式: "__team__marketing"
 
 
 class SemanticMemoryPool:
@@ -111,6 +112,15 @@ class SemanticMemoryPool:
         """写入组织级知识。"""
         self.upsert(category, key, value, user_id=ORG_USER_ID, scope="org", **kwargs)
 
+    def upsert_team(self, team_id: str, category: str, key: str, value: Any, **kwargs) -> None:
+        """写入团队级知识。"""
+        self.upsert(
+            category, key, value,
+            user_id=f"{TEAM_PREFIX}{team_id}",
+            scope="team",
+            **kwargs,
+        )
+
     # ── 读取 ──────────────────────────────────────────────────────────────────
 
     def query(
@@ -118,24 +128,35 @@ class SemanticMemoryPool:
         user_id: str,
         category: str = "",
         limit: int = 10,
+        team_id: str = "",
     ) -> list[dict]:
         """
-        查询用户可见的知识（个人级 + 组织级合并，个人级优先）。
+        查询用户可见的知识，三层合并：user > team > org（就近覆盖）。
         """
         conn = self._ensure_conn()
-        conditions = ["(user_id = ? OR (scope = 'org' AND user_id = ?))"]
-        params: list[Any] = [user_id, ORG_USER_ID]
 
+        # 构建匹配条件：user 本人 + team + org
+        user_conditions = ["(scope = 'user' AND user_id = ?)"]
+        params: list[Any] = [user_id]
+        if team_id:
+            user_conditions.append("(scope = 'team' AND user_id = ?)")
+            params.append(f"{TEAM_PREFIX}{team_id}")
+        user_conditions.append("(scope = 'org' AND user_id = ?)")
+        params.append(ORG_USER_ID)
+
+        scope_filter = "(" + " OR ".join(user_conditions) + ")"
+        conditions = [scope_filter]
         if category:
             conditions.append("category = ?")
             params.append(category)
 
         where = " AND ".join(conditions)
-        # 按 scope 排序：user 优先于 org（同 key 时个人覆盖组织）
+        # 优先级：user=0, team=1, org=2（同 key 就近覆盖）
         rows = conn.execute(
             f"SELECT scope, user_id, category, key, value, confidence, updated_at "
             f"FROM memory_smp WHERE {where} "
-            f"ORDER BY CASE scope WHEN 'user' THEN 0 ELSE 1 END, confidence DESC, updated_at DESC "
+            f"ORDER BY CASE scope WHEN 'user' THEN 0 WHEN 'team' THEN 1 ELSE 2 END, "
+            f"confidence DESC, updated_at DESC "
             f"LIMIT ?",
             (*params, limit),
         ).fetchall()
@@ -145,7 +166,7 @@ class SemanticMemoryPool:
         for r in rows:
             k = f"{r[2]}:{r[3]}"
             if k in seen_keys:
-                continue  # 个人级已覆盖同 key 的组织级
+                continue
             seen_keys.add(k)
             try:
                 val = json.loads(r[4])
@@ -157,11 +178,12 @@ class SemanticMemoryPool:
             })
         return results
 
-    def get_knowledge_text(self, user_id: str, max_items: int = 5) -> str:
+    def get_knowledge_text(self, user_id: str, max_items: int = 5, team_id: str = "") -> str:
         """
         获取用户可见的知识摘要文本（用于注入 system prompt）。
+        三层合并：user > team > org。
         """
-        items = self.query(user_id, limit=max_items)
+        items = self.query(user_id, limit=max_items, team_id=team_id)
         if not items:
             return ""
 
