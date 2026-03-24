@@ -67,7 +67,7 @@
     "category": "复杂过滤",
     "difficulty": 2,
     "question": "2025年12月内，国际品牌或国内知名品牌的进口商品的订单明细，按下单时间降序",
-    "reference_sql": "SELECT dwd_order_item_detail.order_item_id, dwd_order_item_detail.order_id, dim_product.product_name, dim_brand.brand_name, dim_brand.brand_level, dwd_order_item_detail.actual_amount, dwd_order_item_detail.order_dt\nFROM dwd_order_item_detail\nINNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\nINNER JOIN dim_brand ON dim_product.brand_id = dim_brand.brand_id\nWHERE dim_brand.brand_level IN ('国际', '国内知名')\n  AND dim_product.is_imported = 1\n  AND dwd_order_item_detail.order_dt >= '2025-12-01'\n  AND dwd_order_item_detail.order_dt < '2026-01-01'\nORDER BY dwd_order_item_detail.order_dt DESC"
+    "reference_sql": "SELECT dwd_order_item_detail.order_item_id, dwd_order_item_detail.order_id, dim_product.product_name, dim_brand.brand_name, dwd_order_item_detail.actual_amount, dwd_order_item_detail.order_dt\nFROM dwd_order_item_detail\nINNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\nINNER JOIN dim_brand ON dim_product.brand_id = dim_brand.brand_id\nWHERE dim_brand.brand_level IN ('国际', '国内知名')\n  AND dim_product.is_imported = 1\n  AND dwd_order_item_detail.order_dt >= '2025-12-01'\n  AND dwd_order_item_detail.order_dt < '2026-01-01'\nORDER BY dwd_order_item_detail.order_dt DESC"
   },
   {
     "id": 11,
@@ -151,7 +151,7 @@
     "category": "窗口聚合",
     "difficulty": 3,
     "question": "计算每个商品的销售额及其在所属品类总销售额中的占比",
-    "reference_sql": "WITH product_rev AS (\n  SELECT dwd_order_item_detail.product_id, dim_product.product_name, dim_category.category_name,\n    SUM(dwd_order_item_detail.actual_amount) AS product_revenue\n  FROM dwd_order_item_detail\n  INNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\n  INNER JOIN dim_category ON dim_product.category_id = dim_category.category_id\n  GROUP BY dwd_order_item_detail.product_id, dim_product.product_name, dim_category.category_name\n)\nSELECT product_name, category_name, product_revenue,\n  SUM(product_revenue) OVER (PARTITION BY category_name) AS category_total,\n  ROUND(product_revenue * 100.0 / SUM(product_revenue) OVER (PARTITION BY category_name), 2) AS pct_of_category\nFROM product_rev\nORDER BY category_name, product_revenue DESC"
+    "reference_sql": "WITH product_rev AS (\n  SELECT dwd_order_item_detail.product_id, dim_product.product_name, dim_category.category_name,\n    SUM(dwd_order_item_detail.actual_amount) AS product_revenue\n  FROM dwd_order_item_detail\n  INNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\n  INNER JOIN dim_category ON dim_product.category_id = dim_category.category_id\n  GROUP BY dwd_order_item_detail.product_id, dim_product.product_name, dim_category.category_name\n)\nSELECT product_name, category_name, product_revenue,\n  ROUND(product_revenue * 1.0 / SUM(product_revenue) OVER (PARTITION BY category_name), 4) AS pct_of_category\nFROM product_rev\nORDER BY category_name, product_revenue DESC"
   },
   {
     "id": 23,
@@ -172,13 +172,13 @@
     "category": "窗口聚合",
     "difficulty": 3,
     "question": "每个渠道按月统计订单数，以及该渠道当月订单数在所有渠道当月总订单数中的占比",
-    "reference_sql": "WITH monthly_channel AS (\n  SELECT dim_channel.channel_name, STRFTIME('%Y-%m', dwd_order_detail.order_dt) AS month,\n    COUNT(dwd_order_detail.order_id) AS monthly_orders\n  FROM dwd_order_detail\n  INNER JOIN dim_channel ON dwd_order_detail.channel_id = dim_channel.channel_id\n  GROUP BY dim_channel.channel_name, STRFTIME('%Y-%m', dwd_order_detail.order_dt)\n)\nSELECT channel_name, month, monthly_orders,\n  SUM(monthly_orders) OVER (PARTITION BY month) AS total_monthly,\n  ROUND(monthly_orders * 100.0 / SUM(monthly_orders) OVER (PARTITION BY month), 2) AS pct\nFROM monthly_channel\nORDER BY month, monthly_orders DESC"
+    "reference_sql": "WITH monthly_channel AS (\n  SELECT dim_channel.channel_name, STRFTIME('%Y-%m', dwd_order_detail.order_dt) AS month,\n    COUNT(dwd_order_detail.order_id) AS monthly_orders\n  FROM dwd_order_detail\n  INNER JOIN dim_channel ON dwd_order_detail.channel_id = dim_channel.channel_id\n  GROUP BY dim_channel.channel_name, STRFTIME('%Y-%m', dwd_order_detail.order_dt)\n)\nSELECT channel_name, month, monthly_orders,\n  ROUND(monthly_orders * 1.0 / SUM(monthly_orders) OVER (PARTITION BY month), 4) AS pct\nFROM monthly_channel\nORDER BY month, monthly_orders DESC"
   },
   {
     "id": 26,
     "category": "时序导航",
     "difficulty": 2,
-    "question": "每个用户最近一笔已完成订单与上一笔已完成订单的金额对比，显示用户ID、下单时间、当前金额和上一笔金额",
+    "question": "每个用户每笔已完成订单的金额，以及上一笔已完成订单的金额（LAG），显示用户ID、下单时间、当前金额和上一笔金额",
     "reference_sql": "SELECT dwd_order_detail.user_id, dwd_order_detail.order_dt, dwd_order_detail.total_amount,\n  LAG(dwd_order_detail.total_amount, 1) OVER (PARTITION BY dwd_order_detail.user_id ORDER BY dwd_order_detail.order_dt ASC) AS prev_amount\nFROM dwd_order_detail\nWHERE dwd_order_detail.order_status = '已完成'\nORDER BY dwd_order_detail.user_id, dwd_order_detail.order_dt"
   },
   {
@@ -193,7 +193,7 @@
     "category": "时序导航",
     "difficulty": 2,
     "question": "每个用户相邻两次下单之间的时间间隔（天数），显示用户ID、下单时间和距上次下单天数",
-    "reference_sql": "SELECT dwd_order_detail.user_id, dwd_order_detail.order_dt,\n  JULIANDAY(dwd_order_detail.order_dt) - JULIANDAY(LAG(dwd_order_detail.order_dt, 1) OVER (PARTITION BY dwd_order_detail.user_id ORDER BY dwd_order_detail.order_dt ASC)) AS days_since_last_order\nFROM dwd_order_detail\nWHERE dwd_order_detail.order_status = '已完成'\nORDER BY dwd_order_detail.user_id, dwd_order_detail.order_dt"
+    "reference_sql": "SELECT dwd_order_detail.user_id, dwd_order_detail.order_dt,\n  ROUND(JULIANDAY(dwd_order_detail.order_dt) - JULIANDAY(LAG(dwd_order_detail.order_dt, 1) OVER (PARTITION BY dwd_order_detail.user_id ORDER BY dwd_order_detail.order_dt ASC)), 1) AS days_since_last_order\nFROM dwd_order_detail\nWHERE dwd_order_detail.order_status = '已完成'\nORDER BY dwd_order_detail.user_id, dwd_order_detail.order_dt"
   },
   {
     "id": 29,
@@ -248,7 +248,7 @@
     "id": 36,
     "category": "综合复杂查询",
     "difficulty": 3,
-    "question": "统计各品牌钻石会员用户的已完成订单客单价，按品牌和客单价降序排列",
+    "question": "统计各品牌钻石会员用户在已完成订单中的平均商品实付单价（AVG item actual_amount），按均价降序排列",
     "reference_sql": "SELECT dim_brand.brand_name, dim_vip_level.level_name, AVG(dwd_order_item_detail.actual_amount) AS avg_item_price, COUNT(DISTINCT dwd_order_detail.order_id) AS order_count\nFROM dwd_order_item_detail\nINNER JOIN dwd_order_detail ON dwd_order_item_detail.order_id = dwd_order_detail.order_id\nINNER JOIN dim_user ON dwd_order_detail.user_id = dim_user.user_id\nINNER JOIN dim_vip_level ON dim_user.vip_level_id = dim_vip_level.vip_level_id\nINNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\nINNER JOIN dim_brand ON dim_product.brand_id = dim_brand.brand_id\nWHERE dwd_order_detail.order_status = '已完成'\n  AND dim_vip_level.level_name = '钻石'\nGROUP BY dim_brand.brand_id, dim_brand.brand_name, dim_vip_level.level_name\nORDER BY avg_item_price DESC"
   },
   {
@@ -263,7 +263,7 @@
     "category": "综合复杂查询",
     "difficulty": 3,
     "question": "各品类内，按销售额排名前3的商品及其销售额在品类中的占比",
-    "reference_sql": "WITH product_rev AS (\n  SELECT dim_product.product_id, dim_product.product_name, dim_category.category_name,\n    SUM(dwd_order_item_detail.actual_amount) AS product_revenue\n  FROM dwd_order_item_detail\n  INNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\n  INNER JOIN dim_category ON dim_product.category_id = dim_category.category_id\n  GROUP BY dim_product.product_id, dim_product.product_name, dim_category.category_name\n),\nranked AS (\n  SELECT product_name, category_name, product_revenue,\n    ROUND(product_revenue * 100.0 / SUM(product_revenue) OVER (PARTITION BY category_name), 2) AS pct,\n    ROW_NUMBER() OVER (PARTITION BY category_name ORDER BY product_revenue DESC) AS rn\n  FROM product_rev\n)\nSELECT category_name, product_name, product_revenue, pct FROM ranked WHERE rn <= 3 ORDER BY category_name, rn"
+    "reference_sql": "WITH product_rev AS (\n  SELECT dim_product.product_id, dim_product.product_name, dim_category.category_name,\n    SUM(dwd_order_item_detail.actual_amount) AS product_revenue\n  FROM dwd_order_item_detail\n  INNER JOIN dim_product ON dwd_order_item_detail.product_id = dim_product.product_id\n  INNER JOIN dim_category ON dim_product.category_id = dim_category.category_id\n  GROUP BY dim_product.product_id, dim_product.product_name, dim_category.category_name\n),\nranked AS (\n  SELECT product_name, category_name, product_revenue,\n    ROUND(product_revenue * 1.0 / SUM(product_revenue) OVER (PARTITION BY category_name), 4) AS pct,\n    ROW_NUMBER() OVER (PARTITION BY category_name ORDER BY product_revenue DESC) AS rn\n  FROM product_rev\n)\nSELECT category_name, product_name, product_revenue, pct FROM ranked WHERE rn <= 3 ORDER BY category_name, rn"
   },
   {
     "id": 39,
@@ -276,7 +276,7 @@
     "id": 40,
     "category": "综合复杂查询",
     "difficulty": 3,
-    "question": "各年龄段用户的退款率（退款订单数/总完成订单数），并按退款率排名",
+    "question": "各年龄段用户的退款率（退款订单数/总订单数），并按退款率降序排列",
     "reference_sql": "WITH age_orders AS (\n  SELECT dim_user.age_group,\n    COUNT(DISTINCT dwd_order_detail.order_id) AS total_orders\n  FROM dwd_order_detail\n  INNER JOIN dim_user ON dwd_order_detail.user_id = dim_user.user_id\n  GROUP BY dim_user.age_group\n),\nage_refunds AS (\n  SELECT dim_user.age_group,\n    COUNT(DISTINCT dwd_refund_detail.order_id) AS refund_count\n  FROM dwd_refund_detail\n  INNER JOIN dwd_order_detail ON dwd_refund_detail.order_id = dwd_order_detail.order_id\n  INNER JOIN dim_user ON dwd_order_detail.user_id = dim_user.user_id\n  GROUP BY dim_user.age_group\n)\nSELECT age_orders.age_group, age_orders.total_orders,\n  COALESCE(age_refunds.refund_count, 0) AS refund_count,\n  ROUND(CAST(COALESCE(age_refunds.refund_count, 0) AS REAL) / age_orders.total_orders, 4) AS refund_rate\nFROM age_orders\nLEFT JOIN age_refunds ON age_orders.age_group = age_refunds.age_group\nORDER BY refund_rate DESC"
   }
 ]

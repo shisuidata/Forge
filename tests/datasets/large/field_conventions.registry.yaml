@@ -14,39 +14,51 @@
 
 order_status_filter:
   label: 订单状态过滤原则
-  applies_to: [orders.status, order_items.order_id]
+  applies_to: [dwd_order_detail.order_status, dwd_order_item_detail.order_id]
   convention: |
     - 纯维度统计（"各品类总销售额"、"商品销量排行"）→ 不需要加 order_status 过滤
-    - 用户行为分析（"消费轨迹"、"下单时间间隔"、"复购分析"）→ 默认加 order_status = '已完成'
+    - 用户行为分析（"消费轨迹"、"下单时间间隔"、"复购分析"、"消费排名"）→ 默认加 dwd_order_detail.order_status = '已完成'
     - 若用户明确要求看全部状态或特定状态，以用户要求为准
-  confirmed_by_users: false
+  confirmed_by_users: true
 
 category_group_by:
   label: 品类 GROUP BY 与 PARTITION BY
-  applies_to: [products.category_id, dim_category.name]
+  applies_to: [dim_category.category_id, dim_category.category_name]
   convention: |
-    当按品类名称分组时，如果 schema 中存在 category_id 字段，
-    应同时将 category_id 纳入 GROUP BY（或 PARTITION BY），
+    当按品类名称分组时，必须同时将 category_id 纳入 GROUP BY（或 PARTITION BY），
     因为 dim_category 中可能存在同名但不同 ID 的品类，
     仅按名称分组可能造成数据错误合并。
-    示例：group: ["products.category_id", "dim_category.name"]
+    示例：group: ["dim_category.category_id", "dim_category.category_name"]
   confirmed_by_users: false
 
 lag_lead_order:
   label: LAG/LEAD 时序方向
-  applies_to: [orders.created_at, order_items.created_at]
+  applies_to: [dwd_order_detail.order_dt, dwd_order_detail.pay_dt, dwd_comment_detail.comment_dt]
   convention: |
     LAG/LEAD 窗口函数的 order 字段必须使用时间字段 ASC 排序，
     表示"按时间顺序，取上一条/下一条记录"。
     切勿使用 DESC，那会导致 LAG 取到的是时间更晚的记录（逻辑反转）。
-    正确写法：{"col": "orders.created_at", "dir": "asc"}
+    正确写法：{"col": "dwd_order_detail.order_dt", "dir": "asc"}
   confirmed_by_users: false
 
 unit_price_calculation:
   label: 客单价计算粒度
-  applies_to: [orders.total_amount, users.id]
+  applies_to: [dwd_order_detail.total_amount, dwd_order_detail.pay_amount]
   convention: |
-    "客单价"通常指单个订单的平均金额（AVG(orders.total_amount)），
-    不是用户消费总额的平均（SUM/COUNT 用户级别）。
-    "客单价在 X 到 Y 之间"是对单个订单的过滤（filter），而非对用户平均消费的 HAVING 过滤。
+    "客单价"指单个订单的平均实付金额，即 AVG(dwd_order_detail.pay_amount) 或
+    AVG(dwd_order_detail.total_amount)（明确要求已完成订单时加 order_status = '已完成'）。
+    "客单价在 X 到 Y 之间"是对单个订单金额的过滤（filter），而非对用户平均消费的 HAVING 过滤。
+    不要用 SUM(total_amount)/COUNT(user_id) 这种用户级别的均值代替客单价。
   confirmed_by_users: false
+
+refund_rate_join:
+  label: 退款率的计算方式
+  applies_to: [dwd_refund_detail.order_id, dwd_order_detail.order_id]
+  convention: |
+    "退款率"= 有退款记录的订单数 / 总订单数。计算方式：
+    1. 从 dwd_order_detail 出发（总订单数分母）
+    2. LEFT JOIN dwd_refund_detail ON dwd_refund_detail.order_id = dwd_order_detail.order_id
+    3. 分子用 COUNT(DISTINCT dwd_refund_detail.order_id) 或 COUNT(DISTINCT dwd_refund_detail.refund_id)
+    注意：dwd_order_detail 表上【没有】refund_id 字段，退款数据必须从 dwd_refund_detail 表获取。
+    注意：不要把"退款率"和"退货率"混淆——退货率来自 dwd_return_goods_detail。
+  confirmed_by_users: true

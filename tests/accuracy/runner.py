@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))  # for methods/ import
 
 from forge.compiler import compile_query  # noqa: E402
+from forge.lint import lint_conventions  # noqa: E402
 
 ACCURACY_DIR = Path(__file__).parent
 RESULTS_DIR  = ACCURACY_DIR / "results"
@@ -50,6 +51,9 @@ MINIMAX_FALLBACK_MODEL = os.environ.get("MINIMAX_FALLBACK_MODEL", "MiniMax-M2.5"
 DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_MODEL    = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+
+# 原生 Anthropic Claude API
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 
 # ── API 调用 ──────────────────────────────────────────────────────────────────
@@ -71,11 +75,15 @@ def _clean_json(raw: str) -> str:
     return s
 
 
-def _call_model(client: anthropic.Anthropic, system: str, question: str,
+def _call_model(client: anthropic.Anthropic, system: str,
                 model: str, max_tokens: int = 3000,
+                question: str | None = None,
+                messages: list[dict] | None = None,
                 _retries: int = 5, _backoff: float = 10.0,
                 _fallback_client: anthropic.Anthropic | None = None,
                 _fallback_model: str | None = None) -> str:
+    if messages is None:
+        messages = [{"role": "user", "content": question}]
     cur_client, cur_model = client, model
     for attempt in range(_retries):
         try:
@@ -83,7 +91,7 @@ def _call_model(client: anthropic.Anthropic, system: str, question: str,
                 model=cur_model,
                 max_tokens=max_tokens,
                 system=system,
-                messages=[{"role": "user", "content": question}],
+                messages=messages,
             )
             return _extract_text(msg.content)
         except anthropic.RateLimitError:
@@ -91,7 +99,6 @@ def _call_model(client: anthropic.Anthropic, system: str, question: str,
                 tqdm.write(f"  ⚡ 主账号限速，切换到 fallback（{_fallback_model}）")
                 cur_client = _fallback_client
                 cur_model  = _fallback_model or model
-                # 不消耗 attempt，立即重试
                 continue
             wait = _backoff * (2 ** attempt)
             tqdm.write(f"  ⚠ 限速，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
@@ -108,22 +115,63 @@ def _call_model(client: anthropic.Anthropic, system: str, question: str,
 def run_forge(client: anthropic.Anthropic, question: str,
               system: str, model: str,
               fallback_client: anthropic.Anthropic | None = None,
-              fallback_model: str | None = None) -> dict:
-    """Call model → parse Forge JSON → compile to SQL."""
-    raw = _clean_json(_call_model(client, system, question, model,
-                                  _fallback_client=fallback_client,
-                                  _fallback_model=fallback_model))
-    try:
-        forge_json = json.loads(raw)
-    except json.JSONDecodeError as e:
-        return {"forge_json": None, "sql": None,
-                "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}"}
-    try:
-        sql = compile_query(forge_json)
-        return {"forge_json": forge_json, "sql": sql, "error": None}
-    except Exception as e:
-        return {"forge_json": forge_json, "sql": None,
-                "error": f"编译失败: {e}"}
+              fallback_model: str | None = None,
+              max_compile_retries: int = 0) -> dict:
+    """Call model → parse Forge JSON → compile to SQL.
+
+    max_compile_retries > 0 时，编译/解析失败后将错误反馈给模型重试，
+    模拟 agent.py 的 MAX_RETRIES 行为。
+    """
+    messages = [{"role": "user", "content": question}]
+
+    for attempt in range(1 + max_compile_retries):
+        raw = _clean_json(_call_model(client, system, model=model,
+                                      messages=messages,
+                                      _fallback_client=fallback_client,
+                                      _fallback_model=fallback_model))
+        # 解析 JSON
+        try:
+            forge_json = json.loads(raw)
+        except json.JSONDecodeError as e:
+            if attempt < max_compile_retries:
+                tqdm.write(f"    🔄 JSON 解析失败（第 {attempt+1} 次），重试...")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content":
+                    f"JSON 解析失败：{e}\n请修正后重新输出完整的 Forge JSON，不要包含任何解释文字。"})
+                continue
+            return {"forge_json": None, "sql": None,
+                    "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}",
+                    "attempts": attempt + 1}
+
+        # 约定 lint（仅在首次尝试时检查，避免浪费所有重试次数）
+        if attempt == 0 and max_compile_retries > 0:
+            warnings = lint_conventions(forge_json, question)
+            if warnings:
+                warning_text = "\n".join(f"- {w}" for w in warnings)
+                tqdm.write(f"    🔍 约定检查发现 {len(warnings)} 个问题，重试...")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content":
+                    f"约定检查发现以下问题：\n{warning_text}\n请修正后重新输出完整的 Forge JSON。"})
+                continue
+
+        # 编译
+        try:
+            sql = compile_query(forge_json)
+            return {"forge_json": forge_json, "sql": sql, "error": None,
+                    "attempts": attempt + 1}
+        except Exception as e:
+            if attempt < max_compile_retries:
+                tqdm.write(f"    🔄 编译失败（第 {attempt+1} 次）：{str(e)[:60]}，重试...")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content":
+                    f"Forge JSON 编译失败：{e}\n请根据错误信息修正后重新输出完整的 Forge JSON。"})
+                continue
+            return {"forge_json": forge_json, "sql": None,
+                    "error": f"编译失败: {e}",
+                    "attempts": attempt + 1}
+
+    return {"forge_json": None, "sql": None, "error": "重试耗尽",
+            "attempts": 1 + max_compile_retries}
 
 
 def run_sql(client: anthropic.Anthropic, question: str,
@@ -131,7 +179,7 @@ def run_sql(client: anthropic.Anthropic, question: str,
             fallback_client: anthropic.Anthropic | None = None,
             fallback_model: str | None = None) -> dict:
     """Call model → return raw SQL."""
-    sql = _call_model(client, system, question, model,
+    sql = _call_model(client, system, model=model, question=question,
                       _fallback_client=fallback_client,
                       _fallback_model=fallback_model)
     return {"forge_json": None, "sql": sql, "error": None}
@@ -139,20 +187,21 @@ def run_sql(client: anthropic.Anthropic, question: str,
 
 # ── OpenAI-compatible API 调用（SiliconFlow / DeepSeek 官方等）────────────────
 
-def _call_model_oai(api_key: str, base_url: str, system: str, question: str,
+def _call_model_oai(api_key: str, base_url: str, system: str,
                     model: str, max_tokens: int = 4096,
+                    question: str | None = None,
+                    messages: list[dict] | None = None,
                     _retries: int = 5, _backoff: float = 10.0) -> str:
     """直接 HTTP 调用 OpenAI-compatible /chat/completions。"""
     import requests as _req
     url = base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    if messages is None:
+        messages = [{"role": "user", "content": question}]
     payload = {
         "model": model,
         "max_tokens": max_tokens,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": question},
-        ],
+        "messages": [{"role": "system", "content": system}] + messages,
     }
     for attempt in range(_retries):
         try:
@@ -175,26 +224,61 @@ def _call_model_oai(api_key: str, base_url: str, system: str, question: str,
 
 
 def run_forge_oai(api_key: str, base_url: str, question: str,
-                  system: str, model: str) -> dict:
+                  system: str, model: str,
+                  max_compile_retries: int = 0) -> dict:
     """OpenAI-compatible: Call model → parse Forge JSON → compile to SQL."""
-    raw = _clean_json(_call_model_oai(api_key, base_url, system, question, model))
-    try:
-        forge_json = json.loads(raw)
-    except json.JSONDecodeError as e:
-        return {"forge_json": None, "sql": None,
-                "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}"}
-    try:
-        sql = compile_query(forge_json)
-        return {"forge_json": forge_json, "sql": sql, "error": None}
-    except Exception as e:
-        return {"forge_json": forge_json, "sql": None,
-                "error": f"编译失败: {e}"}
+    messages = [{"role": "user", "content": question}]
+
+    for attempt in range(1 + max_compile_retries):
+        raw = _clean_json(_call_model_oai(api_key, base_url, system,
+                                          model=model, messages=messages))
+        try:
+            forge_json = json.loads(raw)
+        except json.JSONDecodeError as e:
+            if attempt < max_compile_retries:
+                tqdm.write(f"    🔄 JSON 解析失败（第 {attempt+1} 次），重试...")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content":
+                    f"JSON 解析失败：{e}\n请修正后重新输出完整的 Forge JSON，不要包含任何解释文字。"})
+                continue
+            return {"forge_json": None, "sql": None,
+                    "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}",
+                    "attempts": attempt + 1}
+
+        # 约定 lint
+        if attempt == 0 and max_compile_retries > 0:
+            warnings = lint_conventions(forge_json, question)
+            if warnings:
+                warning_text = "\n".join(f"- {w}" for w in warnings)
+                tqdm.write(f"    🔍 约定检查发现 {len(warnings)} 个问题，重试...")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content":
+                    f"约定检查发现以下问题：\n{warning_text}\n请修正后重新输出完整的 Forge JSON。"})
+                continue
+
+        try:
+            sql = compile_query(forge_json)
+            return {"forge_json": forge_json, "sql": sql, "error": None,
+                    "attempts": attempt + 1}
+        except Exception as e:
+            if attempt < max_compile_retries:
+                tqdm.write(f"    🔄 编译失败（第 {attempt+1} 次）：{str(e)[:60]}，重试...")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content":
+                    f"Forge JSON 编译失败：{e}\n请根据错误信息修正后重新输出完整的 Forge JSON。"})
+                continue
+            return {"forge_json": forge_json, "sql": None,
+                    "error": f"编译失败: {e}",
+                    "attempts": attempt + 1}
+
+    return {"forge_json": None, "sql": None, "error": "重试耗尽",
+            "attempts": 1 + max_compile_retries}
 
 
 def run_sql_oai(api_key: str, base_url: str, question: str,
                 system: str, model: str) -> dict:
     """OpenAI-compatible: Call model → return raw SQL."""
-    sql = _call_model_oai(api_key, base_url, system, question, model)
+    sql = _call_model_oai(api_key, base_url, system, model=model, question=question)
     return {"forge_json": None, "sql": sql, "error": None}
 
 
@@ -224,7 +308,8 @@ def save_runs(method_id: str, data: dict) -> None:
 
 def run_method(method_id: str, fresh: bool = False,
                runs_override: int | None = None,
-               workers_override: int | None = None) -> None:
+               workers_override: int | None = None,
+               compile_retries: int = 0) -> None:
     from methods import load  # local import after sys.path setup
 
     cfg = load(method_id)
@@ -271,21 +356,32 @@ def run_method(method_id: str, fresh: bool = False,
         print(f"\n🔬 {cfg.label}")
         print(f"   Provider：openai-compat  模型：{oai_model}  并发：{max_workers}  每用例：{runs_per_method} 次")
         print(f"   Endpoint：{oai_base_url}")
+        if compile_retries > 0:
+            print(f"   编译重试：最多 {compile_retries} 次（模拟 agent 行为）")
         print(f"   待执行：{len(tasks)} 次 API 调用\n")
     else:
         # Anthropic SDK（MiniMax / 原生 Claude 等）
         model = cfg.model if cfg.model != "MiniMax-M2.5-highspeed" else MINIMAX_MODEL
-        client = anthropic.Anthropic(
-            api_key=cfg.api_key or MINIMAX_API_KEY,
-            base_url=cfg.base_url or MINIMAX_BASE_URL,
-        )
-        fallback_client = (
-            anthropic.Anthropic(api_key=MINIMAX_FALLBACK_KEY, base_url=MINIMAX_BASE_URL)
-            if MINIMAX_FALLBACK_KEY else None
-        )
-        fallback_model = MINIMAX_FALLBACK_MODEL if MINIMAX_FALLBACK_KEY else None
+        # 原生 Claude：base_url 为空或显式为 "anthropic"，走 ANTHROPIC_API_KEY
+        is_native_claude = not cfg.base_url or cfg.base_url == "anthropic"
+        if is_native_claude:
+            client = anthropic.Anthropic(api_key=cfg.api_key or ANTHROPIC_API_KEY)
+            fallback_client = None
+            fallback_model = None
+        else:
+            client = anthropic.Anthropic(
+                api_key=cfg.api_key or MINIMAX_API_KEY,
+                base_url=cfg.base_url or MINIMAX_BASE_URL,
+            )
+            fallback_client = (
+                anthropic.Anthropic(api_key=MINIMAX_FALLBACK_KEY, base_url=MINIMAX_BASE_URL)
+                if MINIMAX_FALLBACK_KEY else None
+            )
+            fallback_model = MINIMAX_FALLBACK_MODEL if MINIMAX_FALLBACK_KEY else None
         print(f"\n🔬 {cfg.label}")
         print(f"   模型：{model}  |  并发：{max_workers}  |  每用例：{runs_per_method} 次")
+        if compile_retries > 0:
+            print(f"   编译重试：最多 {compile_retries} 次（模拟 agent 行为）")
         print(f"   待执行：{len(tasks)} 次 API 调用\n")
         if fallback_client:
             print(f"   Fallback：{fallback_model}（主账号限速时自动切换）")
@@ -328,19 +424,28 @@ def run_method(method_id: str, fresh: bool = False,
             return cfg.system_prompt
 
     if is_oai:
-        _forge_fn = run_forge_oai if cfg.mode == "forge" else run_sql_oai
         def dispatch(task):
             case, run_idx = task
             question = _enrich(case["question"])
-            result = _forge_fn(oai_api_key, oai_base_url, question,
-                               _get_system(question), oai_model)
+            if cfg.mode == "forge":
+                result = run_forge_oai(oai_api_key, oai_base_url, question,
+                                       _get_system(question), oai_model,
+                                       max_compile_retries=compile_retries)
+            else:
+                result = run_sql_oai(oai_api_key, oai_base_url, question,
+                                     _get_system(question), oai_model)
             return case, run_idx, result
     else:
-        dispatch_fn = run_forge if cfg.mode == "forge" else run_sql
         def dispatch(task):
             case, run_idx = task
             question = _enrich(case["question"])
-            result = dispatch_fn(client, question, _get_system(question), model,
+            if cfg.mode == "forge":
+                result = run_forge(client, question, _get_system(question), model,
+                                   fallback_client=fallback_client,
+                                   fallback_model=fallback_model,
+                                   max_compile_retries=compile_retries)
+            else:
+                result = run_sql(client, question, _get_system(question), model,
                                  fallback_client=fallback_client,
                                  fallback_model=fallback_model)
             return case, run_idx, result
@@ -411,6 +516,9 @@ def main() -> None:
                         help="覆盖并发 worker 数")
     parser.add_argument("--cases", type=str, default=None,
                         help="测试用例文件路径（默认 results/cases.json），如 results/cases_large.json")
+    parser.add_argument("--retry", type=int, default=0,
+                        help="编译失败时的最大重试次数（默认 0 = 不重试）。"
+                             "设为 2 可模拟 agent.py 的 MAX_RETRIES 行为。")
     args = parser.parse_args()
 
     global CASES_FILE
@@ -449,7 +557,8 @@ def main() -> None:
     for mid in method_ids:
         run_method(mid, fresh=args.fresh,
                    runs_override=args.runs,
-                   workers_override=args.workers)
+                   workers_override=args.workers,
+                   compile_retries=args.retry)
 
 
 if __name__ == "__main__":

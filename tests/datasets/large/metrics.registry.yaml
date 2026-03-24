@@ -675,6 +675,25 @@ ad_roi:
     分子 ad_revenue 以 convert_dt 统计，分母 ad_cost 以 date_id 统计
     通常以天或周为统计粒度，保证归因窗口一致（点击后 7 天内的转化）
 
+refund_rate:
+  metric_class: derivative
+  label: 退款率
+  description: 有退款记录的订单数除以总订单数，衡量售后退款情况
+  numerator: COUNT(DISTINCT dwd_refund_detail.order_id)
+  denominator: COUNT(DISTINCT dwd_order_detail.order_id)
+  notes: |
+    退款率 ≠ 退货率。退款率基于 dwd_refund_detail 表，退货率基于 dwd_return_goods_detail 表。
+    计算方式：
+      分子 = COUNT(DISTINCT dwd_refund_detail.order_id)   ← 有退款记录的去重订单数
+      分母 = COUNT(DISTINCT dwd_order_detail.order_id)    ← 总订单数（视上下文决定是否加 order_status 过滤）
+    JOIN 路径：dwd_order_detail LEFT JOIN dwd_refund_detail ON dwd_refund_detail.order_id = dwd_order_detail.order_id
+    ⚠️ dwd_order_detail 表上没有 refund_id 字段，不要尝试访问 dwd_order_detail.refund_id
+  period_col: dwd_order_detail.order_dt
+  dimensions:
+    - dim_category.category_name
+    - dim_user.age_group
+    - dim_merchant.merchant_name
+
 return_rate:
   metric_class: derivative
   label: 退货率

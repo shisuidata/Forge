@@ -105,19 +105,39 @@ def _compare(ref_rows: list, gen_rows: list) -> bool:
         ):
             return True
 
-    # Layer 2：列投影+排列匹配（ref_width ≤ 6，gen_width ≤ 10）
-    # 枚举 gen 列的 C(gen_width, ref_width) 个子集，每个子集再尝试所有排列
-    if ref_width >= 1 and gen_width >= ref_width and ref_width <= 6 and gen_width <= 10:
+    # Layer 2：列投影匹配
+    # 先用列值指纹缩小候选集，再尝试排列，避免全量 C(gen,ref)×ref! 爆炸
+    if ref_width >= 1 and gen_width >= ref_width:
         ref_sorted = sorted(ref_rows)
-        for col_subset in combinations(range(gen_width), ref_width):
-            for perm in permutations(col_subset):
-                projected = sorted(
-                    tuple(row[i] for i in perm)
-                    for row in gen_rows
-                )
+        # 为每列建「排序值签名」，快速过滤候选
+        gen_sigs = [tuple(sorted(str(row[g]) for row in gen_rows)) for g in range(gen_width)]
+        ref_sigs = [tuple(sorted(str(row[r]) for row in ref_rows)) for r in range(ref_width)]
+        # ref 的每一列，找 gen 中值签名匹配（或数值近似匹配）的候选列
+        candidates = []
+        for r in range(ref_width):
+            cands = []
+            for g in range(gen_width):
+                if gen_sigs[g] == ref_sigs[r]:
+                    cands.append(g)
+                # 数值近似签名：当精度不同时（如 0.1893 vs 18.93）签名不同，另行检查
+                elif all(
+                    _numeric_approx(str(row_r[r]), str(row_g[g]))
+                    for row_r, row_g in zip(ref_sorted, sorted(gen_rows))
+                ):
+                    cands.append(g)
+            if not cands:
+                candidates = None
+                break
+            candidates.append(cands)
+
+        if candidates is not None:
+            from itertools import product as iproduct
+            for col_mapping in iproduct(*candidates):
+                if len(set(col_mapping)) != ref_width:   # 要求单射（不重复引用同一列）
+                    continue
+                projected = sorted(tuple(row[g] for g in col_mapping) for row in gen_rows)
                 if projected == ref_sorted:
                     return True
-                # Layer 2+3：列投影 + 数值近似（处理 ROUND 精度差异）
                 if all(
                     all(_numeric_approx(a, b) for a, b in zip(rr, gr))
                     for rr, gr in zip(projected, ref_sorted)

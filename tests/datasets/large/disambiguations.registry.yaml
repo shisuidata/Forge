@@ -1,70 +1,88 @@
-# ──────────────────────────────────────────────────────────────────────────────
-# disambiguations.registry.yaml — 业务歧义消除规则库
-#
-# 用途：
-#   当用户问题中出现 triggers 中的词时，自动将 context 注入 LLM 的系统提示，
-#   或在 requires_clarification=true 时先向用户发起一轮澄清问答。
-#
-#   confirmed_by_users 为 true 表示该规则已经过至少一名用户的实际确认，
-#   可信度高于初始人工编写的规则。
-#
-# 维护方式：
-#   1. 人工编写（初始化时）
-#   2. 自动写入（用户确认 staging/ 中的歧义消除记录后，由 registry.sync 合并）
-# ──────────────────────────────────────────────────────────────────────────────
-
 revenue:
   label: 销售额 / 营收
-  triggers: [销售额, 营收, GMV, 收入, 流水]
-  context: |
-    "销售额"/"营收" 默认指订单维度金额（orders.total_amount），
+  triggers:
+  - 销售额
+  - 营收
+  - GMV
+  - 收入
+  - 流水
+  context: '"销售额"/"营收" 默认指订单维度金额（orders.total_amount），
+
     而非商品成本。若需按商品品类汇总，应使用 order_items.quantity * order_items.unit_price。
+
     两者结果不同：前者是订单总价，后者是明细行成交额（可含多件商品）。
+
+    '
   requires_clarification: false
   confirmed_by_users: false
-
 refund_rate_threshold:
   label: 退款率阈值
-  triggers: [退款率, 退货率, 退单率]
-  context: |
-    退款率是一个 0~1 之间的小数（如 15% 应写为 0.15，而非 15）。
+  triggers:
+  - 退款率
+  - 退货率
+  - 退单率
+  context: '退款率是一个 0~1 之间的小数（如 15% 应写为 0.15，而非 15）。
+
     过滤条件示例：{"col": "refund_rate", "op": "gt", "val": 0.15}
+
+    '
   requires_clarification: false
   confirmed_by_users: false
-
 repurchase_definition:
   label: 复购定义
-  triggers: [复购, 复购率, 回购, 二次购买]
-  context: |
-    复购率 = 下过 2 次及以上订单的用户数 / 下过至少 1 次订单的用户数。
+  triggers:
+  - 复购
+  - 复购率
+  - 回购
+  - 二次购买
+  context: '复购率 = 下过 2 次及以上订单的用户数 / 下过至少 1 次订单的用户数。
+
     分母包含所有下单用户（含首购用户），分子仅包含有重复购买记录的用户。
+
+    '
   requires_clarification: false
   confirmed_by_users: false
-
 time_range_missing:
   label: 时间范围未指定
-  triggers: [最近, 近期, 这段时间, 今年, 本月, 上月, 同比, 环比]
-  context: |
-    用户提到相对时间词时，请根据语义推断具体日期区间，并在 explain 字段说明你的推断逻辑。
+  triggers:
+  - 最近
+  - 近期
+  - 这段时间
+  - 今年
+  - 本月
+  - 上月
+  - 同比
+  - 环比
+  context: '用户提到相对时间词时，请根据语义推断具体日期区间，并在 explain 字段说明你的推断逻辑。
+
     例："最近7天"= 当前日期前7天；"本月"= 当前自然月1日至今。
+
+    '
   requires_clarification: false
   confirmed_by_users: false
-
-# ── requires_clarification=true 示例：当指标定义存在根本歧义、无法安全推断时才开启 ──
-# 大多数情况下 requires_clarification=false，将 context 注入 LLM 即可，让模型自行判断。
-# 仅当错误代价极高（如财务报告）或明确有多个等价有效答案时，才设为 true。
 revenue_granularity_ambiguous:
   label: 销售额口径（订单 vs 商品明细）
-  triggers: [按品类统计, 品类销售额, 品类营收]
-  context: |
-    "按品类统计销售额"可能有两种口径：
+  triggers:
+  - 按品类统计
+  - 品类销售额
+  - 品类营收
+  context: '"按品类统计销售额"可能有两种口径：
+
     A. 订单口径：订单中有该品类商品的订单总金额（可能含其他品类的钱）
+
     B. 明细口径：该品类商品的 quantity * unit_price 之和（精确到品类）
+
     B 更精确，但需要 JOIN order_items；A 简单，但可能造成跨品类金额归属错误。
-  clarification_question: |
-    您需要的"品类销售额"是指：
+
+    '
+  clarification_question: '您需要的"品类销售额"是指：
+
     A. 含有该品类商品的订单总金额（快速、略有误差）
+
     B. 该品类商品实际成交金额（精确，需关联明细表）
+
     请回复 A 或 B，或直接描述您的需求。
+
+    '
   requires_clarification: true
   confirmed_by_users: false

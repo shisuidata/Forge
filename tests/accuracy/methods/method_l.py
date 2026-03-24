@@ -25,5 +25,8 @@ NOTES = "2026-03-16 数据集迁移到 tests/datasets/large/，从文件读取 R
 
 _DATASETS_DIR = Path(__file__).parent.parent.parent / "datasets"
 
-REGISTRY_CONTEXT = (_DATASETS_DIR / "large" / "schema_context.md").read_text(encoding="utf-8").strip()
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from build_context import build_registry_context
+REGISTRY_CONTEXT = build_registry_context(_DATASETS_DIR / "large")
 CASES_FILE = str(_DATASETS_DIR / "large" / "cases.json")

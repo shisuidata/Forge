@@ -107,7 +107,9 @@ flowchart LR
 | 指标 | 值 |
 |---|---|
 | EA best（small schema, Claude/DeepSeek） | **95.0%** |
-| EA（large schema, DeepSeek V3） | **65.0%** |
+| EA（large schema, MiniMax M2.7, retry=2） | **72.5%** |
+| EA（large schema, DeepSeek V3.2） | **65.0%** |
+| EA（large schema, Claude Sonnet 4.6） | **57.5%** |
 | 编译器测试用例 | **53** |
 | Spider2-Lite 编译成功率 | **97.6%** |
 | Spider2-Lite EA | **9.2%** |
@@ -168,6 +170,7 @@ tests/
 | [Day 1 · 历史债 / 地面泥潭](docs/devlog/day1_2026-03-15.md) | 2026-03-15 | SQL 的设计哲学、四层召回演进、飞书 Bot 工程坑、SQL 缓存双阶段反馈 |
 | [Day 2 · CROSS JOIN / HAVING 别名 / EA 95%](docs/devlog/day2_2026-03-16.md) | 2026-03-16 | CROSS JOIN 标量 CTE 模式、HAVING alias 展开修复、DeepSeek strict tool calling 实验、M/O/N 三组 EA 基准 |
 | [Day 3 · 工程稳固 / 产品门面 / 连锁故障](docs/devlog/day3_2026-03-18.md) | 2026-03-18 | Session 持久化、编译器拆分、飞书 Bot 四层连锁故障、demo 向导、forge config CLI |
+| [Day 5 · 先看自己错没错 / 三层系统优化](docs/devlog/day5_2026-03-19.md) | 2026-03-19 | 5 处设计缺陷修复、编译重试对齐、约定 lint 程序化验证、LAG 示例补全、M2.7 EA 72.5% |
 
 ---
 

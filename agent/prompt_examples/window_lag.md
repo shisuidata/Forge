@@ -68,6 +68,10 @@
 LAG/LEAD **必须有 partition**，否则会跨用户取行，语义错误。
 LAG/LEAD 的 `order` **必须用 `"dir": "asc"`**（时间升序，才能取到"上一条"）；用 `desc` 会取到错误方向的行。
 
+### 模式 1：明细行 LAG（取上一笔金额）
+
+对原始明细行直接打 LAG，返回每一行（不是只返回最后一行）。
+
 ```json
 {
   "scan": "orders",
@@ -83,5 +87,30 @@ LAG/LEAD 的 `order` **必须用 `"dir": "asc"`**（时间升序，才能取到"
     "as": "prev_amount"
   }],
   "select": ["users.name", "orders.created_at", "orders.total_amount", "prev_amount"]
+}
+```
+
+### 模式 2：LAG + 时间间隔计算（SQLite julianday）
+
+求相邻两次下单间隔天数：先用 LAG 取上一行时间，再用 `julianday()` 做差。
+**SQLite 不支持日期直接相减**，必须用 `julianday(a) - julianday(b)` 得到天数差。
+
+```json
+{
+  "scan": "orders",
+  "filter": [{"col": "orders.status", "op": "eq", "val": "completed"}],
+  "window": [{
+    "fn": "lag",
+    "col": "orders.created_at",
+    "offset": 1,
+    "default": null,
+    "partition": ["orders.user_id"],
+    "order": [{"col": "orders.created_at", "dir": "asc"}],
+    "as": "prev_order_dt"
+  }],
+  "select": [
+    "orders.user_id", "orders.created_at", "prev_order_dt",
+    {"expr": "ROUND(julianday(orders.created_at) - julianday(prev_order_dt), 1)", "as": "days_gap"}
+  ]
 }
 ```
