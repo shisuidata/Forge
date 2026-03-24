@@ -261,6 +261,23 @@ def _coerce_select(q: dict) -> dict:
             fixed_sel.append(item)
         q["select"] = fixed_sel
 
+    # 修复 21：多 CTE JOIN 时外层 SELECT 的裸列名歧义
+    # 场景：scan=CTE_A，JOIN CTE_B，两个 CTE 都有 "month" 列，
+    #       外层 SELECT ["month", ...] → SQLite: ambiguous column name: month
+    # 策略：对外层 SELECT 中不含 "." 的裸列字符串，加上主扫描 CTE 的前缀
+    if q.get("cte") and q.get("select") and q.get("joins"):
+        _cte_names = {c["name"] for c in q["cte"] if isinstance(c, dict) and "name" in c}
+        _scan = q.get("scan", "")
+        if _scan in _cte_names:
+            _joined_ctes = {j["table"] for j in q.get("joins", []) if j.get("table") in _cte_names}
+            if _joined_ctes:
+                new_sel = []
+                for item in q["select"]:
+                    if isinstance(item, str) and "." not in item:
+                        item = f"{_scan}.{item}"
+                    new_sel.append(item)
+                q["select"] = new_sel
+
     return q
 
 
@@ -306,15 +323,22 @@ def _coerce_cte_refs(q: dict) -> dict:
         cte_names = {c["name"] for c in q["cte"] if isinstance(c, dict) and "name" in c}
         if q["scan"] in cte_names:
             def _strip_prefix(s: str) -> str:
-                """若 s 形如 table.col 且 table 不在 cte_names，剥离 table. 前缀。"""
+                """若 s 形如 table.col 且 table 是主扫描 CTE，剥离 table. 前缀。
+                JOIN 表的前缀必须保留，防止多表场景中出现 ambiguous column name。
+                """
                 if isinstance(s, str) and "." in s:
                     parts = s.split(".", 1)
-                    if parts[0] not in cte_names:
+                    if parts[0] == q["scan"]:   # 只剥主扫描 CTE 自己的前缀
                         return parts[1]
                 return s
 
             # select 字符串项 及 expr 对象中纯列引用（"table.col"）
-            if q.get("select"):
+            # 修复 21 冲突：当有 joined CTE 时，SELECT 的前缀由 fix 21（_coerce_select）负责，
+            # 这里跳过剥离，避免把 fix 21 加的消歧前缀又剥掉。
+            _has_joined_ctes = any(
+                j.get("table") in cte_names for j in q.get("joins", [])
+            )
+            if q.get("select") and not _has_joined_ctes:
                 new_sel = []
                 for item in q["select"]:
                     if isinstance(item, str):

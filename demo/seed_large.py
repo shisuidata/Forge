@@ -37,16 +37,42 @@ PROVINCES = ["北京", "上海", "广东", "浙江", "四川", "湖北", "陕西
 START_DT = datetime(2024, 1, 1)
 END_DT = datetime(2025, 12, 31)
 
+# 近期加权：2025 年占 65%，2024 年占 35%；2025 下半年尤其集中
+_PERIODS = [
+    (datetime(2024, 1, 1),  datetime(2024, 12, 31), 0.20),  # 2024 全年
+    (datetime(2025, 1, 1),  datetime(2025, 6, 30),  0.25),  # 2025 上半年
+    (datetime(2025, 7, 1),  datetime(2025, 10, 31), 0.25),  # 2025 7-10 月
+    (datetime(2025, 11, 1), datetime(2025, 12, 31), 0.30),  # 2025 11-12 月（最近）
+]
+_CUM_WEIGHTS = []
+_acc = 0.0
+for _s, _e, _w in _PERIODS:
+    _acc += _w
+    _CUM_WEIGHTS.append(_acc)
+
+
+def _rand_in_period(s: datetime, e: datetime) -> datetime:
+    delta_s = int((e - s).total_seconds())
+    return s + timedelta(seconds=random.randint(0, delta_s))
+
+
+def _weighted_dt() -> datetime:
+    r = random.random()
+    for i, cw in enumerate(_CUM_WEIGHTS):
+        if r <= cw:
+            s, e, _ = _PERIODS[i]
+            return _rand_in_period(s, e)
+    s, e, _ = _PERIODS[-1]
+    return _rand_in_period(s, e)
+
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 def rand_dt():
-    delta = END_DT - START_DT
-    return (START_DT + timedelta(seconds=random.randint(0, int(delta.total_seconds())))).strftime("%Y-%m-%d %H:%M:%S")
+    return _weighted_dt().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def rand_date():
-    delta = END_DT - START_DT
-    return (START_DT + timedelta(days=random.randint(0, delta.days))).strftime("%Y-%m-%d")
+    return _weighted_dt().strftime("%Y-%m-%d")
 
 
 def rand_str(n=8):
@@ -470,12 +496,12 @@ SMALL_DWD = {
 
 def row_count(table_name):
     if table_name.startswith("dim_"):
-        return random.randint(20, 100)
+        return random.randint(50, 200)      # 原来 20-100，加大维表覆盖度
     if table_name in CORE_DWD:
-        return random.randint(2000, 5000)
+        return random.randint(8000, 15000)  # 原来 2000-5000，核心事实表数据量×4
     if table_name in SMALL_DWD:
-        return random.randint(200, 500)
-    return random.randint(500, 1000)
+        return random.randint(500, 1000)    # 原来 200-500
+    return random.randint(1500, 3000)       # 原来 500-1000，其他 dwd 表翻3倍
 
 
 # ─── Seed order ──────────────────────────────────────────────────────────────
