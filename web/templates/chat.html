@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forge — 查询</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* SQL 代码块样式 */
+    .sql-block {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .sql-block .kw { color: #93c5fd; font-weight: 600; }
+    .sql-block .fn { color: #a5b4fc; }
+    .sql-block .str { color: #86efac; }
+    .sql-block .num { color: #fbbf24; }
+    .sql-block .op { color: #94a3b8; }
+
+    /* 消息气泡 */
+    .msg-user { background: #f0f9ff; border: 1px solid #bae6fd; }
+    .msg-bot  { background: #ffffff; border: 1px solid #e5e7eb; }
+    .msg-system { background: #fefce8; border: 1px solid #fde68a; }
+
+    /* 输入框自适应高度 */
+    #chat-input {
+      min-height: 2.5rem;
+      max-height: 8rem;
+      resize: none;
+      overflow-y: auto;
+    }
+
+    /* 打字动画 */
+    .typing-dots span {
+      animation: blink 1.4s infinite both;
+      display: inline-block;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #94a3b8; margin: 0 2px;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+
+    /* 滚动条 */
+    #chat-messages::-webkit-scrollbar { width: 6px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body class="flex h-screen bg-gray-50 font-sans text-sm text-gray-800">
+
+  <!-- 侧边栏 -->
+  <aside class="w-52 flex-shrink-0 bg-gray-900 text-gray-200 flex flex-col">
+    <div class="px-6 py-5 border-b border-gray-700">
+      <span class="text-white font-semibold text-base tracking-wide">Forge</span>
+      <span class="text-gray-500 text-xs ml-1">AI SQL Agent</span>
+    </div>
+    <nav class="flex-1 px-3 py-4 space-y-1">
+      <a href="/chat"
+         class="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-700 text-white transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        查询
+      </a>
+      <div class="pt-3 pb-1 px-3">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">管理</p>
+      </div>
+      <a href="/admin/schema"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+        </svg>
+        结构层
+      </a>
+      <a href="/admin/metrics"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        指标库
+      </a>
+      <a href="/admin/semantic"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+        </svg>
+        语义规则
+      </a>
+      <a href="/admin/staging"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8"/>
+        </svg>
+        Staging
+      </a>
+      <a href="/admin/audit"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2
+                   M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        查询审计
+      </a>
+      <a href="/admin/settings"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0
+                   002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0
+                   001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0
+                   00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0
+                   00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0
+                   00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0
+                   00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0
+                   001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        系统配置
+      </a>
+    </nav>
+    <div class="px-6 py-4 border-t border-gray-700 text-xs text-gray-500">
+      Forge v0.1.0
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- 消息区 -->
+    <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+      <!-- 欢迎消息 -->
+      <div class="max-w-2xl mx-auto text-center py-12">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-900 text-white text-xl font-bold mb-4">F</div>
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">Forge 查询助手</h2>
+        <p class="text-gray-500 mb-6">用自然语言描述你的数据需求，Forge 会生成 SQL 供你审核后执行。</p>
+        <div class="flex flex-wrap justify-center gap-2">
+          <button onclick="useSuggestion('各城市的订单总额是多少？')"
+                  class="bg-white border border-gray-200 text-gray-700 text-xs px-3 py-2 rounded-lg hover:border-gray-400 transition-colors">
+            各城市的订单总额是多少？
+          </button>
+          <button onclick="useSuggestion('最近30天的VIP用户数量')"
+                  class="bg-white border border-gray-200 text-gray-700 text-xs px-3 py-2 rounded-lg hover:border-gray-400 transition-colors">
+            最近30天的VIP用户数量
+          </button>
+          <button onclick="useSuggestion('每个品类的退货率排名')"
+                  class="bg-white border border-gray-200 text-gray-700 text-xs px-3 py-2 rounded-lg hover:border-gray-400 transition-colors">
+            每个品类的退货率排名
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="border-t border-gray-200 bg-white px-6 py-4">
+      <div class="max-w-2xl mx-auto">
+        <form id="chat-form" class="flex items-end gap-3">
+          <div class="flex-1 relative">
+            <textarea id="chat-input"
+                      rows="1"
+                      placeholder="输入你的数据查询..."
+                      class="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-shadow"
+                      ></textarea>
+          </div>
+          <button id="send-btn" type="submit"
+                  class="bg-gray-900 text-white px-4 py-2.5 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </form>
+        <p class="text-xs text-gray-400 mt-2 text-center">
+          生成的 SQL 需要你确认后才会执行。按 Enter 发送，Shift+Enter 换行。
+        </p>
+      </div>
+    </div>
+  </div>
+
+<script>
+const USER_ID = 'web_user_' + Math.random().toString(36).slice(2, 8);
+const messagesEl = document.getElementById('chat-messages');
+const form = document.getElementById('chat-form');
+const input = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+let isWaiting = false;
+let welcomeVisible = true;
+
+// ── 工具函数 ──────────────────────────────────────────────────────────────────
+
+function scrollToBottom() {
+  messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+}
+
+function highlightSQL(sql) {
+  const keywords = /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|AND|OR|NOT|IN|IS|NULL|AS|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|DISTINCT|CASE|WHEN|THEN|ELSE|END|UNION|ALL|EXISTS|BETWEEN|LIKE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|WITH|OVER|PARTITION|ROWS|RANGE|UNBOUNDED|PRECEDING|FOLLOWING|CURRENT|ROW|ASC|DESC|ANTI|SEMI|ROUND|CAST|COALESCE|NULLIF|FILTER)\b/gi;
+  const functions = /\b(COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|ROW_NUMBER|RANK|DENSE_RANK|LAG|LEAD|FIRST_VALUE|LAST_VALUE|JULIANDAY|DATE|STRFTIME|IFNULL|LENGTH|SUBSTR|TRIM|UPPER|LOWER|CONCAT|ABS)\b/gi;
+  const strings = /('[^']*')/g;
+  const numbers = /\b(\d+\.?\d*)\b/g;
+
+  let h = sql
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(strings, '<span class="str">$1</span>')
+    .replace(keywords, '<span class="kw">$1</span>')
+    .replace(functions, '<span class="fn">$1</span>')
+    .replace(numbers, '<span class="num">$1</span>');
+  return h;
+}
+
+function addMessage(role, content, extra) {
+  if (welcomeVisible) {
+    messagesEl.innerHTML = '';
+    welcomeVisible = false;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'max-w-2xl mx-auto flex ' + (role === 'user' ? 'justify-end' : 'justify-start');
+
+  const bubble = document.createElement('div');
+  const baseClass = role === 'user' ? 'msg-user' : (role === 'system' ? 'msg-system' : 'msg-bot');
+  bubble.className = `${baseClass} rounded-xl px-4 py-3 max-w-lg shadow-sm`;
+
+  if (role === 'user') {
+    bubble.innerHTML = `<p class="text-sm text-gray-800 whitespace-pre-wrap">${escapeHtml(content)}</p>`;
+  } else if (extra && extra.sql) {
+    // SQL 预览消息
+    bubble.className = 'msg-bot rounded-xl px-4 py-3 max-w-2xl shadow-sm w-full';
+    bubble.innerHTML = `
+      ${content ? `<p class="text-sm text-gray-700 mb-3">${escapeHtml(content)}</p>` : ''}
+      <div class="sql-block mb-3">${highlightSQL(extra.sql)}</div>
+      <div class="flex items-center gap-2">
+        <button onclick="approveSQL(this)" class="bg-green-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+          确认执行
+        </button>
+        <button onclick="cancelSQL(this)" class="bg-gray-200 text-gray-700 text-xs font-medium px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors">
+          取消
+        </button>
+        <button onclick="copySQL(this, '${encodeURIComponent(extra.sql)}')" class="text-gray-400 hover:text-gray-600 text-xs px-2 py-2 transition-colors">
+          复制 SQL
+        </button>
+      </div>
+    `;
+  } else {
+    bubble.innerHTML = `<p class="text-sm text-gray-700 whitespace-pre-wrap">${formatText(content)}</p>`;
+  }
+
+  wrapper.appendChild(bubble);
+  messagesEl.appendChild(wrapper);
+  scrollToBottom();
+  return wrapper;
+}
+
+function addTypingIndicator() {
+  const wrapper = document.createElement('div');
+  wrapper.id = 'typing-indicator';
+  wrapper.className = 'max-w-2xl mx-auto flex justify-start';
+  wrapper.innerHTML = `
+    <div class="msg-bot rounded-xl px-4 py-3 shadow-sm">
+      <div class="typing-dots flex items-center gap-0.5">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+  messagesEl.appendChild(wrapper);
+  scrollToBottom();
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function formatText(text) {
+  // 简单 markdown 格式：**bold**、`code`、换行
+  return escapeHtml(text)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+function setWaiting(v) {
+  isWaiting = v;
+  sendBtn.disabled = v;
+  input.disabled = v;
+  if (v) addTypingIndicator();
+  else removeTypingIndicator();
+}
+
+// ── API 调用 ──────────────────────────────────────────────────────────────────
+
+async function sendMessage(text) {
+  addMessage('user', text);
+  setWaiting(true);
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, user_id: USER_ID }),
+    });
+    const data = await resp.json();
+
+    if (data.action === 'sql_review' && data.sql) {
+      addMessage('bot', data.text || 'SQL 已生成，请审核：', { sql: data.sql });
+    } else if (data.action === 'error') {
+      addMessage('system', data.text || '处理出错，请重试。');
+    } else {
+      addMessage('bot', data.text || '(无回复)');
+    }
+  } catch (err) {
+    addMessage('system', '网络错误：' + err.message);
+  } finally {
+    setWaiting(false);
+    input.focus();
+  }
+}
+
+async function approveSQL(btn) {
+  const btnGroup = btn.parentElement;
+  btnGroup.querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.textContent = '执行中...';
+
+  try {
+    const resp = await fetch('/api/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '', user_id: USER_ID }),
+    });
+    const data = await resp.json();
+
+    btnGroup.innerHTML = '<span class="text-green-600 text-xs font-medium">&#10003; 已执行</span>';
+
+    if (data.exec_error) {
+      addMessage('system', data.exec_error);
+    } else if (data.columns && data.rows && data.rows.length > 0) {
+      addResultTable(data.columns, data.rows, data.row_count);
+    } else if (data.columns && data.row_count === 0) {
+      addMessage('bot', '查询完成，结果为空。');
+    } else if (data.text) {
+      addMessage('bot', data.text);
+    }
+  } catch (err) {
+    addMessage('system', '执行失败：' + err.message);
+    btnGroup.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.textContent = '确认执行';
+  }
+}
+
+function addResultTable(columns, rows, totalCount) {
+  if (welcomeVisible) { messagesEl.innerHTML = ''; welcomeVisible = false; }
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'max-w-3xl mx-auto flex justify-start';
+
+  // 只展示前 50 行
+  const displayRows = rows.slice(0, 50);
+  const truncated = rows.length > 50;
+
+  let html = `
+    <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
+      <div class="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+        <span class="text-xs font-medium text-gray-700">查询结果</span>
+        <span class="text-xs text-gray-400">${totalCount} 行 × ${columns.length} 列</span>
+      </div>
+      <div class="overflow-x-auto max-h-96">
+        <table class="min-w-full text-xs">
+          <thead class="bg-gray-50 sticky top-0">
+            <tr>
+              ${columns.map(c => `<th class="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap border-b border-gray-200">${escapeHtml(String(c))}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            ${displayRows.map((row, i) => `
+              <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-blue-50/40">
+                ${row.map(v => `<td class="px-3 py-1.5 text-gray-800 whitespace-nowrap font-mono">${escapeHtml(v === null ? 'NULL' : String(v))}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${truncated ? `<div class="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-400">仅显示前 50 行</div>` : ''}
+    </div>
+  `;
+
+  wrapper.innerHTML = html;
+  messagesEl.appendChild(wrapper);
+  scrollToBottom();
+}
+
+async function cancelSQL(btn) {
+  const btnGroup = btn.parentElement;
+
+  try {
+    const resp = await fetch('/api/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '', user_id: USER_ID }),
+    });
+    const data = await resp.json();
+    btnGroup.innerHTML = '<span class="text-gray-400 text-xs">已取消</span>';
+  } catch (err) {
+    addMessage('system', '取消失败：' + err.message);
+  }
+}
+
+function copySQL(btn, encodedSql) {
+  const sql = decodeURIComponent(encodedSql);
+  navigator.clipboard.writeText(sql).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+function useSuggestion(text) {
+  input.value = text;
+  sendMessage(text);
+  input.value = '';
+}
+
+// ── 事件绑定 ──────────────────────────────────────────────────────────────────
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text || isWaiting) return;
+  input.value = '';
+  input.style.height = 'auto';
+  sendMessage(text);
+});
+
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    form.dispatchEvent(new Event('submit'));
+  }
+});
+
+// 输入框自适应高度
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 128) + 'px';
+});
+
+input.focus();
+</script>
+</body>
+</html>

@@ -75,11 +75,18 @@ class Session:
         """
         追加一条消息到历史记录。
 
-        超过 20 条时自动裁剪头部，保留最近 20 条。
-        20 条的上限对应约 10 轮对话，在保证上下文连贯性的同时控制 token 消耗。
+        裁剪策略：
+        - 超过 20 条时，优先丢弃 [系统] 注入消息（编译重试错误等）
+        - 仍然超出则从头部丢弃最旧消息
         持久化通过 _on_change 回调自动触发。
         """
         self.history.append(Message(role=role, content=content))
+        if len(self.history) > 20:
+            # 优先清理系统注入消息
+            self.history = [
+                m for m in self.history
+                if not (m.role == "user" and m.content.startswith("[系统]"))
+            ]
         if len(self.history) > 20:
             self.history = self.history[-20:]
         if self._on_change:

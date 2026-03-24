@@ -1,130 +1,350 @@
 {% extends "base.html" %}
 {% set active = "semantic" %}
-{% block title %}语义规则 — Forge 管理后台{% endblock %}
+{% block title %}语义规则 — Forge{% endblock %}
 {% block heading %}语义规则库{% endblock %}
 
 {% block content %}
 
-{# ── flash message ─────────────────────────────────────────────────────────── #}
 {% if flash %}
-<div class="mb-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
+<div id="flash" class="mb-6 bg-green-50 border border-green-200 rounded-md px-4 py-3 text-sm text-green-700">
   {{ flash }}
 </div>
+<script>setTimeout(() => document.getElementById('flash').style.display='none', 3000)</script>
 {% endif %}
 
-{# ── disambiguations ───────────────────────────────────────────────────────── #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# 歧义消除规则                                                               #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
 <section class="mb-10">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-base font-semibold text-gray-700">
       歧义消除规则
-      <span class="text-xs font-normal text-gray-400 ml-1">
-        disambiguations.registry.yaml · 触发词命中时自动注入 LLM 上下文
-      </span>
+      <span class="text-xs font-normal text-gray-400 ml-1">触发词命中时自动注入 LLM 上下文</span>
     </h2>
+    <button onclick="openDisambModal()"
+            class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700 transition-colors">
+      + 新增规则
+    </button>
   </div>
+
   {% if disambiguations %}
-  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200 text-sm">
-      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
-        <tr>
-          <th class="px-4 py-3 text-left w-40">规则</th>
-          <th class="px-4 py-3 text-left w-52">触发词</th>
-          <th class="px-4 py-3 text-left">注入说明</th>
-          <th class="px-4 py-3 text-center w-28">澄清</th>
-          <th class="px-4 py-3 text-center w-20">状态</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-        {% for key, rule in disambiguations.items() %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-4 py-3">
-            <p class="font-medium text-gray-900">{{ rule.label or key }}</p>
-            <p class="font-mono text-xs text-gray-400">{{ key }}</p>
-          </td>
-          <td class="px-4 py-3">
-            <div class="flex flex-wrap gap-1">
-              {% for t in (rule.triggers or []) %}
-              <span class="bg-blue-50 text-blue-700 text-xs px-1.5 py-0.5 rounded font-mono">{{ t }}</span>
-              {% endfor %}
-            </div>
-          </td>
-          <td class="px-4 py-3 text-gray-600 text-xs leading-relaxed whitespace-pre-line">{{ (rule.context or '') | truncate(150) }}</td>
-          <td class="px-4 py-3 text-center">
+  <div class="space-y-2">
+    {% for key, rule in disambiguations.items() %}
+    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      {# 摘要行 #}
+      <div class="flex items-center px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+           onclick="toggleDetail('d-{{ loop.index }}')">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-gray-900">{{ rule.label or key }}</span>
+            <span class="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{{ key }}</span>
             {% if rule.requires_clarification %}
             <span class="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded-full">需确认</span>
-            {% else %}
-            <span class="text-gray-300 text-xs">自动注入</span>
             {% endif %}
-          </td>
-          <td class="px-4 py-3 text-center">
             {% if rule.confirmed_by_users %}
             <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">已验证</span>
-            {% else %}
-            <span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">草稿</span>
             {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          </div>
+          <div class="flex flex-wrap gap-1 mt-1">
+            {% for t in (rule.triggers or [])[:8] %}
+            <span class="bg-blue-50 text-blue-700 text-xs px-1.5 py-0.5 rounded font-mono">{{ t }}</span>
+            {% endfor %}
+            {% if (rule.triggers or [])|length > 8 %}
+            <span class="text-xs text-gray-400">+{{ (rule.triggers or [])|length - 8 }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <svg class="w-4 h-4 text-gray-400 ml-2 transition-transform" id="arrow-d-{{ loop.index }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+      {# 详情区 #}
+      <div id="d-{{ loop.index }}" class="hidden border-t border-gray-100 px-5 py-4 bg-gray-50">
+        <div class="grid grid-cols-1 gap-3 text-sm mb-4">
+          <div>
+            <p class="text-xs font-semibold text-gray-400 uppercase mb-1">注入说明 (context)</p>
+            <pre class="bg-white border border-gray-200 rounded-md p-3 text-xs text-gray-700 whitespace-pre-wrap font-mono">{{ rule.context or '(空)' }}</pre>
+          </div>
+          {% if rule.clarification_question %}
+          <div>
+            <p class="text-xs font-semibold text-gray-400 uppercase mb-1">澄清提问</p>
+            <p class="text-sm text-gray-600 italic">{{ rule.clarification_question }}</p>
+          </div>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="editDisamb('{{ key }}', {{ rule | tojson }})"
+                  class="text-xs text-blue-600 hover:text-blue-800 font-medium">编辑</button>
+          <button onclick="deleteDisamb('{{ key }}')"
+                  class="text-xs text-red-500 hover:text-red-700 font-medium">删除</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
   </div>
   {% else %}
-  <p class="text-gray-400 italic">暂无歧义消除规则。可通过 registry/data/disambiguations.registry.yaml 手动添加，
-    或通过 <code class="bg-gray-100 px-1 rounded font-mono">forge sync-staging</code> 自动合并用户确认记录。</p>
+  <div class="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+    <p>暂无歧义消除规则</p>
+    <p class="text-xs mt-1">点击右上角「新增规则」添加，或通过 Staging 自动合并用户确认记录。</p>
+  </div>
   {% endif %}
 </section>
 
-{# ── field conventions ─────────────────────────────────────────────────────── #}
-<section>
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# 字段使用约定                                                               #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+<section class="mb-10">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-base font-semibold text-gray-700">
       字段使用约定
-      <span class="text-xs font-normal text-gray-400 ml-1">
-        field_conventions.registry.yaml · 字段名匹配时自动注入
-      </span>
+      <span class="text-xs font-normal text-gray-400 ml-1">字段名匹配时自动注入</span>
     </h2>
+    <button onclick="openConvModal()"
+            class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700 transition-colors">
+      + 新增约定
+    </button>
   </div>
+
   {% if conventions %}
-  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200 text-sm">
-      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
-        <tr>
-          <th class="px-4 py-3 text-left w-40">约定</th>
-          <th class="px-4 py-3 text-left w-52">适用字段</th>
-          <th class="px-4 py-3 text-left">约定内容</th>
-          <th class="px-4 py-3 text-center w-20">状态</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-        {% for key, rule in conventions.items() %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-4 py-3">
-            <p class="font-medium text-gray-900">{{ rule.label or key }}</p>
-            <p class="font-mono text-xs text-gray-400">{{ key }}</p>
-          </td>
-          <td class="px-4 py-3">
-            <div class="flex flex-wrap gap-1">
-              {% for f in (rule.applies_to or []) %}
-              <span class="bg-purple-50 text-purple-700 text-xs px-1.5 py-0.5 rounded font-mono">{{ f }}</span>
-              {% endfor %}
-            </div>
-          </td>
-          <td class="px-4 py-3 text-gray-600 text-xs leading-relaxed whitespace-pre-line">{{ (rule.convention or '') | truncate(150) }}</td>
-          <td class="px-4 py-3 text-center">
+  <div class="space-y-2">
+    {% for key, rule in conventions.items() %}
+    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div class="flex items-center px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+           onclick="toggleDetail('c-{{ loop.index }}')">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-gray-900">{{ rule.label or key }}</span>
+            <span class="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{{ key }}</span>
             {% if rule.confirmed_by_users %}
             <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">已验证</span>
-            {% else %}
-            <span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">草稿</span>
             {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          </div>
+          <div class="flex flex-wrap gap-1 mt-1">
+            {% for f in (rule.applies_to or [])[:6] %}
+            <span class="bg-purple-50 text-purple-700 text-xs px-1.5 py-0.5 rounded font-mono">{{ f }}</span>
+            {% endfor %}
+            {% if (rule.applies_to or [])|length > 6 %}
+            <span class="text-xs text-gray-400">+{{ (rule.applies_to or [])|length - 6 }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <svg class="w-4 h-4 text-gray-400 ml-2 transition-transform" id="arrow-c-{{ loop.index }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+      <div id="c-{{ loop.index }}" class="hidden border-t border-gray-100 px-5 py-4 bg-gray-50">
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-400 uppercase mb-1">约定内容 (convention)</p>
+          <pre class="bg-white border border-gray-200 rounded-md p-3 text-xs text-gray-700 whitespace-pre-wrap font-mono">{{ rule.convention or '(空)' }}</pre>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="editConv('{{ key }}', {{ rule | tojson }})"
+                  class="text-xs text-blue-600 hover:text-blue-800 font-medium">编辑</button>
+          <button onclick="deleteConv('{{ key }}')"
+                  class="text-xs text-red-500 hover:text-red-700 font-medium">删除</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
   </div>
   {% else %}
-  <p class="text-gray-400 italic">暂无字段约定。可通过 registry/data/field_conventions.registry.yaml 手动添加。</p>
+  <div class="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+    <p>暂无字段约定</p>
+    <p class="text-xs mt-1">点击右上角「新增约定」添加。</p>
+  </div>
   {% endif %}
 </section>
 
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# 歧义消除 Modal                                                            #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+<div id="disamb-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-12 pb-8 overflow-y-auto">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+    <h3 class="text-base font-semibold text-gray-900 mb-4" id="disamb-modal-title">新增歧义消除规则</h3>
+    <form method="post" action="/admin/semantic/disambiguation">
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">标识符 (key) <span class="text-red-400">*</span></label>
+            <input id="da-key" name="key" type="text" required
+                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="revenue_definition" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">显示名称 <span class="text-red-400">*</span></label>
+            <input id="da-label" name="label" type="text" required
+                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="销售额定义" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">触发词 <span class="text-gray-400 font-normal">(每行一个)</span></label>
+          <textarea id="da-triggers" name="triggers" rows="2"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="销售额&#10;营收&#10;GMV"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">注入说明 (context) <span class="text-red-400">*</span></label>
+          <textarea id="da-context" name="context" rows="4" required
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="当用户提到「销售额」时，默认指..."></textarea>
+        </div>
+        <div class="flex items-center gap-6">
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input id="da-clarify" name="requires_clarification" type="checkbox" value="true"
+                   class="rounded border-gray-300" onchange="toggleClarifyField()" />
+            需要向用户发起澄清
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input id="da-confirmed" name="confirmed_by_users" type="checkbox" value="true"
+                   class="rounded border-gray-300" />
+            已验证
+          </label>
+        </div>
+        <div id="da-clarify-field" class="hidden">
+          <label class="block text-xs font-medium text-gray-700 mb-1">澄清提问</label>
+          <textarea id="da-clarify-q" name="clarification_question" rows="2"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="请问您说的「销售额」是指..."></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100">
+        <button type="button" onclick="closeModal('disamb-modal')"
+                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">取消</button>
+        <button type="submit"
+                class="bg-green-600 text-white text-sm px-4 py-2 rounded-md hover:bg-green-700 transition-colors">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# 字段约定 Modal                                                            #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+<div id="conv-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-12 pb-8 overflow-y-auto">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+    <h3 class="text-base font-semibold text-gray-900 mb-4" id="conv-modal-title">新增字段约定</h3>
+    <form method="post" action="/admin/semantic/convention">
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">标识符 (key) <span class="text-red-400">*</span></label>
+            <input id="cv-key" name="key" type="text" required
+                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="order_status_filter" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">显示名称 <span class="text-red-400">*</span></label>
+            <input id="cv-label" name="label" type="text" required
+                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="订单状态过滤" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">适用字段 <span class="text-gray-400 font-normal">(每行一个，格式 table.column)</span></label>
+          <textarea id="cv-applies" name="applies_to" rows="2"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="orders.status&#10;orders.order_status"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">约定内容 <span class="text-red-400">*</span></label>
+          <textarea id="cv-convention" name="convention" rows="4" required
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="当涉及订单状态过滤时..."></textarea>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-700">
+          <input id="cv-confirmed" name="confirmed_by_users" type="checkbox" value="true"
+                 class="rounded border-gray-300" />
+          已验证
+        </label>
+      </div>
+      <div class="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100">
+        <button type="button" onclick="closeModal('conv-modal')"
+                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">取消</button>
+        <button type="submit"
+                class="bg-green-600 text-white text-sm px-4 py-2 rounded-md hover:bg-green-700 transition-colors">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleDetail(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('hidden');
+  const arrow = document.getElementById('arrow-' + id);
+  if (arrow) arrow.style.transform = el.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// ── 歧义消除 ─────────────────────────────────────────────────────────────────
+
+function openDisambModal() {
+  document.getElementById('disamb-modal-title').textContent = '新增歧义消除规则';
+  ['da-key','da-label','da-triggers','da-context','da-clarify-q'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('da-clarify').checked = false;
+  document.getElementById('da-confirmed').checked = false;
+  document.getElementById('da-clarify-field').classList.add('hidden');
+  document.getElementById('da-key').readOnly = false;
+  document.getElementById('disamb-modal').classList.remove('hidden');
+}
+
+function editDisamb(key, rule) {
+  document.getElementById('disamb-modal-title').textContent = '编辑歧义消除规则';
+  document.getElementById('da-key').value = key;
+  document.getElementById('da-key').readOnly = true;
+  document.getElementById('da-label').value = rule.label || '';
+  document.getElementById('da-triggers').value = (rule.triggers || []).join('\n');
+  document.getElementById('da-context').value = rule.context || '';
+  document.getElementById('da-clarify').checked = !!rule.requires_clarification;
+  document.getElementById('da-confirmed').checked = !!rule.confirmed_by_users;
+  document.getElementById('da-clarify-q').value = rule.clarification_question || '';
+  toggleClarifyField();
+  document.getElementById('disamb-modal').classList.remove('hidden');
+}
+
+function toggleClarifyField() {
+  document.getElementById('da-clarify-field').classList.toggle('hidden', !document.getElementById('da-clarify').checked);
+}
+
+async function deleteDisamb(key) {
+  if (!confirm('确认删除规则「' + key + '」？')) return;
+  const r = await fetch('/admin/semantic/disambiguation/' + encodeURIComponent(key), { method: 'DELETE' });
+  if (r.ok) window.location.reload();
+  else alert('删除失败');
+}
+
+// ── 字段约定 ─────────────────────────────────────────────────────────────────
+
+function openConvModal() {
+  document.getElementById('conv-modal-title').textContent = '新增字段约定';
+  ['cv-key','cv-label','cv-applies','cv-convention'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('cv-confirmed').checked = false;
+  document.getElementById('cv-key').readOnly = false;
+  document.getElementById('conv-modal').classList.remove('hidden');
+}
+
+function editConv(key, rule) {
+  document.getElementById('conv-modal-title').textContent = '编辑字段约定';
+  document.getElementById('cv-key').value = key;
+  document.getElementById('cv-key').readOnly = true;
+  document.getElementById('cv-label').value = rule.label || '';
+  document.getElementById('cv-applies').value = (rule.applies_to || []).join('\n');
+  document.getElementById('cv-convention').value = rule.convention || '';
+  document.getElementById('cv-confirmed').checked = !!rule.confirmed_by_users;
+  document.getElementById('conv-modal').classList.remove('hidden');
+}
+
+async function deleteConv(key) {
+  if (!confirm('确认删除约定「' + key + '」？')) return;
+  const r = await fetch('/admin/semantic/convention/' + encodeURIComponent(key), { method: 'DELETE' });
+  if (r.ok) window.location.reload();
+  else alert('删除失败');
+}
+</script>
 {% endblock %}

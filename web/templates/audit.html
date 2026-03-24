@@ -1,54 +1,91 @@
 {% extends "base.html" %}
 {% set active = "audit" %}
 
-{% block title %}查询审计 — Forge 管理后台{% endblock %}
+{% block title %}查询审计 — Forge{% endblock %}
 {% block heading %}查询审计{% endblock %}
 
 {% block content %}
+<style>
+  .sql-highlight {
+    background: #1e293b; color: #e2e8f0; border-radius: 0.375rem;
+    padding: 0.75rem 1rem; font-family: 'SF Mono','Fira Code',monospace;
+    font-size: 0.75rem; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .sql-highlight .kw { color: #93c5fd; font-weight: 600; }
+  .sql-highlight .fn { color: #a5b4fc; }
+  .sql-highlight .str { color: #86efac; }
+  .sql-highlight .num { color: #fbbf24; }
+</style>
+
+{# ── 统计卡片 ────────────────────────────────────────────────────────────── #}
+<div class="grid grid-cols-5 gap-3 mb-6">
+  <a href="/admin/audit" class="block bg-white rounded-lg border border-gray-200 px-4 py-3 hover:border-gray-400 transition-colors {% if not filter_status %}ring-2 ring-gray-900 ring-offset-1{% endif %}">
+    <p class="text-2xl font-semibold text-gray-900">{{ counts.get('total', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">全部</p>
+  </a>
+  <a href="/admin/audit?status=pending{% if filter_q %}&q={{ filter_q }}{% endif %}" class="block bg-white rounded-lg border border-gray-200 px-4 py-3 hover:border-yellow-400 transition-colors {% if filter_status == 'pending' %}ring-2 ring-yellow-500 ring-offset-1{% endif %}">
+    <p class="text-2xl font-semibold text-yellow-600">{{ counts.get('pending', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">待确认</p>
+  </a>
+  <a href="/admin/audit?status=approved{% if filter_q %}&q={{ filter_q }}{% endif %}" class="block bg-white rounded-lg border border-gray-200 px-4 py-3 hover:border-green-400 transition-colors {% if filter_status == 'approved' %}ring-2 ring-green-500 ring-offset-1{% endif %}">
+    <p class="text-2xl font-semibold text-green-600">{{ counts.get('approved', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">已执行</p>
+  </a>
+  <a href="/admin/audit?status=cancelled{% if filter_q %}&q={{ filter_q }}{% endif %}" class="block bg-white rounded-lg border border-gray-200 px-4 py-3 hover:border-gray-400 transition-colors {% if filter_status == 'cancelled' %}ring-2 ring-gray-400 ring-offset-1{% endif %}">
+    <p class="text-2xl font-semibold text-gray-500">{{ counts.get('cancelled', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">已取消</p>
+  </a>
+  <a href="/admin/audit?status=error{% if filter_q %}&q={{ filter_q }}{% endif %}" class="block bg-white rounded-lg border border-gray-200 px-4 py-3 hover:border-red-400 transition-colors {% if filter_status == 'error' %}ring-2 ring-red-500 ring-offset-1{% endif %}">
+    <p class="text-2xl font-semibold text-red-600">{{ counts.get('error', 0) }}</p>
+    <p class="text-xs text-gray-500 mt-0.5">错误</p>
+  </a>
+</div>
+
+{# ── 搜索栏 ──────────────────────────────────────────────────────────────── #}
+<form method="get" action="/admin/audit" class="mb-4 flex items-center gap-3">
+  {% if filter_status %}
+  <input type="hidden" name="status" value="{{ filter_status }}" />
+  {% endif %}
+  <div class="relative flex-1 max-w-md">
+    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <input type="text" name="q" value="{{ filter_q }}"
+           placeholder="搜索查询内容或 SQL..."
+           class="w-full border border-gray-300 rounded-md pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+  </div>
+  <button type="submit" class="bg-gray-900 text-white text-sm px-4 py-2 rounded-md hover:bg-gray-700 transition-colors">搜索</button>
+  {% if filter_q or filter_status %}
+  <a href="/admin/audit" class="text-sm text-gray-500 hover:text-gray-700">清除筛选</a>
+  {% endif %}
+</form>
+
+{# ── 记录表格 ────────────────────────────────────────────────────────────── #}
 {% if records %}
 <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
   <table class="min-w-full divide-y divide-gray-200 text-sm">
     <thead class="bg-gray-50">
       <tr>
-        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">时间</th>
-        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">用户</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">时间</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">用户</th>
         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">查询内容</th>
-        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">生成 SQL</th>
-        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">状态</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">状态</th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">操作</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-gray-100">
       {% for r in records %}
-      <tr class="hover:bg-gray-50 align-top">
+      <tr class="hover:bg-gray-50 align-top group">
         <td class="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">
           {{ r.timestamp[:19].replace("T", " ") if r.timestamp else "—" }}
         </td>
-        <td class="px-4 py-3 text-gray-600 font-mono text-xs truncate max-w-0 w-36">
-          <span title="{{ r.user_id }}">{{ r.user_id[:12] }}{% if r.user_id|length > 12 %}…{% endif %}</span>
+        <td class="px-4 py-3 font-mono text-xs text-gray-500 truncate max-w-0 w-28">
+          <span title="{{ r.user_id }}">{{ r.user_id[:10] }}{% if r.user_id|length > 10 %}...{% endif %}</span>
         </td>
-        <td class="px-4 py-3 text-gray-800 max-w-xs">
-          <span class="line-clamp-2" title="{{ r.user_message }}">{{ r.user_message }}</span>
-        </td>
-        <td class="px-4 py-3 max-w-xs">
-          {% if r.sql %}
-          <div>
-            <code id="sql-short-{{ r.id }}"
-                  class="text-xs text-gray-600 font-mono block truncate max-w-xs cursor-pointer hover:text-gray-900"
-                  title="点击展开"
-                  onclick="toggleSQL({{ r.id }})">{{ r.sql | truncate(80, True) }}</code>
-            <pre id="sql-full-{{ r.id }}"
-                 class="hidden text-xs text-gray-600 font-mono whitespace-pre-wrap break-all mt-1 bg-gray-50 rounded p-2 cursor-pointer"
-                 onclick="toggleSQL({{ r.id }})">{{ r.sql }}</pre>
-            {% if r.error_message %}
-            <p class="text-xs text-red-500 mt-1">{{ r.error_message }}</p>
-            {% endif %}
-          </div>
-          {% else %}
-            {% if r.error_message %}
-            <span class="text-xs text-red-500">{{ r.error_message }}</span>
-            {% else %}
-            <span class="text-gray-300">—</span>
-            {% endif %}
+        <td class="px-4 py-3 text-gray-800">
+          <p class="text-sm leading-relaxed">{{ r.user_message }}</p>
+          {% if r.error_message %}
+          <p class="text-xs text-red-500 mt-1">{{ r.error_message }}</p>
           {% endif %}
         </td>
         <td class="px-4 py-3">
@@ -64,24 +101,119 @@
           <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">{{ r.status }}</span>
           {% endif %}
         </td>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2">
+            {% if r.sql %}
+            <button onclick="showDetail({{ r.id }}, 'sql')"
+                    class="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer">SQL</button>
+            {% endif %}
+            {% if r.forge_json %}
+            <button onclick="showDetail({{ r.id }}, 'json')"
+                    class="text-xs text-purple-600 hover:text-purple-800 font-medium cursor-pointer">JSON</button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {# 详情展开行（默认隐藏）#}
+      <tr id="detail-{{ r.id }}" class="hidden">
+        <td colspan="5" class="px-4 py-4 bg-gray-50">
+          <div id="detail-content-{{ r.id }}"></div>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-<p class="mt-3 text-xs text-gray-400">共显示最近 {{ records|length }} 条记录</p>
+<p class="mt-3 text-xs text-gray-400">
+  显示 {{ records|length }} 条记录
+  {% if filter_status %} · 状态: {{ filter_status }}{% endif %}
+  {% if filter_q %} · 搜索: "{{ filter_q }}"{% endif %}
+</p>
 {% else %}
 <div class="text-center py-16 text-gray-400">
-  <p class="text-4xl mb-3">📋</p>
-  <p class="text-base">暂无审计记录</p>
-  <p class="text-xs mt-1">用户通过飞书发起查询后，记录将显示在此处</p>
+  {% if filter_status or filter_q %}
+  <p class="text-base mb-1">没有匹配的记录</p>
+  <p class="text-xs">尝试 <a href="/admin/audit" class="text-blue-500 hover:underline">清除筛选</a> 查看全部</p>
+  {% else %}
+  <p class="text-base mb-1">暂无审计记录</p>
+  <p class="text-xs">通过 Chat 或飞书发起查询后，记录将显示在此处</p>
+  {% endif %}
 </div>
 {% endif %}
 
+{# ── 存储每条记录的 SQL 和 JSON 数据 ─────────────────────────────────────── #}
 <script>
-function toggleSQL(id) {
-  document.getElementById('sql-short-' + id).classList.toggle('hidden');
-  document.getElementById('sql-full-'  + id).classList.toggle('hidden');
+const recordData = {
+  {% for r in records %}
+  {{ r.id }}: {
+    sql: {{ r.sql | tojson if r.sql else 'null' }},
+    forge_json: {{ r.forge_json | tojson if r.forge_json else 'null' }}
+  },
+  {% endfor %}
+};
+
+function highlightSQL(sql) {
+  const kw = /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|AND|OR|NOT|IN|IS|NULL|AS|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|DISTINCT|CASE|WHEN|THEN|ELSE|END|UNION|ALL|EXISTS|BETWEEN|LIKE|WITH|OVER|PARTITION|ROWS|RANGE|UNBOUNDED|PRECEDING|FOLLOWING|CURRENT|ROW|ASC|DESC|ANTI|SEMI|ROUND|CAST|COALESCE)\b/gi;
+  const fn = /\b(COUNT|SUM|AVG|MIN|MAX|ROW_NUMBER|RANK|DENSE_RANK|LAG|LEAD|JULIANDAY|DATE|STRFTIME|IFNULL|LENGTH|SUBSTR|TRIM|ABS)\b/gi;
+  const str = /('[^']*')/g;
+  const num = /\b(\d+\.?\d*)\b/g;
+  return sql
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(str, '<span class="str">$1</span>')
+    .replace(kw, '<span class="kw">$1</span>')
+    .replace(fn, '<span class="fn">$1</span>')
+    .replace(num, '<span class="num">$1</span>');
+}
+
+let openDetailId = null;
+
+function showDetail(id, type) {
+  const row = document.getElementById('detail-' + id);
+  const content = document.getElementById('detail-content-' + id);
+  const data = recordData[id];
+
+  // 点击同一行同一类型则关闭
+  if (openDetailId === id + '-' + type) {
+    row.classList.add('hidden');
+    openDetailId = null;
+    return;
+  }
+
+  // 关闭上一个
+  if (openDetailId) {
+    const prevId = openDetailId.split('-')[0];
+    document.getElementById('detail-' + prevId).classList.add('hidden');
+  }
+
+  if (type === 'sql' && data.sql) {
+    content.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-medium text-gray-700">生成的 SQL</span>
+        <button onclick="copyText(this, ${JSON.stringify(data.sql)})" class="text-xs text-gray-400 hover:text-gray-600">复制</button>
+      </div>
+      <div class="sql-highlight">${highlightSQL(data.sql)}</div>
+    `;
+  } else if (type === 'json' && data.forge_json) {
+    const pretty = JSON.stringify(typeof data.forge_json === 'string' ? JSON.parse(data.forge_json) : data.forge_json, null, 2);
+    content.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-medium text-gray-700">Forge JSON</span>
+        <button onclick="copyText(this, ${JSON.stringify(pretty)})" class="text-xs text-gray-400 hover:text-gray-600">复制</button>
+      </div>
+      <pre class="bg-gray-900 text-green-300 rounded-md p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap">${pretty.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+    `;
+  }
+
+  row.classList.remove('hidden');
+  openDetailId = id + '-' + type;
+}
+
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
 }
 </script>
 {% endblock %}

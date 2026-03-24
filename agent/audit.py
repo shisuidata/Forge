@@ -118,6 +118,58 @@ async def recent(limit: int = 50) -> list[dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
+async def search(
+    *,
+    status: str = "",
+    keyword: str = "",
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """
+    带筛选的审计记录查询。
+
+    Args:
+        status:  按状态过滤（pending/approved/cancelled/error），空字符串不过滤。
+        keyword: 搜索用户消息或 SQL 中包含的关键词，空字符串不过滤。
+        limit:   返回条数上限。
+    """
+    await _ensure_schema()
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if keyword:
+        conditions.append("(user_message LIKE ? OR sql LIKE ?)")
+        params.extend([f"%{keyword}%", f"%{keyword}%"])
+
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"SELECT * FROM audit_log{where} ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def stats() -> dict[str, int]:
+    """返回各状态的记录计数和总数。"""
+    await _ensure_schema()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT status, COUNT(*) as cnt FROM audit_log GROUP BY status"
+        )
+        rows = await cursor.fetchall()
+        result: dict[str, int] = {"total": 0}
+        for row in rows:
+            result[row["status"]] = row["cnt"]
+            result["total"] += row["cnt"]
+        return result
+
+
 async def update_status(record_id: int, status: str) -> None:
     """
     更新指定审计记录的状态。

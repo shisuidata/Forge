@@ -1,33 +1,322 @@
 {% extends "base.html" %}
 {% set active = "settings" %}
 
-{% block title %}系统配置 — Forge 管理后台{% endblock %}
+{% block title %}系统配置 — Forge{% endblock %}
 {% block heading %}系统配置{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl">
-  <p class="text-xs text-gray-400 mb-5">
-    当前运行时配置（只读）。修改请通过环境变量或
-    <code class="font-mono bg-gray-100 px-1 rounded">.env</code> 文件，重启服务后生效。
+<div class="max-w-3xl">
+
+  {# ── 保存成功提示 ───────────────────────────────────────────────────────── #}
+  {% if saved %}
+  <div id="save-toast" class="mb-6 bg-green-50 border border-green-200 rounded-md px-4 py-3 flex items-center gap-2">
+    <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+    </svg>
+    <span class="text-sm text-green-800">配置已保存到 forge.yaml，重启服务后生效。</span>
+  </div>
+  {% endif %}
+
+  <p class="text-sm text-gray-500 mb-8">
+    修改后保存到 <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">forge.yaml</code>。
+    敏感字段（API Key、Secret）建议通过 <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">.env</code> 文件配置，环境变量优先级高于此文件。
+    <strong>修改后需重启服务才能生效。</strong>
   </p>
 
-  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-100 text-sm">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">配置项</th>
-          <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">当前值</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-        {% for key, value in settings.items() %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-5 py-3 font-medium text-gray-700 whitespace-nowrap">{{ key }}</td>
-          <td class="px-5 py-3 font-mono text-gray-600 break-all">{{ value }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# LLM 模型                                                                  #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">LLM 模型</h3>
+      <p class="text-xs text-gray-500 mt-0.5">配置用于生成 Forge JSON 的大语言模型。</p>
+    </div>
+    <form method="post" action="/admin/settings/llm" class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Provider</label>
+          <select name="provider"
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <option value="anthropic" {% if (y.get('llm', {}).get('provider', 'anthropic')) == 'anthropic' %}selected{% endif %}>anthropic</option>
+            <option value="openai" {% if (y.get('llm', {}).get('provider', '')) == 'openai' %}selected{% endif %}>openai (compatible)</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">openai 模式兼容 DeepSeek、MiniMax 等所有 OpenAI 接口。</p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Model</label>
+          <input name="model" type="text"
+                 value="{{ y.get('llm', {}).get('model', '') }}"
+                 placeholder="claude-sonnet-4-6"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+          <p class="text-xs text-gray-400 mt-1">留空则读取 MINIMAX_MODEL 环境变量。</p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">API Key</label>
+        <input name="api_key" type="password"
+               value="{{ mask_secret(y.get('llm', {}).get('api_key', '')) }}"
+               placeholder="sk-..."
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1">以 * 开头的值不会覆盖已有配置。建议使用 .env 文件管理。</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">Base URL</label>
+        <input name="base_url" type="text"
+               value="{{ y.get('llm', {}).get('base_url', '') }}"
+               placeholder="https://api.deepseek.com/v1"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1">仅 openai 模式需要。Anthropic 模式留空即可。</p>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存 LLM 配置
+        </button>
+      </div>
+    </form>
   </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# 数据库连接                                                                 #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">数据库连接</h3>
+      <p class="text-xs text-gray-500 mt-0.5">Forge 直连数据库执行已审核的 SQL 并展示结果。</p>
+    </div>
+    <form method="post" action="/admin/settings/database" class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">Database URL</label>
+        <input name="url" type="text"
+               value="{{ y.get('database', {}).get('url', '') }}"
+               placeholder="postgresql://user:pass@localhost:5432/mydb"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1">支持 SQLite、PostgreSQL、MySQL。示例：<code class="font-mono">sqlite:///path/to/db</code> / <code class="font-mono">mysql+pymysql://user:pass@host/db</code></p>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存数据库配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# Embedding 模型                                                            #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">Embedding 模型</h3>
+      <p class="text-xs text-gray-500 mt-0.5">用于 Registry 向量检索（RAG），从表结构中精选相关上下文。</p>
+    </div>
+    <form method="post" action="/admin/settings/embedding" class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Model</label>
+          <input name="model" type="text"
+                 value="{{ y.get('embedding', {}).get('model', 'BAAI/bge-m3') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Top K</label>
+          <input name="top_k" type="number" min="1" max="20"
+                 value="{{ y.get('embedding', {}).get('top_k', 5) }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+          <p class="text-xs text-gray-400 mt-1">每次查询最多召回几张表。</p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">Base URL</label>
+        <input name="base_url" type="text"
+               value="{{ y.get('embedding', {}).get('base_url', 'https://api.siliconflow.cn/v1') }}"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">API Key</label>
+        <input name="api_key" type="password"
+               value="{{ mask_secret(y.get('embedding', {}).get('api_key', '')) }}"
+               placeholder="留空则复用 LLM API Key"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存 Embedding 配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# Registry 路径                                                              #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">Registry 路径</h3>
+      <p class="text-xs text-gray-500 mt-0.5">语义层和结构层文件的存储位置。<code class="font-mono">forge sync</code> 生成的表结构和手动维护的指标定义都存在这里。</p>
+    </div>
+    <form method="post" action="/admin/settings/registry" class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Schema (结构层)</label>
+          <input name="schema_path" type="text"
+                 value="{{ y.get('registry', {}).get('schema_path', '') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Metrics (指标语义层)</label>
+          <input name="metrics_path" type="text"
+                 value="{{ y.get('registry', {}).get('metrics_path', '') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Disambiguations (歧义消除)</label>
+          <input name="disambiguations_path" type="text"
+                 value="{{ y.get('registry', {}).get('disambiguations_path', '') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Conventions (字段约定)</label>
+          <input name="conventions_path" type="text"
+                 value="{{ y.get('registry', {}).get('conventions_path', '') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存 Registry 路径
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# 飞书机器人                                                                 #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">飞书机器人</h3>
+      <p class="text-xs text-gray-500 mt-0.5">飞书 Bot 的应用凭证，用于接收和回复飞书消息。</p>
+    </div>
+    <form method="post" action="/admin/settings/feishu" class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">App ID</label>
+          <input name="app_id" type="text"
+                 value="{{ y.get('feishu', {}).get('app_id', '') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">App Secret</label>
+          <input name="app_secret" type="password"
+                 value="{{ mask_secret(y.get('feishu', {}).get('app_secret', '')) }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Verification Token</label>
+          <input name="verification_token" type="text"
+                 value="{{ y.get('feishu', {}).get('verification_token', '') }}"
+                 placeholder="HTTP 模式用，长连接可留空"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Encrypt Key</label>
+          <input name="encrypt_key" type="text"
+                 value="{{ y.get('feishu', {}).get('encrypt_key', '') }}"
+                 placeholder="不加密留空"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存飞书配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# Web 服务器                                                                 #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">Web 服务器</h3>
+      <p class="text-xs text-gray-500 mt-0.5">Uvicorn 监听地址和端口。修改后需重启服务。</p>
+    </div>
+    <form method="post" action="/admin/settings/server" class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Host</label>
+          <input name="host" type="text"
+                 value="{{ y.get('server', {}).get('host', '0.0.0.0') }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">Port</label>
+          <input name="port" type="number" min="1" max="65535"
+                 value="{{ y.get('server', {}).get('port', 8000) }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存服务器配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# 运行时状态（只读）                                                         #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">运行时状态</h3>
+      <p class="text-xs text-gray-500 mt-0.5">当前进程实际生效的配置值（只读）。环境变量会覆盖 forge.yaml 中的同名配置。</p>
+    </div>
+    <div class="px-6 py-4">
+      <div class="bg-gray-50 rounded-md border border-gray-100 overflow-hidden">
+        <table class="min-w-full text-sm">
+          <tbody class="divide-y divide-gray-100">
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500 w-48">LLM Provider</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('llm', {}).get('provider', 'anthropic') }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">LLM Model</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('llm', {}).get('model', '') or '(env fallback)' }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">LLM API Key</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ mask_secret(y.get('llm', {}).get('api_key', '')) }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Database URL</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800 break-all">{{ mask_db_url(y.get('database', {}).get('url', '')) }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Staging Dir</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('staging', {}).get('dir', '.forge/staging') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<script>
+// 保存成功后 3 秒自动隐藏提示
+const toast = document.getElementById('save-toast');
+if (toast) setTimeout(() => toast.style.display = 'none', 4000);
+</script>
 {% endblock %}

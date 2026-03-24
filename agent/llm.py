@@ -471,21 +471,29 @@ def _extract_hint_tables(error: str, registry: dict) -> list[str]:
     return found
 
 
-def call(history: list[Any], extra_tables: list[str] | None = None) -> dict:
+def call(history: list[Any], extra_tables: list[str] | None = None,
+         system_override: str | None = None) -> dict:
     """
     LLM 统一调用入口。
 
     根据 cfg.LLM_PROVIDER 自动分发到 Anthropic 或 OpenAI 兼容后端。
-    每次调用前实时读取注册表上下文，确保 LLM 始终使用最新的表结构和指标定义。
 
     Args:
-        history:      Session.recent() 返回的 Message 列表，包含最近 N 条对话记录。
-        extra_tables: 强制追加到检索结果的表名列表（用于错误驱动二次召回）。
+        history:         Session.recent() 返回的 Message 列表。
+        extra_tables:    强制追加到检索结果的表名列表。
+        system_override: 自定义 system prompt，传入时跳过 registry 构建，无 tools（纯文字模式）。
 
     Returns:
         {"tool": str, "input": dict}  — LLM 调用了工具
         {"tool": None, "text": str}   — LLM 直接文字回复
     """
+    # 纯文字模式：自定义 system prompt，无 tools
+    if system_override is not None:
+        messages = [{"role": m.role, "content": m.content} for m in history]
+        if cfg.LLM_PROVIDER == "anthropic":
+            return _call_anthropic(messages, system_override, tools=[])
+        else:
+            return _call_openai(messages, system_override, tools=[])
     # 每次调用前实时读取 registry
     registry: dict = {}
     try:

@@ -3,25 +3,69 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}Forge 管理后台{% endblock %}</title>
+  <title>{% block title %}Forge{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    #ai-panel { transition: width 0.2s ease, opacity 0.15s ease; }
+    #ai-panel.collapsed { width: 0; opacity: 0; overflow: hidden; padding: 0; border: none; }
+    #ai-panel .ai-msg-user { background: #f0f9ff; border: 1px solid #bae6fd; }
+    #ai-panel .ai-msg-bot  { background: #fff; border: 1px solid #e5e7eb; }
+    #ai-panel .proposal-card { background: #f8fafc; border: 1px solid #e2e8f0; }
+    #ai-panel .ai-md h1,#ai-panel .ai-md h2,#ai-panel .ai-md h3 { font-size: 0.8125rem; font-weight: 600; color: #1e293b; margin: 0.75rem 0 0.25rem; }
+    #ai-panel .ai-md p { margin: 0.25rem 0; }
+    #ai-panel .ai-md ul,#ai-panel .ai-md ol { padding-left: 1.25rem; margin: 0.25rem 0; }
+    #ai-panel .ai-md li { margin: 0.125rem 0; }
+    #ai-panel .ai-md code { background: #f1f5f9; padding: 0.125rem 0.3rem; border-radius: 0.25rem; font-size: 0.7rem; font-family: 'SF Mono',monospace; }
+    #ai-panel .ai-md pre { background: #1e293b; color: #e2e8f0; padding: 0.5rem; border-radius: 0.375rem; overflow-x: auto; margin: 0.375rem 0; }
+    #ai-panel .ai-md pre code { background: none; padding: 0; color: inherit; }
+    #ai-panel .ai-md table { width: 100%; border-collapse: collapse; margin: 0.375rem 0; font-size: 0.7rem; }
+    #ai-panel .ai-md th,#ai-panel .ai-md td { border: 1px solid #e2e8f0; padding: 0.25rem 0.5rem; text-align: left; }
+    #ai-panel .ai-md th { background: #f8fafc; font-weight: 600; }
+    #ai-panel .ai-md hr { border: none; border-top: 1px solid #e2e8f0; margin: 0.5rem 0; }
+    #ai-panel .ai-md strong { font-weight: 600; }
+    #ai-panel .ai-md blockquote { border-left: 3px solid #cbd5e1; padding-left: 0.75rem; color: #64748b; margin: 0.375rem 0; }
+    #ai-messages::-webkit-scrollbar { width: 4px; }
+    #ai-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+  </style>
 </head>
 <body class="flex h-screen bg-gray-100 font-sans text-sm text-gray-800">
 
   <!-- 侧边栏 -->
   <aside class="w-52 flex-shrink-0 bg-gray-900 text-gray-200 flex flex-col">
     <div class="px-6 py-5 border-b border-gray-700">
-      <span class="text-white font-semibold text-base tracking-wide">⚙ Forge 管理后台</span>
+      <span class="text-white font-semibold text-base tracking-wide">Forge</span>
+      <span class="text-gray-500 text-xs ml-1">AI SQL Agent</span>
     </div>
     <nav class="flex-1 px-3 py-4 space-y-1">
-      <a href="/admin/registry"
+      <a href="/chat"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
-                {% if active == 'registry' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+                {% if active == 'chat' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
         </svg>
-        指标注册表
+        查询
+      </a>
+      <div class="pt-3 pb-1 px-3">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">管理</p>
+      </div>
+      <a href="/admin/schema"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
+                {% if active == 'schema' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+        </svg>
+        结构层
+      </a>
+      <a href="/admin/metrics"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
+                {% if active == 'metrics' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        指标库
       </a>
       <a href="/admin/semantic"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
@@ -56,16 +100,8 @@
                 {% if active == 'settings' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0
-                   002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0
-                   001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0
-                   00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0
-                   00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0
-                   00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0
-                   00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0
-                   001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
         系统配置
       </a>
@@ -77,13 +113,194 @@
 
   <!-- 主内容区 -->
   <div class="flex-1 flex flex-col overflow-hidden">
-    <header class="bg-white border-b border-gray-200 px-8 py-4">
+    <header class="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
       <h1 class="text-lg font-semibold text-gray-900">{% block heading %}{% endblock %}</h1>
+      <button id="ai-toggle-btn" onclick="toggleAIPanel()"
+              class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+        AI 助手
+      </button>
     </header>
-    <main class="flex-1 overflow-y-auto px-8 py-6">
-      {% block content %}{% endblock %}
-    </main>
+    <div class="flex-1 flex overflow-hidden">
+      <main class="flex-1 overflow-y-auto px-8 py-6">
+        {% block content %}{% endblock %}
+      </main>
+
+      <!-- AI 助手面板 -->
+      <div id="ai-panel" class="collapsed w-80 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <span class="text-xs font-semibold text-gray-700">AI 管理助手</span>
+          <button onclick="toggleAIPanel()" class="text-gray-400 hover:text-gray-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 消息区 -->
+        <div id="ai-messages" class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          <div class="text-center text-xs text-gray-400 py-4">
+            <p class="mb-2">用自然语言管理语义库</p>
+            <div class="space-y-1.5">
+              <button onclick="aiSend('添加一个复购率指标')" class="block w-full text-left bg-gray-50 hover:bg-gray-100 rounded px-2.5 py-1.5 text-gray-600 transition-colors">"添加一个复购率指标"</button>
+              <button onclick="aiSend('当用户说销售额时默认指已完成订单')" class="block w-full text-left bg-gray-50 hover:bg-gray-100 rounded px-2.5 py-1.5 text-gray-600 transition-colors">"当用户说销售额时默认指已完成订单"</button>
+              <button onclick="aiSend('列出所有已有的指标')" class="block w-full text-left bg-gray-50 hover:bg-gray-100 rounded px-2.5 py-1.5 text-gray-600 transition-colors">"列出所有已有的指标"</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 输入区 -->
+        <div class="px-4 py-3 border-t border-gray-100">
+          <form id="ai-form" onsubmit="event.preventDefault(); aiSend(document.getElementById('ai-input').value);">
+            <div class="flex gap-2">
+              <input id="ai-input" type="text" placeholder="描述你要做的操作..."
+                     class="flex-1 border border-gray-300 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button type="submit" class="bg-gray-900 text-white px-3 py-2 rounded-md text-xs hover:bg-gray-700 transition-colors flex-shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
+
+<script>
+const AI_PAGE = '{{ active }}';
+const aiMessages = document.getElementById('ai-messages');
+const aiInput = document.getElementById('ai-input');
+let aiPanelOpen = false;
+let pendingProposal = null;
+
+function toggleAIPanel() {
+  const panel = document.getElementById('ai-panel');
+  aiPanelOpen = !aiPanelOpen;
+  panel.classList.toggle('collapsed', !aiPanelOpen);
+  if (aiPanelOpen) setTimeout(() => aiInput.focus(), 200);
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function addAiMsg(role, content) {
+  const div = document.createElement('div');
+  if (role === 'user') {
+    div.className = 'ai-msg-user rounded-lg px-3 py-2 text-xs';
+    div.textContent = content;
+  } else {
+    div.className = 'ai-msg-bot rounded-lg px-3 py-2 text-xs ai-md';
+    div.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : content;
+  }
+  aiMessages.appendChild(div);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+function addProposalCard(data) {
+  pendingProposal = data;
+  const proposal = data.proposal || {};
+  const typeLabelMap = {
+    'add_metric': '新增指标', 'update_metric': '更新指标', 'delete_metric': '删除指标',
+    'add_disambiguation': '新增歧义规则', 'update_disambiguation': '更新歧义规则',
+    'add_convention': '新增字段约定', 'update_convention': '更新字段约定',
+  };
+  const typeLabel = typeLabelMap[data.type] || data.type;
+
+  let fieldsHtml = '';
+  for (const [k, v] of Object.entries(proposal)) {
+    const val = Array.isArray(v) ? v.join(', ') : String(v);
+    fieldsHtml += `<div class="flex gap-2"><span class="text-gray-400 w-24 flex-shrink-0 text-right">${escHtml(k)}</span><span class="text-gray-800 font-mono">${escHtml(val)}</span></div>`;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'proposal-card rounded-lg overflow-hidden';
+  card.innerHTML = `
+    <div class="px-3 py-2 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+      <span class="text-xs font-semibold text-blue-800">${escHtml(typeLabel)}</span>
+    </div>
+    <div class="px-3 py-2 space-y-1 text-xs">${fieldsHtml}</div>
+    <div class="px-3 py-2 border-t border-gray-100 flex gap-2">
+      <button onclick="applyProposal()" class="bg-green-600 text-white text-xs font-medium px-3 py-1.5 rounded hover:bg-green-700 transition-colors">确认应用</button>
+      <button onclick="dismissProposal(this)" class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">取消</button>
+    </div>
+  `;
+  aiMessages.appendChild(card);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+async function aiSend(text) {
+  text = text.trim();
+  if (!text) return;
+  aiInput.value = '';
+
+  // 确保面板打开
+  if (!aiPanelOpen) toggleAIPanel();
+
+  // 清掉欢迎区
+  const welcome = aiMessages.querySelector('.text-center');
+  if (welcome) welcome.remove();
+
+  addAiMsg('user', escHtml(text));
+
+  // loading
+  const loading = document.createElement('div');
+  loading.className = 'ai-msg-bot rounded-lg px-3 py-2 text-xs text-gray-400';
+  loading.textContent = '思考中...';
+  aiMessages.appendChild(loading);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+
+  try {
+    const resp = await fetch('/api/admin-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, page: AI_PAGE }),
+    });
+    const data = await resp.json();
+    loading.remove();
+
+    if (data.summary) {
+      addAiMsg('bot', data.summary);
+    }
+    if (data.type && data.type !== 'message' && data.proposal && Object.keys(data.proposal).length > 0) {
+      addProposalCard(data);
+    }
+  } catch (err) {
+    loading.remove();
+    addAiMsg('bot', '**请求失败：** ' + err.message);
+  }
+  aiInput.focus();
+}
+
+async function applyProposal() {
+  if (!pendingProposal) return;
+  try {
+    const resp = await fetch('/api/admin-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pendingProposal),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      addAiMsg('bot', data.message);
+      pendingProposal = null;
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      addAiMsg('bot', '**操作失败：** ' + data.error);
+    }
+  } catch (err) {
+    addAiMsg('bot', '**请求失败：** ' + err.message);
+  }
+}
+
+function dismissProposal(btn) {
+  btn.closest('.proposal-card').remove();
+  pendingProposal = null;
+  addAiMsg('bot', '已取消');
+}
+</script>
 
 </body>
 </html>

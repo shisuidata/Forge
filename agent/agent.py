@@ -165,10 +165,16 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             # 编译成功：若本次查询是由澄清轮次触发的，将确认写入 staging
             _maybe_write_staging(session, user_text, forge_json)
 
+            # 清除重试期间注入的系统消息和 Forge JSON（只保留原始用户提问）
+            session.history = [
+                m for m in session.history
+                if not (m.role == "user" and m.content.startswith("[系统]"))
+                and not (m.role == "assistant" and m.content.startswith("{"))
+            ]
+
             # 存入 session 的 pending 槽位，等待用户 approve/cancel
             session.pending_sql   = sql
             session.pending_forge = forge_json
-            session.add("assistant", f"[SQL ready for review]\n{sql}")
             return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review")
 
         # ── 提案模式：模型猜测指标定义，等待用户确认 ─────────────────────────

@@ -72,11 +72,16 @@ def _recommend(cols: list[str], rows: list[tuple]) -> str:
 
 # ── 图表生成 ──────────────────────────────────────────────────────────────────
 
+def _init_opts():
+    """响应式初始化参数。"""
+    from pyecharts import options as opts
+    return opts.InitOpts(width="100%", height="100%", theme="dark")
+
+
 def _make_bar(title: str, cols: list[str], rows: list[tuple]) -> str:
     from pyecharts.charts import Bar
     from pyecharts import options as opts
 
-    # 找第一个文本列作 X 轴，其余数值列作 Y 系列
     num_idx  = [i for i, c in enumerate(cols) if _col_is_numeric(c, [r[i] for r in rows[:10]])]
     text_idx = [i for i in range(len(cols)) if i not in num_idx]
     x_idx    = text_idx[0] if text_idx else 0
@@ -84,13 +89,14 @@ def _make_bar(title: str, cols: list[str], rows: list[tuple]) -> str:
 
     x_data = [str(r[x_idx]) for r in rows]
     bar = (
-        Bar()
+        Bar(init_opts=_init_opts())
         .set_global_opts(
-            title_opts=opts.TitleOpts(title=title),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
-            toolbox_opts=opts.ToolboxOpts(is_show=True),
+            title_opts=opts.TitleOpts(title=title, pos_left="center"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_show=True),
+            toolbox_opts=opts.ToolboxOpts(is_show=True, pos_right="8px"),
             datazoom_opts=[opts.DataZoomOpts(type_="inside"), opts.DataZoomOpts()],
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30)),
+            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30, interval=0)),
+            legend_opts=opts.LegendOpts(pos_top="30px"),
         )
         .add_xaxis(x_data)
     )
@@ -112,7 +118,7 @@ def _make_pie(title: str, cols: list[str], rows: list[tuple]) -> str:
 
     data_pairs = [(str(r[name_idx]), r[val_idx]) for r in rows if r[val_idx] is not None]
     pie = (
-        Pie()
+        Pie(init_opts=_init_opts())
         .add(
             cols[val_idx],
             data_pairs,
@@ -120,9 +126,10 @@ def _make_pie(title: str, cols: list[str], rows: list[tuple]) -> str:
             rosetype="radius",
         )
         .set_global_opts(
-            title_opts=opts.TitleOpts(title=title),
-            legend_opts=opts.LegendOpts(orient="vertical", pos_left="left"),
-            toolbox_opts=opts.ToolboxOpts(is_show=True),
+            title_opts=opts.TitleOpts(title=title, pos_left="center"),
+            legend_opts=opts.LegendOpts(orient="horizontal", pos_bottom="8px"),
+            toolbox_opts=opts.ToolboxOpts(is_show=True, pos_right="8px"),
+            tooltip_opts=opts.TooltipOpts(is_show=True),
         )
         .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {d}%"))
     )
@@ -143,16 +150,17 @@ def _make_line(title: str, cols: list[str], rows: list[tuple]) -> str:
 
     x_data = [str(r[date_idx]) for r in rows]
     line = (
-        Line()
+        Line(init_opts=_init_opts())
         .set_global_opts(
-            title_opts=opts.TitleOpts(title=title),
-            tooltip_opts=opts.TooltipOpts(trigger="axis"),
-            toolbox_opts=opts.ToolboxOpts(is_show=True),
+            title_opts=opts.TitleOpts(title=title, pos_left="center"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", is_show=True),
+            toolbox_opts=opts.ToolboxOpts(is_show=True, pos_right="8px"),
             datazoom_opts=[opts.DataZoomOpts(type_="inside"), opts.DataZoomOpts()],
             xaxis_opts=opts.AxisOpts(
                 type_="category",
-                axislabel_opts=opts.LabelOpts(rotate=30),
+                axislabel_opts=opts.LabelOpts(rotate=30, interval=0),
             ),
+            legend_opts=opts.LegendOpts(pos_top="30px"),
         )
         .add_xaxis(x_data)
     )
@@ -167,20 +175,69 @@ def _make_line(title: str, cols: list[str], rows: list[tuple]) -> str:
 
 
 def _build_html(chart_embed: str, title: str) -> str:
+    # pyecharts render_embed() 生成的 div 写死了 width:900px; height:500px
+    # 用 CSS 覆盖为响应式 + JS resize 监听
+    import re
+    # 提取 chart div 的 id
+    div_match = re.search(r'id="([a-f0-9]+)"', chart_embed)
+    chart_id = div_match.group(1) if div_match else ""
+    # 替换固定尺寸为 100%
+    chart_embed = re.sub(
+        r'style="width:\d+px;\s*height:\d+px;\s*"',
+        'style="width:100%; height:100%;"',
+        chart_embed,
+    )
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>{title}</title>
   <style>
-    body {{ margin: 0; background: #0f172a; font-family: sans-serif; }}
-    h2 {{ color: #94a3b8; text-align: center; padding: 16px 0 0; margin: 0; font-size: 14px; }}
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    html, body {{ width: 100%; height: 100%; overflow: hidden; background: #0f172a; font-family: -apple-system, sans-serif; }}
+    .header {{
+      color: #94a3b8; text-align: center; padding: 12px 16px 4px;
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }}
+    .chart-container {{
+      width: 100% !important;
+      height: calc(100vh - 40px) !important;
+      min-height: 300px;
+    }}
+    /* 小屏幕优化 */
+    @media (max-width: 768px) {{
+      .header {{ font-size: 12px; padding: 8px 12px 2px; }}
+      .chart-container {{ height: calc(100vh - 32px) !important; }}
+    }}
   </style>
 </head>
 <body>
-  <h2>{title}</h2>
+  <div class="header">{title}</div>
   {chart_embed}
+  <script>
+    // ECharts 自适应 resize
+    (function() {{
+      var chartDom = document.querySelector('.chart-container');
+      if (!chartDom) return;
+      var chartId = '{chart_id}';
+      var instance = chartDom && echarts.getInstanceByDom(chartDom);
+      if (!instance) return;
+
+      // 初始 resize
+      setTimeout(function() {{ instance.resize(); }}, 100);
+
+      // 窗口变化时自适应
+      window.addEventListener('resize', function() {{ instance.resize(); }});
+
+      // 移动端横竖屏切换
+      window.addEventListener('orientationchange', function() {{
+        setTimeout(function() {{ instance.resize(); }}, 300);
+      }});
+    }})();
+  </script>
 </body>
 </html>"""
 

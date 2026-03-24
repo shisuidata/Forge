@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set active = "schema" %}
+{% block title %}结构层 — Forge{% endblock %}
+{% block heading %}结构层{% endblock %}
+
+{% block content %}
+
+<p class="text-sm text-gray-500 mb-6">
+  数据库表结构，由 <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">forge sync</code> 自动生成。
+  共 <strong>{{ tables | length }}</strong> 张表。点击展开查看字段详情。
+</p>
+
+{% if tables %}
+<div class="space-y-2">
+  {% for tname, tinfo in tables.items() %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div class="flex items-center px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+         onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('svg').style.transform = this.nextElementSibling.classList.contains('hidden') ? '' : 'rotate(180deg)'">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-gray-900 font-mono">{{ tname }}</span>
+          <span class="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{{ tinfo.columns | length if tinfo.columns is mapping else tinfo.columns | length }} 列</span>
+        </div>
+        {% if tinfo.description %}
+        <p class="text-xs text-gray-500 mt-0.5">{{ tinfo.description }}</p>
+        {% endif %}
+      </div>
+      <svg class="w-4 h-4 text-gray-400 ml-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+      </svg>
+    </div>
+    <div class="hidden border-t border-gray-100">
+      <table class="min-w-full text-xs">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-5 py-2 text-left font-medium text-gray-500 w-48">字段</th>
+            <th class="px-5 py-2 text-left font-medium text-gray-500">说明</th>
+            <th class="px-5 py-2 text-left font-medium text-gray-500 w-56">枚举值</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% if tinfo.columns is mapping %}
+            {% for cname, cinfo in tinfo.columns.items() %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-5 py-2 font-mono text-gray-800">{{ cname }}</td>
+              <td class="px-5 py-2 text-gray-600">{{ cinfo.description if cinfo is mapping else '' }}</td>
+              <td class="px-5 py-2">
+                {% if cinfo is mapping and cinfo.enum %}
+                <div class="flex flex-wrap gap-1">
+                  {% for v in cinfo.enum %}
+                  <span class="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-xs">{{ v }}</span>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <span class="text-gray-300">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            {% for col in tinfo.columns %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-5 py-2 font-mono text-gray-800">{{ col }}</td>
+              <td class="px-5 py-2 text-gray-300">-</td>
+              <td class="px-5 py-2 text-gray-300">-</td>
+            </tr>
+            {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-400">
+  <p class="text-base mb-1">暂无表结构</p>
+  <p class="text-xs">运行 <code class="font-mono bg-gray-100 px-1 rounded">forge sync --db &lt;url&gt;</code> 从数据库自动生成</p>
+</div>
+{% endif %}
+
+{% endblock %}
