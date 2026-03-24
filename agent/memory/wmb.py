@@ -25,7 +25,9 @@ class SceneConfig:
     """场景的记忆裁剪配置。"""
     ems_limit: int | None       # EMS 消息条数上限，None=全 session
     smp_max_items: int          # SMP 知识条数上限
-    ems_token_budget: int       # EMS 消息的大致 token 预算（按字符估算，1 token ≈ 2 中文字符）
+    ems_token_budget: int       # EMS 消息的大致 token 预算
+    inject_business_context: bool = False         # 是否注入业务上下文
+    business_context_categories: list | None = None  # 注入的类别，None=全部
 
 
 SCENE_CONFIGS: dict[str, SceneConfig] = {
@@ -35,9 +37,21 @@ SCENE_CONFIGS: dict[str, SceneConfig] = {
         ems_token_budget=3000,
     ),
     "define": SceneConfig(
-        ems_limit=None,          # 全 session
+        ems_limit=None,
         smp_max_items=5,
         ems_token_budget=4000,
+    ),
+    "analyze": SceneConfig(
+        ems_limit=6,
+        smp_max_items=5,
+        ems_token_budget=3000,
+        inject_business_context=True,
+        business_context_categories=["thresholds", "calendar", "benchmarks", "rules"],
+    ),
+    "visualize": SceneConfig(
+        ems_limit=4,
+        smp_max_items=3,
+        ems_token_budget=2000,
     ),
     "admin": SceneConfig(
         ems_limit=6,
@@ -115,16 +129,29 @@ class WorkingMemoryBuffer:
         ]
 
         # ── 2. 从 SMP 提取知识上下文 ──────────────────────────────────────
-        knowledge_context = ""
+        knowledge_parts = []
         try:
-            knowledge_context = self._smp.get_knowledge_text(
+            smp_text = self._smp.get_knowledge_text(
                 user_id,
                 max_items=config.smp_max_items,
                 team_id=team_id,
             )
+            if smp_text:
+                knowledge_parts.append(smp_text)
         except Exception as exc:
             logger.debug("SMP knowledge retrieval failed: %s", exc)
 
+        # ── 3. 注入业务上下文（仅 analyze 等场景）────────────────────────
+        if config.inject_business_context:
+            try:
+                from registry.business_context import format_for_prompt
+                biz_text = format_for_prompt(categories=config.business_context_categories)
+                if biz_text:
+                    knowledge_parts.append(biz_text)
+            except Exception as exc:
+                logger.debug("Business context injection failed: %s", exc)
+
+        knowledge_context = "\n\n".join(knowledge_parts)
         return lm_messages, knowledge_context
 
     def _trim_by_budget(

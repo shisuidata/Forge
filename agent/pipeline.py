@@ -398,21 +398,34 @@ class PipelineRunner:
         if not input_artifact:
             return AnalysisReport(status="incomplete", summary="无输入数据", needs="需要先查询数据")
 
-        # 构建 WMB 上下文
+        # WMB 构建（analyze scene 自动注入业务上下文 + SMP 知识）
         messages, knowledge = self._memory.build("analyze", run.user_id, run.question)
 
-        # 注入 input artifact
+        # 注入查询结果
         messages.append({
             "role": "user",
             "content": f"请分析以下查询结果：\n\n{input_artifact.to_prompt()}\n\n用户问题：{run.question}",
         })
 
-        system = (
-            "你是一个数据分析师。根据查询结果和用户问题，生成结构化分析报告。\n"
-            "用 generate_analysis 工具输出。\n"
-            "重点分析：趋势方向、异常数据点、关键指标、可行建议。\n"
-            "如果数据粒度不够（比如只有年度汇总无法分析月度趋势），标注 status=incomplete 并给出 suggested_query。"
-        )
+        system = """你是一位资深数据分析师。根据查询结果和业务上下文，生成结构化分析报告。
+
+分析要求：
+1. 先给出一句话核心发现（summary）
+2. 列出 3-5 条关键洞察（insights），每条一句话，用数据支撑
+3. 提取关键指标（key_metrics），如增长率、占比、排名变化等
+4. 判断趋势方向（trend_direction）：up / down / stable / mixed
+5. 标注异常数据点（anomalies），说明为什么异常
+6. 给出 1-3 条可行建议（recommendations）
+
+重要：
+- 结合业务上下文判断数值好坏（参考阈值标准、日历事件、行业基准）
+- 不要只描述数据，要给出业务含义和判断
+- 如果数据粒度不够（如只有年度汇总无法分析月度趋势），标注 status=incomplete 并给出 suggested_query
+- 用 JSON 格式回复（不要加代码块标记）
+
+JSON 格式：
+{"status": "complete", "summary": "...", "insights": ["..."], "key_metrics": {"指标名": 值}, "trend_direction": "up|down|stable|mixed", "anomalies": ["..."], "recommendations": ["..."], "needs": null, "suggested_query": null}"""
+
         if knowledge:
             system += "\n\n" + knowledge
 

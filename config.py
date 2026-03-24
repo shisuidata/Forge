@@ -104,6 +104,9 @@ class Config:
     # ── Staging 目录（用户确认后的歧义消除暂存区）──────────────────────────────
     STAGING_DIR: Path = Path(_env("STAGING_DIR", "staging", "dir", default=".forge/staging"))
 
+    # ── 业务上下文 ─────────────────────────────────────────────────────────────
+    BUSINESS_CONTEXT_PATH: Path = Path(_env("BUSINESS_CONTEXT_PATH", "registry", "business_context_path", default="registry/business_context.yaml"))
+
     # ── 记忆系统 ─────────────────────────────────────────────────────────────────
     MEMORY_DB_PATH:       str = _env("MEMORY_DB_PATH",       "memory", "db_path",        default=".forge/memory.db")
     MEMORY_RETENTION_DAYS: int = int(_env("MEMORY_RETENTION_DAYS", "memory", "ems_retention_days", default="0"))  # 0=无限
