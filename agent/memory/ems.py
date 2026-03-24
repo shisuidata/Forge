@@ -286,6 +286,33 @@ class EpisodicMemoryStore:
         session_id = self.current_session_id(user_id)
         return self.get_session_messages(session_id, roles=roles, limit=limit)
 
+    def get_recent_tables(self, user_id: str) -> list[str]:
+        """
+        从当前 session 的 tool_output（SQL）中提取用过的表名。
+        用于追问时确保 retriever 不会遗漏上一轮查询涉及的表。
+        """
+        import re
+        session_id = self.current_session_id(user_id)
+        conn = self._ensure_conn()
+        rows = conn.execute(
+            "SELECT tool_output FROM memory_ems "
+            "WHERE session_id = ? AND tool_name = 'generate_forge_query' AND tool_output IS NOT NULL "
+            "ORDER BY seq DESC LIMIT 3",
+            (session_id,),
+        ).fetchall()
+
+        tables: list[str] = []
+        seen: set[str] = set()
+        for row in rows:
+            sql = row[0] or ""
+            # 从 SQL 中提取 FROM/JOIN 后的表名
+            for match in re.finditer(r'(?:FROM|JOIN)\s+(\w+)', sql, re.IGNORECASE):
+                t = match.group(1).lower()
+                if t not in seen and t not in ("select", "where", "on", "and", "or"):
+                    tables.append(t)
+                    seen.add(t)
+        return tables
+
     def get_full_session(self, session_id: str) -> list[dict]:
         """获取完整 session（含所有角色，用于 SMP 提炼）。"""
         conn = self._ensure_conn()

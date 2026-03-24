@@ -399,7 +399,7 @@ class PipelineRunner:
             return AnalysisReport(status="incomplete", summary="无输入数据", needs="需要先查询数据")
 
         # WMB 构建（analyze scene 自动注入业务上下文 + SMP 知识）
-        messages, knowledge = self._memory.build("analyze", run.user_id, run.question)
+        messages, knowledge, _ = self._memory.build("analyze", run.user_id, run.question)
 
         # 注入查询结果
         messages.append({

@@ -73,21 +73,23 @@ class MemoryManager:
         user_id: str,
         query: str = "",
         team_id: str = "",
-    ) -> tuple[list[dict[str, str]], str]:
+    ) -> tuple[list[dict[str, str]], str, list[str]]:
         """
         按场景构建 LLM 输入。
 
         Returns:
-            (messages, knowledge_context)
+            (messages, knowledge_context, extra_tables)
+            extra_tables: 当前 session 中已用过的表名（确保追问时不遗漏）
         """
-        # 自动获取 team_id（如果未传入）
         if not team_id:
             try:
                 from agent.tenant import tenants
                 team_id = tenants.get_team(user_id)
             except Exception:
                 pass
-        return self.wmb.build(scene, user_id, query, team_id=team_id)
+        messages, knowledge = self.wmb.build(scene, user_id, query, team_id=team_id)
+        extra_tables = self.ems.get_recent_tables(user_id)
+        return messages, knowledge, extra_tables
 
     # ── 状态管理 ──────────────────────────────────────────────────────────────
 

@@ -117,11 +117,11 @@ def process(user_id: str, user_text: str) -> AgentResponse:
     retry_messages: list[dict] = []
 
     for attempt in range(1 + MAX_RETRIES):
-        # 从 WMB 构建基础消息 + 拼接重试上下文
-        messages, knowledge = memory.build("query", user_id, user_text)
+        # 从 WMB 构建基础消息 + 拼接重试上下文 + 上一轮用过的表
+        messages, knowledge, extra_tables = memory.build("query", user_id, user_text)
         if retry_messages:
             messages = messages + retry_messages
-        result = llm.call(messages, knowledge_context=knowledge)
+        result = llm.call(messages, knowledge_context=knowledge, extra_tables=extra_tables)
 
         # ── 文字回复：无工具调用，直接透传 ───────────────────────────────────
         if result["tool"] is None:
