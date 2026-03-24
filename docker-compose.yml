@@ -1,13 +1,39 @@
 services:
+  # ── PostgreSQL（记忆系统 + 审计日志）─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: forge
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-forge123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forge"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Forge Agent ─────────────────────────────────────────────────────────────
   forge:
     build: .
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      MEMORY_DB_URL: "postgresql://forge:${PG_PASSWORD:-forge123}@postgres:5432/forge"
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./registry:/app/registry
+      - ./forge.yaml:/app/forge.yaml
       - forge-data:/app/.forge
     restart: unless-stopped
 
 volumes:
+  pg-data:
   forge-data:
