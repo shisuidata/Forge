@@ -606,26 +606,86 @@ async def audit_page(request: Request, status: str = "", q: str = ""):
 
 @router.get("/pipelines", response_class=HTMLResponse)
 async def pipelines_page(request: Request):
-    """Pipeline 执行视图。从 EMS 中读取 pipeline 记录。"""
+    """Pipeline 执行视图。从 EMS 聚合所有查询活动。"""
     from agent.memory import memory
+    runs = []
     try:
         conn = memory.ems._ensure_conn()
-        rows = conn.execute(
+
+        # 1. 读取 PipelineRunner 产生的记录
+        pr_rows = conn.execute(
             "SELECT tool_output FROM memory_ems "
             "WHERE tool_name = 'pipeline_complete' AND tool_output IS NOT NULL "
-            "ORDER BY id DESC LIMIT 50"
+            "ORDER BY id DESC LIMIT 30"
         ).fetchall()
-        runs = []
-        for row in rows:
+        for row in pr_rows:
             try:
                 data = json.loads(row[0])
-                # 计算总耗时
-                total_ms = sum(s.get("duration_ms", 0) for s in data.get("stages", []))
-                data["total_ms"] = total_ms
+                data["total_ms"] = sum(s.get("duration_ms", 0) for s in data.get("stages", []))
                 runs.append(data)
             except (json.JSONDecodeError, TypeError):
                 continue
-    except Exception:
+
+        # 2. 读取直接走 agent.process() 的查询（按 session 聚合）
+        query_rows = conn.execute(
+            """SELECT
+                e.session_id, e.user_id,
+                u.content as question,
+                e.tool_output as sql,
+                e.action,
+                e.created_at,
+                u.created_at as asked_at
+            FROM memory_ems e
+            INNER JOIN (
+                SELECT session_id, MAX(id) as last_user_id, content, created_at
+                FROM memory_ems
+                WHERE role = 'user' AND content != '' AND action IS NULL
+                GROUP BY session_id
+            ) u ON e.session_id = u.session_id
+            WHERE e.tool_name = 'generate_forge_query' AND e.action = 'sql_review'
+            ORDER BY e.id DESC LIMIT 50"""
+        ).fetchall()
+
+        seen_sessions = {r.get("run_id", "") for r in runs}
+        for row in query_rows:
+            sid, uid, question, sql, action, created_at, asked_at = row
+            if sid in seen_sessions:
+                continue
+            seen_sessions.add(sid)
+
+            # 查找该 session 里是否有 approve/cancel
+            status_row = conn.execute(
+                "SELECT action FROM memory_ems "
+                "WHERE session_id = ? AND action IN ('approved','cancelled') "
+                "ORDER BY id DESC LIMIT 1",
+                (sid,),
+            ).fetchone()
+            final_status = "completed" if status_row and status_row[0] == "approved" else (
+                "cancelled" if status_row and status_row[0] == "cancelled" else "pending_approval"
+            )
+
+            runs.append({
+                "run_id": sid,
+                "pipeline": "query",
+                "user_id": uid or "",
+                "team_id": "",
+                "question": question or "",
+                "status": final_status,
+                "started_at": asked_at or created_at or "",
+                "ended_at": created_at or "",
+                "total_ms": 0,
+                "stages": [
+                    {"stage": "generate", "agent": "forge_query",
+                     "status": "completed", "duration_ms": 0, "error": None},
+                ],
+            })
+
+        # 按时间倒序
+        runs.sort(key=lambda r: r.get("started_at", ""), reverse=True)
+        runs = runs[:50]
+
+    except Exception as exc:
+        logger.warning("Pipeline page error: %s", exc)
         runs = []
 
     return templates.TemplateResponse(
