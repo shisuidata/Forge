@@ -657,7 +657,27 @@ Analysis Agent 输出 incomplete：
   → 走正常的 SQL审核 → 执行 → 分析 流程
 ```
 
-这样用户始终是 hub，Agent 是 spoke。不存在 spoke-to-spoke 的链路。
+**中间方案（2026-03-24 确认）**：允许一次自动补查，但必须告知用户。
+
+```
+Analysis Agent 发现数据不足
+    ↓
+Orchestrator 检查：本轮是否已经补查过？
+    ↓
+没有 → 自动执行 suggested_query（跳过用户确认 SQL 的步骤）
+       但在 UI 上展示："数据粒度不够，已自动补查月度数据..."
+       然后将补查结果交给 Analysis Agent 重新分析
+    ↓
+已经补查过 1 次 → 不再自动补查
+       展示 incomplete 结果 + suggested_query 按钮
+       由用户决定是否继续
+```
+
+这样保证了：
+- 简单场景（缺月度数据）一次自动搞定，用户不多操作
+- 复杂场景不会死循环（最多 1 次自动补查）
+- 用户始终知道发生了什么（UI 上展示补查提示）
+- 用户始终是 hub，Agent 是 spoke。不存在 spoke-to-spoke 的链路。
 
 ---
 
@@ -825,9 +845,48 @@ Analysis Agent 的 system prompt 中会看到：
 
 ---
 
-## 14. 待讨论问题
+### 2026-03-24 第六轮：反向通信 + 业务上下文收集
 
-- [ ] business_context.registry.yaml 的具体 schema 定义
-- [ ] 文档导入功能的优先级（PDF → LLM 提取 → 用户确认）
-- [ ] "数据推断"功能：自动统计历史均值/标准差，需要定时任务还是按需执行？
-- [ ] 实现优先级排序
+**反向通信**：
+- 完全禁止太保守（用户操作步骤多），完全放开有死循环风险
+- 中间方案：**允许 1 次自动补查，必须告知用户**
+- 超过 1 次 → 展示 incomplete + suggested_query，由用户决定
+- 用户确认
+
+**业务上下文收集**：
+- 用户认为三种收集方式**同等重要**：
+  1. Web UI 管理（管理员填阈值/日历/组织架构）
+  2. 对话式录入（分析过程中用户随口说的规则 → SMP 提炼）
+  3. 文档导入（上传行业报告/内部文档 → LLM 提取 → 用户确认）
+- 不分优先级，三者并行实现
+
+---
+
+## 14. 实现路线图
+
+### Phase 1: Pipeline 基础设施
+- [ ] `agent/pipeline.py`：PipelineRunner + Stage + Artifact 数据结构
+- [ ] 意图路由：关键词 + LLM 混合
+- [ ] agent.py 中 process() 接入 Pipeline（query pipeline = 现有逻辑不变）
+- [ ] 断点恢复：PipelineContext 存入 EMS state
+
+### Phase 2: Analysis Agent
+- [ ] `agent/agents/analyst.py`：分析 Agent（system prompt + generate_analysis tool）
+- [ ] `business_context.registry.yaml`：业务规则文件 + 加载逻辑
+- [ ] WMB analyze scene 注入业务上下文
+- [ ] analyze pipeline 端到端跑通
+
+### Phase 3: 业务上下文收集
+- [ ] Web UI：Settings 页面新增"业务规则"管理区块
+- [ ] 对话式录入：Analysis Agent 对话中提取规则 → SMP → 用户确认
+- [ ] 文档导入：上传接口 + LLM 提取 + 预览确认
+
+### Phase 4: Visualization Agent 升级
+- [ ] `agent/agents/visualizer.py`：生成 ChartSpec（不直接生成图片）
+- [ ] ChartSpec → ECharts config 渲染（升级现有 chart.py）
+- [ ] 标注和高亮能力（Analysis Agent 标记的异常点 → 图表标注）
+
+### Phase 5: Report Pipeline
+- [ ] report_writer Agent
+- [ ] 完整 report pipeline：query → analyze → visualize → summary
+- [ ] 输出格式：Web 页面 / Markdown / 飞书长文
