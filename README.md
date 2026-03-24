@@ -47,15 +47,14 @@ cp .env.example .env
 bash scripts/demo-setup.sh
 
 # 4. 启动服务
-PYTHONPATH=. python3 web/feishu.py          # 飞书 Bot
-# 或
-uvicorn main:app --host 0.0.0.0 --port 8000  # Web API
+uvicorn main:app --host 0.0.0.0 --port 8000  # Web UI + API
 ```
 
-**Docker 方式：**
+**Docker 方式（推荐，自带 PostgreSQL）：**
 
 ```bash
 docker compose up
+# 访问 http://localhost:8000/admin
 ```
 
 **接入自己的数据库：**
@@ -107,14 +106,29 @@ flowchart LR
 | 指标 | 值 |
 |---|---|
 | EA best（small schema, Claude/DeepSeek） | **95.0%** |
-| EA（large schema, MiniMax M2.7, retry=2） | **72.5%** |
+| EA（large schema, MiniMax M2.7, Method S） | **70.0%** |
+| EA（large schema, MiniMax M2.7, Method R） | **72.5%** |
 | EA（large schema, DeepSeek V3.2） | **65.0%** |
-| EA（large schema, Claude Sonnet 4.6） | **57.5%** |
 | 编译器测试用例 | **53** |
 | Spider2-Lite 编译成功率 | **97.6%** |
 | Spider2-Lite EA | **9.2%** |
 
 详见 [基准测试详情](docs/benchmarks.md)。
+
+### 已落地功能
+
+| 功能 | 状态 |
+|---|---|
+| Web UI（Chat + 8 个 Admin 页面） | ✅ |
+| 认证鉴权（Cookie session + API Key） | ✅ |
+| 多租户（org → team → user 三层隔离） | ✅ |
+| 数据权限（team 级别表可见性 ACL） | ✅ |
+| PostgreSQL 支持（SQLite 零改动切换） | ✅ |
+| 三层记忆系统（EMS / SMP / WMB） | ✅ |
+| Pipeline 引擎（分析 / 可视化 / 报告） | ✅ |
+| 飞书 Bot（流式卡片 + 按钮回调） | ✅ |
+| 五通道知识收集（RSS / URL / 文档 / 对话 / 手动） | ✅ |
+| 文档导入（上传 .txt/.md → LLM 提取 → 确认入库） | ✅ |
 
 ---
 
@@ -124,23 +138,36 @@ flowchart LR
 forge/
   ├── schema.json          — Forge DSL 格式定义（JSON Schema）
   ├── compiler.py          — 确定性编译器：Forge JSON → SQL
-  ├── retriever.py         — Schema 向量检索器（四层召回）
+  ├── retriever.py         — Schema 向量检索器（四层召回 + ACL 过滤）
   ├── executor.py          — SQL 执行器
   ├── cache.py             — 查询缓存（精确 + 模糊匹配）
-  ├── chart.py             — 图表生成
+  ├── chart.py             — 图表生成（ECharts）
   └── cli.py               — CLI 入口
 
 agent/
   ├── agent.py             — Agent 调度（查询 / 指标定义 / 缓存反馈）
-  ├── session.py           — 会话状态
-  └── llm.py               — LLM 客户端（RAG 过滤 tool schema）
+  ├── llm.py               — LLM 客户端（RAG + ACL + 约定注入）
+  ├── pipeline.py          — Pipeline 引擎（分析 / 可视化 / 报告）
+  ├── db.py                — 数据库抽象层（SQLite / PostgreSQL）
+  ├── tenant.py            — 多租户（org / team / user / ACL）
+  ├── knowledge.py         — 五通道知识收集框架
+  └── memory/
+      ├── ems.py           — Episodic Memory Store（对话历史）
+      ├── smp.py           — Semantic Memory Pool（业务知识）
+      └── wmb.py           — Working Memory Buffer（当前上下文）
+
+web/
+  ├── router.py            — FastAPI 路由（Web UI + API）
+  ├── auth.py              — HMAC-SHA256 Cookie + API Key 认证
+  └── templates/           — Jinja2 模板（Chat + 8 个 Admin 页面）
 
 registry/
-  └── sync.py              — forge sync：直连数据库生成 Registry
+  ├── sync.py              — forge sync：直连数据库生成结构层
+  └── data/                — Registry 三层文件（schema / metrics / disambiguations）
 
 tests/
-  ├── test_compiler.py     — 编译器单元测试（53 个用例）
-  ├── accuracy/            — 自有 40 题基准
+  ├── test_compiler*.py    — 编译器单元测试（53 个用例）
+  ├── accuracy/            — 自有 40 题基准（Method R/S）
   └── spider2/             — Spider2-Lite SQLite 子集（123 题）
 ```
 
@@ -171,6 +198,7 @@ tests/
 | [Day 2 · CROSS JOIN / HAVING 别名 / EA 95%](docs/devlog/day2_2026-03-16.md) | 2026-03-16 | CROSS JOIN 标量 CTE 模式、HAVING alias 展开修复、DeepSeek strict tool calling 实验、M/O/N 三组 EA 基准 |
 | [Day 3 · 工程稳固 / 产品门面 / 连锁故障](docs/devlog/day3_2026-03-18.md) | 2026-03-18 | Session 持久化、编译器拆分、飞书 Bot 四层连锁故障、demo 向导、forge config CLI |
 | [Day 5 · 先看自己错没错 / 三层系统优化](docs/devlog/day5_2026-03-19.md) | 2026-03-19 | 5 处设计缺陷修复、编译重试对齐、约定 lint 程序化验证、LAG 示例补全、M2.7 EA 72.5% |
+| [Day 6 · 从原型到产品](docs/devlog/day6_2026-03-25.md) | 2026-03-25 | PostgreSQL 支持、HMAC 认证、数据权限 ACL、Pipeline E2E、Web Admin 完整落地、EA 70.0% |
 
 ---
 
