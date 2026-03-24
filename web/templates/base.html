@@ -95,6 +95,15 @@
         </svg>
         查询审计
       </a>
+      <a href="/admin/pipelines"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
+                {% if active == 'pipelines' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        Pipeline
+      </a>
       <a href="/admin/settings"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
                 {% if active == 'settings' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">

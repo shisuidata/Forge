@@ -599,6 +599,36 @@ async def audit_page(request: Request, status: str = "", q: str = ""):
     )
 
 
+@router.get("/pipelines", response_class=HTMLResponse)
+async def pipelines_page(request: Request):
+    """Pipeline 执行视图。从 EMS 中读取 pipeline 记录。"""
+    from agent.memory import memory
+    try:
+        conn = memory.ems._ensure_conn()
+        rows = conn.execute(
+            "SELECT tool_output FROM memory_ems "
+            "WHERE tool_name = 'pipeline_complete' AND tool_output IS NOT NULL "
+            "ORDER BY id DESC LIMIT 50"
+        ).fetchall()
+        runs = []
+        for row in rows:
+            try:
+                data = json.loads(row[0])
+                # 计算总耗时
+                total_ms = sum(s.get("duration_ms", 0) for s in data.get("stages", []))
+                data["total_ms"] = total_ms
+                runs.append(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    except Exception:
+        runs = []
+
+    return templates.TemplateResponse(
+        "pipelines.html",
+        {"request": request, "runs": runs},
+    )
+
+
 def _load_forge_yaml() -> dict:
     """读取 forge.yaml 原始内容。"""
     yaml_path = Path(__file__).resolve().parent.parent / "forge.yaml"

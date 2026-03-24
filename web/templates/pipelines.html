@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set active = "pipelines" %}
+{% block title %}Pipeline 执行 — Forge{% endblock %}
+{% block heading %}Pipeline 执行记录{% endblock %}
+
+{% block content %}
+
+{% if runs %}
+<div class="space-y-4">
+  {% for run in runs %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    {# 摘要行 #}
+    <div class="flex items-center px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+         onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('.arrow').style.transform = this.nextElementSibling.classList.contains('hidden') ? '' : 'rotate(180deg)'">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="font-mono text-xs text-gray-400">#{{ run.run_id[:8] }}</span>
+          <span class="font-medium text-gray-900 text-sm">{{ run.question[:60] }}{% if run.question|length > 60 %}...{% endif %}</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+          <span class="bg-gray-100 px-1.5 py-0.5 rounded font-mono">{{ run.pipeline }}</span>
+          <span>{{ run.user_id[:12] }}</span>
+          {% if run.team_id %}<span class="text-gray-400">{{ run.team_id }}</span>{% endif %}
+          <span>{{ run.started_at[:19].replace("T"," ") if run.started_at else "" }}</span>
+          {% if run.total_ms %}<span>{{ "%.1f"|format(run.total_ms/1000) }}s</span>{% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-2 ml-4">
+        {% if run.status == "completed" %}
+        <span class="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">完成</span>
+        {% elif run.status == "running" or run.status == "pending_approval" %}
+        <span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-0.5 rounded">进行中</span>
+        {% elif run.status == "failed" %}
+        <span class="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded">失败</span>
+        {% else %}
+        <span class="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded">{{ run.status }}</span>
+        {% endif %}
+        <svg class="w-4 h-4 text-gray-400 arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+    </div>
+
+    {# 阶段详情 #}
+    <div class="hidden border-t border-gray-100 px-5 py-4 bg-gray-50">
+      <div class="flex items-start gap-4">
+        {% for stage in run.stages %}
+        <div class="flex items-center gap-2">
+          {# 状态图标 #}
+          {% if stage.status == "completed" %}
+          <div class="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          {% elif stage.status == "failed" %}
+          <div class="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-3.5 h-3.5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </div>
+          {% elif stage.status == "running" %}
+          <div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <div class="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+          </div>
+          {% elif stage.status == "skipped" %}
+          <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <span class="text-gray-400 text-xs">-</span>
+          </div>
+          {% else %}
+          <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <div class="w-3 h-3 rounded-full bg-gray-300"></div>
+          </div>
+          {% endif %}
+
+          <div class="min-w-0">
+            <p class="text-xs font-medium text-gray-800">{{ stage.stage }}</p>
+            <p class="text-xs text-gray-400">{{ stage.agent }}</p>
+            {% if stage.duration_ms %}
+            <p class="text-xs text-gray-400">{{ "%.1f"|format(stage.duration_ms/1000) }}s</p>
+            {% endif %}
+            {% if stage.error %}
+            <p class="text-xs text-red-500 mt-0.5">{{ stage.error[:60] }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {# 阶段间的连接线 #}
+        {% if not loop.last %}
+        <div class="flex items-center pt-2">
+          <svg class="w-5 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 20 12">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M1 6h18m-4-4l4 4-4 4"/>
+          </svg>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<p class="mt-3 text-xs text-gray-400">显示最近 {{ runs|length }} 条记录</p>
+{% else %}
+<div class="text-center py-16 text-gray-400">
+  <p class="text-base mb-1">暂无 Pipeline 执行记录</p>
+  <p class="text-xs">通过 Chat 或飞书发起查询后，Pipeline 执行记录将显示在此处</p>
+</div>
+{% endif %}
+
+{% endblock %}
