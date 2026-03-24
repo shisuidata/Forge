@@ -33,6 +33,24 @@ from lark_oapi.api.im.v1 import (
     CreateMessageReactionRequest,
     CreateMessageReactionRequestBody,
     Emoji,
+    PatchMessageRequest,
+    PatchMessageRequestBody,
+)
+from lark_oapi.api.cardkit.v1 import (
+    CreateCardRequest,
+    CreateCardRequestBody,
+    ContentCardElementRequest,
+    ContentCardElementRequestBody,
+    SettingsCardRequest,
+    SettingsCardRequestBody,
+    UpdateCardRequest,
+    UpdateCardRequestBody,
+)
+from lark_oapi.event.callback.model.p2_card_action_trigger import (
+    P2CardActionTrigger,
+    P2CardActionTriggerResponse,
+    CallBackToast,
+    CallBackCard,
 )
 
 from config import cfg
@@ -187,70 +205,213 @@ def _send_card(open_id: str, card: dict) -> None:
         logger.error("send_card failed: %s %s", resp.code, resp.msg)
 
 
-def _sql_to_image(sql: str) -> bytes | None:
-    """用 Pygments 把 SQL 渲染成带语法高亮的 PNG（Monokai 主题）。"""
-    try:
-        from pygments import highlight
-        from pygments.lexers import SqlLexer
-        from pygments.formatters import ImageFormatter
-        fmt = ImageFormatter(style="monokai", font_size=15, line_pad=5, image_pad=16)
-        return highlight(sql, SqlLexer(), fmt)
-    except Exception as exc:
-        logger.warning("sql_to_image failed: %s", exc)
-        return None
+# ── 流式卡片 ──────────────────────────────────────────────────────────────────
+
+_STREAMING_ELEMENT_ID = "stream_md"
 
 
-
-def _send_sql_review_card(open_id: str, sql: str) -> None:
-    """发送 SQL 审核卡片，SQL 以语法高亮图片展示。"""
-    # 先尝试生成语法高亮图片
-    sql_img_key: str | None = None
-    png = _sql_to_image(sql)
-    if png:
-        sql_img_key = _upload_image(png)
-
-    elements: list = []
-    if sql_img_key:
-        elements.append({
-            "tag": "img",
-            "img_key": sql_img_key,
-            "alt": {"tag": "plain_text", "content": "SQL"},
-            "mode": "fit_horizontal",
-        })
-    else:
-        # 降级：纯文本
-        elements.append({
-            "tag": "div",
-            "text": {"tag": "lark_md", "content": sql},
-        })
-
-    elements += [
-        {"tag": "hr"},
-        {
-            "tag": "div",
-            "text": {
-                "tag": "lark_md",
-                "content": "回复 **确认** 执行 · 回复 **取消** 放弃",
+def _create_streaming_card() -> str | None:
+    """创建流式卡片实体，返回 card_id。"""
+    client = _get_client()
+    card_json = json.dumps({
+        "schema": "2.0",
+        "config": {
+            "streaming_mode": True,
+            "streaming_config": {
+                "print_frequency_ms": {"default": 50},
+                "print_step": {"default": 2},
+                "print_strategy": "fast",
             },
         },
-    ]
+        "header": {
+            "title": {"tag": "plain_text", "content": "Forge"},
+            "template": "blue",
+        },
+        "body": {
+            "elements": [
+                {
+                    "tag": "markdown",
+                    "content": "",
+                    "element_id": _STREAMING_ELEMENT_ID,
+                },
+            ],
+        },
+    }, ensure_ascii=False)
+    try:
+        req = (
+            CreateCardRequest.builder()
+            .request_body(
+                CreateCardRequestBody.builder()
+                .type("card_json")
+                .data(card_json)
+                .build()
+            )
+            .build()
+        )
+        resp = client.cardkit.v1.card.create(req)
+        if resp.success() and resp.data:
+            return resp.data.card_id
+        logger.warning("create streaming card failed: %s %s", resp.code, resp.msg)
+    except Exception as exc:
+        logger.warning("create streaming card error: %s", exc)
+    return None
+
+
+def _send_card_by_id(open_id: str, card_id: str) -> None:
+    """使用 card_id 发送卡片消息。"""
+    client = _get_client()
+    content = json.dumps({"type": "card", "data": {"card_id": card_id}})
+    req = (
+        CreateMessageRequest.builder()
+        .receive_id_type("open_id")
+        .request_body(
+            CreateMessageRequestBody.builder()
+            .receive_id(open_id)
+            .msg_type("interactive")
+            .content(content)
+            .build()
+        )
+        .build()
+    )
+    resp = client.im.v1.message.create(req)
+    if not resp.success():
+        logger.error("send_card_by_id failed: %s %s", resp.code, resp.msg)
+
+
+def _stream_update_text(card_id: str, text: str) -> None:
+    """推送流式文本（完整内容，平台自动 diff 出增量部分做打字机效果）。"""
+    client = _get_client()
+    try:
+        req = (
+            ContentCardElementRequest.builder()
+            .card_id(card_id)
+            .element_id(_STREAMING_ELEMENT_ID)
+            .request_body(
+                ContentCardElementRequestBody.builder()
+                .content(text)
+                .sequence(_next_seq(card_id))
+                .build()
+            )
+            .build()
+        )
+        resp = client.cardkit.v1.card_element.content(req)
+        if not resp.success():
+            logger.debug("stream_update failed: %s %s", resp.code, resp.msg)
+    except Exception as exc:
+        logger.debug("stream_update error: %s", exc)
+
+
+def _close_streaming(card_id: str) -> None:
+    """关闭流式模式，恢复交互能力。"""
+    client = _get_client()
+    try:
+        req = (
+            SettingsCardRequest.builder()
+            .card_id(card_id)
+            .request_body(
+                SettingsCardRequestBody.builder()
+                .settings(json.dumps({"config": {"streaming_mode": False}}))
+                .sequence(_next_seq(card_id))
+                .build()
+            )
+            .build()
+        )
+        resp = client.cardkit.v1.card.settings(req)
+        if not resp.success():
+            logger.warning("close_streaming failed: %s %s", resp.code, resp.msg)
+    except Exception as exc:
+        logger.warning("close_streaming error: %s", exc)
+
+
+# 全局递增序列号，CardKit API 要求 sequence 严格单调递增
+_card_seq_lock = threading.Lock()
+_card_sequences: dict[str, int] = {}
+
+
+def _next_seq(card_id: str) -> int:
+    """获取卡片的下一个 sequence 值。"""
+    with _card_seq_lock:
+        seq = _card_sequences.get(card_id, 0) + 1
+        _card_sequences[card_id] = seq
+        return seq
+
+
+def _update_card_by_id(card_id: str, card_json: dict) -> None:
+    """更新卡片实体的完整内容（关闭流式后用，加入按钮等交互组件）。"""
+    from lark_oapi.api.cardkit.v1.model.card import Card
+    client = _get_client()
+    try:
+        card_obj = (
+            Card.builder()
+            .type("card_json")
+            .data(json.dumps(card_json, ensure_ascii=False))
+            .build()
+        )
+        req = (
+            UpdateCardRequest.builder()
+            .card_id(card_id)
+            .request_body(
+                UpdateCardRequestBody.builder()
+                .card(card_obj)
+                .sequence(_next_seq(card_id))
+                .build()
+            )
+            .build()
+        )
+        resp = client.cardkit.v1.card.update(req)
+        if not resp.success():
+            logger.warning("update_card_by_id failed: %s %s", resp.code, resp.msg)
+    except Exception as exc:
+        logger.warning("update_card_by_id error: %s", exc)
+
+
+# ── 业务卡片 ──────────────────────────────────────────────────────────────────
+
+def _send_sql_review_card(open_id: str, sql: str) -> None:
+    """发送 SQL 审核卡片，SQL 以 Markdown 代码块展示 + 交互按钮。"""
     card = {
         "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"tag": "plain_text", "content": "🔍 Forge SQL 审核"},
+            "title": {"tag": "plain_text", "content": "Forge SQL 审核"},
             "template": "blue",
         },
-        "elements": elements,
+        "elements": [
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"```\n{sql}\n```",
+                },
+            },
+            {"tag": "hr"},
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "确认执行"},
+                        "type": "primary",
+                        "value": {"action": "approve", "user_id": open_id},
+                    },
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "取消"},
+                        "type": "default",
+                        "value": {"action": "cancel", "user_id": open_id},
+                    },
+                ],
+            },
+        ],
     }
     _send_card(open_id, card)
 
 
 def _send_metric_card(open_id: str, proposal_text: str) -> None:
-    """发送指标提案卡片（纯展示），文字「确认」/「取消」交互。"""
+    """发送指标提案卡片，带确认/取消按钮。"""
     card = {
         "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"tag": "plain_text", "content": "📋 Forge 指标提案"},
+            "title": {"tag": "plain_text", "content": "Forge 指标提案"},
             "template": "orange",
         },
         "elements": [
@@ -260,11 +421,21 @@ def _send_metric_card(open_id: str, proposal_text: str) -> None:
             },
             {"tag": "hr"},
             {
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": "回复 **确认** 入库 · 回复 **取消** 放弃",
-                },
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "确认入库"},
+                        "type": "primary",
+                        "value": {"action": "confirm_metric", "user_id": open_id},
+                    },
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "取消"},
+                        "type": "default",
+                        "value": {"action": "reject_metric", "user_id": open_id},
+                    },
+                ],
             },
         ],
     }
@@ -297,31 +468,15 @@ def _send_result_card(
     img_key: str | None = None,
     chart_url: str | None = None,
 ) -> None:
-    """发送 SQL 执行结果卡片：原生 table + 嵌入图表图片。"""
-    # SQL 高亮图片
-    sql_img_key: str | None = None
-    if sql:
-        png = _sql_to_image(sql)
-        if png:
-            sql_img_key = _upload_image(png)
-
-    sql_elem: dict
-    if sql_img_key:
-        sql_elem = {
-            "tag": "img",
-            "img_key": sql_img_key,
-            "alt": {"tag": "plain_text", "content": "SQL"},
-            "mode": "fit_horizontal",
-        }
-    else:
-        sql_elem = {
-            "tag": "div",
-            "text": {"tag": "lark_md", "content": sql},
-        }
-
+    """发送 SQL 执行结果卡片：Markdown SQL + 原生 table + 图表。"""
     elements: list = [
-        {"tag": "div", "text": {"tag": "lark_md", "content": "**已执行 SQL**"}},
-        sql_elem,
+        {
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": f"**已执行 SQL**\n```\n{sql}\n```",
+            },
+        },
         {"tag": "hr"},
     ]
 
@@ -368,10 +523,31 @@ def _send_result_card(
             ],
         })
 
+    # 结果反馈按钮（Stage 2）
+    if cols and rows:
+        elements.append({"tag": "hr"})
+        elements.append({
+            "tag": "action",
+            "actions": [
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "👍 结果准确"},
+                    "type": "default",
+                    "value": {"action": "cache_verify", "user_id": open_id},
+                },
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "👎 结果不准确"},
+                    "type": "default",
+                    "value": {"action": "cache_reject", "user_id": open_id},
+                },
+            ],
+        })
+
     card = {
         "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"tag": "plain_text", "content": "✅ 查询结果"},
+            "title": {"tag": "plain_text", "content": "查询结果"},
             "template": "green",
         },
         "elements": elements,
@@ -397,29 +573,25 @@ def _send_info_card(open_id: str, text: str, template: str = "yellow") -> None:
     _send_card(open_id, card)
 
 
-def _send_cache_feedback_card(open_id: str) -> None:
-    """Stage 2 反馈卡片：询问用户查询结果是否准确。"""
-    card = {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {"tag": "plain_text", "content": "📊 结果反馈"},
-            "template": "purple",
-        },
-        "elements": [
-            {
-                "tag": "div",
-                "text": {
-                    "tag": "lark_md",
-                    "content": (
-                        "这次查询结果是否准确？\n\n"
-                        "回复 **准确** 👍 将保存此查询，下次相似问题可快速复用\n"
-                        "回复 **不准确** 👎 丢弃，不会影响后续查询"
-                    ),
-                },
-            },
-        ],
-    }
-    _send_card(open_id, card)
+def _update_card(message_id: str, card: dict) -> None:
+    """通过 PATCH API 更新已发送的卡片内容。"""
+    try:
+        client = _get_client()
+        req = (
+            PatchMessageRequest.builder()
+            .message_id(message_id)
+            .request_body(
+                PatchMessageRequestBody.builder()
+                .content(json.dumps(card, ensure_ascii=False))
+                .build()
+            )
+            .build()
+        )
+        resp = client.im.v1.message.patch(req)
+        if not resp.success():
+            logger.warning("update_card failed: %s %s", resp.code, resp.msg)
+    except Exception as exc:
+        logger.warning("update_card error: %s", exc)
 
 
 def _upload_image(image_bytes: bytes) -> str | None:
@@ -520,10 +692,6 @@ def _handle_approve(open_id: str, query_hint: str = "") -> None:
 
     _send_result_card(open_id, sql, cols, rows, img_key, chart_url)
 
-    # Stage 2：若已写入缓存（pending），发送结果反馈提示
-    if store.get(open_id).pending_cache_id:
-        _send_cache_feedback_card(open_id)
-
 
 _ACCURATE_WORDS   = {"准确", "正确", "对的", "没错", "是的"}
 _INACCURATE_WORDS = {"不准确", "不对", "不正确", "错了", "有问题", "错误"}
@@ -539,7 +707,16 @@ def _is_inaccurate(text: str) -> bool:
     return t in _INACCURATE_WORDS or any(w in t for w in _INACCURATE_WORDS)
 
 
+_RESET_WORDS = {"重置", "清空", "reset", "clear", "新对话", "重新开始"}
+
+
 def _dispatch(open_id: str, text: str) -> None:
+    # 重置对话指令
+    if text.strip().lower() in _RESET_WORDS:
+        store.clear(open_id)
+        _send_chat_card(open_id, "对话已重置，请开始新的查询。")
+        return
+
     session = store.get(open_id)
 
     if session.pending_sql:
@@ -576,14 +753,164 @@ def _dispatch(open_id: str, text: str) -> None:
         # 用户直接发了新问题，自动放弃本次反馈，继续处理新消息
         session.pending_cache_id = None
 
-    resp = agent.process(open_id, text)
+    _dispatch_query(open_id, text)
 
-    if resp.action == "sql_review":
-        _send_sql_review_card(open_id, resp.sql or "")
-    elif resp.action == "metric_clarification":
-        _send_metric_card(open_id, resp.text)
+
+def _v2_button(label: str, btn_type: str, action: str, user_id: str,
+               card_id: str = "") -> dict:
+    """构造 Card JSON v2 按钮。用 value 字段触发 P2CardActionTrigger 回调（WebSocket 模式）。"""
+    val = {"action": action, "user_id": user_id}
+    if card_id:
+        val["card_id"] = card_id
+    return {
+        "tag": "button",
+        "text": {"tag": "plain_text", "content": label},
+        "type": btn_type,
+        "value": val,
+    }
+
+
+def _v2_sql_review_card(sql: str, open_id: str, card_id: str = "") -> dict:
+    """Card JSON v2 格式的 SQL 审核卡片。"""
+    return {
+        "schema": "2.0",
+        "header": {
+            "title": {"tag": "plain_text", "content": "Forge SQL 审核"},
+            "template": "blue",
+        },
+        "body": {
+            "elements": [
+                {"tag": "markdown", "content": f"```\n{sql}\n```"},
+                {"tag": "hr"},
+                {
+                    "tag": "column_set",
+                    "flex_mode": "none",
+                    "background_style": "default",
+                    "horizontal_spacing": "default",
+                    "columns": [
+                        {
+                            "tag": "column",
+                            "width": "auto",
+                            "elements": [
+                                _v2_button("确认执行", "primary", "approve", open_id, card_id),
+                            ],
+                        },
+                        {
+                            "tag": "column",
+                            "width": "auto",
+                            "elements": [
+                                _v2_button("取消", "default", "cancel", open_id, card_id),
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def _v2_metric_card(proposal_text: str, open_id: str, card_id: str = "") -> dict:
+    """Card JSON v2 格式的指标提案卡片。"""
+    return {
+        "schema": "2.0",
+        "header": {
+            "title": {"tag": "plain_text", "content": "Forge 指标提案"},
+            "template": "orange",
+        },
+        "body": {
+            "elements": [
+                {"tag": "markdown", "content": proposal_text},
+                {"tag": "hr"},
+                {
+                    "tag": "column_set",
+                    "flex_mode": "none",
+                    "background_style": "default",
+                    "horizontal_spacing": "default",
+                    "columns": [
+                        {
+                            "tag": "column",
+                            "width": "auto",
+                            "elements": [
+                                _v2_button("确认入库", "primary", "confirm_metric", open_id, card_id),
+                            ],
+                        },
+                        {
+                            "tag": "column",
+                            "width": "auto",
+                            "elements": [
+                                _v2_button("取消", "default", "reject_metric", open_id, card_id),
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def _v2_done_card(text: str, template: str = "green") -> dict:
+    """Card JSON v2 格式的完成状态卡片（替换原审核卡片）。"""
+    return {
+        "schema": "2.0",
+        "header": {
+            "title": {"tag": "plain_text", "content": "Forge"},
+            "template": template,
+        },
+        "body": {
+            "elements": [
+                {"tag": "markdown", "content": text},
+            ],
+        },
+    }
+
+
+def _dispatch_query(open_id: str, text: str) -> None:
+    """处理新查询：尝试用流式卡片展示进度，降级为普通卡片。"""
+    import time
+
+    # 尝试创建流式卡片
+    card_id = _create_streaming_card()
+    logger.info("streaming card_id=%s for user=%s", card_id, open_id)
+    if card_id:
+        _send_card_by_id(open_id, card_id)
+
+        _stream_update_text(card_id, "正在理解你的问题...")
+        time.sleep(0.3)
+
+        _stream_update_text(card_id, "正在理解你的问题...\n\n正在生成 SQL...")
+
+        resp = agent.process(open_id, text)
+        logger.info("agent resp: action=%s sql=%s", resp.action, bool(resp.sql))
+
+        if resp.action == "sql_review" and resp.sql:
+            _stream_update_text(card_id, f"正在理解你的问题...\n\n正在生成 SQL...\n\n```\n{resp.sql}\n```")
+            time.sleep(0.5)
+            _close_streaming(card_id)
+            time.sleep(0.3)
+            _update_card_by_id(card_id, _v2_sql_review_card(resp.sql, open_id, card_id))
+
+        elif resp.action == "metric_clarification":
+            _stream_update_text(card_id, resp.text)
+            time.sleep(0.3)
+            _close_streaming(card_id)
+            time.sleep(0.3)
+            _update_card_by_id(card_id, _v2_metric_card(resp.text, open_id, card_id))
+
+        else:
+            final = resp.text or "（无回复）"
+            _stream_update_text(card_id, final)
+            time.sleep(0.3)
+            _close_streaming(card_id)
+
     else:
-        _send_chat_card(open_id, resp.text or "（无回复）")
+        # 降级：流式卡片创建失败，用 v1 传统方式
+        resp = agent.process(open_id, text)
+        if resp.action == "sql_review":
+            _send_sql_review_card(open_id, resp.sql or "")
+        elif resp.action == "metric_clarification":
+            _send_metric_card(open_id, resp.text)
+        else:
+            _send_chat_card(open_id, resp.text or "（无回复）")
 
 
 # ── 事件处理器 ─────────────────────────────────────────────────────────────────
@@ -622,9 +949,138 @@ def _on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
         logger.exception("Error handling message: %s", exc)
 
 
+# ── 卡片按钮回调 ──────────────────────────────────────────────────────────────
+
+def _on_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
+    """处理卡片按钮点击回调。"""
+    response = P2CardActionTriggerResponse()
+    try:
+        action_value = data.event.action.value or {}
+        action_type  = action_value.get("action", "")
+        open_id      = (
+            action_value.get("user_id")
+            or data.event.operator.open_id
+        )
+        message_id   = data.event.context.open_message_id
+
+        logger.info("card_action: action=%s open_id=%s message_id=%s",
+                     action_type, open_id, message_id)
+
+        card_id = action_value.get("card_id", "")
+
+        def _update_card_state(text: str, template: str = "green") -> None:
+            """根据卡片来源选择 v1 PATCH 或 v2 CardKit 更新。"""
+            if card_id:
+                _update_card_by_id(card_id, _v2_done_card(text, template))
+            else:
+                _update_card(message_id, _make_done_card(text, template))
+
+        if action_type == "approve":
+            response.toast = CallBackToast()
+            response.toast.type = "info"
+            response.toast.content = "正在执行查询..."
+            threading.Thread(
+                target=_handle_card_approve,
+                args=(open_id, message_id, card_id),
+                daemon=True,
+            ).start()
+
+        elif action_type == "cancel":
+            resp = agent.cancel(open_id)
+            response.toast = CallBackToast()
+            response.toast.type = "info"
+            response.toast.content = "已取消"
+            _update_card_state("~~已取消~~", "grey")
+
+        elif action_type == "confirm_metric":
+            resp = agent.confirm_metric_definition(open_id)
+            response.toast = CallBackToast()
+            response.toast.type = "success"
+            response.toast.content = resp.text or "指标已保存"
+            _update_card_state("指标已保存", "green")
+
+        elif action_type == "reject_metric":
+            resp = agent.reject_metric_proposal(open_id)
+            response.toast = CallBackToast()
+            response.toast.type = "info"
+            response.toast.content = "已取消"
+            _update_card_state("指标提案已取消", "grey")
+
+        elif action_type == "cache_verify":
+            resp = agent.cache_verify(open_id)
+            response.toast = CallBackToast()
+            response.toast.type = "success"
+            response.toast.content = "感谢反馈，查询已加入缓存"
+
+        elif action_type == "cache_reject":
+            resp = agent.cache_reject(open_id)
+            response.toast = CallBackToast()
+            response.toast.type = "info"
+            response.toast.content = "已记录，该查询不会被缓存"
+
+        else:
+            logger.warning("unknown card action: %s", action_type)
+
+    except Exception as exc:
+        logger.exception("card_action error: %s", exc)
+        response.toast = CallBackToast()
+        response.toast.type = "error"
+        response.toast.content = f"处理失败：{exc}"
+
+    return response
+
+
+def _handle_card_approve(open_id: str, message_id: str, card_id: str = "") -> None:
+    """按钮回调后异步执行 approve + SQL 执行 + 发送结果卡片。"""
+    try:
+        _handle_approve(open_id)
+        # 更新原审核卡片：按钮替换为"已执行"状态
+        if card_id:
+            _update_card_by_id(card_id, _v2_done_card("SQL 已确认并执行", "green"))
+        else:
+            _update_card(message_id, _make_done_card("SQL 已确认并执行", "green"))
+    except Exception as exc:
+        logger.exception("card approve error: %s", exc)
+        _send_info_card(open_id, f"执行失败：{exc}", template="red")
+
+
+def _make_cancelled_card() -> dict:
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": "Forge SQL 审核"},
+            "template": "grey",
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": "~~已取消~~"},
+            },
+        ],
+    }
+
+
+def _make_done_card(text: str, template: str = "green") -> dict:
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": "Forge"},
+            "template": template,
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": text},
+            },
+        ],
+    }
+
+
 # ── 启动 ───────────────────────────────────────────────────────────────────────
 
 def start_bot() -> None:
+    import time as _time
+
     if not cfg.FEISHU_APP_ID or not cfg.FEISHU_APP_SECRET:
         logger.error("FEISHU_APP_ID / FEISHU_APP_SECRET 未配置，飞书 Bot 不会启动。")
         return
@@ -635,18 +1091,25 @@ def start_bot() -> None:
             cfg.FEISHU_ENCRYPT_KEY,
         )
         .register_p2_im_message_receive_v1(_on_message)
+        .register_p2_card_action_trigger(_on_card_action)
         .build()
     )
 
-    ws_client = lark.ws.Client(
-        cfg.FEISHU_APP_ID,
-        cfg.FEISHU_APP_SECRET,
-        event_handler=event_handler,
-        log_level=lark.LogLevel.INFO,
-    )
-
-    logger.info("Forge 飞书 Bot 已启动，等待消息…")
-    ws_client.start()
+    # 自动重连：ws_client.start() 在连接断开后会退出，循环重建连接
+    while True:
+        try:
+            ws_client = lark.ws.Client(
+                cfg.FEISHU_APP_ID,
+                cfg.FEISHU_APP_SECRET,
+                event_handler=event_handler,
+                log_level=lark.LogLevel.INFO,
+            )
+            logger.info("Forge 飞书 Bot 已启动，等待消息…")
+            ws_client.start()
+        except Exception as exc:
+            logger.error("WebSocket 异常退出: %s", exc)
+        logger.warning("WebSocket 断开，3 秒后重连…")
+        _time.sleep(3)
 
 
 if __name__ == "__main__":
