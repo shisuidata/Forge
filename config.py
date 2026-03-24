@@ -113,6 +113,10 @@ class Config:
     MEMORY_SESSION_TIMEOUT: int = int(_env("MEMORY_SESSION_TIMEOUT", "memory", "session_timeout_min", default="30"))
     MEMORY_EXTRACT_MODEL: str = _env("MEMORY_EXTRACT_MODEL", "memory", "extract_model", default="")  # 空=用默认LLM
 
+    # ── 日志 ─────────────────────────────────────────────────────────────────────
+    LOG_LEVEL: str = _env("LOG_LEVEL", "logging", "level", default="INFO")
+    LOG_FILE:  str = _env("LOG_FILE",  "logging", "file",  default="")  # 空=只输出到 stderr
+
     # ── Web 服务器 ─────────────────────────────────────────────────────────────
     HOST: str = _env("HOST", "server", "host", default="0.0.0.0")
     PORT: int = int(_env("PORT", "server", "port", default="8000"))

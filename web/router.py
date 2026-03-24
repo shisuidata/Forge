@@ -604,6 +604,38 @@ async def audit_page(request: Request, status: str = "", q: str = ""):
     )
 
 
+@router.get("/sessions", response_class=HTMLResponse)
+async def sessions_page(request: Request, sid: str = ""):
+    """对话日志页面：Session 列表 + 单 Session 详情。"""
+    from agent.memory import memory
+    if sid:
+        # 单个 session 详情
+        messages = memory.ems.get_full_session(sid)
+        return templates.TemplateResponse(
+            "sessions.html",
+            {"request": request, "session_id": sid, "messages": messages, "sessions": []},
+        )
+    else:
+        # session 列表（聚合所有用户）
+        try:
+            conn = memory.ems._ensure_conn()
+            rows = conn.execute(
+                "SELECT session_id, user_id, MIN(created_at) as started, MAX(created_at) as ended, COUNT(*) as msg_count "
+                "FROM memory_ems WHERE role != 'state' "
+                "GROUP BY session_id ORDER BY ended DESC LIMIT 50"
+            ).fetchall()
+            sessions = [
+                {"session_id": r[0], "user_id": r[1], "started": r[2], "ended": r[3], "msg_count": r[4]}
+                for r in rows
+            ]
+        except Exception:
+            sessions = []
+        return templates.TemplateResponse(
+            "sessions.html",
+            {"request": request, "session_id": "", "messages": [], "sessions": sessions},
+        )
+
+
 @router.get("/pipelines", response_class=HTMLResponse)
 async def pipelines_page(request: Request):
     """Pipeline 执行视图。从 EMS 聚合所有查询活动。"""

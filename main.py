@@ -19,10 +19,19 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from config import cfg
 from agent.feishu import dispatcher
 from web.router import chat_router, router as admin_router
 
-logging.basicConfig(level=logging.INFO)
+# ── 日志配置（可通过 forge.yaml 或环境变量调整）──────────────────────────────
+_log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+if cfg.LOG_FILE:
+    _log_handlers.append(logging.FileHandler(cfg.LOG_FILE, encoding="utf-8"))
+logging.basicConfig(
+    level=getattr(logging, cfg.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=_log_handlers,
+)
 app = FastAPI(title="Forge Agent")
 
 # Chat + API 路由挂载到根级别（/chat, /api/*）

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% set active = "sessions" %}
+{% block title %}对话日志 — Forge{% endblock %}
+{% block heading %}对话日志{% endblock %}
+
+{% block content %}
+
+{% if session_id %}
+{# ── 单个 Session 详情 ────────────────────────────────────────────────────── #}
+<div class="mb-4">
+  <a href="/admin/sessions" class="text-sm text-blue-600 hover:text-blue-800">&larr; 返回列表</a>
+  <span class="text-sm text-gray-400 ml-3">Session: <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{ session_id }}</code></span>
+</div>
+
+{% if messages %}
+<div class="space-y-2 max-w-3xl">
+  {% for m in messages %}
+  <div class="flex gap-3 {% if m.role == 'user' %}bg-blue-50 border-blue-100{% elif m.role == 'state' %}bg-gray-50 border-gray-100{% elif m.role == 'system' %}bg-yellow-50 border-yellow-100{% else %}bg-white border-gray-200{% endif %} border rounded-lg px-4 py-3">
+    <div class="flex-shrink-0 w-16">
+      <span class="text-xs font-mono {% if m.role == 'user' %}text-blue-600{% elif m.role == 'assistant' %}text-green-600{% elif m.role == 'state' %}text-gray-400{% else %}text-orange-500{% endif %}">{{ m.role }}</span>
+      {% if m.action %}
+      <span class="block text-xs text-gray-400 mt-0.5">{{ m.action }}</span>
+      {% endif %}
+    </div>
+    <div class="flex-1 min-w-0">
+      {% if m.content %}
+      <p class="text-sm text-gray-800 whitespace-pre-wrap break-words">{{ m.content[:500] }}{% if m.content|length > 500 %}...{% endif %}</p>
+      {% endif %}
+      {% if m.tool_name %}
+      <p class="text-xs text-purple-600 font-mono mt-1">tool: {{ m.tool_name }}</p>
+      {% endif %}
+      {% if m.tool_output %}
+      <details class="mt-1">
+        <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">输出 ({{ m.tool_output|length }} chars)</summary>
+        <pre class="mt-1 bg-gray-900 text-green-300 rounded p-2 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap">{{ m.tool_output[:1000] }}</pre>
+      </details>
+      {% endif %}
+    </div>
+    <div class="flex-shrink-0 text-xs text-gray-400">
+      {{ m.created_at[11:19] if m.created_at else "" }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-gray-400">该 Session 没有消息记录</p>
+{% endif %}
+
+{% else %}
+{# ── Session 列表 ─────────────────────────────────────────────────────────── #}
+{% if sessions %}
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+  <table class="min-w-full text-sm divide-y divide-gray-200">
+    <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+      <tr>
+        <th class="px-4 py-3 text-left">Session ID</th>
+        <th class="px-4 py-3 text-left">用户</th>
+        <th class="px-4 py-3 text-left">开始时间</th>
+        <th class="px-4 py-3 text-left">结束时间</th>
+        <th class="px-4 py-3 text-right">消息数</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for s in sessions %}
+      <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location='/admin/sessions?sid={{ s.session_id }}'">
+        <td class="px-4 py-3 font-mono text-xs text-blue-600">{{ s.session_id }}</td>
+        <td class="px-4 py-3 text-xs text-gray-600">{{ s.user_id[:15] }}</td>
+        <td class="px-4 py-3 text-xs text-gray-500">{{ s.started[:19].replace("T"," ") if s.started else "" }}</td>
+        <td class="px-4 py-3 text-xs text-gray-500">{{ s.ended[:19].replace("T"," ") if s.ended else "" }}</td>
+        <td class="px-4 py-3 text-xs text-gray-500 text-right">{{ s.msg_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="mt-3 text-xs text-gray-400">共 {{ sessions|length }} 个 Session</p>
+{% else %}
+<div class="text-center py-16 text-gray-400">
+  <p class="text-base mb-1">暂无对话记录</p>
+  <p class="text-xs">通过 Chat 或飞书发起查询后，对话日志将显示在此处</p>
+</div>
+{% endif %}
+{% endif %}
+
+{% endblock %}

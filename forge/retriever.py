@@ -290,10 +290,14 @@ class SchemaRetriever:
         # 若问题命中已注册的业务指标，直接从其定义中提取所需表，精度最高
         metric_tables = self._retrieve_by_metrics(question)
 
-        # Phase 1：表级语义检索
-        if self._embeddings is not None and embed_fn is not None:
+        # Phase 1：表级语义检索（embedding 不可用或含 NaN 时自动降级 BM25）
+        if (self._embeddings is not None
+                and embed_fn is not None
+                and not np.isnan(self._embeddings).any()):
             candidates = self._retrieve_by_embedding(question, embed_fn, top_k)
         else:
+            if self._embeddings is not None and np.isnan(self._embeddings).any():
+                logger.warning("Embedding index contains NaN, using BM25 fallback")
             candidates = self._retrieve_by_keywords(question, top_k)
 
         # Phase 2：列名关键词补充（去重合并，candidates 优先）
@@ -350,11 +354,19 @@ class SchemaRetriever:
         embed_fn: Callable,
         top_k: int,
     ) -> list[str]:
-        """向量检索：问题嵌入 → cosine 相似度排序。"""
-        q_emb = self._normalize(np.array(embed_fn([question]), dtype=np.float32))  # (1, d)
-        scores = (q_emb @ self._embeddings.T).flatten()   # (n_tables,)
-        top_idx = np.argsort(scores)[::-1][:top_k]
-        return [self.tables[i] for i in top_idx]
+        """向量检索：问题嵌入 → cosine 相似度排序。失败时降级到 BM25。"""
+        try:
+            q_emb = self._normalize(np.array(embed_fn([question]), dtype=np.float32))
+            scores = (q_emb @ self._embeddings.T).flatten()
+            # 检查 scores 是否有效
+            if np.isnan(scores).all() or np.all(scores == 0):
+                logger.warning("Embedding scores all NaN/zero, falling back to BM25")
+                return self._retrieve_by_keywords(question, top_k)
+            top_idx = np.argsort(scores)[::-1][:top_k]
+            return [self.tables[i] for i in top_idx]
+        except Exception as exc:
+            logger.warning("Embedding retrieval failed (%s), falling back to BM25", exc)
+            return self._retrieve_by_keywords(question, top_k)
 
     def _retrieve_by_keywords(self, question: str, top_k: int) -> list[str]:
         """BM25-lite 降级：TF×IDF 关键词权重匹配。"""
@@ -577,7 +589,9 @@ class SchemaRetriever:
 
     @staticmethod
     def _normalize(x: np.ndarray) -> np.ndarray:
-        """L2 归一化（用于余弦相似度计算）。"""
+        """L2 归一化（用于余弦相似度计算）。处理 NaN 和零向量。"""
+        # 先把 NaN/Inf 替换为 0
+        x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         norms = np.linalg.norm(x, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
         return x / norms
