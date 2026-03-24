@@ -472,24 +472,34 @@ def _extract_hint_tables(error: str, registry: dict) -> list[str]:
 
 
 def call(history: list[Any], extra_tables: list[str] | None = None,
-         system_override: str | None = None) -> dict:
+         system_override: str | None = None,
+         knowledge_context: str = "") -> dict:
     """
     LLM 统一调用入口。
 
-    根据 cfg.LLM_PROVIDER 自动分发到 Anthropic 或 OpenAI 兼容后端。
-
     Args:
-        history:         Session.recent() 返回的 Message 列表。
-        extra_tables:    强制追加到检索结果的表名列表。
-        system_override: 自定义 system prompt，传入时跳过 registry 构建，无 tools（纯文字模式）。
+        history:           Message 列表或 dict 列表 [{"role": ..., "content": ...}]。
+        extra_tables:      强制追加到检索结果的表名列表。
+        system_override:   自定义 system prompt（纯文字模式，无 tools）。
+        knowledge_context: SMP 知识文本，追加到 system prompt 尾部。
 
     Returns:
         {"tool": str, "input": dict}  — LLM 调用了工具
         {"tool": None, "text": str}   — LLM 直接文字回复
     """
+    # 统一 messages 格式：兼容 Message 对象和 dict 列表
+    def _to_dicts(msgs):
+        result = []
+        for m in msgs:
+            if isinstance(m, dict):
+                result.append({"role": m["role"], "content": m.get("content", "")})
+            else:
+                result.append({"role": m.role, "content": m.content})
+        return result
+
     # 纯文字模式：自定义 system prompt，无 tools
     if system_override is not None:
-        messages = [{"role": m.role, "content": m.content} for m in history]
+        messages = _to_dicts(history)
         if cfg.LLM_PROVIDER == "anthropic":
             return _call_anthropic(messages, system_override, tools=[])
         else:
@@ -504,8 +514,10 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     # 提取最新的用户问题，用于 schema 向量检索（精简 context）
     current_question: str | None = None
     for m in reversed(history):
-        if m.role == "user":
-            current_question = m.content
+        role = m["role"] if isinstance(m, dict) else m.role
+        content = m.get("content", "") if isinstance(m, dict) else m.content
+        if role == "user":
+            current_question = content
             break
 
     # 用检索到的相关表构建 tool schema（避免全量 200 张表撑爆 context window）
@@ -530,7 +542,10 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
 
     tools = _build_tools(filtered_registry)
     system = build_system(_registry_context(question=current_question), question=current_question)
-    messages = [{"role": m.role, "content": m.content} for m in history]
+    # 拼接 SMP 知识上下文
+    if knowledge_context:
+        system = system + "\n\n" + knowledge_context
+    messages = _to_dicts(history)
     if cfg.LLM_PROVIDER == "anthropic":
         return _call_anthropic(messages, system, tools)
     else:

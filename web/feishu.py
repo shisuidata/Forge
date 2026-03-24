@@ -55,7 +55,7 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
 
 from config import cfg
 from agent import agent
-from agent.session import store
+from agent.memory import memory
 from forge.executor import execute_with_data as _execute_sql
 from forge.chart import generate as _generate_chart, generate_image as _generate_chart_image
 
@@ -713,15 +713,14 @@ _RESET_WORDS = {"重置", "清空", "reset", "clear", "新对话", "重新开始
 def _dispatch(open_id: str, text: str) -> None:
     # 重置对话指令
     if text.strip().lower() in _RESET_WORDS:
-        store.clear(open_id)
+        memory.reset(open_id)
         _send_chat_card(open_id, "对话已重置，请开始新的查询。")
         return
 
-    session = store.get(open_id)
-
-    if session.pending_sql:
+    pending_sql = memory.get_state(open_id, "pending_sql")
+    if pending_sql:
         if _is_confirm(text):
-            _handle_approve(open_id, query_hint=session.pending_sql or "")
+            _handle_approve(open_id, query_hint=pending_sql or "")
         elif _is_cancel(text):
             resp = agent.cancel(open_id)
             _send_chat_card(open_id, resp.text)
@@ -729,7 +728,7 @@ def _dispatch(open_id: str, text: str) -> None:
             _send_info_card(open_id, "当前有待确认的 SQL，请回复 **确认** 执行或 **取消** 放弃。")
         return
 
-    if session.pending_metric_proposal:
+    if memory.get_state(open_id, "pending_metric_proposal"):
         if _is_confirm(text):
             resp = agent.confirm_metric_definition(open_id)
             _send_chat_card(open_id, resp.text)
@@ -741,7 +740,7 @@ def _dispatch(open_id: str, text: str) -> None:
         return
 
     # Stage 2：结果准确性反馈
-    if session.pending_cache_id:
+    if memory.get_state(open_id, "pending_cache_id"):
         if _is_accurate(text):
             resp = agent.cache_verify(open_id)
             _send_chat_card(open_id, resp.text)
@@ -750,8 +749,8 @@ def _dispatch(open_id: str, text: str) -> None:
             resp = agent.cache_reject(open_id)
             _send_chat_card(open_id, resp.text)
             return
-        # 用户直接发了新问题，自动放弃本次反馈，继续处理新消息
-        session.pending_cache_id = None
+        # 用户直接发了新问题，自动放弃本次反馈
+        memory.clear_state(open_id, "pending_cache_id")
 
     _dispatch_query(open_id, text)
 

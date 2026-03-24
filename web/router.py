@@ -245,12 +245,8 @@ type=message 时 proposal 为空，summary 是对用户的文字回复。
 
 delete 类型的 proposal 只需 {{"name": "要删除的标识符"}}。"""
 
-    messages = [{"role": "user", "content": message}]
-    # 调用 LLM
-    from agent.session import Message
-    msgs = [Message(role="user", content=message)]
-
     import json as _json
+    msgs = [{"role": "user", "content": message}]
     try:
         result = llm.call(msgs, system_override=system_prompt)
         text = result.get("text", "")

@@ -46,7 +46,8 @@ from forge.compiler import compile_query
 from forge.cache import cache
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
-from agent.session import store, IntentSpec
+from agent.session import IntentSpec          # 仅用于类型定义，后续可移除
+from agent.memory import memory
 from agent import llm
 
 logger = logging.getLogger(__name__)
@@ -88,56 +89,45 @@ def process(user_id: str, user_text: str) -> AgentResponse:
     """
     处理用户发送的一条消息，返回 AgentResponse。
 
-    流程：
-        1. 将用户消息加入 session 历史
-        2. 进入带重试的 agent loop：
-           a. 调用 LLM，获取工具调用或文字回复
-           b. 若为文字回复 → 直接返回
-           c. 若为 generate_forge_query → 编译 Forge JSON
-              - 编译成功 → 存入 pending_sql，返回 sql_review
-              - 编译失败且未超重试上限 → 将错误注入 session，continue 重试
-              - 超出重试上限 → 返回 error
-           d. 若为 define_metric → 校验并保存指标
-
-    Args:
-        user_id:   飞书 open_id，用于从 SessionStore 获取会话状态。
-        user_text: 用户发送的原始文本。
-
-    Returns:
-        AgentResponse，action 字段指示上层如何处理响应。
+    记忆流：
+        EMS.record(user) → WMB.build(scene) → LLM → EMS.record(assistant)
+        状态变更通过 memory.set_state / clear_state 管理
     """
-    session = store.get(user_id)
-
     # ── 澄清轮次：若有待补充的 intent，将用户回复合并入原始问题后继续 ──────────
-    if session.pending_intent is not None:
-        intent = session.pending_intent
-        session.pending_intent = None
-        # 将用户的补充信息附加到原始问题，构建更完整的查询描述
-        enriched = f"{intent.original_question}（补充说明：{user_text}）"
-        session.add("user", enriched)
+    pending_intent = memory.get_state(user_id, "pending_intent")
+    if pending_intent is not None:
+        memory.clear_state(user_id, "pending_intent")
+        enriched = f"{pending_intent.get('original_question', '')}（补充说明：{user_text}）"
+        memory.record(user_id, "user", enriched)
     else:
         # ── 首次消息：检测是否需要发起澄清 ──────────────────────────────────
         clarification = _check_clarification_needed(user_text)
         if clarification:
-            # 保存待澄清的 intent，返回澄清问题给用户
-            session.pending_intent = IntentSpec(
-                original_question=user_text,
-                clarification_prompt=clarification["prompt"],
-                ambiguity_keys=clarification["keys"],
-            )
-            session.add("user", user_text)
-            session.add("assistant", clarification["prompt"])
+            memory.set_state(user_id, "pending_intent", {
+                "original_question": user_text,
+                "clarification_prompt": clarification["prompt"],
+                "ambiguity_keys": clarification["keys"],
+            })
+            memory.record(user_id, "user", user_text)
+            memory.record(user_id, "assistant", clarification["prompt"])
             return AgentResponse(text=clarification["prompt"], action="clarification")
-        session.add("user", user_text)
+        memory.record(user_id, "user", user_text)
 
     # ── 带编译重试的 agent loop ───────────────────────────────────────────────
+    # 重试期间的临时消息用 retry_messages 维护，不写入 EMS（避免污染）
+    retry_messages: list[dict] = []
+
     for attempt in range(1 + MAX_RETRIES):
-        result = llm.call(session.recent())
+        # 从 WMB 构建基础消息 + 拼接重试上下文
+        messages, knowledge = memory.build("query", user_id, user_text)
+        if retry_messages:
+            messages = messages + retry_messages
+        result = llm.call(messages, knowledge_context=knowledge)
 
         # ── 文字回复：无工具调用，直接透传 ───────────────────────────────────
         if result["tool"] is None:
             text = result.get("text", "")
-            session.add("assistant", text)
+            memory.record(user_id, "assistant", text)
             return AgentResponse(text=text)
 
         # ── 查询模式：生成 Forge JSON 并编译 ─────────────────────────────────
@@ -147,48 +137,43 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                 sql = compile_query(forge_json)
             except Exception as exc:
                 if attempt < MAX_RETRIES:
-                    # 将编译错误注入 session，让 LLM 在下一轮自我修正
-                    # 先把 LLM 生成的（有问题的）Forge JSON 作为 assistant 消息记录
-                    session.add("assistant", json.dumps(forge_json, ensure_ascii=False))
-                    err_msg = (
-                        f"[系统] 编译错误（第 {attempt + 1} 次尝试）：{exc}\n"
-                        "请修正 Forge JSON 后重新生成。"
+                    # 重试消息不写 EMS，只在本次调用内传递
+                    retry_messages.append(
+                        {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
                     )
-                    session.add("user", err_msg)
-                    continue   # 回到 loop 顶部，再次调用 LLM
+                    retry_messages.append(
+                        {"role": "user", "content": f"编译错误（第 {attempt + 1} 次）：{exc}\n请修正。"}
+                    )
+                    continue
                 else:
-                    # 已达重试上限，向用户报错
                     err = f"⚠ 查询生成失败（已重试 {MAX_RETRIES} 次）：{exc}"
-                    session.add("assistant", err)
+                    memory.record(user_id, "assistant", err, action="error")
                     return AgentResponse(text=err, action="error")
 
-            # 编译成功：若本次查询是由澄清轮次触发的，将确认写入 staging
-            _maybe_write_staging(session, user_text, forge_json)
+            # 编译成功
+            memory.record(user_id, "assistant", "",
+                          tool_name="generate_forge_query",
+                          tool_input=json.dumps(forge_json, ensure_ascii=False),
+                          tool_output=sql,
+                          action="sql_review")
 
-            # 清除重试期间注入的系统消息和 Forge JSON（只保留原始用户提问）
-            session.history = [
-                m for m in session.history
-                if not (m.role == "user" and m.content.startswith("[系统]"))
-                and not (m.role == "assistant" and m.content.startswith("{"))
-            ]
-
-            # 存入 session 的 pending 槽位，等待用户 approve/cancel
-            session.pending_sql   = sql
-            session.pending_forge = forge_json
+            # 存入 pending 状态
+            memory.set_state(user_id, "pending_sql", sql)
+            memory.set_state(user_id, "pending_forge", forge_json)
             return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review")
 
         # ── 提案模式：模型猜测指标定义，等待用户确认 ─────────────────────────
         if result["tool"] == "propose_metric_definition":
             proposal = result["input"]
             summary  = proposal.pop("proposal_summary", "")
-            session.pending_metric_proposal = proposal
+            memory.set_state(user_id, "pending_metric_proposal", proposal)
             text = (
                 f"📋 **指标定义提案**\n\n"
                 f"我根据数据库结构，推测了以下定义：\n\n"
                 f"{summary}\n\n"
                 "如确认无误，请回复「确认」；如需调整，请直接描述修改意见。"
             )
-            session.add("assistant", text)
+            memory.record(user_id, "assistant", text, action="metric_clarification")
             return AgentResponse(text=text, action="metric_clarification")
 
         # ── 定义模式：提取指标并校验保存 ─────────────────────────────────────
@@ -203,15 +188,14 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                     + "\n".join(f"• {e}" for e in validation_err)
                     + "\n\n请修正后重新定义。"
                 )
-                session.add("assistant", err_text)
+                memory.record(user_id, "assistant", err_text, action="error")
                 return AgentResponse(text=err_text, action="error")
 
             label = metric.get("label", metric.get("name", ""))
             text  = f"✅ 已保存指标「{label}」：{metric.get('description', '')}"
             if validation_warn:
-                # 有警告但仍保存成功，将警告信息附在回复末尾
                 text += "\n\n" + "\n".join(f"⚠ {w}" for w in validation_warn)
-            session.add("assistant", text)
+            memory.record(user_id, "assistant", text, action="metric_saved")
             return AgentResponse(text=text, action="metric_saved")
 
         # ── 未知工具（防御性处理）─────────────────────────────────────────────
@@ -235,51 +219,43 @@ def approve(user_id: str) -> AgentResponse:
     Returns:
         action=approved 并携带 sql；若无 pending SQL 则返回 action=error。
     """
-    session = store.get(user_id)
-    sql        = session.pending_sql
-    forge_json = session.pending_forge
+    sql = memory.get_state(user_id, "pending_sql")
+    forge_json = memory.get_state(user_id, "pending_forge")
     if not sql:
         return AgentResponse(text="没有待确认的 SQL。", action="error")
 
-    # 清空 pending 状态，保证状态机的单向流转
-    session.pending_sql   = None
-    session.pending_forge = None
+    memory.clear_state(user_id, "pending_sql")
+    memory.clear_state(user_id, "pending_forge")
 
-    # Stage 1 完成：写入缓存（pending），等待 Stage 2 结果反馈
+    # Stage 1 完成：写入缓存
     if forge_json:
-        question = _last_user_question(session)
+        question = _last_user_question(user_id)
         cache_id = cache.add_pending(
-            question=question,
-            question_emb=None,   # 无 embedding 时退化为精确匹配
-            forge_json=forge_json,
-            sql=sql,
+            question=question, question_emb=None,
+            forge_json=forge_json, sql=sql,
         )
-        session.pending_cache_id = cache_id or None
+        if cache_id:
+            memory.set_state(user_id, "pending_cache_id", cache_id)
 
+    memory.record(user_id, "assistant", "", action="approved")
     return AgentResponse(text="✅ SQL 已确认，开始执行。", sql=sql, action="approved")
 
 
-def _last_user_question(session) -> str:
-    """从 session 历史中取出最后一条真实用户提问（跳过系统注入消息）。"""
-    for msg in reversed(session.history):
-        if msg.role == "user" and not msg.content.startswith("[系统]"):
-            return msg.content
+def _last_user_question(user_id: str) -> str:
+    """从 EMS 中取出最后一条真实用户提问。"""
+    messages = memory.ems.get_recent_messages(user_id, limit=5, roles=("user",))
+    for msg in reversed(messages):
+        content = msg.get("content", "")
+        if content and not content.startswith("[系统]") and not content.startswith("编译错误"):
+            return content
     return ""
 
 
 def cancel(user_id: str) -> AgentResponse:
-    """
-    用户取消 pending SQL，清空 session 的 pending 状态。
-
-    Args:
-        user_id: 飞书 open_id。
-
-    Returns:
-        action=cancelled；即使当前无 pending SQL 也安全返回。
-    """
-    session = store.get(user_id)
-    session.pending_sql   = None
-    session.pending_forge = None
+    """用户取消 pending SQL。"""
+    memory.clear_state(user_id, "pending_sql")
+    memory.clear_state(user_id, "pending_forge")
+    memory.record(user_id, "assistant", "已取消。", action="cancelled")
     return AgentResponse(text="已取消。", action="cancelled")
 
 
@@ -292,11 +268,10 @@ def cache_verify(user_id: str) -> AgentResponse:
     verified 条目可在后续问题中通过 embedding 相似度命中，直接复用 SQL。
     高频 verified 条目还可作为语义层指标的候选定义（suggest_metrics）。
     """
-    session = store.get(user_id)
-    cache_id = session.pending_cache_id
+    cache_id = memory.get_state(user_id, "pending_cache_id")
     if not cache_id:
         return AgentResponse(text="没有待反馈的查询缓存。", action="error")
-    session.pending_cache_id = None
+    memory.clear_state(user_id, "pending_cache_id")
     cache.verify(cache_id)
     return AgentResponse(
         text="✅ 已记录，该查询已加入缓存，下次相似问题可直接复用。",
@@ -305,14 +280,11 @@ def cache_verify(user_id: str) -> AgentResponse:
 
 
 def cache_reject(user_id: str) -> AgentResponse:
-    """
-    Stage 2 👎：用户标记查询结果不准确，将缓存条目软删除为 rejected。
-    """
-    session = store.get(user_id)
-    cache_id = session.pending_cache_id
+    """Stage 2 👎：用户标记查询结果不准确。"""
+    cache_id = memory.get_state(user_id, "pending_cache_id")
     if not cache_id:
         return AgentResponse(text="没有待反馈的查询缓存。", action="error")
-    session.pending_cache_id = None
+    memory.clear_state(user_id, "pending_cache_id")
     cache.reject(cache_id)
     return AgentResponse(
         text="已记录，感谢反馈，该查询结果不会被缓存。",
@@ -323,23 +295,14 @@ def cache_reject(user_id: str) -> AgentResponse:
 # ── 指标提案确认 / 拒绝 ──────────────────────────────────────────────────────
 
 def confirm_metric_definition(user_id: str) -> AgentResponse:
-    """
-    用户确认模型提出的指标定义草案，校验后持久化入库。
-
-    Args:
-        user_id: 飞书 open_id。
-
-    Returns:
-        action=metric_saved 表示保存成功；action=error 表示校验失败或无待确认项。
-    """
-    session = store.get(user_id)
-    proposal = session.pending_metric_proposal
+    """用户确认模型提出的指标定义草案。"""
+    proposal = memory.get_state(user_id, "pending_metric_proposal")
     if not proposal:
         return AgentResponse(text="没有待确认的指标定义。", action="error")
 
     name = proposal.get("name", "")
     validation_err, validation_warn = _validate_and_save(proposal, name)
-    session.pending_metric_proposal = None   # 清空，无论成功或失败
+    memory.clear_state(user_id, "pending_metric_proposal")
 
     if validation_err:
         err_text = (
@@ -347,82 +310,67 @@ def confirm_metric_definition(user_id: str) -> AgentResponse:
             + "\n".join(f"• {e}" for e in validation_err)
             + "\n\n请修正后重新定义。"
         )
-        session.add("assistant", err_text)
+        memory.record(user_id, "assistant", err_text, action="error")
         return AgentResponse(text=err_text, action="error")
 
     label = proposal.get("label", name)
     text  = f"✅ 已保存指标「{label}」，下次查询时直接可用。"
     if validation_warn:
         text += "\n\n" + "\n".join(f"⚠ {w}" for w in validation_warn)
-    session.add("assistant", text)
+    memory.record(user_id, "assistant", text, action="metric_saved")
     return AgentResponse(text=text, action="metric_saved")
 
 
 def reject_metric_proposal(user_id: str) -> AgentResponse:
-    """
-    用户拒绝模型提出的指标定义草案，清空 pending 状态。
-
-    Args:
-        user_id: 飞书 open_id。
-    """
-    session = store.get(user_id)
-    session.pending_metric_proposal = None
+    """用户拒绝指标定义草案。"""
+    memory.clear_state(user_id, "pending_metric_proposal")
     return AgentResponse(text="已取消指标提案，请重新描述您的需求。", action="cancelled")
 
 
 # ── Staging 写入 ─────────────────────────────────────────────────────────────
 
-def _maybe_write_staging(session, user_text: str, forge_json: dict) -> None:
+def _maybe_write_staging(user_id: str, user_text: str, forge_json: dict) -> None:
     """
-    若本次查询是由澄清轮次驱动（session 中曾有 pending_intent），
-    将用户的澄清回复 + 原始问题写入 staging，供后续 sync-staging 合并入 registry。
-
-    在 process() 编译成功时调用。session.pending_intent 此时已被清空，
-    因此额外传入 user_text 作为上下文补充。
-
-    只在 session 历史中能检测到澄清对话模式时才写入（避免误触发）。
+    若本次查询是由澄清轮次驱动，将用户澄清记录写入 staging。
+    从 EMS 中检测是否有澄清对话模式。
     """
-    # 从 history 中检测：倒数找 action=clarification 的模式
-    # 简单启发式：如果倒数第 3 条是 assistant（澄清问），倒数第 2 条是 user（用户回答）
-    hist = session.history
-    if len(hist) < 3:
+    messages = memory.ems.get_recent_messages(
+        user_id, limit=6, roles=("user", "assistant")
+    )
+    if len(messages) < 3:
         return
 
-    # 找澄清提示（assistant）和用户回答（user）的对
+    # 找澄清提示
     clarification_prompt = ""
-    for i in range(len(hist) - 1, 0, -1):
-        if hist[i].role == "user" and hist[i - 1].role == "assistant":
-            prev_assistant = hist[i - 1].content
-            # 判断是否是澄清提示（包含「补充」「请问」「说明」等词）
-            if any(kw in prev_assistant for kw in ["请问", "补充", "指的是", "是否", "请确认"]):
-                clarification_prompt = prev_assistant
+    for i in range(len(messages) - 1, 0, -1):
+        if messages[i]["role"] == "user" and messages[i - 1]["role"] == "assistant":
+            prev = messages[i - 1]["content"]
+            if any(kw in prev for kw in ["请问", "补充", "指的是", "是否", "请确认"]):
+                clarification_prompt = prev
                 break
 
     if not clarification_prompt:
         return
 
-    # 提取原始问题（enriched 格式：原始问题 + 补充说明：user_text）
+    # 提取原始问题
     current_q = ""
-    for msg in reversed(hist):
-        if msg.role == "user" and "补充说明" in msg.content:
-            # 格式："{original}（补充说明：{user_text}）"
-            parts = msg.content.split("（补充说明：")
+    for msg in reversed(messages):
+        if msg["role"] == "user" and "补充说明" in msg["content"]:
+            parts = msg["content"].split("（补充说明：")
             current_q = parts[0].strip()
             break
 
     if not current_q:
         return
 
-    # 写入 staging
     try:
         import re as _re
         key = _re.sub(r'[^\w]', '_', current_q[:30]).strip('_').lower()
-        key = f"user_confirmed_{key}"
         write_staging_record(
             staging_dir=cfg.STAGING_DIR,
-            key=key,
+            key=f"user_confirmed_{key}",
             label=f"用户确认：{current_q[:20]}...",
-            triggers=current_q.split()[:5],      # 取前5个词作为触发词
+            triggers=current_q.split()[:5],
             context=f"用户补充说明：{user_text}",
             original_question=current_q,
             clarification_prompt=clarification_prompt,
