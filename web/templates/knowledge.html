@@ -79,10 +79,21 @@
 <section class="mb-10">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-base font-semibold text-gray-700">知识源订阅</h2>
-    <button onclick="document.getElementById('source-modal').classList.remove('hidden')"
-            class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700">
-      + 添加知识源
-    </button>
+    <div class="flex gap-2">
+      <a href="/admin/knowledge/import"
+         class="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-md hover:bg-blue-700">
+        导入文档
+      </a>
+      <button id="collect-all-btn"
+              onclick="collectAll()"
+              class="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md hover:bg-indigo-700">
+        全部收集
+      </button>
+      <button onclick="document.getElementById('source-modal').classList.remove('hidden')"
+              class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700">
+        + 添加知识源
+      </button>
+    </div>
   </div>
 
   {% if sources %}
@@ -94,7 +105,7 @@
           <th class="px-4 py-3 text-left">名称</th>
           <th class="px-4 py-3 text-left">配置</th>
           <th class="px-4 py-3 text-left">最后运行</th>
-          <th class="px-4 py-3 text-right w-20">操作</th>
+          <th class="px-4 py-3 text-right w-36">操作</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
@@ -115,7 +126,9 @@
             {% if s.config.keywords %}{{ s.config.keywords[:30] }}{% endif %}
           </td>
           <td class="px-4 py-3 text-xs text-gray-400">{{ s.last_run[:16].replace("T"," ") if s.last_run else "未运行" }}</td>
-          <td class="px-4 py-3 text-right">
+          <td class="px-4 py-3 text-right flex gap-2 justify-end">
+            <button onclick="collectOne({{ s.id }}, this)"
+                    class="text-xs text-indigo-600 hover:text-indigo-800 collect-btn">立即收集</button>
             <form method="post" action="/admin/knowledge/source/delete/{{ s.id }}" style="display:inline">
               <button type="submit" class="text-xs text-red-500 hover:text-red-700">删除</button>
             </form>
@@ -208,5 +221,59 @@
     </form>
   </div>
 </div>
+
+{# ── 收集结果提示 ──────────────────────────────────────────────────────────── #}
+<div id="collect-toast" class="hidden fixed bottom-6 right-6 text-sm px-4 py-3 rounded-lg shadow-lg z-50"></div>
+
+<script>
+function showToast(msg, ok) {
+  const el = document.getElementById('collect-toast');
+  el.textContent = msg;
+  el.className = 'fixed bottom-6 right-6 text-sm px-4 py-3 rounded-lg shadow-lg z-50 ' +
+    (ok ? 'bg-green-700 text-white' : 'bg-red-700 text-white');
+  setTimeout(() => { el.className += ' hidden'; }, 4000);
+}
+
+async function collectOne(sid, btn) {
+  btn.disabled = true;
+  btn.textContent = '收集中...';
+  try {
+    const resp = await fetch('/admin/knowledge/collect/' + sid, {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) {
+      showToast('新增 ' + data.added + ' 条候选知识', true);
+      if (data.added > 0) setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast('收集失败：' + (data.detail || '未知错误'), false);
+    }
+  } catch(e) {
+    showToast('网络错误：' + e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '立即收集';
+  }
+}
+
+async function collectAll() {
+  const btn = document.getElementById('collect-all-btn');
+  btn.disabled = true;
+  btn.textContent = '收集中...';
+  try {
+    const resp = await fetch('/admin/knowledge/collect', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) {
+      showToast('处理 ' + data.processed + ' 个源，新增 ' + data.added + ' 条，错误 ' + data.errors + ' 个', true);
+      if (data.added > 0) setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast('收集失败：' + (data.detail || '未知错误'), false);
+    }
+  } catch(e) {
+    showToast('网络错误：' + e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '全部收集';
+  }
+}
+</script>
 
 {% endblock %}

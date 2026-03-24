@@ -21,3 +21,4 @@ local_sqlite.zip
 tests/benchmark/benchmark.db
 tests/benchmark/results/
 *.pkl
+.mcp.json

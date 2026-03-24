@@ -80,8 +80,17 @@ class KnowledgeStore:
             logger.warning("Knowledge DB init failed: %s", exc)
 
     def _ensure_conn(self):
+        from agent.db import get_connection_raw
         if self._conn is None:
-            from agent.db import get_connection_raw
+            self._conn = get_connection_raw()
+            return self._conn
+        try:
+            self._conn.execute("SELECT 1")
+        except Exception:
+            try:
+                self._conn._conn.rollback()
+            except Exception:
+                pass
             self._conn = get_connection_raw()
         return self._conn
 
@@ -212,7 +221,7 @@ class KnowledgeStore:
     def list_sources(self, enabled_only: bool = True) -> list[dict]:
         """列出知识源。"""
         conn = self._ensure_conn()
-        where = "WHERE enabled = 1" if enabled_only else ""
+        where = "WHERE enabled = TRUE" if enabled_only else ""
         rows = conn.execute(
             f"SELECT id, type, name, config, enabled, last_run, created_at "
             f"FROM knowledge_sources {where} ORDER BY created_at DESC"
@@ -245,3 +254,206 @@ class KnowledgeStore:
 
 # 全局单例
 knowledge_store = KnowledgeStore()
+
+
+# ── 知识收集执行器 ─────────────────────────────────────────────────────────────
+
+class KnowledgeCollector:
+    """
+    知识收集执行器。
+    遍历 enabled=True 的 KnowledgeSource，拉取内容，提取候选知识。
+    """
+
+    def run_all(self) -> dict:
+        """运行所有启用的知识源。返回统计 {"processed": N, "added": N, "errors": N}."""
+        sources = knowledge_store.list_sources(enabled_only=True)
+        processed = 0
+        added = 0
+        errors = 0
+        for source in sources:
+            try:
+                n = self.run_source(source)
+                added += n
+                processed += 1
+            except Exception as exc:
+                logger.warning("Knowledge source %s (%s) failed: %s", source.get("id"), source.get("name"), exc)
+                errors += 1
+        return {"processed": processed, "added": added, "errors": errors}
+
+    def run_source(self, source: dict) -> int:
+        """运行单个知识源。返回新增候选数。"""
+        src_type = source.get("type", "")
+        if src_type == "rss":
+            n = self._collect_rss(source)
+        elif src_type == "url_fetch":
+            n = self._collect_url_fetch(source)
+        elif src_type == "web_search":
+            n = self._collect_web_search(source)
+        else:
+            logger.warning("Unknown knowledge source type: %s", src_type)
+            n = 0
+        knowledge_store.update_source_last_run(source["id"])
+        return n
+
+    def _collect_rss(self, source: dict) -> int:
+        """RSS 订阅：拉取 feed，每条 entry 作为一个候选。"""
+        import httpx
+        import xml.etree.ElementTree as ET
+
+        config = source.get("config", {})
+        url = config.get("url", "")
+        if not url:
+            logger.warning("RSS source %s has no URL", source.get("name"))
+            return 0
+
+        try:
+            resp = httpx.get(url, timeout=15, follow_redirects=True)
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.warning("RSS fetch failed for %s: %s", url, exc)
+            return 0
+
+        added = 0
+        try:
+            root = ET.fromstring(resp.text)
+            # 支持 RSS 2.0 和 Atom 格式
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            # RSS 2.0: channel/item
+            items = root.findall(".//item")
+            # Atom: feed/entry
+            if not items:
+                items = root.findall(".//atom:entry", ns) or root.findall(".//entry")
+
+            for item in items:
+                # RSS 2.0 字段
+                title_el = item.find("title")
+                desc_el   = item.find("description") or item.find("summary")
+                link_el   = item.find("link")
+                # Atom 字段
+                if title_el is None:
+                    title_el = item.find("atom:title", ns)
+                if desc_el is None:
+                    desc_el = item.find("atom:summary", ns) or item.find("atom:content", ns)
+                if link_el is None:
+                    link_el = item.find("atom:link", ns)
+
+                title   = (title_el.text or "").strip() if title_el is not None else ""
+                summary = (desc_el.text   or "").strip() if desc_el   is not None else ""
+                # Atom link 可能是属性 href
+                if link_el is not None:
+                    link = link_el.text or link_el.get("href", "")
+                else:
+                    link = ""
+
+                if not title and not summary:
+                    continue
+
+                value = f"title: {title}\n{summary[:500]}" if title else summary[:500]
+                try:
+                    knowledge_store.add_candidate(
+                        source="rss",
+                        category="fact",
+                        key=title[:80] if title else "rss_entry",
+                        value=value,
+                        source_url=link[:200],
+                        extracted_by="auto",
+                        confidence=0.8,
+                    )
+                    added += 1
+                except Exception as exc:
+                    logger.debug("Failed to add RSS candidate: %s", exc)
+        except ET.ParseError as exc:
+            logger.warning("RSS XML parse error for %s: %s", url, exc)
+
+        return added
+
+    def _collect_url_fetch(self, source: dict) -> int:
+        """URL 抓取：fetch HTML，用 LLM 提取关键知识点。"""
+        import httpx
+        import re
+
+        config = source.get("config", {})
+        url = config.get("url", "")
+        if not url:
+            logger.warning("URL fetch source %s has no URL", source.get("name"))
+            return 0
+
+        try:
+            resp = httpx.get(url, timeout=15, follow_redirects=True)
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.warning("URL fetch failed for %s: %s", url, exc)
+            return 0
+
+        # 去掉 HTML 标签，取前 2000 字符
+        html = resp.text
+        text = re.sub(r"<[^>]+>", "", html)
+        text = re.sub(r"\s+", " ", text).strip()
+        text = text[:2000]
+
+        if not text:
+            return 0
+
+        # 尝试用 LLM 提取知识点
+        added = 0
+        try:
+            from agent import llm as llm_module
+            system_prompt = (
+                "你是知识提取助手。从以下网页内容中提取3-5条有价值的业务知识点，"
+                "每条50字以内，JSON数组格式：[{\"key\":\"知识点标题\",\"value\":\"内容\"}]"
+                "只输出 JSON 数组，不要有其他内容。"
+            )
+            messages = [{"role": "user", "content": f"URL: {url}\n\n{text}"}]
+            result = llm_module.call(messages, system_override=system_prompt)
+            raw = result.get("text", "") or ""
+            # 尝试解析 JSON
+            json_match = re.search(r"\[.*\]", raw, re.DOTALL)
+            if json_match:
+                items = json.loads(json_match.group())
+                for item in items:
+                    k = str(item.get("key", "url_fact"))[:80]
+                    v = str(item.get("value", ""))[:500]
+                    if not v:
+                        continue
+                    try:
+                        knowledge_store.add_candidate(
+                            source="web_search",
+                            category="fact",
+                            key=k,
+                            value=v,
+                            source_url=url[:200],
+                            extracted_by="llm",
+                            confidence=0.7,
+                        )
+                        added += 1
+                    except Exception as exc:
+                        logger.debug("Failed to add URL fetch candidate: %s", exc)
+            else:
+                raise ValueError("No JSON array in LLM response")
+        except Exception as exc:
+            logger.info("LLM extraction failed for %s (%s), storing raw summary", url, exc)
+            # 降级：存整个摘要为一条
+            try:
+                knowledge_store.add_candidate(
+                    source="web_search",
+                    category="fact",
+                    key=f"url_summary_{source.get('name', 'fetch')}",
+                    value=text[:500],
+                    source_url=url[:200],
+                    extracted_by="auto",
+                    confidence=0.5,
+                )
+                added = 1
+            except Exception as exc2:
+                logger.debug("Failed to store URL summary: %s", exc2)
+
+        return added
+
+    def _collect_web_search(self, source: dict) -> int:
+        """WebSearch：暂时 stub，返回 0。"""
+        # TODO: 需要外部搜索 API
+        return 0
+
+
+# 全局收集器单例
+knowledge_collector = KnowledgeCollector()

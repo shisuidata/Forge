@@ -84,13 +84,21 @@ class EpisodicMemoryStore:
 
     def _ensure_conn(self):
         """
-        返回数据库连接（DBAPI 级别）。
-
-        通过 agent.db 获取，SQLite 和 PostgreSQL 透明切换。
-        连接由 Engine 连接池管理。
+        返回数据库连接（_UnifiedConn）。每次调用前检测连接是否仍可用，
+        PG 事务失败后自动回滚并重建连接。
         """
         from agent.db import get_connection_raw
         if not hasattr(self, '_conn') or self._conn is None:
+            self._conn = get_connection_raw()
+            return self._conn
+        # 检测连接健康状态（PG 事务失败会导致后续查询全部报错）
+        try:
+            self._conn.execute("SELECT 1")
+        except Exception:
+            try:
+                self._conn._conn.rollback()
+            except Exception:
+                pass
             self._conn = get_connection_raw()
         return self._conn
 

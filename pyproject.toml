@@ -21,6 +21,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "pyyaml>=6.0",
     "numpy>=1.24",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS tenant_teams (
     display_name TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now','utc'))
 );
+
+CREATE TABLE IF NOT EXISTS team_table_acl (
+    team_id     TEXT NOT NULL,
+    table_name  TEXT NOT NULL,
+    PRIMARY KEY (team_id, table_name)
+);
+CREATE INDEX IF NOT EXISTS idx_acl_team ON team_table_acl(team_id);
 """
 
 
@@ -121,6 +128,37 @@ class TenantStore:
         if row:
             return {"user_id": row[0], "team_id": row[1], "display_name": row[2], "role": row[3]}
         return None
+
+    # ── 表级权限 ACL ──────────────────────────────────────────────────────────
+
+    def set_allowed_tables(self, team_id: str, tables: list[str]) -> None:
+        """设置团队可见的表白名单。传空列表表示无限制（看所有表）。"""
+        conn = self._ensure_conn()
+        conn.execute("DELETE FROM team_table_acl WHERE team_id = ?", (team_id,))
+        for table in tables:
+            conn.execute(
+                "INSERT OR IGNORE INTO team_table_acl (team_id, table_name) VALUES (?, ?)",
+                (team_id, table),
+            )
+        conn.commit()
+
+    def get_allowed_tables(self, team_id: str) -> list[str] | None:
+        """
+        返回团队可见的表名列表。
+        若该团队没有配置任何 ACL，返回 None（表示不限制，看所有表）。
+        """
+        conn = self._ensure_conn()
+        rows = conn.execute(
+            "SELECT table_name FROM team_table_acl WHERE team_id = ?", (team_id,)
+        ).fetchall()
+        if not rows:
+            return None   # 无限制
+        return [r[0] for r in rows]
+
+    def get_allowed_tables_for_user(self, user_id: str) -> list[str] | None:
+        """根据 user_id 查出所在 team，再返回该 team 的表权限。"""
+        team_id = self.get_team(user_id)
+        return self.get_allowed_tables(team_id)
 
 
 # 全局单例

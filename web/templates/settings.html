@@ -275,6 +275,88 @@
   </div>
 
   {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# 认证鉴权                                                                  #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">认证鉴权</h3>
+      <p class="text-xs text-gray-500 mt-0.5">控制 Web UI 和 API 的访问权限。开启后 Web 页面需要密码登录，API 调用需要 X-API-Key。</p>
+    </div>
+    <form method="post" action="/admin/settings/auth" class="px-6 py-5 space-y-4">
+      <div class="flex items-center justify-between py-2">
+        <div>
+          <label class="text-xs font-medium text-gray-700">启用认证</label>
+          <p class="text-xs text-gray-400 mt-0.5">关闭时所有访问不需要认证</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="enabled"
+                 {% if y.get('server',{}).get('auth',{}).get('enabled', False) %}checked{% endif %}
+                 class="sr-only peer" />
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">管理员密码</label>
+        <input name="admin_password" type="password"
+               value="{{ mask_secret(y.get('server',{}).get('auth',{}).get('admin_password','')) }}"
+               placeholder="设置 Web UI 登录密码"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1">留空则不改变现有密码。以 * 开头的值不会覆盖已有配置。</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">API Keys（每行一个）</label>
+        <textarea name="api_keys" rows="4"
+                  placeholder="每行输入一个 API Key，用于 API 调用鉴权"
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">{{ y.get('server',{}).get('auth',{}).get('api_keys',[]) | join('\n') }}</textarea>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存认证配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# 记忆数据库                                                                 #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">记忆数据库</h3>
+      <p class="text-xs text-gray-500 mt-0.5">存储对话记忆（EMS/SMP）的数据库。支持 SQLite（默认）和 PostgreSQL。</p>
+    </div>
+    <form method="post" action="/admin/settings/memory" class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">Memory DB URL</label>
+        <input name="db_url" type="text"
+               value="{{ y.get('memory',{}).get('db_url','') }}"
+               placeholder="留空使用默认 SQLite（.forge/memory.db）"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1"><code class="font-mono">postgresql://user:pass@host:5432/db</code> 或留空用 SQLite。</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">SQLite 路径（仅 SQLite 模式）</label>
+        <input name="db_path" type="text"
+               value="{{ y.get('memory',{}).get('db_path','.forge/memory.db') }}"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1">仅当 DB URL 为空时生效。</p>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存记忆配置
+        </button>
+      </div>
+    </form>
+    <div class="px-6 pb-5">
+      <div class="bg-blue-50 border border-blue-200 rounded-md px-4 py-3 text-xs text-blue-800">
+        ⚠️ 修改记忆数据库配置后需重启服务才能生效。切换数据库后现有记忆不会自动迁移。
+      </div>
+    </div>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
   {# 运行时状态（只读）                                                         #}
   {# ══════════════════════════════════════════════════════════════════════════ #}
   <div class="border border-gray-200 rounded-lg mb-6">
@@ -305,6 +387,14 @@
             <tr>
               <td class="px-4 py-2.5 text-gray-500">Staging Dir</td>
               <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('staging', {}).get('dir', '.forge/staging') }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Auth Enabled</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('server',{}).get('auth',{}).get('enabled', False) }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Memory DB</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800 break-all">{{ mask_db_url(y.get('memory',{}).get('db_url','') or '.forge/memory.db') }}</td>
             </tr>
           </tbody>
         </table>

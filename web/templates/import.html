@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% set active = "knowledge" %}
+{% block title %}文档导入 — Forge{% endblock %}
+{% block heading %}文档导入{% endblock %}
+
+{% block content %}
+
+<div class="max-w-2xl">
+
+  {# ── 上传表单 ────────────────────────────────────────────────────────────── #}
+  <section id="upload-section" class="mb-8">
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 class="text-base font-semibold text-gray-700 mb-4">上传文件</h2>
+      <p class="text-sm text-gray-500 mb-4">支持 .txt、.md 格式。上传后 LLM 会自动提取知识点供您确认。</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">选择文件</label>
+          <input id="file-input" type="file" accept=".txt,.md"
+                 class="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3
+                        file:rounded file:border-0 file:text-xs file:font-medium
+                        file:bg-gray-900 file:text-white hover:file:bg-gray-700 cursor-pointer" />
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="uploadFile()"
+                  id="upload-btn"
+                  class="bg-blue-600 text-white text-sm px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50">
+            上传并提取
+          </button>
+          <span id="upload-status" class="text-sm text-gray-500 hidden">正在提取中，请稍候...</span>
+        </div>
+      </div>
+      <div id="upload-error" class="hidden mt-3 bg-red-50 border border-red-200 rounded-md px-4 py-2 text-sm text-red-700"></div>
+    </div>
+  </section>
+
+  {# ── 知识点预览 ──────────────────────────────────────────────────────────── #}
+  <section id="preview-section" class="hidden mb-8">
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-base font-semibold text-gray-700">提取结果预览</h2>
+          <p id="preview-filename" class="text-xs text-gray-400 mt-0.5"></p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="selectAll(true)"  class="text-xs text-blue-600 hover:underline">全选</button>
+          <span class="text-gray-300">|</span>
+          <button onclick="selectAll(false)" class="text-xs text-gray-500 hover:underline">全不选</button>
+        </div>
+      </div>
+
+      <div id="preview-list" class="space-y-2 mb-5"></div>
+
+      <div class="flex items-center gap-3 pt-4 border-t border-gray-100">
+        <button onclick="confirmImport()"
+                id="confirm-btn"
+                class="bg-green-600 text-white text-sm px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50">
+          确认导入选中项
+        </button>
+        <button onclick="resetForm()" class="text-sm text-gray-500 hover:text-gray-700">重新上传</button>
+        <span id="confirm-status" class="text-sm text-gray-500 hidden"></span>
+      </div>
+      <div id="confirm-error" class="hidden mt-3 bg-red-50 border border-red-200 rounded-md px-4 py-2 text-sm text-red-700"></div>
+    </div>
+  </section>
+
+  {# ── 导入成功 ────────────────────────────────────────────────────────────── #}
+  <section id="success-section" class="hidden mb-8">
+    <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+      <p class="text-green-800 font-medium text-base mb-1" id="success-msg"></p>
+      <p class="text-green-700 text-sm mb-4">已进入待审核队列，请在知识源页面确认。</p>
+      <div class="flex gap-3 justify-center">
+        <a href="/admin/knowledge" class="bg-green-600 text-white text-sm px-4 py-2 rounded-md hover:bg-green-700">
+          前往审核
+        </a>
+        <button onclick="resetForm()" class="text-sm text-gray-600 hover:text-gray-800 px-4 py-2">
+          继续导入
+        </button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+let _previewItems = [];
+
+async function uploadFile() {
+  const input = document.getElementById('file-input');
+  if (!input.files || !input.files[0]) {
+    showError('upload-error', '请先选择文件');
+    return;
+  }
+  const file = input.files[0];
+  const form = new FormData();
+  form.append('file', file);
+
+  setLoading(true);
+  hideError('upload-error');
+
+  try {
+    const resp = await fetch('/admin/knowledge/import/upload', {method: 'POST', body: form});
+    const data = await resp.json();
+    if (!data.ok) {
+      showError('upload-error', data.detail || '上传失败');
+      return;
+    }
+    _previewItems = data.items;
+    renderPreview(data.items, data.filename);
+    document.getElementById('upload-section').classList.add('hidden');
+    document.getElementById('preview-section').classList.remove('hidden');
+  } catch(e) {
+    showError('upload-error', '网络错误：' + e.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function renderPreview(items, filename) {
+  document.getElementById('preview-filename').textContent = '文件：' + filename + '  共提取 ' + items.length + ' 条';
+  const list = document.getElementById('preview-list');
+  list.innerHTML = '';
+  items.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = 'bg-gray-50 rounded-md border border-gray-200 px-4 py-3 flex items-start gap-3';
+    div.innerHTML = `
+      <input type="checkbox" id="item-${idx}" checked
+             class="mt-0.5 flex-shrink-0 h-4 w-4 rounded border-gray-300 text-blue-600"
+             onchange="_previewItems[${idx}].selected = this.checked" />
+      <label for="item-${idx}" class="flex-1 cursor-pointer">
+        <span class="font-medium text-gray-800 text-sm block">${escHtml(item.key)}</span>
+        <span class="text-gray-500 text-xs mt-0.5 block">${escHtml(item.value)}</span>
+      </label>`;
+    list.appendChild(div);
+  });
+}
+
+async function confirmImport() {
+  const selected = _previewItems.filter(i => i.selected);
+  if (!selected.length) {
+    showError('confirm-error', '请至少选中一条知识点');
+    return;
+  }
+  document.getElementById('confirm-btn').disabled = true;
+  document.getElementById('confirm-status').textContent = '导入中...';
+  document.getElementById('confirm-status').classList.remove('hidden');
+  hideError('confirm-error');
+
+  try {
+    const resp = await fetch('/admin/knowledge/import/confirm', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items: selected}),
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      showError('confirm-error', data.detail || '导入失败');
+      return;
+    }
+    document.getElementById('success-msg').textContent = '成功导入 ' + data.added + ' 条知识点';
+    document.getElementById('preview-section').classList.add('hidden');
+    document.getElementById('success-section').classList.remove('hidden');
+  } catch(e) {
+    showError('confirm-error', '网络错误：' + e.message);
+  } finally {
+    document.getElementById('confirm-btn').disabled = false;
+    document.getElementById('confirm-status').classList.add('hidden');
+  }
+}
+
+function selectAll(checked) {
+  _previewItems.forEach((item, idx) => {
+    item.selected = checked;
+    const cb = document.getElementById('item-' + idx);
+    if (cb) cb.checked = checked;
+  });
+}
+
+function resetForm() {
+  _previewItems = [];
+  document.getElementById('file-input').value = '';
+  document.getElementById('preview-list').innerHTML = '';
+  document.getElementById('upload-section').classList.remove('hidden');
+  document.getElementById('preview-section').classList.add('hidden');
+  document.getElementById('success-section').classList.add('hidden');
+  hideError('upload-error');
+  hideError('confirm-error');
+}
+
+function setLoading(on) {
+  const btn = document.getElementById('upload-btn');
+  const st  = document.getElementById('upload-status');
+  btn.disabled = on;
+  if (on) { st.classList.remove('hidden'); } else { st.classList.add('hidden'); }
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function hideError(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+{% endblock %}

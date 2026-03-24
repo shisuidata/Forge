@@ -2,6 +2,20 @@
 
 `anti` = "不存在于右表"；`semi` = "存在于右表"。绝对禁用 NOT IN（NULL 陷阱）。
 
+⚠️ **`scan` 必须是主表（保留行的那张表）**：
+- `scan` = 你想保留数据行的表（"从哪张表查"）
+- `joins[].table` + `type: anti` = 你要排除的那张表
+- 常见错误：把被排除的表写成 `scan`，主表反而放在 join 里 → 结果完全相反
+
+```json
+// ❌ 错误：scan 写了被排除的表
+{"scan": "orders", "joins": [{"type": "anti", "table": "users", "on": {...}}]}
+// 上面查的是"在 users 中不存在的 orders"，而不是"没下单的用户"
+
+// ✅ 正确：scan 是你想保留的主表（users），orders 是被排除的表
+{"scan": "users", "joins": [{"type": "anti", "table": "orders", "on": {...}}]}
+```
+
 ### 关键：`filter` 字段
 
 当需要"从未做过某类操作"（而非"完全没有记录"）时，用 `anti` join 的 `filter` 字段指定条件。

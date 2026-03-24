@@ -124,6 +124,20 @@ class Config:
     HOST: str = _env("HOST", "server", "host", default="0.0.0.0")
     PORT: int = int(_env("PORT", "server", "port", default="8000"))
 
+    # ── 认证鉴权 ───────────────────────────────────────────────────────────────
+    AUTH_ENABLED:        bool      = _y("server", "auth", "enabled", default="false").lower() == "true"
+    AUTH_ADMIN_PASSWORD: str       = (
+        os.getenv("AUTH_PASSWORD")
+        or _y("server", "auth", "admin_password", default="")
+    )
+    AUTH_API_KEYS:       list[str] = [
+        k for k in (
+            os.getenv("AUTH_API_KEYS", "").split(",")
+            + (_yaml.get("server", {}).get("auth", {}).get("api_keys") or [])
+        )
+        if k
+    ]
+
 
 # 全局单例
 cfg = Config()

@@ -1,22 +1,26 @@
 """
-Method S — large 数据集 × Claude Sonnet 4.6（原生 Anthropic API）
+Method S — large 数据集 × MiniMax M2.7-highspeed，P0 修复后基准
 
-用于对比 Forge DSL + Claude 在大 Schema（200 张表）场景下的 EA。
-与 Method R（M2.7）和 Method N（DeepSeek）横向对比。
+与 Method R 完全一致，用于验证以下 P0 修复的实际 EA 提升：
+  1. antijoin.md — 新增 scan 必须是主表的警告和反例
+  2. field_conventions.registry.yaml — 新增 category_output_name 约定
+     （品类查询输出 category_name 而非 category_id）
+
 数据集：tests/datasets/large/（40 个用例，200 张表电商数仓）
+对比基准：Method R = 67.5%
 """
 from pathlib import Path
 
 METHOD_ID = "s"
-LABEL = "Method S（large 数据集，Claude Sonnet 4.6）"
+LABEL = "Method S（large 数据集，MiniMax M2.7-highspeed，P0修复后）"
 MODE = "forge"
 USE_SEMANTIC_LIB = True
 RUNS = 3
 DATASET = "large"
-NOTES = "2026-03-18 Claude Sonnet 4.6 × large 数据集基准"
+NOTES = "2026-03-25 P0修复后（antijoin scan警告 + category_output_name约定）"
 
-MODEL    = "claude-sonnet-4-6"
-BASE_URL = "anthropic"          # 触发原生 Anthropic API 路径（非 MiniMax）
+MODEL = "MiniMax-M2.7-highspeed"
+BASE_URL = "https://api.minimaxi.com/anthropic"
 
 _DATASETS_DIR = Path(__file__).parent.parent.parent / "datasets"
 

@@ -473,7 +473,8 @@ def _extract_hint_tables(error: str, registry: dict) -> list[str]:
 
 def call(history: list[Any], extra_tables: list[str] | None = None,
          system_override: str | None = None,
-         knowledge_context: str = "") -> dict:
+         knowledge_context: str = "",
+         allowed_tables: list[str] | None = None) -> dict:
     """
     LLM 统一调用入口。
 
@@ -482,6 +483,7 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
         extra_tables:      强制追加到检索结果的表名列表。
         system_override:   自定义 system prompt（纯文字模式，无 tools）。
         knowledge_context: SMP 知识文本，追加到 system prompt 尾部。
+        allowed_tables:    数据权限白名单；非 None 时只把该列表内的表暴露给 LLM。
 
     Returns:
         {"tool": str, "input": dict}  — LLM 调用了工具
@@ -526,19 +528,32 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     if current_question and retriever:
         top_k = getattr(cfg, "RETRIEVAL_TOP_K", 10)
         try:
-            selected_tables = retriever.retrieve(current_question, q_embed_fn, top_k=top_k)
+            selected_tables = retriever.retrieve(
+                current_question, q_embed_fn, top_k=top_k,
+                allowed_tables=allowed_tables,
+            )
         except (ValueError, OSError, TypeError) as exc:
             logger.warning("Schema retrieval failed, using all tables: %s", exc)
-            selected_tables = list(registry.get("tables", {}).keys())
-        # 错误驱动二次召回：追加缺失表（去重，保持顺序）
+            all_tables = list(registry.get("tables", {}).keys())
+            selected_tables = (
+                [t for t in all_tables if t in set(allowed_tables)]
+                if allowed_tables is not None else all_tables
+            )
+        # 错误驱动二次召回：追加缺失表（去重，保持顺序；extra_tables 也受权限约束）
         if extra_tables:
             seen = set(selected_tables)
+            allowed_set = set(allowed_tables) if allowed_tables is not None else None
             for t in extra_tables:
-                if t not in seen:
+                if t not in seen and (allowed_set is None or t in allowed_set):
                     selected_tables.append(t)
                     seen.add(t)
         tables_info = registry.get("tables", {})
         filtered_registry = {"tables": {t: tables_info[t] for t in selected_tables if t in tables_info}}
+    elif allowed_tables is not None:
+        # 无检索器但有权限限制：直接过滤 registry
+        tables_info = registry.get("tables", {})
+        allowed_set = set(allowed_tables)
+        filtered_registry = {"tables": {t: tables_info[t] for t in allowed_set if t in tables_info}}
 
     tools = _build_tools(filtered_registry)
     system = build_system(_registry_context(question=current_question), question=current_question)

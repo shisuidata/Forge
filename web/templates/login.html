@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 — Forge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex h-screen items-center justify-center bg-gray-950 font-sans text-sm text-gray-200">
+
+  <div class="w-full max-w-sm px-6">
+    <!-- Logo / Title -->
+    <div class="mb-8 text-center">
+      <span class="text-white font-semibold text-xl tracking-wide">Forge</span>
+      <span class="text-gray-500 text-xs ml-1.5">AI SQL Agent</span>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl px-8 py-8 shadow-xl">
+      <h1 class="text-base font-semibold text-gray-100 mb-6">登录</h1>
+
+      {% if error %}
+      <div class="mb-4 px-3 py-2.5 rounded-lg bg-red-950 border border-red-800 text-red-300 text-xs">
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <form method="POST" action="/login">
+        {% if next %}
+        <input type="hidden" name="next" value="{{ next }}" />
+        {% endif %}
+
+        <div class="mb-5">
+          <label for="password" class="block text-xs font-medium text-gray-400 mb-1.5">密码</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            autofocus
+            required
+            placeholder="请输入访问密码"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-100
+                   placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent
+                   transition-colors"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="w-full bg-gray-100 hover:bg-white text-gray-900 font-semibold text-sm
+                 py-2.5 rounded-lg transition-colors"
+        >
+          进入
+        </button>
+      </form>
+    </div>
+
+    <p class="mt-6 text-center text-xs text-gray-600">
+      Forge v0.1.0 · 私有化部署
+    </p>
+  </div>
+
+</body>
+</html>

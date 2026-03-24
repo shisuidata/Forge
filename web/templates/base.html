@@ -94,6 +94,25 @@
         </svg>
         对话日志
       </a>
+      <a href="/admin/memory"
+         class="flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors
+                {% if active == 'memory' %}bg-gray-800 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+        </svg>
+        记忆管理
+        {% if active == 'memory' %}<span class="sr-only">(当前页)</span>{% endif %}
+      </a>
+      <a href="/admin/teams"
+         class="flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors
+                {% if active == 'teams' %}bg-gray-800 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        团队权限
+        {% if active == 'teams' %}<span class="sr-only">(当前页)</span>{% endif %}
+      </a>
       <a href="/admin/audit"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
                 {% if active == 'audit' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">

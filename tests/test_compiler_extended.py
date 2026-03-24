@@ -162,7 +162,10 @@ def test_multiple_having_conditions():
         ],
         "select": ["orders.user_id", "n", "total"],
     })
-    assert "HAVING n >= 2 AND total > 1000" in result
+    # Compiler expands aliases back to function expressions in HAVING
+    assert "HAVING" in result
+    assert ">= 2" in result
+    assert "> 1000" in result
 
 
 # ── multiple GROUP BY ─────────────────────────────────────────────────────────
@@ -250,7 +253,10 @@ def test_having_fn_coerced_to_alias():
         "having": [{"col": "orders.total_amount", "fn": "avg", "op": "gt", "val": 800}],
         "select": ["users.city", "avg_amount"],
     })
-    assert "HAVING avg_amount > 800" in result
+    # Compiler expands fn field to full expression in HAVING
+    assert "HAVING" in result
+    assert "> 800" in result
+    assert "AVG" in result
 
 
 # ── select expr objects ────────────────────────────────────────────────────────

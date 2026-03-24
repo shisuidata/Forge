@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from config import cfg
 from agent.feishu import dispatcher
 from web.router import chat_router, router as admin_router
+from web.auth import _LoginRedirect
 
 # ── 日志配置（可通过 forge.yaml 或环境变量调整）──────────────────────────────
 _log_handlers: list[logging.Handler] = [logging.StreamHandler()]
@@ -38,6 +39,13 @@ app = FastAPI(title="Forge Agent")
 app.include_router(chat_router)
 # Admin 管理后台路由保持 /admin 前缀
 app.include_router(admin_router, prefix="/admin")
+
+
+@app.exception_handler(_LoginRedirect)
+async def login_redirect_handler(request: Request, exc: _LoginRedirect):
+    """将 require_web_auth 抛出的 _LoginRedirect 转为 302 → /login。"""
+    next_path = exc.next_path or request.url.path
+    return RedirectResponse(url=f"/login?next={next_path}", status_code=302)
 
 
 @app.get("/")

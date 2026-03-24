@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% set active = "teams" %}
+{% block title %}团队权限 — Forge{% endblock %}
+{% block heading %}团队权限管理{% endblock %}
+
+{% block content %}
+
+{% if flash %}
+<div class="mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded-md text-sm text-green-700">
+  {{ flash }}
+</div>
+{% endif %}
+
+{# ── 团队列表 ──────────────────────────────────────────────────────────────── #}
+<div class="mb-6">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h2 class="text-base font-semibold text-gray-900">团队列表</h2>
+      <p class="text-xs text-gray-500 mt-0.5">为每个团队配置可见数据表，未配置任何限制的团队可访问所有表</p>
+    </div>
+    <button id="toggle-create-form"
+            onclick="document.getElementById('create-form').classList.toggle('hidden')"
+            class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md hover:bg-gray-700 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      新建团队
+    </button>
+  </div>
+
+  {# 新建团队内联表单 #}
+  <div id="create-form" class="hidden mb-4 bg-white border border-gray-200 rounded-lg p-4">
+    <h3 class="text-sm font-medium text-gray-800 mb-3">新建团队</h3>
+    <form method="post" action="/admin/teams/create" class="flex items-end gap-3">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">团队 ID <span class="text-red-500">*</span></label>
+        <input type="text" name="team_id" placeholder="e.g. marketing" required
+               class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">显示名称</label>
+        <input type="text" name="display_name" placeholder="e.g. 市场团队"
+               class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" />
+      </div>
+      <button type="submit"
+              class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
+        保存
+      </button>
+      <button type="button"
+              onclick="document.getElementById('create-form').classList.add('hidden')"
+              class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">
+        取消
+      </button>
+    </form>
+  </div>
+
+  {# 团队表格 #}
+  {% if teams %}
+  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <table class="min-w-full text-sm divide-y divide-gray-100">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-2.5 text-left">团队</th>
+          <th class="px-4 py-2.5 text-left">成员数</th>
+          <th class="px-4 py-2.5 text-left">数据权限</th>
+          <th class="px-4 py-2.5 text-left">操作</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for team in teams %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <div class="font-medium text-gray-900">{{ team.display_name or team.team_id }}</div>
+            <div class="text-xs text-gray-400">{{ team.team_id }}</div>
+          </td>
+          <td class="px-4 py-3 text-gray-600">
+            {{ team.member_count }} 人
+          </td>
+          <td class="px-4 py-3">
+            {% if team.allowed_tables is none %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">不限制</span>
+            {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{{ team.allowed_tables|length }} 张表</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <a href="/admin/teams/{{ team.team_id }}/members"
+                 class="text-xs text-blue-600 hover:text-blue-800 hover:underline">
+                管理成员
+              </a>
+              <span class="text-gray-300">|</span>
+              <button onclick="toggleAcl('acl-{{ team.team_id }}')"
+                      class="text-xs text-gray-600 hover:text-gray-900 hover:underline">
+                配置权限
+              </button>
+            </div>
+          </td>
+        </tr>
+        {# ACL 内联展开行 #}
+        <tr id="acl-{{ team.team_id }}" class="hidden bg-gray-50">
+          <td colspan="4" class="px-4 py-4">
+            <div class="max-w-3xl">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-semibold text-gray-800">
+                  {{ team.display_name or team.team_id }} — 可见数据表
+                </h4>
+                <span class="text-xs text-gray-500">未选中任何表 = 不限制（所有表可见）</span>
+              </div>
+
+              <form method="post" action="/admin/teams/{{ team.team_id }}/acl">
+                {# 全选/全不选 #}
+                {% if all_tables %}
+                <div class="flex gap-2 mb-3">
+                  <button type="button"
+                          onclick="setAllCheckboxes('boxes-{{ team.team_id }}', true)"
+                          class="text-xs text-blue-600 hover:text-blue-800 hover:underline">全选</button>
+                  <span class="text-gray-300">·</span>
+                  <button type="button"
+                          onclick="setAllCheckboxes('boxes-{{ team.team_id }}', false)"
+                          class="text-xs text-gray-500 hover:text-gray-700 hover:underline">全不选</button>
+                </div>
+
+                <div id="boxes-{{ team.team_id }}" class="grid grid-cols-2 gap-1.5 mb-4">
+                  {% for tbl in all_tables %}
+                  <label class="flex items-center gap-2 text-xs text-gray-700 hover:text-gray-900 cursor-pointer">
+                    <input type="checkbox" name="tables" value="{{ tbl }}"
+                           {% if team.allowed_tables is not none and tbl in team.allowed_tables %}checked{% endif %}
+                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                    <span class="font-mono">{{ tbl }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-xs text-gray-400 mb-3">未找到任何表（schema.registry.json 为空或未初始化）</p>
+                {% endif %}
+
+                <div class="flex gap-2">
+                  <button type="submit"
+                          class="px-4 py-1.5 bg-gray-900 text-white text-xs rounded-md hover:bg-gray-700 transition-colors">
+                    保存权限
+                  </button>
+                  <button type="button"
+                          onclick="toggleAcl('acl-{{ team.team_id }}')"
+                          class="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+                    收起
+                  </button>
+                </div>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white border border-gray-200 rounded-lg px-6 py-10 text-center">
+    <p class="text-gray-400 text-sm">暂无团队，点击右上角"新建团队"创建第一个团队</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function toggleAcl(rowId) {
+  const row = document.getElementById(rowId);
+  if (row) row.classList.toggle('hidden');
+}
+
+function setAllCheckboxes(containerId, checked) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = checked);
+}
+</script>
+
+{% endblock %}

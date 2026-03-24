@@ -58,8 +58,17 @@ class SemanticMemoryPool:
             logger.warning("SMP DB init failed: %s", exc)
 
     def _ensure_conn(self):
+        from agent.db import get_connection_raw
         if self._conn is None:
-            from agent.db import get_connection_raw
+            self._conn = get_connection_raw()
+            return self._conn
+        try:
+            self._conn.execute("SELECT 1")
+        except Exception:
+            try:
+                self._conn._conn.rollback()
+            except Exception:
+                pass
             self._conn = get_connection_raw()
         return self._conn
 

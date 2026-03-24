@@ -256,6 +256,7 @@ class SchemaRetriever:
         question: str,
         embed_fn: Callable[[list[str]], np.ndarray] | None = None,
         top_k: int = 3,
+        allowed_tables: list[str] | None = None,
     ) -> list[str]:
         """
         三层检索策略，返回与问题相关的表名列表。
@@ -272,15 +273,24 @@ class SchemaRetriever:
             确保 JOIN 所需的父表不被遗漏（如 order_items → orders → users）。
 
         Args:
-            question: 用户自然语言问题
-            embed_fn: 嵌入函数（可 None，触发降级）
-            top_k:    Phase 1+2 的初始召回数量（FK 扩展后可能更多）
+            question:       用户自然语言问题
+            embed_fn:       嵌入函数（可 None，触发降级）
+            top_k:          Phase 1+2 的初始召回数量（FK 扩展后可能更多）
+            allowed_tables: 数据权限白名单；非 None 时只在该列表内检索
 
         Returns:
             表名列表，按相关度降序排列（Phase 1 优先，FK 扩展附加在后）
         """
-        if top_k >= len(self.tables):
-            return list(self.tables)
+        # 数据权限：限制可见表范围
+        effective_tables = self.tables
+        if allowed_tables is not None:
+            allowed_set = set(allowed_tables)
+            effective_tables = [t for t in self.tables if t in allowed_set]
+            if not effective_tables:
+                return []
+
+        if top_k >= len(effective_tables):
+            return list(effective_tables)
 
         # 动态 top_k：根据问题中实体数量自动调整召回数
         # 每识别到一个独立实体词（"品牌" "退款" "渠道"）+1，上限为 top_k * 2
@@ -304,19 +314,23 @@ class SchemaRetriever:
         col_tables = self._retrieve_by_columns(question, top_k)
 
         # 合并优先级：metric_tables > vector/BM25 > column match
+        allowed_set = set(effective_tables) if allowed_tables is not None else None
         seen: set[str] = set()
         merged: list[str] = []
         for t in metric_tables + candidates:
-            if t not in seen:
+            if t not in seen and (allowed_set is None or t in allowed_set):
                 seen.add(t)
                 merged.append(t)
         for t in col_tables:
-            if t not in seen:
+            if t not in seen and (allowed_set is None or t in allowed_set):
                 seen.add(t)
                 merged.append(t)
 
-        # Phase 3：FK 扩展
-        return self._expand_fks(merged)
+        # Phase 3：FK 扩展（扩展后也过滤权限）
+        expanded = self._expand_fks(merged)
+        if allowed_set is not None:
+            expanded = [t for t in expanded if t in allowed_set]
+        return expanded
 
     def _dynamic_top_k(self, question: str, base_k: int) -> int:
         """

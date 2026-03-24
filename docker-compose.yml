@@ -29,9 +29,8 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./registry:/app/registry
-      - ./forge.yaml:/app/forge.yaml
-      - forge-data:/app/.forge
+      - .:/app                          # 源码热挂载，改代码无需重建镜像
+      - forge-data:/app/.forge          # 持久化 staging / 缓存
     restart: unless-stopped
 
 volumes:

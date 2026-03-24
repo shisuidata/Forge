@@ -161,7 +161,8 @@ class StageRun:
             "duration_ms": self.duration_ms, "error": self.error,
         }
         if self.artifact:
-            d["artifact"] = self.artifact.to_dict()
+            d["artifact"] = (self.artifact if isinstance(self.artifact, dict)
+                             else self.artifact.to_dict())
         return d
 
 

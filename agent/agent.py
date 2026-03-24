@@ -116,12 +116,19 @@ def process(user_id: str, user_text: str) -> AgentResponse:
     # 重试期间的临时消息用 retry_messages 维护，不写入 EMS（避免污染）
     retry_messages: list[dict] = []
 
+    # 数据权限：查询该用户所属团队的可见表白名单
+    from agent.tenant import tenants as _tenants
+    _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
+
     for attempt in range(1 + MAX_RETRIES):
         # 从 WMB 构建基础消息 + 拼接重试上下文 + 上一轮用过的表
         messages, knowledge, extra_tables = memory.build("query", user_id, user_text)
         if retry_messages:
             messages = messages + retry_messages
-        result = llm.call(messages, knowledge_context=knowledge, extra_tables=extra_tables)
+        result = llm.call(
+            messages, knowledge_context=knowledge,
+            extra_tables=extra_tables, allowed_tables=_allowed_tables,
+        )
 
         # ── 文字回复：无工具调用，直接透传 ───────────────────────────────────
         if result["tool"] is None:

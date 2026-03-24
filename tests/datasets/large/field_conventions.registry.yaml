@@ -51,6 +51,16 @@ unit_price_calculation:
     不要用 SUM(total_amount)/COUNT(user_id) 这种用户级别的均值代替客单价。
   confirmed_by_users: false
 
+category_output_name:
+  label: 品类输出字段优先用 category_name
+  applies_to: [dim_category.category_id, dim_category.category_name]
+  convention: |
+    用户提问中出现"品类"、"类别"、"品类名"等词时，select 输出应包含 dim_category.category_name（可读名称），
+    而不是 dim_category.category_id（内部 ID）。
+    只有用户明确说"按品类 ID 分组"或"需要品类 ID"时，才输出 category_id。
+    若 GROUP BY 含 category_name，建议同时加 category_id（见 category_group_by 约定）。
+  confirmed_by_users: true
+
 refund_rate_join:
   label: 退款率的计算方式
   applies_to: [dwd_refund_detail.order_id, dwd_order_detail.order_id]

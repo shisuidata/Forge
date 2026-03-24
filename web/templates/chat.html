@@ -362,6 +362,14 @@ async function approveSQL(btn) {
     } else if (data.text) {
       addMessage('bot', data.text);
     }
+
+    // Pipeline 后续阶段结果（分析报告 + 图表）
+    if (data.analysis) {
+      addAnalysisCard(data.analysis);
+    }
+    if (data.chart_html) {
+      addChartCard(data.chart_html);
+    }
   } catch (err) {
     addMessage('system', '执行失败：' + err.message);
     btnGroup.querySelectorAll('button').forEach(b => b.disabled = false);
@@ -466,6 +474,64 @@ input.addEventListener('input', () => {
 });
 
 input.focus();
+
+// ── Pipeline 分析报告卡片 ────────────────────────────────────────────────────
+function addAnalysisCard(analysis) {
+  if (welcomeVisible) { messagesEl.innerHTML = ''; welcomeVisible = false; }
+  const wrapper = document.createElement('div');
+  wrapper.className = 'max-w-3xl mx-auto flex justify-start';
+
+  const dirIcon = { up: '↑', down: '↓', stable: '→', mixed: '↕' };
+  const dirColor = { up: 'text-green-600', down: 'text-red-600', stable: 'text-gray-600', mixed: 'text-yellow-600' };
+  const dir = analysis.trend_direction || '';
+
+  const insightsHtml = (analysis.insights || []).map(i =>
+    `<li class="text-xs text-gray-700 leading-relaxed">${escapeHtml(i)}</li>`
+  ).join('');
+
+  const metricsHtml = Object.entries(analysis.key_metrics || {}).map(([k, v]) =>
+    `<div class="bg-gray-50 rounded px-3 py-2 text-center">
+       <div class="text-xs text-gray-500">${escapeHtml(k)}</div>
+       <div class="text-sm font-semibold text-gray-900 font-mono">${escapeHtml(String(v))}</div>
+     </div>`
+  ).join('');
+
+  const recHtml = (analysis.recommendations || []).map(r =>
+    `<li class="text-xs text-gray-700 leading-relaxed">${escapeHtml(r)}</li>`
+  ).join('');
+
+  wrapper.innerHTML = `
+    <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
+      <div class="px-4 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+        <span class="text-xs font-medium text-blue-800">📊 数据分析</span>
+        ${dir ? `<span class="text-xs font-semibold ${dirColor[dir] || 'text-gray-600'}">${dirIcon[dir] || ''} ${dir}</span>` : ''}
+      </div>
+      <div class="p-4 space-y-3">
+        ${analysis.summary ? `<p class="text-sm font-medium text-gray-900">${escapeHtml(analysis.summary)}</p>` : ''}
+        ${metricsHtml ? `<div class="grid grid-cols-3 gap-2">${metricsHtml}</div>` : ''}
+        ${insightsHtml ? `<div><div class="text-xs font-semibold text-gray-500 mb-1">关键洞察</div><ul class="space-y-1 list-disc list-inside">${insightsHtml}</ul></div>` : ''}
+        ${recHtml ? `<div><div class="text-xs font-semibold text-gray-500 mb-1">建议</div><ul class="space-y-1 list-disc list-inside">${recHtml}</ul></div>` : ''}
+      </div>
+    </div>`;
+  messagesEl.appendChild(wrapper);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ── 图表卡片 ─────────────────────────────────────────────────────────────────
+function addChartCard(chartHtml) {
+  if (welcomeVisible) { messagesEl.innerHTML = ''; welcomeVisible = false; }
+  const wrapper = document.createElement('div');
+  wrapper.className = 'max-w-3xl mx-auto flex justify-start';
+  wrapper.innerHTML = `
+    <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
+      <div class="px-4 py-2.5 bg-purple-50 border-b border-purple-100">
+        <span class="text-xs font-medium text-purple-800">📈 可视化图表</span>
+      </div>
+      <div class="p-2">${chartHtml}</div>
+    </div>`;
+  messagesEl.appendChild(wrapper);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
 </script>
 </body>
 </html>

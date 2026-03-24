@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% set active = "memory" %}
+{% block title %}记忆管理 — Forge{% endblock %}
+{% block heading %}记忆管理{% endblock %}
+
+{% block content %}
+
+{% if flash %}
+<div class="mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded-md text-sm text-green-700">
+  {{ flash }}
+</div>
+{% endif %}
+
+{# ── SMP 语义记忆 ─────────────────────────────────────────────────────────── #}
+<div class="mb-8">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h2 class="text-base font-semibold text-gray-900">SMP 语义记忆</h2>
+      <p class="text-xs text-gray-500 mt-0.5">Forge 从对话中提炼的结构化知识，org 级对所有用户可见，user 级只对本人可见</p>
+    </div>
+    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+      {{ smp_entries|length }} 条
+    </span>
+  </div>
+
+  {% if smp_entries %}
+  {# 按 scope 分组 #}
+  {% set scopes = ['org', 'team', 'user'] %}
+  {% for scope in scopes %}
+  {% set scope_entries = smp_entries | selectattr("scope", "equalto", scope) | list %}
+  {% if scope_entries %}
+  <details class="mb-3 bg-white border border-gray-200 rounded-lg overflow-hidden" open>
+    <summary class="flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-gray-50 select-none">
+      {% if scope == 'org' %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">org</span>
+      {% elif scope == 'team' %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">team</span>
+      {% else %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">user</span>
+      {% endif %}
+      <span class="text-sm font-medium text-gray-700">{{ scope }} 级</span>
+      <span class="text-xs text-gray-400 ml-1">({{ scope_entries|length }} 条)</span>
+    </summary>
+    <div class="border-t border-gray-100">
+      <table class="min-w-full text-sm divide-y divide-gray-100">
+        <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr>
+            <th class="px-4 py-2.5 text-left w-20">Scope</th>
+            <th class="px-4 py-2.5 text-left">Category</th>
+            <th class="px-4 py-2.5 text-left">Key</th>
+            <th class="px-4 py-2.5 text-left">Value</th>
+            <th class="px-4 py-2.5 text-center w-20">信度</th>
+            <th class="px-4 py-2.5 text-left w-28">更新时间</th>
+            <th class="px-4 py-2.5 text-center w-16">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for entry in scope_entries %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2.5">
+              {% if entry.scope == 'org' %}
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">org</span>
+              {% elif entry.scope == 'team' %}
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">team</span>
+              {% else %}
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">user</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-gray-600 font-mono">{{ entry.category }}</td>
+            <td class="px-4 py-2.5 text-xs text-gray-800 font-medium">{{ entry.key }}</td>
+            <td class="px-4 py-2.5 text-xs text-gray-600 max-w-xs">
+              {% set val_str = json.dumps(entry.value, ensure_ascii=False) if entry.value is mapping or entry.value is iterable and entry.value is not string else entry.value|string %}
+              {% if val_str|length > 60 %}
+              <span title="{{ val_str }}">{{ val_str[:60] }}…</span>
+              {% else %}
+              {{ val_str }}
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-gray-500 text-center">
+              {% if entry.confidence is not none %}
+              {{ "%.2f"|format(entry.confidence|float) }}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td class="px-4 py-2.5 text-xs text-gray-400">
+              {{ entry.updated_at[:10] if entry.updated_at else "—" }}
+            </td>
+            <td class="px-4 py-2.5 text-center">
+              <form method="post" action="/admin/memory/smp/delete/{{ entry.id }}"
+                    onsubmit="return confirm('确认删除这条记忆？')">
+                <button type="submit"
+                        class="text-red-400 hover:text-red-600 transition-colors"
+                        title="删除">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+  {% endfor %}
+  {% else %}
+  <div class="bg-white border border-gray-200 rounded-lg px-6 py-10 text-center text-gray-400">
+    <svg class="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+    </svg>
+    <p class="text-sm">暂无语义记忆</p>
+    <p class="text-xs mt-1">对话过程中 Forge 积累的知识将显示在此处</p>
+  </div>
+  {% endif %}
+</div>
+
+{# ── EMS 情景记忆统计 ─────────────────────────────────────────────────────── #}
+<div class="mb-8">
+  <div class="mb-3">
+    <h2 class="text-base font-semibold text-gray-900">EMS 情景记忆统计</h2>
+    <p class="text-xs text-gray-500 mt-0.5">对话历史的统计概览，按用户维度管理</p>
+  </div>
+
+  {# 统计卡片 #}
+  <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="bg-white border border-gray-200 rounded-lg px-5 py-4">
+      <p class="text-xs text-gray-500 mb-1">总 Session 数</p>
+      <p class="text-2xl font-semibold text-gray-900">{{ ems_stats.total_sessions }}</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-lg px-5 py-4">
+      <p class="text-xs text-gray-500 mb-1">总事件数</p>
+      <p class="text-2xl font-semibold text-gray-900">{{ ems_stats.total_events }}</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-lg px-5 py-4">
+      <p class="text-xs text-gray-500 mb-1">活跃用户数</p>
+      <p class="text-2xl font-semibold text-gray-900">{{ ems_stats.active_users }}</p>
+    </div>
+  </div>
+
+  {# 用户明细 #}
+  {% if ems_stats.users %}
+  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
+    <table class="min-w-full text-sm divide-y divide-gray-200">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left">用户 ID</th>
+          <th class="px-4 py-3 text-right">Session 数</th>
+          <th class="px-4 py-3 text-left">最后活跃</th>
+          <th class="px-4 py-3 text-center w-24">操作</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for u in ems_stats.users %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3 text-xs font-mono text-gray-800">{{ u.user_id }}</td>
+          <td class="px-4 py-3 text-xs text-gray-600 text-right">{{ u.sessions }}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">
+            {{ u.last_active[:19].replace("T"," ") if u.last_active else "—" }}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <form method="post" action="/admin/memory/ems/clear/{{ u.user_id }}"
+                  onsubmit="return confirm('确认清空用户 {{ u.user_id }} 的所有情景记忆？')">
+              <button type="submit"
+                      class="text-xs text-orange-500 hover:text-orange-700 border border-orange-200 hover:border-orange-400 px-2 py-1 rounded transition-colors">
+                清空
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center text-gray-400 mb-6">
+    <p class="text-sm">暂无情景记忆数据</p>
+  </div>
+  {% endif %}
+
+  {# 危险区 #}
+  <div class="border border-red-200 bg-red-50 rounded-lg px-5 py-4">
+    <h3 class="text-sm font-semibold text-red-700 mb-1">危险操作</h3>
+    <p class="text-xs text-red-600 mb-3">以下操作不可撤销，请谨慎操作</p>
+    <form method="post" action="/admin/memory/ems/clear-all"
+          onsubmit="return confirm('警告：此操作将清空所有用户的全部情景记忆，且无法恢复。\n\n确认继续？')">
+      <button type="submit"
+              class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-4 py-2 rounded-md transition-colors">
+        清空所有情景记忆
+      </button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

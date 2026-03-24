@@ -44,7 +44,17 @@
 | 连接条件 | `"on": "a.id = b.id"` | `"on": {"left": "a.id", "right": "b.id"}` |
 | 过滤条件 | `"where": {...}` 或 `"filter": {"and":[...]}` | `"filter": [{...}, {...}]`（平铺数组，多项自动 AND） |
 | 分组 | `"group_by": [...]` 或 `"groupby": [...]` | `"group": [...]` |
-| 排序 | `"order_by": [...]` 或 `[{"desc": "col"}]` | `"sort": [{"col": "字段", "dir": "desc"}]` |
+| 排序 | `"order_by": [...]` 或 `[{"col": "x"}]`（**缺 dir**） | `"sort": [{"col": "字段", "dir": "desc"}]`（**dir 是必填项，asc 或 desc，绝不能省略**） |
 | 比较运算符 | `"op": "<"` 或 `"op": ">"` | `"op": "lt"` / `"op": "gt"` |
 | 按月分组 | `{"col": "created_at", "fn": "month"}` | `{"expr": "STRFTIME('%Y-%m', orders.created_at)", "as": "month"}` |
 | 条件聚合数量 | `{"fn": "count_all", "filter": [...]}` | `{"fn": "count", "col": "table.id", "filter": [...], "as": "n"}` |
+
+⚠️ **sort.dir 是必填字段**：每个 sort 节点必须同时包含 `col` 和 `dir`（值为 `"asc"` 或 `"desc"`），缺少 `dir` 会导致编译失败。
+
+```json
+// ❌ 错误：缺少 dir
+"sort": [{"col": "total_sales"}]
+
+// ✅ 正确：必须指定方向
+"sort": [{"col": "total_sales", "dir": "desc"}]
+```

@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -46,13 +46,20 @@ from forge.executor import execute_with_data
 from config import cfg
 from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
+from web.auth import (
+    require_web_auth,
+    require_api_auth,
+    set_session_cookie,
+    clear_session_cookie,
+    _LoginRedirect,
+)
 
 logger = logging.getLogger(__name__)
 
 # Chat / API 路由 — 挂载在根级别
 chat_router = APIRouter()
-# Admin 路由 — 挂载在 /admin 前缀下
-router = APIRouter()
+# Admin 路由 — 挂载在 /admin 前缀下（全部路由需要 Web 登录验证）
+router = APIRouter(dependencies=[Depends(require_web_auth)])
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -60,6 +67,42 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 def _tojson_cn(value):
     return json.dumps(value, ensure_ascii=False)
 templates.env.filters["tojson_cn"] = _tojson_cn
+
+
+# ── 认证路由（login / logout）─────────────────────────────────────────────────
+
+@chat_router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: str = "/chat"):
+    return templates.TemplateResponse(
+        request, "login.html", {"error": None, "next": next}
+    )
+
+
+@chat_router.post("/login", response_class=HTMLResponse)
+async def login_submit(
+    request: Request,
+    password: str = Form(...),
+    next: str = Form(default="/chat"),
+):
+    expected = cfg.AUTH_ADMIN_PASSWORD
+    # auth disabled 或未设密码时任意密码均可通过
+    if not cfg.AUTH_ENABLED or not expected or password == expected:
+        response = RedirectResponse(url=next or "/chat", status_code=303)
+        set_session_cookie(response, "admin")
+        return response
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {"error": "密码错误，请重试", "next": next},
+        status_code=401,
+    )
+
+
+@chat_router.get("/logout")
+async def logout():
+    response = RedirectResponse(url="/login", status_code=302)
+    clear_session_cookie(response)
+    return response
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -124,56 +167,126 @@ def _run_sync(fn, *args):
 
 
 @chat_router.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request):
-    return templates.TemplateResponse("chat.html", {"request": request})
+async def chat_page(request: Request, _auth=Depends(require_web_auth)):
+    return templates.TemplateResponse(request, "chat.html", {})
 
 
 @chat_router.post("/api/chat", response_class=JSONResponse)
-async def api_chat(req: ChatRequest):
-    """调用 Agent process，返回 AgentResponse 的 JSON 表示。"""
-    resp = await _run_sync(agent_process, req.user_id, req.message)
-    # 写入审计日志
-    status_map = {"sql_review": "pending", "error": "error", "metric_saved": "approved"}
-    await audit.log(
-        user_id=req.user_id,
-        user_message=req.message,
-        forge_json=resp.forge_json,
-        sql=resp.sql,
-        status=status_map.get(resp.action, "approved"),
-        error_message=resp.text if resp.action == "error" else None,
-    )
-    return {
-        "text": resp.text,
-        "sql": resp.sql,
-        "forge_json": resp.forge_json,
-        "action": resp.action,
-    }
+async def api_chat(req: ChatRequest, _auth=Depends(require_api_auth)):
+    """调用 Agent process，分析/可视化意图自动走 Pipeline；其他走普通查询。"""
+    from agent.pipeline import router as intent_router, runner as pipeline_runner
+
+    pipeline_name = intent_router.route(req.message)
+
+    if pipeline_name in ("analyze", "visualize", "report"):
+        # Pipeline 模式：run() 返回 pending_approval 状态，等待用户确认 SQL
+        run = await _run_sync(pipeline_runner.run, pipeline_name, req.user_id, req.message)
+        # 取 generate stage 的结果（SQL + text）
+        gen_stage = next((s for s in run.stages if s.stage == "generate"), None)
+        art = gen_stage.artifact if gen_stage else None
+        sql = getattr(art, "sql", None) if art else None
+        forge_json = getattr(art, "forge_json", None) if art else None
+        action = "sql_review" if sql else ("error" if run.status == "failed" else "message")
+        text = (gen_stage.error or "Pipeline 启动失败") if run.status == "failed" else ""
+        await audit.log(
+            user_id=req.user_id, user_message=req.message,
+            forge_json=forge_json, sql=sql,
+            status="pending" if sql else "error",
+            error_message=text or None,
+        )
+        return {"text": text, "sql": sql, "forge_json": forge_json, "action": action,
+                "pipeline": pipeline_name}
+    else:
+        # 普通查询模式
+        resp = await _run_sync(agent_process, req.user_id, req.message)
+        status_map = {"sql_review": "pending", "error": "error", "metric_saved": "approved"}
+        await audit.log(
+            user_id=req.user_id,
+            user_message=req.message,
+            forge_json=resp.forge_json,
+            sql=resp.sql,
+            status=status_map.get(resp.action, "approved"),
+            error_message=resp.text if resp.action == "error" else None,
+        )
+        return {
+            "text": resp.text,
+            "sql": resp.sql,
+            "forge_json": resp.forge_json,
+            "action": resp.action,
+        }
 
 
 @chat_router.post("/api/approve", response_class=JSONResponse)
-async def api_approve(req: ChatRequest):
-    """用户确认 SQL，随后执行并返回结果。"""
+async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
+    """用户确认 SQL，随后执行并返回结果；若有活跃 Pipeline 则继续后续阶段。"""
     resp = await _run_sync(agent_approve, req.user_id)
     result = {"text": resp.text, "sql": resp.sql, "action": resp.action,
-              "columns": None, "rows": None, "row_count": 0, "exec_error": None}
+              "columns": None, "rows": None, "row_count": 0, "exec_error": None,
+              "analysis": None, "chart_html": None}
 
     if resp.action == "approved" and resp.sql:
+        # 1. 执行 SQL
+        cols, rows_raw = [], []
         try:
-            text, cols, rows = await _run_sync(execute_with_data, resp.sql)
-            # 将 Row 对象转为普通 list
+            text, cols, rows_raw = await _run_sync(execute_with_data, resp.sql)
             result["columns"] = cols
-            result["rows"] = [list(r) for r in rows]
-            result["row_count"] = len(rows)
+            result["rows"] = [list(r) for r in rows_raw]
+            result["row_count"] = len(rows_raw)
             if text.startswith("⚠"):
                 result["exec_error"] = text
         except Exception as exc:
             result["exec_error"] = str(exc)
 
+        # 2. 检查是否有活跃 Pipeline，有则注入数据并 resume
+        try:
+            from agent.memory import memory as _mem
+            from agent.pipeline import runner as _runner, QueryResult, Artifact
+            run_data = _mem.get_state(req.user_id, "pipeline_run")
+            if run_data and run_data.get("status") == "pending_approval":
+                # 找到 generate stage artifact，注入 rows / columns
+                stages = run_data.get("stages", [])
+                for s in stages:
+                    if s.get("stage") == "generate" and s.get("artifact"):
+                        art = s["artifact"]
+                        art["rows"]    = result["rows"] or []
+                        art["columns"] = cols
+                        art["row_count"] = len(result["rows"] or [])
+                        s["artifact"] = art
+                run_data["stages"] = stages
+                run_data["status"] = "running"
+                _mem.set_state(req.user_id, "pipeline_run", run_data)
+
+                # resume pipeline（analyze / chart / report 阶段）
+                pipeline_run = await _run_sync(_runner.resume, req.user_id)
+                if pipeline_run:
+                    # 收集分析报告
+                    for sr in pipeline_run.stages:
+                        art = sr.artifact
+                        if art is None:
+                            continue
+                        if isinstance(art, dict):
+                            art = Artifact.from_dict(art)
+                        if art._type == "analysis_report":
+                            result["analysis"] = {
+                                "summary":          getattr(art, "summary", ""),
+                                "insights":         getattr(art, "insights", []),
+                                "key_metrics":      getattr(art, "key_metrics", {}),
+                                "trend_direction":  getattr(art, "trend_direction", ""),
+                                "anomalies":        getattr(art, "anomalies", []),
+                                "recommendations":  getattr(art, "recommendations", []),
+                            }
+                        elif art._type == "chart_spec":
+                            result["chart_html"] = getattr(art, "html", None)
+                    result["action"] = "pipeline_complete"
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Pipeline resume failed: %s", exc)
+
     return result
 
 
 @chat_router.post("/api/cancel", response_class=JSONResponse)
-async def api_cancel(req: ChatRequest):
+async def api_cancel(req: ChatRequest, _auth=Depends(require_api_auth)):
     """用户取消 SQL。"""
     resp = await _run_sync(agent_cancel, req.user_id)
     return {"text": resp.text, "action": resp.action}
@@ -344,9 +457,10 @@ async def schema_page(request: Request):
     schema = _load_schema()
     tables = schema.get("tables", {})
     return templates.TemplateResponse(
-        "schema.html",
-        {"request": request, "tables": tables},
-    )
+            request,
+            "schema.html",
+            {"tables": tables},
+        )
 
 
 # 兼容旧路由
@@ -363,9 +477,10 @@ async def metrics_page(request: Request):
     atomics     = {k: v for k, v in metrics.items() if v.get("metric_class") == "atomic"}
     derivatives = {k: v for k, v in metrics.items() if v.get("metric_class") == "derivative"}
     return templates.TemplateResponse(
-        "metrics.html",
-        {"request": request, "atomics": atomics, "derivatives": derivatives, "all_metrics": metrics},
-    )
+            request,
+            "metrics.html",
+            {"atomics": atomics, "derivatives": derivatives, "all_metrics": metrics},
+        )
 
 
 @router.post("/metrics/metric", response_class=HTMLResponse)
@@ -399,10 +514,9 @@ async def upsert_metric(
         atomics     = {k: v for k, v in all_metrics.items() if v.get("metric_class") == "atomic"}
         derivatives = {k: v for k, v in all_metrics.items() if v.get("metric_class") == "derivative"}
         return templates.TemplateResponse(
-            "metrics.html",
-            {
-                "request":       request,
-                "atomics":       atomics,
+                request,
+                "metrics.html",
+                {"atomics":       atomics,
                 "derivatives":   derivatives,
                 "all_metrics":   all_metrics,
                 "form_errors":   result.errors,
@@ -430,8 +544,9 @@ async def delete_metric(name: str):
 @router.get("/semantic", response_class=HTMLResponse)
 async def semantic_page(request: Request, flash: str = ""):
     return templates.TemplateResponse(
+        request,
         "semantic.html",
-        {"request": request, "disambiguations": _load_disambiguations(),
+        {"disambiguations": _load_disambiguations(),
          "conventions": _load_conventions(), "flash": flash},
     )
 
@@ -551,10 +666,11 @@ async def staging_page(request: Request, flash: str = ""):
                     logger.debug("Skipping malformed done file %s: %s", fp.name, exc)
 
     return templates.TemplateResponse(
-        "staging.html",
-        {"request": request, "records": records,
+            request,
+            "staging.html",
+            {"records": records,
          "done_records": done_records, "flash": flash},
-    )
+        )
 
 
 @router.post("/staging/promote/{filename}", response_class=RedirectResponse)
@@ -598,10 +714,11 @@ async def audit_page(request: Request, status: str = "", q: str = ""):
     records = await audit.search(status=status, keyword=q, limit=200)
     counts = await audit.stats()
     return templates.TemplateResponse(
-        "audit.html",
-        {"request": request, "records": records, "counts": counts,
+            request,
+            "audit.html",
+            {"records": records, "counts": counts,
          "filter_status": status, "filter_q": q},
-    )
+        )
 
 
 @router.get("/sessions", response_class=HTMLResponse)
@@ -612,9 +729,10 @@ async def sessions_page(request: Request, sid: str = ""):
         # 单个 session 详情
         messages = memory.ems.get_full_session(sid)
         return templates.TemplateResponse(
-            "sessions.html",
-            {"request": request, "session_id": sid, "messages": messages, "sessions": []},
-        )
+                request,
+                "sessions.html",
+                {"session_id": sid, "messages": messages, "sessions": []},
+            )
     else:
         # session 列表（聚合所有用户）
         try:
@@ -631,9 +749,10 @@ async def sessions_page(request: Request, sid: str = ""):
         except Exception:
             sessions = []
         return templates.TemplateResponse(
-            "sessions.html",
-            {"request": request, "session_id": "", "messages": [], "sessions": sessions},
-        )
+                request,
+                "sessions.html",
+                {"session_id": "", "messages": [], "sessions": sessions},
+            )
 
 
 @router.get("/pipelines", response_class=HTMLResponse)
@@ -721,9 +840,10 @@ async def pipelines_page(request: Request):
         runs = []
 
     return templates.TemplateResponse(
-        "pipelines.html",
-        {"request": request, "runs": runs},
-    )
+            request,
+            "pipelines.html",
+            {"runs": runs},
+        )
 
 
 # ── 知识源管理 ────────────────────────────────────────────────────────────────
@@ -736,10 +856,11 @@ async def knowledge_page(request: Request, flash: str = ""):
     sources = knowledge_store.list_sources(enabled_only=False)
     pending_count = knowledge_store.pending_count()
     return templates.TemplateResponse(
-        "knowledge.html",
-        {"request": request, "candidates": candidates, "confirmed": confirmed,
+            request,
+            "knowledge.html",
+            {"candidates": candidates, "confirmed": confirmed,
          "sources": sources, "pending_count": pending_count, "flash": flash},
-    )
+        )
 
 
 @router.post("/knowledge/confirm/{cid}", response_class=RedirectResponse)
@@ -781,6 +902,155 @@ async def knowledge_delete_source(sid: int):
     return RedirectResponse(url="/admin/knowledge?flash=已删除", status_code=303)
 
 
+@router.post("/knowledge/collect", response_class=JSONResponse)
+async def knowledge_collect_all():
+    """手动触发所有知识源收集。"""
+    try:
+        from agent.knowledge import knowledge_collector
+        stats = knowledge_collector.run_all()
+        return JSONResponse({"ok": True, "added": stats["added"], "errors": stats["errors"],
+                             "processed": stats["processed"]})
+    except Exception as exc:
+        logger.warning("Knowledge collect all failed: %s", exc)
+        return JSONResponse({"ok": False, "added": 0, "errors": 1, "detail": str(exc)}, status_code=500)
+
+
+@router.post("/knowledge/collect/{sid}", response_class=JSONResponse)
+async def knowledge_collect_one(sid: int):
+    """触发单个知识源收集。"""
+    try:
+        from agent.knowledge import knowledge_store, knowledge_collector
+        sources = knowledge_store.list_sources(enabled_only=False)
+        source = next((s for s in sources if s["id"] == sid), None)
+        if source is None:
+            return JSONResponse({"ok": False, "detail": "知识源不存在"}, status_code=404)
+        added = knowledge_collector.run_source(source)
+        return JSONResponse({"ok": True, "added": added, "errors": 0})
+    except Exception as exc:
+        logger.warning("Knowledge collect source %s failed: %s", sid, exc)
+        return JSONResponse({"ok": False, "added": 0, "errors": 1, "detail": str(exc)}, status_code=500)
+
+
+# ── 文档导入 ──────────────────────────────────────────────────────────────────
+
+@router.get("/knowledge/import", response_class=HTMLResponse)
+async def knowledge_import_page(request: Request):
+    return templates.TemplateResponse(request, "import.html", {})
+
+
+@router.post("/knowledge/import/upload", response_class=JSONResponse)
+async def knowledge_import_upload(request: Request):
+    """上传文件，LLM 提取知识点，返回预览列表。"""
+    import re
+    form = await request.form()
+    file = form.get("file")
+    if file is None:
+        return JSONResponse({"ok": False, "detail": "未收到文件"}, status_code=400)
+
+    filename = file.filename or ""
+    raw_bytes = await file.read()
+
+    # 解析文本
+    text = ""
+    if filename.lower().endswith(".pdf"):
+        return JSONResponse({"ok": False, "detail": "请将 PDF 转换为 .txt 或 .md 后再导入"}, status_code=400)
+    else:
+        try:
+            text = raw_bytes.decode("utf-8", errors="replace")
+        except Exception:
+            return JSONResponse({"ok": False, "detail": "文件编码无法识别，请使用 UTF-8 编码"}, status_code=400)
+
+    if not text.strip():
+        return JSONResponse({"ok": False, "detail": "文件内容为空"}, status_code=400)
+
+    # 按 2000 字分段，每段用 LLM 提取
+    chunk_size = 2000
+    chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+    all_items: list[dict] = []
+    try:
+        from agent import llm as llm_module
+        system_prompt = (
+            "你是知识提取助手。从以下文档内容中提取3-5条有价值的业务知识点，"
+            "每条50字以内，JSON数组格式：[{\"key\":\"知识点标题\",\"value\":\"内容\"}]"
+            "只输出 JSON 数组，不要有其他内容。"
+        )
+        for chunk in chunks[:5]:  # 最多处理前5段
+            messages = [{"role": "user", "content": f"文档片段：\n\n{chunk}"}]
+            result = llm_module.call(messages, system_override=system_prompt)
+            raw = result.get("text", "") or ""
+            json_match = re.search(r"\[.*\]", raw, re.DOTALL)
+            if json_match:
+                items = json.loads(json_match.group())
+                for item in items:
+                    k = str(item.get("key", "doc_fact"))[:80]
+                    v = str(item.get("value", ""))[:500]
+                    if v:
+                        all_items.append({"key": k, "value": v, "selected": True})
+    except Exception as exc:
+        logger.info("LLM extraction failed during import: %s", exc)
+        # 降级：直接把每段前200字作为一条
+        for i, chunk in enumerate(chunks[:5]):
+            all_items.append({
+                "key": f"{filename}_段落{i + 1}",
+                "value": chunk[:200],
+                "selected": True,
+            })
+
+    if not all_items:
+        return JSONResponse({"ok": False, "detail": "未能提取到知识点，请检查文件内容"}, status_code=400)
+
+    # 临时存储到 .forge 目录
+    forge_dir = Path(__file__).resolve().parent.parent / ".forge"
+    forge_dir.mkdir(exist_ok=True)
+    tmp_file = forge_dir / "import_tmp.json"
+    tmp_file.write_text(
+        json.dumps({"filename": filename, "items": all_items}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return JSONResponse({"ok": True, "items": all_items, "filename": filename})
+
+
+@router.post("/knowledge/import/confirm", response_class=JSONResponse)
+async def knowledge_import_confirm(request: Request):
+    """确认导入选中的知识点到 KnowledgeStore。"""
+    body = await request.json()
+    items: list[dict] = body.get("items", [])
+    if not items:
+        return JSONResponse({"ok": False, "detail": "没有选中的知识点"}, status_code=400)
+
+    from agent.knowledge import knowledge_store
+    added = 0
+    for item in items:
+        k = str(item.get("key", "doc_fact"))[:80]
+        v = str(item.get("value", ""))
+        if not v:
+            continue
+        try:
+            knowledge_store.add_candidate(
+                source="document",
+                category="fact",
+                key=k,
+                value=v,
+                extracted_by="llm",
+                confidence=0.8,
+            )
+            added += 1
+        except Exception as exc:
+            logger.debug("Failed to add import candidate: %s", exc)
+
+    # 清理临时文件
+    try:
+        tmp_file = Path(__file__).resolve().parent.parent / ".forge" / "import_tmp.json"
+        if tmp_file.exists():
+            tmp_file.unlink()
+    except Exception:
+        pass
+
+    return JSONResponse({"ok": True, "added": added})
+
+
 def _load_forge_yaml() -> dict:
     """读取 forge.yaml 原始内容。"""
     yaml_path = Path(__file__).resolve().parent.parent / "forge.yaml"
@@ -802,15 +1072,13 @@ def _save_forge_yaml(data: dict) -> None:
 async def settings_page(request: Request, saved: str = ""):
     y = _load_forge_yaml()
     return templates.TemplateResponse(
-        "settings.html",
-        {
-            "request": request,
-            "y": y,
+            request,
+            "settings.html",
+            {"y": y,
             "mask_secret": _mask_secret,
             "mask_db_url": _mask_db_url,
-            "saved": saved,
-        },
-    )
+            "saved": saved},
+        )
 
 
 @router.post("/settings/llm", response_class=RedirectResponse)
@@ -906,3 +1174,218 @@ async def settings_save_server(
     y["server"]["port"] = int(port) if port.isdigit() else 8000
     _save_forge_yaml(y)
     return RedirectResponse(url="/admin/settings?saved=server", status_code=303)
+
+
+@router.post("/settings/auth", response_class=RedirectResponse)
+async def settings_save_auth(
+    request: Request,
+    admin_password: str = Form(default=""),
+    api_keys: str = Form(default=""),
+):
+    # enabled 是 checkbox，未勾选时 Form 不会提交该字段，用 request.form 获取
+    form = await request.form()
+    enabled = "enabled" in form
+    y = _load_forge_yaml()
+    y.setdefault("server", {}).setdefault("auth", {})
+    y["server"]["auth"]["enabled"] = enabled
+    if admin_password and not admin_password.startswith("*"):
+        y["server"]["auth"]["admin_password"] = admin_password
+    # 解析 api_keys：按行分割，去空白
+    keys = [k.strip() for k in api_keys.splitlines() if k.strip()]
+    y["server"]["auth"]["api_keys"] = keys
+    _save_forge_yaml(y)
+    return RedirectResponse(url="/admin/settings?saved=auth", status_code=303)
+
+
+@router.post("/settings/memory", response_class=RedirectResponse)
+async def settings_save_memory(
+    db_url:  str = Form(default=""),
+    db_path: str = Form(default=".forge/memory.db"),
+):
+    y = _load_forge_yaml()
+    y.setdefault("memory", {})
+    y["memory"]["db_url"]  = db_url
+    y["memory"]["db_path"] = db_path
+    _save_forge_yaml(y)
+    return RedirectResponse(url="/admin/settings?saved=memory", status_code=303)
+
+
+# ── Memory Management ─────────────────────────────────────────────────────────
+
+def _get_smp_entries(limit: int = 200) -> list[dict]:
+    """读取所有 SMP 条目（不限 user，管理员视图）。"""
+    try:
+        from agent.db import get_connection_raw
+        conn = get_connection_raw()
+        rows = conn.execute(
+            "SELECT id, scope, user_id, category, key, value, confidence, updated_at "
+            "FROM memory_smp ORDER BY scope, category, updated_at DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        result = []
+        for r in rows:
+            try:
+                import json
+                val = json.loads(r[5])
+            except Exception:
+                val = r[5]
+            result.append({
+                "id": r[0], "scope": r[1], "user_id": r[2], "category": r[3],
+                "key": r[4], "value": val, "confidence": r[6], "updated_at": r[7],
+            })
+        return result
+    except Exception:
+        return []
+
+
+def _get_ems_stats() -> dict:
+    """读取 EMS 统计数据。"""
+    try:
+        from agent.db import get_connection_raw
+        conn = get_connection_raw()
+        total_sessions = conn.execute(
+            "SELECT COUNT(DISTINCT session_id) FROM memory_ems"
+        ).fetchone()[0] or 0
+        total_events = conn.execute(
+            "SELECT COUNT(*) FROM memory_ems"
+        ).fetchone()[0] or 0
+        # 按用户统计
+        user_rows = conn.execute(
+            "SELECT user_id, COUNT(DISTINCT session_id) as sessions, MAX(created_at) as last_active "
+            "FROM memory_ems GROUP BY user_id ORDER BY last_active DESC LIMIT 50"
+        ).fetchall()
+        users = [{"user_id": r[0], "sessions": r[1], "last_active": r[2]} for r in user_rows]
+        return {
+            "total_sessions": total_sessions,
+            "total_events": total_events,
+            "active_users": len(users),
+            "users": users,
+        }
+    except Exception:
+        return {"total_sessions": 0, "total_events": 0, "active_users": 0, "users": []}
+
+
+@router.get("/memory", response_class=HTMLResponse)
+async def memory_page(request: Request, flash: str = ""):
+    import json
+    smp_entries = _get_smp_entries()
+    ems_stats = _get_ems_stats()
+    return templates.TemplateResponse(
+        request, "memory.html",
+        {"smp_entries": smp_entries, "ems_stats": ems_stats, "flash": flash, "json": json}
+    )
+
+
+@router.post("/memory/smp/delete/{entry_id}", response_class=RedirectResponse)
+async def memory_smp_delete(entry_id: int):
+    try:
+        from agent.db import get_connection_raw
+        conn = get_connection_raw()
+        conn.execute("DELETE FROM memory_smp WHERE id = ?", (entry_id,))
+        conn.commit()
+    except Exception:
+        pass
+    return RedirectResponse(url="/admin/memory?flash=已删除", status_code=303)
+
+
+@router.post("/memory/ems/clear/{user_id:path}", response_class=RedirectResponse)
+async def memory_ems_clear_user(user_id: str):
+    try:
+        from agent.db import get_connection_raw
+        conn = get_connection_raw()
+        conn.execute("DELETE FROM memory_ems WHERE user_id = ?", (user_id,))
+        conn.commit()
+    except Exception:
+        pass
+    return RedirectResponse(url="/admin/memory?flash=已清空", status_code=303)
+
+
+@router.post("/memory/ems/clear-all", response_class=RedirectResponse)
+async def memory_ems_clear_all():
+    try:
+        from agent.db import get_connection_raw
+        conn = get_connection_raw()
+        conn.execute("DELETE FROM memory_ems")
+        conn.commit()
+    except Exception:
+        pass
+    return RedirectResponse(url="/admin/memory?flash=全部已清空", status_code=303)
+
+
+# ── 团队管理 ──────────────────────────────────────────────────────────────────
+
+def _get_all_tables() -> list[str]:
+    """从 schema.registry.json 读取所有表名。"""
+    try:
+        schema = json.loads(cfg.REGISTRY_PATH.read_text())
+        return sorted(schema.get("tables", {}).keys())
+    except Exception:
+        return []
+
+
+@router.get("/teams", response_class=HTMLResponse)
+async def teams_page(request: Request, flash: str = ""):
+    from agent.tenant import tenants
+    teams = tenants.list_teams()
+    all_tables = _get_all_tables()
+    # 为每个团队附加当前 ACL
+    for t in teams:
+        t["allowed_tables"] = tenants.get_allowed_tables(t["team_id"])  # None = 无限制
+    return templates.TemplateResponse(
+        request, "teams.html",
+        {"teams": teams, "all_tables": all_tables, "flash": flash}
+    )
+
+
+@router.post("/teams/create", response_class=RedirectResponse)
+async def teams_create(
+    team_id:      str = Form(...),
+    display_name: str = Form(default=""),
+):
+    from agent.tenant import tenants
+    tenants.create_team(team_id.strip(), display_name.strip() or team_id.strip())
+    return RedirectResponse(url="/admin/teams?flash=团队已创建", status_code=303)
+
+
+@router.post("/teams/{team_id}/acl", response_class=RedirectResponse)
+async def teams_save_acl(team_id: str, request: Request):
+    form = await request.form()
+    # checkbox 多选：getlist
+    tables = form.getlist("tables")
+    from agent.tenant import tenants
+    tenants.set_allowed_tables(team_id, list(tables))
+    msg = f"已限制 {len(tables)} 张表" if tables else "权限已清除（不限制）"
+    return RedirectResponse(url=f"/admin/teams?flash={msg}", status_code=303)
+
+
+@router.get("/teams/{team_id}/members", response_class=HTMLResponse)
+async def team_members_page(request: Request, team_id: str, flash: str = ""):
+    from agent.tenant import tenants
+    members = tenants.get_team_members(team_id)
+    return templates.TemplateResponse(
+        request, "team_members.html",
+        {"team_id": team_id, "members": members, "flash": flash}
+    )
+
+
+@router.post("/teams/{team_id}/members/add", response_class=RedirectResponse)
+async def team_members_add(
+    team_id:      str,
+    user_id:      str = Form(...),
+    display_name: str = Form(default=""),
+    role:         str = Form(default="member"),
+):
+    from agent.tenant import tenants
+    tenants.set_team(user_id.strip(), team_id, display_name.strip(), role)
+    return RedirectResponse(url=f"/admin/teams/{team_id}/members?flash=已添加", status_code=303)
+
+
+@router.post("/teams/{team_id}/members/remove", response_class=RedirectResponse)
+async def team_members_remove(
+    team_id: str,
+    user_id: str = Form(...),
+):
+    # 把用户移回 default 团队
+    from agent.tenant import tenants
+    tenants.set_team(user_id, "default")
+    return RedirectResponse(url=f"/admin/teams/{team_id}/members?flash=已移除", status_code=303)

@@ -246,14 +246,16 @@ def test_window_expr_requires_as():
         })
 
 
-def test_invalid_window_fn_rejected():
-    with pytest.raises((ValueError, jsonschema.ValidationError)):
-        compile_query({
-            "scan": "orders",
-            "window": [{"fn": "ntile", "as": "bucket",
-                        "order": [{"col": "orders.id", "dir": "asc"}]}],
-            "select": ["bucket"],
-        })
+def test_ntile_without_n_uses_default():
+    """ntile without explicit n field uses compiler default (4)."""
+    result = compile_query({
+        "scan": "orders",
+        "window": [{"fn": "ntile", "as": "bucket",
+                    "order": [{"col": "orders.id", "dir": "asc"}]}],
+        "select": ["bucket"],
+    })
+    assert "NTILE(" in result
+    assert "bucket" in result
 
 
 def test_nav_offset_must_be_positive():

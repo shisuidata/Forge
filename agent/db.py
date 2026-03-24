@@ -85,26 +85,94 @@ def get_connection():
     return get_engine().connect()
 
 
-def get_connection_raw():
-    """
-    获取原始 DBAPI 连接（sqlite3.Connection 或 psycopg2.connection）。
+class _UnifiedCursor:
+    """统一游标接口：兼容 sqlite3 和 psycopg2 的 cursor。"""
 
-    用于需要 cursor-level 操作的场景（EMS / SMP 等裸 SQL 模块）。
-    SQLite 模式下直接返回 sqlite3 连接（单例，WAL 模式已在 Engine 层启用）。
-    PostgreSQL 模式下返回 psycopg2 连接。
+    def __init__(self, cur, is_pg: bool, has_returning: bool = False):
+        self._cur = cur
+        self._is_pg = is_pg
+        # psycopg2 INSERT + RETURNING id：立即取出 id，避免后续 fetch 混乱
+        self._cached_lastrowid: int | None = None
+        if has_returning:
+            row = cur.fetchone()
+            self._cached_lastrowid = row[0] if row else None
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    @property
+    def lastrowid(self) -> int | None:
+        if self._is_pg:
+            return self._cached_lastrowid
+        return self._cur.lastrowid
+
+    @property
+    def rowcount(self) -> int:
+        return self._cur.rowcount
+
+
+class _UnifiedConn:
+    """
+    统一连接接口：让 EMS/SMP/knowledge 的 sqlite3 风格代码同时兼容 PostgreSQL。
+
+    - conn.execute(sql, params) → _UnifiedCursor（自动 ?→%s，自动 RETURNING id）
+    - conn.commit()
+    - conn.close()
+    """
+
+    def __init__(self, raw_conn, is_pg: bool):
+        self._conn = raw_conn
+        self._is_pg = is_pg
+
+    def execute(self, sql: str, params=()) -> _UnifiedCursor:
+        if self._is_pg:
+            sql = sql.replace("?", "%s")
+        cur = self._conn.cursor()
+
+        # psycopg2 INSERT：自动追加 RETURNING id 以获取 lastrowid
+        is_insert = sql.strip().upper().startswith("INSERT")
+        has_returning = False
+        if self._is_pg and is_insert and "RETURNING" not in sql.upper():
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+            has_returning = True
+
+        cur.execute(sql, params)
+        return _UnifiedCursor(cur, self._is_pg, has_returning=has_returning)
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+
+def get_connection_raw() -> _UnifiedConn:
+    """
+    获取统一封装的数据库连接。
+
+    返回 _UnifiedConn，同时兼容 SQLite（sqlite3 风格）和 PostgreSQL（psycopg2）。
+    EMS / SMP / knowledge 等模块直接调用 conn.execute() / conn.commit()，无需感知方言差异。
     """
     engine = get_engine()
-    if str(engine.url).startswith("sqlite"):
-        # SQLite: 使用固定文件连接（非池化），兼容旧代码的 check_same_thread=False
+    is_pg = not str(engine.url).startswith("sqlite")
+
+    if not is_pg:
         import sqlite3
         url = str(engine.url)
         db_path = url.replace("sqlite:///", "")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+        raw = sqlite3.connect(db_path, check_same_thread=False)
+        raw.execute("PRAGMA journal_mode=WAL")
+        raw.execute("PRAGMA busy_timeout=5000")
     else:
-        return engine.raw_connection()
+        raw = engine.raw_connection()
+
+    return _UnifiedConn(raw, is_pg)
 
 
 def execute_ddl(ddl: str) -> None:
@@ -118,19 +186,21 @@ def execute_ddl(ddl: str) -> None:
         ddl = ddl.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
         ddl = ddl.replace("datetime('now','utc')", "NOW() AT TIME ZONE 'UTC'")
         ddl = ddl.replace("datetime('now','localtime')", "NOW()")
-        ddl = ddl.replace("BOOLEAN", "BOOLEAN")  # 兼容
+        ddl = ddl.replace("DEFAULT 1,", "DEFAULT TRUE,")   # BOOLEAN DEFAULT 1 → TRUE
+        ddl = ddl.replace("DEFAULT 0,", "DEFAULT FALSE,")  # BOOLEAN DEFAULT 0 → FALSE
 
-    with engine.begin() as conn:
-        for statement in ddl.split(";"):
-            statement = statement.strip()
-            if statement and not statement.startswith("--"):
-                try:
-                    conn.execute(text(statement))
-                except Exception as exc:
-                    # IF NOT EXISTS 失败时忽略（表已存在）
-                    if "already exists" in str(exc).lower():
-                        continue
-                    logger.warning("DDL execution warning: %s", exc)
+    # 每条语句独立事务，避免单条失败回滚其他建表语句
+    for statement in ddl.split(";"):
+        statement = statement.strip()
+        if not statement or statement.startswith("--"):
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(statement))
+        except Exception as exc:
+            if "already exists" in str(exc).lower():
+                continue
+            logger.warning("DDL execution warning: %s", exc)
 
 
 def is_postgres() -> bool:
