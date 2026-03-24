@@ -108,10 +108,13 @@ class Config:
     BUSINESS_CONTEXT_PATH: Path = Path(_env("BUSINESS_CONTEXT_PATH", "registry", "business_context_path", default="registry/business_context.yaml"))
 
     # ── 记忆系统 ─────────────────────────────────────────────────────────────────
-    MEMORY_DB_PATH:       str = _env("MEMORY_DB_PATH",       "memory", "db_path",        default=".forge/memory.db")
-    MEMORY_RETENTION_DAYS: int = int(_env("MEMORY_RETENTION_DAYS", "memory", "ems_retention_days", default="0"))  # 0=无限
+    # db_url 支持 SQLAlchemy 格式：sqlite / postgresql / mysql
+    # 默认 SQLite；生产环境建议 PostgreSQL
+    MEMORY_DB_URL:        str = _env("MEMORY_DB_URL",        "memory", "db_url",          default="")
+    MEMORY_DB_PATH:       str = _env("MEMORY_DB_PATH",       "memory", "db_path",         default=".forge/memory.db")  # 仅 SQLite 模式
+    MEMORY_RETENTION_DAYS: int = int(_env("MEMORY_RETENTION_DAYS", "memory", "ems_retention_days", default="0"))
     MEMORY_SESSION_TIMEOUT: int = int(_env("MEMORY_SESSION_TIMEOUT", "memory", "session_timeout_min", default="30"))
-    MEMORY_EXTRACT_MODEL: str = _env("MEMORY_EXTRACT_MODEL", "memory", "extract_model", default="")  # 空=用默认LLM
+    MEMORY_EXTRACT_MODEL: str = _env("MEMORY_EXTRACT_MODEL", "memory", "extract_model", default="")
 
     # ── 日志 ─────────────────────────────────────────────────────────────────────
     LOG_LEVEL: str = _env("LOG_LEVEL", "logging", "level", default="INFO")

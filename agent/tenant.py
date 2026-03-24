@@ -13,16 +13,8 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
-try:
-    from config import cfg as _cfg
-    DB_PATH = Path(_cfg.MEMORY_DB_PATH)
-except (ImportError, AttributeError):
-    DB_PATH = Path(".forge/memory.db")
 
 DEFAULT_TEAM = "default"
 
@@ -47,27 +39,22 @@ CREATE TABLE IF NOT EXISTS tenant_teams (
 
 class TenantStore:
 
-    def __init__(self, db_path: Path | str | None = None):
-        self._db_path = Path(db_path) if db_path else DB_PATH
-        self._conn: sqlite3.Connection | None = None
-        self._cache: dict[str, str] = {}   # user_id → team_id 缓存
+    def __init__(self):
+        self._conn = None
+        self._cache: dict[str, str] = {}
         self._init_db()
 
     def _init_db(self) -> None:
         try:
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
-            self._conn.executescript(_DDL)
-            self._conn.commit()
-        except (sqlite3.Error, OSError) as exc:
+            from agent.db import execute_ddl
+            execute_ddl(_DDL)
+        except Exception as exc:
             logger.warning("Tenant DB init failed: %s", exc)
-            self._conn = None
 
-    def _ensure_conn(self) -> sqlite3.Connection:
+    def _ensure_conn(self):
         if self._conn is None:
-            self._init_db()
-        if self._conn is None:
-            raise RuntimeError("Tenant database unavailable")
+            from agent.db import get_connection_raw
+            self._conn = get_connection_raw()
         return self._conn
 
     # ── 团队管理 ──────────────────────────────────────────────────────────────

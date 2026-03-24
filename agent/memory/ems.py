@@ -20,23 +20,19 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Literal
 
-logger = logging.getLogger(__name__)
+from sqlalchemy import text
 
-# ── 配置 ──────────────────────────────────────────────────────────────────────
+logger = logging.getLogger(__name__)
 
 try:
     from config import cfg as _cfg
     SESSION_TIMEOUT_MIN = _cfg.MEMORY_SESSION_TIMEOUT
-    DB_PATH = Path(_cfg.MEMORY_DB_PATH)
 except (ImportError, AttributeError):
     SESSION_TIMEOUT_MIN = 30
-    DB_PATH = Path(".forge/memory.db")
 
 # ── 角色类型 ──────────────────────────────────────────────────────────────────
 
@@ -72,35 +68,30 @@ CREATE INDEX IF NOT EXISTS idx_ems_state   ON memory_ems(user_id, role, action)
 # ── EMS Store ─────────────────────────────────────────────────────────────────
 
 class EpisodicMemoryStore:
-    """情景记忆存储。线程安全（SQLite WAL 模式 + 连接级锁）。"""
+    """情景记忆存储。支持 SQLite / PostgreSQL（通过 agent.db 抽象层）。"""
 
-    def __init__(self, db_path: Path | str | None = None):
-        self._db_path = Path(db_path) if db_path else DB_PATH
-        self._conn: sqlite3.Connection | None = None
+    def __init__(self):
         # 用户当前 session 缓存：{user_id: (session_id, last_seq, last_active)}
         self._sessions: dict[str, tuple[str, int, datetime]] = {}
         self._init_db()
 
     def _init_db(self) -> None:
         try:
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(
-                str(self._db_path),
-                check_same_thread=False,
-                isolation_level="DEFERRED",
-            )
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.executescript(_DDL)
-            self._conn.commit()
-        except (sqlite3.Error, OSError) as exc:
+            from agent.db import execute_ddl
+            execute_ddl(_DDL)
+        except Exception as exc:
             logger.warning("EMS DB init failed: %s", exc)
-            self._conn = None
 
-    def _ensure_conn(self) -> sqlite3.Connection:
-        if self._conn is None:
-            self._init_db()
-        if self._conn is None:
-            raise RuntimeError("EMS database unavailable")
+    def _ensure_conn(self):
+        """
+        返回数据库连接（DBAPI 级别）。
+
+        通过 agent.db 获取，SQLite 和 PostgreSQL 透明切换。
+        连接由 Engine 连接池管理。
+        """
+        from agent.db import get_connection_raw
+        if not hasattr(self, '_conn') or self._conn is None:
+            self._conn = get_connection_raw()
         return self._conn
 
     # ── Session 管理 ──────────────────────────────────────────────────────────
