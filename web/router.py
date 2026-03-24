@@ -629,6 +629,61 @@ async def pipelines_page(request: Request):
     )
 
 
+# ── 知识源管理 ────────────────────────────────────────────────────────────────
+
+@router.get("/knowledge", response_class=HTMLResponse)
+async def knowledge_page(request: Request, flash: str = ""):
+    from agent.knowledge import knowledge_store
+    candidates = knowledge_store.list_candidates(status="pending", limit=50)
+    confirmed = knowledge_store.list_candidates(status="confirmed", limit=20)
+    sources = knowledge_store.list_sources(enabled_only=False)
+    pending_count = knowledge_store.pending_count()
+    return templates.TemplateResponse(
+        "knowledge.html",
+        {"request": request, "candidates": candidates, "confirmed": confirmed,
+         "sources": sources, "pending_count": pending_count, "flash": flash},
+    )
+
+
+@router.post("/knowledge/confirm/{cid}", response_class=RedirectResponse)
+async def knowledge_confirm(cid: int):
+    from agent.knowledge import knowledge_store
+    knowledge_store.confirm(cid)
+    return RedirectResponse(url="/admin/knowledge?flash=已确认", status_code=303)
+
+
+@router.post("/knowledge/reject/{cid}", response_class=RedirectResponse)
+async def knowledge_reject(cid: int):
+    from agent.knowledge import knowledge_store
+    knowledge_store.reject(cid)
+    return RedirectResponse(url="/admin/knowledge?flash=已忽略", status_code=303)
+
+
+@router.post("/knowledge/source", response_class=RedirectResponse)
+async def knowledge_add_source(
+    type: str = Form(...),
+    name: str = Form(...),
+    url:  str = Form(default=""),
+    keywords: str = Form(default=""),
+    schedule: str = Form(default="daily"),
+):
+    from agent.knowledge import knowledge_store
+    config = {"schedule": schedule}
+    if url:
+        config["url"] = url
+    if keywords:
+        config["keywords"] = keywords
+    knowledge_store.add_source(type, name, config)
+    return RedirectResponse(url="/admin/knowledge?flash=知识源已添加", status_code=303)
+
+
+@router.post("/knowledge/source/delete/{sid}", response_class=RedirectResponse)
+async def knowledge_delete_source(sid: int):
+    from agent.knowledge import knowledge_store
+    knowledge_store.delete_source(sid)
+    return RedirectResponse(url="/admin/knowledge?flash=已删除", status_code=303)
+
+
 def _load_forge_yaml() -> dict:
     """读取 forge.yaml 原始内容。"""
     yaml_path = Path(__file__).resolve().parent.parent / "forge.yaml"

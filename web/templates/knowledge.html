@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% set active = "knowledge" %}
+{% block title %}知识源 — Forge{% endblock %}
+{% block heading %}知识源管理{% endblock %}
+
+{% block content %}
+
+{% if flash %}
+<div id="flash" class="mb-6 bg-green-50 border border-green-200 rounded-md px-4 py-3 text-sm text-green-700">
+  {{ flash }}
+</div>
+<script>setTimeout(() => document.getElementById('flash').style.display='none', 3000)</script>
+{% endif %}
+
+{# ── 待审核知识 ────────────────────────────────────────────────────────────── #}
+<section class="mb-10">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">
+      待审核知识
+      {% if pending_count > 0 %}
+      <span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full ml-2">{{ pending_count }}</span>
+      {% endif %}
+    </h2>
+  </div>
+
+  {% if candidates %}
+  <div class="space-y-2">
+    {% for c in candidates %}
+    <div class="bg-white rounded-lg border border-gray-200 px-5 py-3 flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          {% if c.source == "conversation" %}
+          <span class="bg-blue-50 text-blue-700 text-xs px-1.5 py-0.5 rounded">对话</span>
+          {% elif c.source == "web_search" %}
+          <span class="bg-purple-50 text-purple-700 text-xs px-1.5 py-0.5 rounded">搜索</span>
+          {% elif c.source == "rss" %}
+          <span class="bg-orange-50 text-orange-700 text-xs px-1.5 py-0.5 rounded">RSS</span>
+          {% elif c.source == "document" %}
+          <span class="bg-green-50 text-green-700 text-xs px-1.5 py-0.5 rounded">文档</span>
+          {% else %}
+          <span class="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded">{{ c.source }}</span>
+          {% endif %}
+          <span class="font-mono text-xs text-gray-400">{{ c.category }}/{{ c.key }}</span>
+          <span class="text-xs text-gray-400">{{ c.scope }}</span>
+        </div>
+        <p class="text-sm text-gray-800">
+          {% if c.value is mapping %}
+            {{ c.value | tojson }}
+          {% else %}
+            {{ c.value }}
+          {% endif %}
+        </p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          {{ c.created_at[:16].replace("T"," ") if c.created_at else "" }}
+          {% if c.extracted_by == "llm" %} · LLM 提取{% endif %}
+          {% if c.source_url %} · {{ c.source_url[:40] }}{% endif %}
+        </p>
+      </div>
+      <div class="flex gap-2 flex-shrink-0">
+        <form method="post" action="/admin/knowledge/confirm/{{ c.id }}">
+          <button type="submit" class="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700">确认</button>
+        </form>
+        <form method="post" action="/admin/knowledge/reject/{{ c.id }}">
+          <button type="submit" class="bg-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded hover:bg-gray-300">忽略</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-400">
+    <p>没有待审核的知识</p>
+    <p class="text-xs mt-1">通过对话、文档导入或搜索收集的知识会出现在这里</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ── 知识源订阅 ────────────────────────────────────────────────────────────── #}
+<section class="mb-10">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-base font-semibold text-gray-700">知识源订阅</h2>
+    <button onclick="document.getElementById('source-modal').classList.remove('hidden')"
+            class="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-md hover:bg-gray-700">
+      + 添加知识源
+    </button>
+  </div>
+
+  {% if sources %}
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full text-sm divide-y divide-gray-200">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left">类型</th>
+          <th class="px-4 py-3 text-left">名称</th>
+          <th class="px-4 py-3 text-left">配置</th>
+          <th class="px-4 py-3 text-left">最后运行</th>
+          <th class="px-4 py-3 text-right w-20">操作</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for s in sources %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            {% if s.type == "rss" %}
+            <span class="bg-orange-50 text-orange-700 text-xs px-1.5 py-0.5 rounded">RSS</span>
+            {% elif s.type == "web_search" %}
+            <span class="bg-purple-50 text-purple-700 text-xs px-1.5 py-0.5 rounded">搜索</span>
+            {% elif s.type == "url_fetch" %}
+            <span class="bg-blue-50 text-blue-700 text-xs px-1.5 py-0.5 rounded">URL</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 font-medium text-gray-900">{{ s.name }}</td>
+          <td class="px-4 py-3 text-xs text-gray-500 font-mono">
+            {% if s.config.url %}{{ s.config.url[:50] }}{% endif %}
+            {% if s.config.keywords %}{{ s.config.keywords[:30] }}{% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs text-gray-400">{{ s.last_run[:16].replace("T"," ") if s.last_run else "未运行" }}</td>
+          <td class="px-4 py-3 text-right">
+            <form method="post" action="/admin/knowledge/source/delete/{{ s.id }}" style="display:inline">
+              <button type="submit" class="text-xs text-red-500 hover:text-red-700">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-400">
+    <p>暂无知识源</p>
+    <p class="text-xs mt-1">添加 RSS 订阅、搜索主题或 URL 来持续收集业务上下文</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ── 已确认知识 ────────────────────────────────────────────────────────────── #}
+{% if confirmed %}
+<section>
+  <h2 class="text-base font-semibold text-gray-700 mb-3">最近确认的知识</h2>
+  <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <table class="min-w-full text-sm divide-y divide-gray-200">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-4 py-3 text-left">来源</th>
+          <th class="px-4 py-3 text-left">分类</th>
+          <th class="px-4 py-3 text-left">内容</th>
+          <th class="px-4 py-3 text-left">确认时间</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for c in confirmed %}
+        <tr class="text-gray-500">
+          <td class="px-4 py-3 text-xs">{{ c.source }}</td>
+          <td class="px-4 py-3 text-xs font-mono">{{ c.category }}/{{ c.key }}</td>
+          <td class="px-4 py-3 text-xs">{{ c.value if c.value is string else c.value | tojson }}</td>
+          <td class="px-4 py-3 text-xs">{{ c.created_at[:16].replace("T"," ") if c.created_at else "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{# ── 添加知识源 Modal ─────────────────────────────────────────────────────── #}
+<div id="source-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-16">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+    <h3 class="text-base font-semibold text-gray-900 mb-4">添加知识源</h3>
+    <form method="post" action="/admin/knowledge/source">
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">类型</label>
+          <select name="type" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="rss">RSS 订阅</option>
+            <option value="web_search">搜索主题</option>
+            <option value="url_fetch">URL 抓取</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">名称</label>
+          <input name="name" type="text" required placeholder="电商行业周报"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">URL <span class="text-gray-400 font-normal">(RSS/URL 类型必填)</span></label>
+          <input name="url" type="text" placeholder="https://..."
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">搜索关键词 <span class="text-gray-400 font-normal">(搜索类型必填)</span></label>
+          <input name="keywords" type="text" placeholder="电商 退款率 行业报告"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">执行频率</label>
+          <select name="schedule" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+            <option value="manual">手动触发</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100">
+        <button type="button" onclick="document.getElementById('source-modal').classList.add('hidden')"
+                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">取消</button>
+        <button type="submit" class="bg-green-600 text-white text-sm px-4 py-2 rounded-md hover:bg-green-700">添加</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
