@@ -251,24 +251,6 @@ LLM 调用
 
 ---
 
-## 6. 讨论记录
-
-### 2026-03-24 首次讨论
-
-**用户提出**：记忆应该用数仓分层理论进行分层。
-
-**核心观点**：
-1. 原始记忆层保留所有沟通记录、思考和动作（EMS）
-2. 公共层提炼分析有价值和重要的记忆（SMP）
-3. 面向不同 AI 使用场景的再次生产（WMB）
-4. 用户强调"有绝对的控制权"——AI 辅助但人类确认
-
-**设计决策**：
-- EMS 用 SQLite 存储，全量保留
-- SMP 提炼分两种：实时（approve/cancel 时）和异步（对话结束后 LLM 总结）
-- WMB 不存储，每次调用前实时构建
-- 现有 session.history 的 20 条限制由 WMB 的 history_strategy 替代
-
 ---
 
 ## 7. 设计决策（2026-03-24 确认）
@@ -308,12 +290,146 @@ LLM 调用
 └───────────────────────────────────────────────────┘
 ```
 
-### 7.2 待实现细项
+### 7.2 实现决策（2026-03-24 讨论确认）
 
-- [ ] EMS 表 + 写入层（替换 session.py）
-- [ ] SMP 表 + org/user 双层存储
-- [ ] 实时提炼器（approve/cancel/verify 触发）
-- [ ] 异步提炼器（对话结束后 LLM 总结）
-- [ ] WMB 场景构建器（替换现有 system prompt 拼装）
-- [ ] forge.yaml 配置项
-- [ ] 从 session.py 迁移 agent.py / feishu.py / router.py 的调用方
+**模块结构**：
+```
+agent/memory/
+├── __init__.py        # MemoryManager 门面，对外统一 API
+├── ems.py             # Episodic Memory Store
+├── smp.py             # Semantic Memory Pool
+├── wmb.py             # Working Memory Buffer
+└── extractor.py       # SMP 提炼器（实时 + 异步）
+```
+
+**可变状态建模**：
+- pending_sql、pending_forge、pending_intent 等状态建模为 EMS 事件
+- `action=state_set, tool_name=pending_sql` / `action=state_cleared`
+- 从事件流还原当前状态：取最后一条 state_set/state_cleared 事件
+
+**Session 边界**：
+- 超过 30 分钟无交互自动开新 session_id
+- 用户显式"重置"也开新 session
+- 同一 session 内消息共享上下文
+
+**WMB 构建逻辑**：
+- SMP 知识 → 追加到 system prompt 尾部（稳定背景信息）
+- EMS 消息 → messages 数组（对话连续性）
+- 跨 session 关联由 SMP 承担，WMB 不直接读旧 session 的 raw messages
+- 场景裁剪策略：query=4 条 / define=全 session / admin=6 条
+
+**Token 预算分配**（假设 8K 可用）：
+- 基础 prompt + DSL schema：~2K（固定）
+- Registry 上下文：~2K（向量检索已精简）
+- SMP 知识注入：~1K（最多 5 条）
+- EMS 消息历史：~3K（动态裁剪）
+- 超预算裁剪优先级：EMS 旧消息 > SMP 按相关度截断 > Registry 不动
+
+**agent.py 改造**：
+- `session.add()` → `memory.record()`
+- `session.recent()` → `memory.build(scene, user_id, query)`
+- `session.pending_*` → `memory.get_state()` / `memory.set_state()`
+- 业务逻辑（重试/澄清/approve/cancel）不变
+- feishu.py / router.py 只改 `store.clear()` → `memory.reset()`
+
+---
+
+## 8. 讨论记录
+
+### 2026-03-24 第一轮：架构方向
+
+**用户提出**：记忆应该用数仓分层理论进行分层。
+
+**核心观点**：
+1. 原始记忆层保留所有沟通记录、思考和动作（EMS）
+2. 公共层提炼分析有价值和重要的记忆（SMP）
+3. 面向不同 AI 使用场景的再次生产（WMB）
+4. 用户强调"有绝对的控制权"——AI 辅助但人类确认
+
+### 2026-03-24 第二轮：命名体系
+
+**问题**：直接用 ODS/DWD/ADS 会和数仓概念混淆，且含义不匹配。
+
+**讨论过程**：
+- 先提出 Trace / Knowledge / Context（TKC），概念对但缩写像工具名
+- 再提出两组方案：REL/EKB/ACI（全称缩写）vs EMS/SMP/WMB（认知科学）
+- 用户选择认知科学方案，理由：概念自解释，和三层职责精确对应
+
+**最终命名**：
+- EMS（Episodic Memory Store）→ 情景记忆 → 经历过的事
+- SMP（Semantic Memory Pool）→ 语义记忆 → 知道的知识
+- WMB（Working Memory Buffer）→ 工作记忆 → 正在用的信息
+
+### 2026-03-24 第三轮：关键设计决策
+
+**逐项确认**：
+
+| 问题 | 用户决策 | 讨论要点 |
+|---|---|---|
+| EMS 保留策略 | 默认无限，可配置滚动 | 存储成本低，SQLite 足够 |
+| SMP 提炼模型 | 默认用产品 LLM，可选配 | 不引入额外依赖 |
+| 多用户知识 | org + user 分离，实时互补 | 业务知识共享，个人偏好隔离 |
+| 迁移策略 | 直接替换 session.py | 不做并行过渡 |
+
+**org→user 互补机制**（Claude 建议，用户确认）：
+- 个人确认的业务事实 → 标记为 candidate
+- 同一事实被 ≥2 用户确认 → 自动提升为 org 级
+- 或管理员在 Web UI 手动提升
+- 类比 Registry 的 Staging 确认机制
+
+### 2026-03-24 第四轮：实现细节
+
+**讨论的 5 个关键问题**：
+
+1. **模块结构** → `agent/memory/` 独立目录，4 个模块 + 门面
+2. **可变状态** → 建模为 EMS 事件（B 方案），从事件流还原状态
+   - 用户理由：事件溯源更纯粹，状态变更可追溯可回放
+3. **Session 边界** → 30 分钟超时自动新建 + 显式重置
+4. **WMB 裁剪逻辑** → 深入讨论了三个子问题：
+   - 4a: SMP 注入位置 → system prompt 尾部（稳定背景信息，不和对话流混淆）
+   - 4b: EMS 裁剪策略 → 按场景分策略（query=4条/define=全session/admin=6条），跨session关联由SMP承担
+   - 4c: Token 预算 → 8K 分配：prompt 2K + registry 2K + SMP 1K + EMS 3K，超预算按优先级裁剪
+5. **agent.py 改造** → MemoryManager 门面模式，保持业务逻辑不变，只替换存储/读取 API
+
+---
+
+## 9. 实现步骤 Checklist
+
+- [ ] **Step 1: EMS 层** — `agent/memory/ems.py`
+  - SQLite 表 memory_ems
+  - 状态事件读写：set_state / get_state / clear_state
+  - Session 边界：30min 超时自动新建 session_id
+  - 保留策略：默认无限，可配置 retention_days
+
+- [ ] **Step 2: WMB 层** — `agent/memory/wmb.py`
+  - build(scene, user_id, query) → (messages, knowledge_context)
+  - 场景配置：query / define / admin
+  - Token 预算控制
+
+- [ ] **Step 3: MemoryManager 门面** — `agent/memory/__init__.py`
+  - 统一 API：record / build / get_state / set_state / reset
+  - 全局单例，替换 session.store
+
+- [ ] **Step 4: 迁移 agent.py**
+  - process() / approve() / cancel() 改用 memory API
+  - 删除对 session.py 的依赖
+
+- [ ] **Step 5: 迁移 feishu.py + router.py**
+  - store.get/clear → memory 操作
+  - _dispatch 中的 session 操作全部替换
+
+- [ ] **Step 6: SMP 实时提炼** — `agent/memory/smp.py` + `extractor.py`
+  - approve → confirmed_fact
+  - cancel + 重试 → correction
+  - cache_verify → 置信度提升
+  - org / user 分层存储
+
+- [ ] **Step 7: SMP 异步提炼**
+  - 对话结束后 LLM 生成会话摘要
+  - 提取纠错记录
+  - candidate → 多人确认 → org 提升
+
+- [ ] **Step 8: 配置 + 清理**
+  - forge.yaml memory.* 配置项
+  - 删除 agent/session.py
+  - 更新测试
