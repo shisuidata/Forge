@@ -30,8 +30,13 @@ logger = logging.getLogger(__name__)
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 
-SESSION_TIMEOUT_MIN = 30       # 无交互超时后自动新建 session
-DB_PATH = Path(".forge/memory.db")
+try:
+    from config import cfg as _cfg
+    SESSION_TIMEOUT_MIN = _cfg.MEMORY_SESSION_TIMEOUT
+    DB_PATH = Path(_cfg.MEMORY_DB_PATH)
+except (ImportError, AttributeError):
+    SESSION_TIMEOUT_MIN = 30
+    DB_PATH = Path(".forge/memory.db")
 
 # ── 角色类型 ──────────────────────────────────────────────────────────────────
 

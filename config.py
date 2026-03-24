@@ -104,6 +104,12 @@ class Config:
     # ── Staging 目录（用户确认后的歧义消除暂存区）──────────────────────────────
     STAGING_DIR: Path = Path(_env("STAGING_DIR", "staging", "dir", default=".forge/staging"))
 
+    # ── 记忆系统 ─────────────────────────────────────────────────────────────────
+    MEMORY_DB_PATH:       str = _env("MEMORY_DB_PATH",       "memory", "db_path",        default=".forge/memory.db")
+    MEMORY_RETENTION_DAYS: int = int(_env("MEMORY_RETENTION_DAYS", "memory", "ems_retention_days", default="0"))  # 0=无限
+    MEMORY_SESSION_TIMEOUT: int = int(_env("MEMORY_SESSION_TIMEOUT", "memory", "session_timeout_min", default="30"))
+    MEMORY_EXTRACT_MODEL: str = _env("MEMORY_EXTRACT_MODEL", "memory", "extract_model", default="")  # 空=用默认LLM
+
     # ── Web 服务器 ─────────────────────────────────────────────────────────────
     HOST: str = _env("HOST", "server", "host", default="0.0.0.0")
     PORT: int = int(_env("PORT", "server", "port", default="8000"))

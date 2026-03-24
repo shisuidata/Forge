@@ -30,6 +30,7 @@ from typing import Any
 from agent.memory.ems import EpisodicMemoryStore
 from agent.memory.smp import SemanticMemoryPool
 from agent.memory.wmb import WorkingMemoryBuffer
+from agent.memory.extractor import Extractor
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,14 @@ class MemoryManager:
     记忆系统统一入口。
 
     agent.py / feishu.py / router.py 只和 MemoryManager 交互，
-    不直接操作 EMS / SMP / WMB。
+    不直接操作 EMS / SMP / WMB / Extractor。
     """
 
     def __init__(self):
         self.ems = EpisodicMemoryStore()
         self.smp = SemanticMemoryPool()
         self.wmb = WorkingMemoryBuffer(self.ems, self.smp)
+        self.extractor = Extractor(self.ems, self.smp)
 
     # ── EMS 代理：记录 ────────────────────────────────────────────────────────
 
@@ -56,8 +58,12 @@ class MemoryManager:
         content: str = "",
         **kwargs,
     ) -> int:
-        """追加一条情景记忆。"""
-        return self.ems.record(user_id, role, content, **kwargs)
+        """追加一条情景记忆。每条消息后自动重置异步提炼计时器。"""
+        rid = self.ems.record(user_id, role, content, **kwargs)
+        # 每条用户/助手消息都重置 debounce 计时器
+        if role in ("user", "assistant"):
+            self.extractor.schedule_async_extract(user_id)
+        return rid
 
     # ── WMB 代理：构建 LLM 输入 ──────────────────────────────────────────────
 

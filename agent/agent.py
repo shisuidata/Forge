@@ -46,7 +46,6 @@ from forge.compiler import compile_query
 from forge.cache import cache
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
-from agent.session import IntentSpec          # 仅用于类型定义，后续可移除
 from agent.memory import memory
 from agent import llm
 
@@ -238,6 +237,10 @@ def approve(user_id: str) -> AgentResponse:
             memory.set_state(user_id, "pending_cache_id", cache_id)
 
     memory.record(user_id, "assistant", "", action="approved")
+    # SMP 实时提炼：记录查询模式
+    question = _last_user_question(user_id)
+    memory.extractor.on_approve(user_id, sql, forge_json or {}, question)
+    memory.extractor.update_user_profile(user_id, question)
     return AgentResponse(text="✅ SQL 已确认，开始执行。", sql=sql, action="approved")
 
 
@@ -253,9 +256,12 @@ def _last_user_question(user_id: str) -> str:
 
 def cancel(user_id: str) -> AgentResponse:
     """用户取消 pending SQL。"""
+    cancelled_sql = memory.get_state(user_id, "pending_sql") or ""
     memory.clear_state(user_id, "pending_sql")
     memory.clear_state(user_id, "pending_forge")
     memory.record(user_id, "assistant", "已取消。", action="cancelled")
+    # SMP 实时提炼：记录纠错候选
+    memory.extractor.on_cancel(user_id, cancelled_sql)
     return AgentResponse(text="已取消。", action="cancelled")
 
 
@@ -273,6 +279,8 @@ def cache_verify(user_id: str) -> AgentResponse:
         return AgentResponse(text="没有待反馈的查询缓存。", action="error")
     memory.clear_state(user_id, "pending_cache_id")
     cache.verify(cache_id)
+    # SMP 实时提炼：提升置信度 + 写入 org
+    memory.extractor.on_cache_verify(user_id)
     return AgentResponse(
         text="✅ 已记录，该查询已加入缓存，下次相似问题可直接复用。",
         action="cache_verified",
@@ -286,6 +294,7 @@ def cache_reject(user_id: str) -> AgentResponse:
         return AgentResponse(text="没有待反馈的查询缓存。", action="error")
     memory.clear_state(user_id, "pending_cache_id")
     cache.reject(cache_id)
+    memory.extractor.on_cache_reject(user_id)
     return AgentResponse(
         text="已记录，感谢反馈，该查询结果不会被缓存。",
         action="cache_rejected",

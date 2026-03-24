@@ -21,7 +21,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path(".forge/memory.db")   # 与 EMS 共享同一个 DB 文件
+try:
+    from config import cfg as _cfg
+    DB_PATH = Path(_cfg.MEMORY_DB_PATH)
+except (ImportError, AttributeError):
+    DB_PATH = Path(".forge/memory.db")
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS memory_smp (
