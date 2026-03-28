@@ -64,6 +64,17 @@ docker compose up
 forge sync --db postgresql://user:pass@host/db
 ```
 
+**运行测试：**
+
+```bash
+# 编译器 + API 测试（本地，无需服务运行）
+pytest tests/ -v
+
+# Playwright E2E 测试（需服务运行）
+pip install playwright && playwright install chromium
+FORGE_BASE_URL=http://localhost:8000 pytest tests/test_e2e.py -v
+```
+
 ---
 
 ## 工作原理
@@ -109,7 +120,7 @@ flowchart LR
 | EA（large schema, MiniMax M2.7, Method S） | **70.0%** |
 | EA（large schema, MiniMax M2.7, Method R） | **72.5%** |
 | EA（large schema, DeepSeek V3.2） | **65.0%** |
-| 编译器测试用例 | **53** |
+| 编译器测试用例 | **118** |
 | Spider2-Lite 编译成功率 | **97.6%** |
 | Spider2-Lite EA | **9.2%** |
 
@@ -119,16 +130,20 @@ flowchart LR
 
 | 功能 | 状态 |
 |---|---|
-| Web UI（Chat + 8 个 Admin 页面） | ✅ |
+| Web UI（Chat + 12 个 Admin 页面 + Dashboard 概览） | ✅ |
+| SQL 审核编辑（生成后可修改 SQL 再执行） | ✅ |
+| 查询结果导出（CSV / JSON，中文 BOM 兼容） | ✅ |
 | 认证鉴权（Cookie session + API Key） | ✅ |
 | 多租户（org → team → user 三层隔离） | ✅ |
-| 数据权限（team 级别表可见性 ACL） | ✅ |
+| 数据权限（team 级别表可见性 ACL + 无权限提示） | ✅ |
 | PostgreSQL 支持（SQLite 零改动切换） | ✅ |
 | 三层记忆系统（EMS / SMP / WMB） | ✅ |
 | Pipeline 引擎（分析 / 可视化 / 报告） | ✅ |
 | 飞书 Bot（流式卡片 + 按钮回调） | ✅ |
 | 五通道知识收集（RSS / URL / 文档 / 对话 / 手动） | ✅ |
 | 文档导入（上传 .txt/.md → LLM 提取 → 确认入库） | ✅ |
+| 自动化测试（26 API + 22 Playwright E2E） | ✅ |
+| 启动健康检查（DB / LLM / Embedding 状态检测） | ✅ |
 
 ---
 
@@ -157,16 +172,22 @@ agent/
       └── wmb.py           — Working Memory Buffer（当前上下文）
 
 web/
-  ├── router.py            — FastAPI 路由（Web UI + API）
+  ├── router.py            — FastAPI 路由（Web UI + API + execute-raw）
   ├── auth.py              — HMAC-SHA256 Cookie + API Key 认证
-  └── templates/           — Jinja2 模板（Chat + 8 个 Admin 页面）
+  └── templates/           — Jinja2 模板（Chat + Dashboard + 11 个 Admin 页面）
 
 registry/
   ├── sync.py              — forge sync：直连数据库生成结构层
   └── data/                — Registry 三层文件（schema / metrics / disambiguations）
 
+scripts/
+  └── seed_mock_data.py    — Mock 数据填充（团队/用户/审计/会话/知识）
+
 tests/
-  ├── test_compiler*.py    — 编译器单元测试（53 个用例）
+  ├── conftest.py          — 共享 fixtures（app / client / auth_client）
+  ├── test_compiler*.py    — 编译器单元测试（118 个用例）
+  ├── test_api.py          — API 端点测试（26 个用例）
+  ├── test_e2e.py          — Playwright E2E 测试（22 个用例）
   ├── accuracy/            — 自有 40 题基准（Method R/S）
   └── spider2/             — Spider2-Lite SQLite 子集（123 题）
 ```
