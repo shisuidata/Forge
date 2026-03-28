@@ -557,6 +557,15 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
 
     tools = _build_tools(filtered_registry)
     system = build_system(_registry_context(question=current_question), question=current_question)
+    # 数据权限提示：当有白名单限制时，告知 LLM 哪些表被排除
+    if allowed_tables is not None:
+        all_table_names = set(registry.get("tables", {}).keys())
+        excluded = all_table_names - set(allowed_tables)
+        if excluded:
+            system += (
+                f"\n\n【数据权限】当前用户无权访问以下表：{', '.join(sorted(excluded))}。"
+                "如果用户查询涉及这些表，请直接告知「您无权访问该数据表，请联系管理员」，不要尝试生成查询。"
+            )
     # 拼接 SMP 知识上下文
     if knowledge_context:
         system = system + "\n\n" + knowledge_context

@@ -21,8 +21,15 @@
 </div>
 {% endif %}
 
+{# ── 搜索框 ──────────────────────────────────────────────────────────────── #}
+<div class="mb-6">
+  <input id="metrics-search" type="text" placeholder="搜索指标（名称、标签、定义）..."
+         oninput="filterMetrics(this.value)"
+         class="w-full max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+</div>
+
 {# ── atomic metrics ────────────────────────────────────────────────────────── #}
-<section class="mb-10">
+<section class="mb-10" id="section-atomic">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-base font-semibold text-gray-700">
       原子指标
@@ -46,7 +53,7 @@
       </thead>
       <tbody class="divide-y divide-gray-100">
         {% for mname, m in atomics.items() %}
-        <tr class="hover:bg-gray-50">
+        <tr class="hover:bg-gray-50 metric-row" data-search="{{ mname }} {{ m.label or '' }} {{ m.description or '' }}">
           <td class="px-4 py-3">
             <p class="font-medium text-gray-900">{{ m.label or mname }}</p>
             <p class="font-mono text-xs text-gray-400">{{ mname }}</p>
@@ -63,10 +70,10 @@
           </td>
           <td class="px-4 py-3 text-right">
             <div class="flex justify-end gap-2">
-              <button onclick="openEditModal('atomic', '{{ mname }}', {{ m | tojson }})"
-                      class="text-xs text-blue-600 hover:text-blue-800">编辑</button>
-              <button onclick="deleteMetric('{{ mname }}')"
-                      class="text-xs text-red-500 hover:text-red-700">删除</button>
+              <button data-edit-mc="atomic" data-edit-name="{{ mname }}" data-edit-metric="{{ m | tojson_cn }}"
+                      class="text-xs text-blue-600 hover:text-blue-800 btn-edit">编辑</button>
+              <button data-delete-name="{{ mname }}"
+                      class="text-xs text-red-500 hover:text-red-700 btn-delete">删除</button>
             </div>
           </td>
         </tr>
@@ -80,7 +87,7 @@
 </section>
 
 {# ── derivative metrics ────────────────────────────────────────────────────── #}
-<section>
+<section id="section-derivative">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-base font-semibold text-gray-700">
       衍生指标
@@ -104,7 +111,7 @@
       </thead>
       <tbody class="divide-y divide-gray-100">
         {% for mname, m in derivatives.items() %}
-        <tr class="hover:bg-gray-50">
+        <tr class="hover:bg-gray-50 metric-row" data-search="{{ mname }} {{ m.label or '' }} {{ m.description or '' }}">
           <td class="px-4 py-3">
             <p class="font-medium text-gray-900">{{ m.label or mname }}</p>
             <p class="font-mono text-xs text-gray-400">{{ mname }}</p>
@@ -122,10 +129,10 @@
           </td>
           <td class="px-4 py-3 text-right">
             <div class="flex justify-end gap-2">
-              <button onclick="openEditModal('derivative', '{{ mname }}', {{ m | tojson }})"
-                      class="text-xs text-blue-600 hover:text-blue-800">编辑</button>
-              <button onclick="deleteMetric('{{ mname }}')"
-                      class="text-xs text-red-500 hover:text-red-700">删除</button>
+              <button data-edit-mc="derivative" data-edit-name="{{ mname }}" data-edit-metric="{{ m | tojson_cn }}"
+                      class="text-xs text-blue-600 hover:text-blue-800 btn-edit">编辑</button>
+              <button data-delete-name="{{ mname }}"
+                      class="text-xs text-red-500 hover:text-red-700 btn-delete">删除</button>
             </div>
           </td>
         </tr>
@@ -139,10 +146,11 @@
 </section>
 
 {# ── modal ─────────────────────────────────────────────────────────────────── #}
-<div id="metric-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-12 pb-8 overflow-y-auto">
-  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
-    <h3 class="text-base font-semibold text-gray-900 mb-4" id="modal-title">新增指标</h3>
-    <form method="post" action="/admin/metrics/metric">
+<div id="metric-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col" style="max-height: 85vh;">
+    <h3 class="text-base font-semibold text-gray-900 px-6 pt-6 pb-3 flex-shrink-0" id="modal-title">新增指标</h3>
+    <form method="post" action="/admin/metrics/metric" class="flex flex-col flex-1 overflow-hidden">
+    <div class="overflow-y-auto flex-1 px-6">
       <input type="hidden" id="f-metric-class" name="metric_class" value="atomic" />
       <div class="grid grid-cols-2 gap-4 mb-4">
         <div>
@@ -242,12 +250,13 @@
                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="边界说明、口径决策原因"></textarea>
       </div>
-      <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+    </div>{# end scrollable body #}
+      <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0 bg-white rounded-b-xl">
         <button type="button" onclick="closeModal()" class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">取消</button>
         <button type="submit" class="bg-green-600 text-white text-sm px-4 py-2 rounded-md hover:bg-green-700 transition-colors">保存</button>
       </div>
     </form>
-  </div>
+  </div>{# end modal container #}
 </div>
 
 <script>
@@ -301,5 +310,30 @@ async function deleteMetric(name) {
   openEditModal(d.metric_class || 'atomic', d.name || '', d);
 })();
 {% endif %}
+
+function filterMetrics(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.metric-row').forEach(row => {
+    const text = (row.getAttribute('data-search') || '').toLowerCase();
+    row.style.display = !q || text.includes(q) ? '' : 'none';
+  });
+}
+
+// 事件委托：编辑和删除按钮
+document.addEventListener('click', function(e) {
+  const editBtn = e.target.closest('.btn-edit');
+  if (editBtn) {
+    const mc = editBtn.dataset.editMc;
+    const name = editBtn.dataset.editName;
+    const metric = JSON.parse(editBtn.dataset.editMetric);
+    openEditModal(mc, name, metric);
+    return;
+  }
+  const delBtn = e.target.closest('.btn-delete');
+  if (delBtn) {
+    deleteMetric(delBtn.dataset.deleteName);
+    return;
+  }
+});
 </script>
 {% endblock %}

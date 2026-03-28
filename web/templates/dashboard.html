@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+{% block title %}概览 — Forge{% endblock %}
+{% block heading %}概览{% endblock %}
+
+{% block content %}
+
+{# ── 概览卡片 ────────────────────────────────────────────────────────────── #}
+<div class="grid grid-cols-4 gap-4 mb-8">
+  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
+    <p class="text-2xl font-semibold text-gray-900">{{ table_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">数据表</p>
+  </div>
+  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
+    <p class="text-2xl font-semibold text-blue-600">{{ metric_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">业务指标</p>
+  </div>
+  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
+    <p class="text-2xl font-semibold text-purple-600">{{ rule_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">语义规则</p>
+  </div>
+  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
+    <p class="text-2xl font-semibold text-green-600">{{ today_query_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">今日查询</p>
+  </div>
+</div>
+
+{# ── 系统状态 ────────────────────────────────────────────────────────────── #}
+<div class="grid grid-cols-2 gap-6 mb-8">
+  <div class="bg-white rounded-lg border border-gray-200 p-5">
+    <h2 class="text-sm font-semibold text-gray-700 mb-4">系统状态</h2>
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-600">数据库连接</span>
+        {% if health.db %}
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-green-500"></span> 正常
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 px-2 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-red-500"></span> 未连接
+        </span>
+        {% endif %}
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-600">LLM 模型</span>
+        <span class="text-xs text-gray-500">{{ llm_model or '未配置' }}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-600">Embedding 模型</span>
+        {% if health.embedding %}
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-green-500"></span> {{ embed_model }}
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-yellow-500"></span> 降级（全表模式）
+        </span>
+        {% endif %}
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-600">Registry 路径</span>
+        <span class="text-xs text-gray-500 font-mono truncate max-w-[200px]" title="{{ registry_path }}">{{ registry_path }}</span>
+      </div>
+    </div>
+  </div>
+
+  {# ── 快速操作 ──────────────────────────────────────────────────────────── #}
+  <div class="bg-white rounded-lg border border-gray-200 p-5">
+    <h2 class="text-sm font-semibold text-gray-700 mb-4">快速操作</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <a href="/chat"
+         class="flex items-center gap-2 bg-gray-900 text-white text-xs font-medium px-4 py-3 rounded-lg hover:bg-gray-700 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        开始查询
+      </a>
+      <a href="/admin/metrics"
+         class="flex items-center gap-2 bg-blue-600 text-white text-xs font-medium px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        管理指标
+      </a>
+      <a href="/admin/schema"
+         class="flex items-center gap-2 bg-white text-gray-700 text-xs font-medium px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+        </svg>
+        查看结构层
+      </a>
+      <a href="/admin/audit"
+         class="flex items-center gap-2 bg-white text-gray-700 text-xs font-medium px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        查询审计
+      </a>
+    </div>
+  </div>
+</div>
+
+{# ── 最近查询 ────────────────────────────────────────────────────────────── #}
+<div class="bg-white rounded-lg border border-gray-200 p-5">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-sm font-semibold text-gray-700">最近查询</h2>
+    <a href="/admin/audit" class="text-xs text-blue-600 hover:text-blue-800">查看全部</a>
+  </div>
+  {% if recent_queries %}
+  <div class="space-y-3">
+    {% for q in recent_queries %}
+    <div class="flex items-start gap-3 py-2 {% if not loop.last %}border-b border-gray-100{% endif %}">
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-gray-800 truncate">{{ q.user_message }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ q.user_id }} · {{ q.created_at }}</p>
+      </div>
+      <span class="flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full
+        {% if q.status == 'approved' %}bg-green-50 text-green-700
+        {% elif q.status == 'pending' %}bg-yellow-50 text-yellow-700
+        {% elif q.status == 'error' %}bg-red-50 text-red-700
+        {% else %}bg-gray-100 text-gray-500{% endif %}">
+        {% if q.status == 'approved' %}已执行{% elif q.status == 'pending' %}待确认{% elif q.status == 'error' %}错误{% else %}{{ q.status }}{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-400 text-center py-6">暂无查询记录</p>
+  {% endif %}
+</div>
+
+{% endblock %}

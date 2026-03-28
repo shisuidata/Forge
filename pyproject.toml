@@ -25,7 +25,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "playwright>=1.40",
+    "pytest-playwright>=0.5",
+]
 
 [project.scripts]
 forge = "forge.cli:main"
@@ -36,3 +41,4 @@ include = ["forge*", "registry*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

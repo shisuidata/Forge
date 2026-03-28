@@ -35,6 +35,54 @@ logging.basicConfig(
 )
 app = FastAPI(title="Forge Agent")
 
+logger = logging.getLogger("forge.startup")
+
+
+@app.on_event("startup")
+async def _startup_checks():
+    """启动时的健康检查和安全提示。"""
+    # ── #9 默认密码安全警告 ──
+    if cfg.AUTH_ENABLED and cfg.AUTH_ADMIN_PASSWORD in ("123456", ""):
+        logger.warning(
+            "\n"
+            "╔══════════════════════════════════════════════════════════╗\n"
+            "║  ⚠  默认密码未修改！请设置 AUTH_ADMIN_PASSWORD 环境变量  ║\n"
+            "╚══════════════════════════════════════════════════════════╝"
+        )
+
+    # ── #10 连接状态检测 ──
+    checks = []
+    # DB
+    if cfg.DATABASE_URL:
+        try:
+            from sqlalchemy import create_engine, text as sa_text
+            engine = create_engine(cfg.DATABASE_URL)
+            with engine.connect() as conn:
+                conn.execute(sa_text("SELECT 1"))
+            checks.append(("数据库", "✓ 已连接"))
+        except Exception as exc:
+            checks.append(("数据库", f"✗ 连接失败: {exc}"))
+    else:
+        checks.append(("数据库", "✗ 未配置 DATABASE_URL"))
+
+    # LLM
+    if cfg.LLM_API_KEY:
+        checks.append(("LLM", f"✓ {cfg.LLM_PROVIDER}/{cfg.LLM_MODEL}"))
+    else:
+        checks.append(("LLM", "✗ 未配置 LLM_API_KEY"))
+
+    # Embedding
+    if cfg.EMBED_API_KEY:
+        checks.append(("Embedding", f"✓ {cfg.EMBED_MODEL}"))
+    else:
+        checks.append(("Embedding", "⚠ 未配置（将使用全表模式）"))
+
+    # 打印状态表
+    logger.info("系统状态检测：")
+    for name, status in checks:
+        logger.info("  %-12s %s", name, status)
+
+
 # Chat + API 路由挂载到根级别（/chat, /api/*）
 app.include_router(chat_router)
 # Admin 管理后台路由保持 /admin 前缀

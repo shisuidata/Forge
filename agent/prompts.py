@@ -193,6 +193,18 @@ def build_system(registry_context: str, question: str | None = None,
             sections.append(content)
 
     sections.append(query_rules)
+
+    # 注入当前日期，确保 LLM 正确理解"今年""本月""上周"等相对时间
+    from datetime import date
+    today = date.today()
+    sections.append(
+        f"## 当前时间\n\n"
+        f"今天是 {today.isoformat()}（{today.strftime('%Y年%-m月%-d日')}，"
+        f"星期{['一','二','三','四','五','六','日'][today.weekday()]}）。\n"
+        f"当用户说「今年」指 {today.year} 年，「本月」指 {today.strftime('%Y-%m')}，"
+        f"「上周」「最近7天」等均以今天为基准计算。"
+    )
+
     sections.append(f"## 当前数据库结构\n\n{registry_context}")
 
     return "\n\n".join(sections)

@@ -123,14 +123,19 @@ async def search(
     status: str = "",
     keyword: str = "",
     limit: int = 100,
-) -> list[dict[str, Any]]:
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
     """
-    带筛选的审计记录查询。
+    带筛选的审计记录查询（支持分页）。
 
     Args:
         status:  按状态过滤（pending/approved/cancelled/error），空字符串不过滤。
         keyword: 搜索用户消息或 SQL 中包含的关键词，空字符串不过滤。
         limit:   返回条数上限。
+        offset:  分页偏移。
+
+    Returns:
+        (records, total_filtered) — 记录列表和符合条件的总数。
     """
     await _ensure_schema()
     conditions: list[str] = []
@@ -144,14 +149,17 @@ async def search(
         params.extend([f"%{keyword}%", f"%{keyword}%"])
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-    query = f"SELECT * FROM audit_log{where} ORDER BY id DESC LIMIT ?"
-    params.append(limit)
 
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(query, params)
+        # 总数
+        count_cursor = await db.execute(f"SELECT COUNT(*) FROM audit_log{where}", params)
+        total = (await count_cursor.fetchone())[0]
+        # 分页查询
+        query = f"SELECT * FROM audit_log{where} ORDER BY id DESC LIMIT ? OFFSET ?"
+        cursor = await db.execute(query, params + [limit, offset])
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [dict(row) for row in rows], total
 
 
 async def stats() -> dict[str, int]:

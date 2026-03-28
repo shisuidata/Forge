@@ -71,15 +71,17 @@ class AgentResponse:
 
     def __init__(
         self,
-        text:       str         = "",
-        sql:        str | None  = None,
-        forge_json: dict | None = None,
-        action:     str         = "message",
+        text:        str         = "",
+        sql:         str | None  = None,
+        forge_json:  dict | None = None,
+        action:      str         = "message",
+        retry_count: int         = 0,
     ):
-        self.text       = text
-        self.sql        = sql
-        self.forge_json = forge_json
-        self.action     = action
+        self.text        = text
+        self.sql         = sql
+        self.forge_json  = forge_json
+        self.action      = action
+        self.retry_count = retry_count
 
 
 # ── 主入口 ────────────────────────────────────────────────────────────────────
@@ -166,7 +168,8 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             # 存入 pending 状态
             memory.set_state(user_id, "pending_sql", sql)
             memory.set_state(user_id, "pending_forge", forge_json)
-            return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review")
+            return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review",
+                                   retry_count=attempt)
 
         # ── 提案模式：模型猜测指标定义，等待用户确认 ─────────────────────────
         if result["tool"] == "propose_metric_definition":

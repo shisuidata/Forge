@@ -77,6 +77,14 @@
       <div class="pt-3 pb-1 px-3">
         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">管理</p>
       </div>
+      <a href="/admin/dashboard"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+        </svg>
+        概览
+      </a>
       <a href="/admin/schema"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,6 +117,29 @@
         </svg>
         Staging
       </a>
+      <a href="/admin/sessions"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+        </svg>
+        对话日志
+      </a>
+      <a href="/admin/memory"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+        </svg>
+        记忆管理
+      </a>
+      <a href="/admin/teams"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        团队权限
+      </a>
       <a href="/admin/audit"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,6 +148,22 @@
                    M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
         </svg>
         查询审计
+      </a>
+      <a href="/admin/knowledge"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+        </svg>
+        知识源
+      </a>
+      <a href="/admin/pipelines"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        Pipeline
       </a>
       <a href="/admin/settings"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
@@ -242,15 +289,23 @@ function addMessage(role, content, extra) {
   } else if (extra && extra.sql) {
     // SQL 预览消息
     bubble.className = 'msg-bot rounded-xl px-4 py-3 max-w-2xl shadow-sm w-full';
+    bubble._rawSQL = extra.sql;
+    bubble._isEditing = false;
     bubble.innerHTML = `
       ${content ? `<p class="text-sm text-gray-700 mb-3">${escapeHtml(content)}</p>` : ''}
-      <div class="sql-block mb-3">${highlightSQL(extra.sql)}</div>
+      <div class="sql-display">
+        <div class="sql-block mb-3">${highlightSQL(extra.sql)}</div>
+      </div>
+      <textarea class="sql-editor hidden w-full border border-gray-600 rounded-lg px-3 py-2 mb-3 font-mono text-xs leading-relaxed bg-slate-800 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500" rows="8" spellcheck="false">${escapeHtml(extra.sql)}</textarea>
       <div class="flex items-center gap-2">
         <button onclick="approveSQL(this)" class="bg-green-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
           确认执行
         </button>
         <button onclick="cancelSQL(this)" class="bg-gray-200 text-gray-700 text-xs font-medium px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors">
           取消
+        </button>
+        <button onclick="toggleEditSQL(this)" class="text-blue-500 hover:text-blue-700 text-xs px-2 py-2 transition-colors">
+          编辑 SQL
         </button>
         <button onclick="copySQL(this, '${encodeURIComponent(extra.sql)}')" class="text-gray-400 hover:text-gray-600 text-xs px-2 py-2 transition-colors">
           复制 SQL
@@ -324,7 +379,8 @@ async function sendMessage(text) {
     const data = await resp.json();
 
     if (data.action === 'sql_review' && data.sql) {
-      addMessage('bot', data.text || 'SQL 已生成，请审核：', { sql: data.sql });
+      const retryHint = data.retry_count > 0 ? ` (经过 ${data.retry_count} 次修正)` : '';
+      addMessage('bot', (data.text || 'SQL 已生成，请审核：') + retryHint, { sql: data.sql });
     } else if (data.action === 'error') {
       addMessage('system', data.text || '处理出错，请重试。');
     } else {
@@ -338,17 +394,55 @@ async function sendMessage(text) {
   }
 }
 
+function toggleEditSQL(btn) {
+  const bubble = btn.closest('.msg-bot');
+  const display = bubble.querySelector('.sql-display');
+  const editor = bubble.querySelector('.sql-editor');
+  bubble._isEditing = !bubble._isEditing;
+  if (bubble._isEditing) {
+    display.classList.add('hidden');
+    editor.classList.remove('hidden');
+    editor.focus();
+    btn.textContent = '预览';
+    btn.className = 'text-yellow-600 hover:text-yellow-800 text-xs px-2 py-2 transition-colors';
+  } else {
+    display.classList.remove('hidden');
+    editor.classList.add('hidden');
+    // 更新预览
+    display.querySelector('.sql-block').innerHTML = highlightSQL(editor.value);
+    btn.textContent = '编辑 SQL';
+    btn.className = 'text-blue-500 hover:text-blue-700 text-xs px-2 py-2 transition-colors';
+  }
+}
+
 async function approveSQL(btn) {
   const btnGroup = btn.parentElement;
+  const bubble = btn.closest('.msg-bot');
   btnGroup.querySelectorAll('button').forEach(b => b.disabled = true);
   btn.textContent = '执行中...';
 
+  // 检测是否编辑了 SQL
+  const editor = bubble.querySelector('.sql-editor');
+  const editedSQL = editor ? editor.value.trim() : '';
+  const isEdited = editedSQL && editedSQL !== bubble._rawSQL;
+
   try {
-    const resp = await fetch('/api/approve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: '', user_id: USER_ID }),
-    });
+    let resp;
+    if (isEdited) {
+      // 用户编辑过 SQL → 直接执行编辑后的 SQL
+      resp = await fetch('/api/execute-raw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql: editedSQL, user_id: USER_ID }),
+      });
+    } else {
+      // 原始 SQL → 走正常审核流程
+      resp = await fetch('/api/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: '', user_id: USER_ID }),
+      });
+    }
     const data = await resp.json();
 
     btnGroup.innerHTML = '<span class="text-green-600 text-xs font-medium">&#10003; 已执行</span>';
@@ -391,7 +485,11 @@ function addResultTable(columns, rows, totalCount) {
     <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
       <div class="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <span class="text-xs font-medium text-gray-700">查询结果</span>
-        <span class="text-xs text-gray-400">${totalCount} 行 × ${columns.length} 列</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-400">${totalCount} 行 × ${columns.length} 列</span>
+          <button onclick="downloadCSV(this)" class="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-200 transition-colors">CSV</button>
+          <button onclick="downloadJSON(this)" class="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-200 transition-colors">JSON</button>
+        </div>
       </div>
       <div class="overflow-x-auto max-h-96">
         <table class="min-w-full text-xs">
@@ -414,8 +512,50 @@ function addResultTable(columns, rows, totalCount) {
   `;
 
   wrapper.innerHTML = html;
+  // 将完整数据存到 DOM 元素上，供导出使用
+  wrapper.querySelector('.msg-bot')._exportData = { columns, rows };
   messagesEl.appendChild(wrapper);
   scrollToBottom();
+}
+
+function _findExportData(btn) {
+  return btn.closest('.msg-bot')._exportData;
+}
+
+function downloadCSV(btn) {
+  const { columns, rows } = _findExportData(btn);
+  const escapeCsvCell = (v) => {
+    const s = v === null ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [columns.map(escapeCsvCell).join(',')];
+  for (const row of rows) {
+    lines.push(row.map(escapeCsvCell).join(','));
+  }
+  // BOM 头确保 Excel 识别 UTF-8
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'forge_result_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadJSON(btn) {
+  const { columns, rows } = _findExportData(btn);
+  const data = rows.map(row => {
+    const obj = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj;
+  });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'forge_result_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 async function cancelSQL(btn) {

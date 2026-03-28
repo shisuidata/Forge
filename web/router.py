@@ -213,6 +213,7 @@ async def api_chat(req: ChatRequest, _auth=Depends(require_api_auth)):
             "sql": resp.sql,
             "forge_json": resp.forge_json,
             "action": resp.action,
+            "retry_count": getattr(resp, "retry_count", 0),
         }
 
 
@@ -290,6 +291,38 @@ async def api_cancel(req: ChatRequest, _auth=Depends(require_api_auth)):
     """用户取消 SQL。"""
     resp = await _run_sync(agent_cancel, req.user_id)
     return {"text": resp.text, "action": resp.action}
+
+
+class ExecuteRawRequest(BaseModel):
+    sql: str
+    user_id: str = "web_user"
+
+
+@chat_router.post("/api/execute-raw", response_class=JSONResponse)
+async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth)):
+    """直接执行用户编辑后的 SQL（跳过 Agent 编译）。"""
+    result = {"text": "", "sql": req.sql, "action": "approved",
+              "columns": None, "rows": None, "row_count": 0, "exec_error": None,
+              "analysis": None, "chart_html": None}
+    try:
+        text, cols, rows_raw = await _run_sync(execute_with_data, req.sql)
+        result["columns"] = cols
+        result["rows"] = [list(r) for r in rows_raw]
+        result["row_count"] = len(rows_raw)
+        if text.startswith("⚠"):
+            result["exec_error"] = text
+    except Exception as exc:
+        result["exec_error"] = str(exc)
+
+    await audit.log(
+        user_id=req.user_id,
+        user_message="[手动编辑 SQL]",
+        forge_json=None,
+        sql=req.sql,
+        status="approved" if not result["exec_error"] else "error",
+        error_message=result["exec_error"],
+    )
+    return result
 
 
 # ── Admin AI 助手 API ─────────────────────────────────────────────────────────
@@ -447,7 +480,67 @@ async def api_admin_apply(request: Request):
 
 @router.get("/", response_class=RedirectResponse)
 async def admin_root():
-    return RedirectResponse(url="/admin/schema", status_code=302)
+    return RedirectResponse(url="/admin/dashboard", status_code=302)
+
+
+# ── Dashboard（概览）──────────────────────────────────────────────────────────
+
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    schema = _load_schema()
+    tables = schema.get("tables", {})
+    metrics = _load_metrics()
+    disambiguations = _load_disambiguations()
+    conventions = _load_conventions()
+
+    # 系统健康检查
+    health = {"db": False, "embedding": False}
+    try:
+        if cfg.DATABASE_URL:
+            from sqlalchemy import create_engine, text as sa_text
+            engine = create_engine(cfg.DATABASE_URL)
+            with engine.connect() as conn:
+                conn.execute(sa_text("SELECT 1"))
+            health["db"] = True
+    except Exception:
+        pass
+    health["embedding"] = bool(cfg.EMBED_API_KEY)
+
+    # 今日查询数
+    today_count = 0
+    try:
+        from datetime import date as _date
+        today_str = _date.today().isoformat()
+        import aiosqlite
+        async with aiosqlite.connect(audit.DB_PATH) as db:
+            await db.execute(audit._DDL)
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM audit_log WHERE timestamp >= ?",
+                (today_str,),
+            )
+            row = await cursor.fetchone()
+            today_count = row[0] if row else 0
+    except Exception:
+        pass
+
+    # 最近查询
+    recent_queries = await audit.recent(limit=5)
+
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {
+            "table_count": len(tables),
+            "metric_count": len(metrics),
+            "rule_count": len(disambiguations) + len(conventions),
+            "today_query_count": today_count,
+            "health": health,
+            "llm_model": cfg.LLM_MODEL or "",
+            "embed_model": cfg.EMBED_MODEL or "",
+            "registry_path": str(cfg.REGISTRY_PATH),
+            "recent_queries": recent_queries,
+        },
+    )
 
 
 # ── 结构层（表 / 字段）─────────────────────────────────────────────────────────
@@ -710,15 +803,24 @@ async def staging_discard(filename: str):
 
 
 @router.get("/audit", response_class=HTMLResponse)
-async def audit_page(request: Request, status: str = "", q: str = ""):
-    records = await audit.search(status=status, keyword=q, limit=200)
+async def audit_page(request: Request, status: str = "", q: str = "", page: int = 1):
+    per_page = 50
+    offset = (max(1, page) - 1) * per_page
+    records, total_filtered = await audit.search(
+        status=status, keyword=q, limit=per_page, offset=offset,
+    )
     counts = await audit.stats()
+    total_pages = max(1, (total_filtered + per_page - 1) // per_page)
     return templates.TemplateResponse(
-            request,
-            "audit.html",
-            {"records": records, "counts": counts,
-         "filter_status": status, "filter_q": q},
-        )
+        request,
+        "audit.html",
+        {
+            "records": records, "counts": counts,
+            "filter_status": status, "filter_q": q,
+            "page": page, "total_pages": total_pages,
+            "total_filtered": total_filtered,
+        },
+    )
 
 
 @router.get("/sessions", response_class=HTMLResponse)

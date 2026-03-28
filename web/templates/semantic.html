@@ -158,8 +158,8 @@
 {# ══════════════════════════════════════════════════════════════════════════ #}
 {# 歧义消除 Modal                                                            #}
 {# ══════════════════════════════════════════════════════════════════════════ #}
-<div id="disamb-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-12 pb-8 overflow-y-auto">
-  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+<div id="disamb-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col p-6" style="max-height: 85vh;">
     <h3 class="text-base font-semibold text-gray-900 mb-4" id="disamb-modal-title">新增歧义消除规则</h3>
     <form method="post" action="/admin/semantic/disambiguation">
       <div class="space-y-4">
@@ -221,8 +221,8 @@
 {# ══════════════════════════════════════════════════════════════════════════ #}
 {# 字段约定 Modal                                                            #}
 {# ══════════════════════════════════════════════════════════════════════════ #}
-<div id="conv-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 pt-12 pb-8 overflow-y-auto">
-  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+<div id="conv-modal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col p-6" style="max-height: 85vh;">
     <h3 class="text-base font-semibold text-gray-900 mb-4" id="conv-modal-title">新增字段约定</h3>
     <form method="post" action="/admin/semantic/convention">
       <div class="space-y-4">

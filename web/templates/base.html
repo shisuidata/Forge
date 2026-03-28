@@ -50,6 +50,15 @@
       <div class="pt-3 pb-1 px-3">
         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">管理</p>
       </div>
+      <a href="/admin/dashboard"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
+                {% if active == 'dashboard' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+        </svg>
+        概览
+      </a>
       <a href="/admin/schema"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
                 {% if active == 'schema' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
