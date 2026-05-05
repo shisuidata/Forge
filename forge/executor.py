@@ -9,11 +9,82 @@ SQL 执行器 — 连接数据库执行 SQL 并返回格式化结果。
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from config import cfg
 
 logger = logging.getLogger(__name__)
+
+_engine = None
+
+_FORBIDDEN_SQL_KEYWORDS = {
+    "alter",
+    "attach",
+    "call",
+    "copy",
+    "create",
+    "delete",
+    "detach",
+    "drop",
+    "execute",
+    "grant",
+    "insert",
+    "merge",
+    "pragma",
+    "replace",
+    "revoke",
+    "truncate",
+    "update",
+    "vacuum",
+}
+
+
+def _get_engine():
+    """Return a process-wide SQLAlchemy engine for query execution."""
+    global _engine
+    if _engine is None:
+        from sqlalchemy import create_engine
+
+        _engine = create_engine(cfg.DATABASE_URL)
+    return _engine
+
+
+def _strip_sql_literals_and_comments(sql: str) -> str:
+    """Remove strings and comments so keyword checks do not scan user values."""
+    without_block_comments = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
+    without_line_comments = re.sub(r"--[^\n\r]*", " ", without_block_comments)
+    without_single_quotes = re.sub(r"'(?:''|[^'])*'", "''", without_line_comments)
+    without_double_quotes = re.sub(r'"(?:""|[^"])*"', '""', without_single_quotes)
+    return without_double_quotes
+
+
+def validate_readonly_sql(sql: str) -> None:
+    """
+    Reject SQL that is not a single read-only SELECT/WITH query.
+
+    The executor is intended for reviewed analytics queries. This guard is not a
+    substitute for a database read-only role, but it prevents obvious mutating
+    statements from the web API and Feishu approval path.
+    """
+    normalized = _strip_sql_literals_and_comments(sql).strip()
+    if not normalized:
+        raise ValueError("SQL 为空。")
+
+    # Allow one trailing semicolon, reject stacked statements.
+    body = normalized[:-1].strip() if normalized.endswith(";") else normalized
+    if ";" in body:
+        raise ValueError("只允许执行单条 SQL 查询。")
+
+    first = re.match(r"([A-Za-z_]\w*)", body)
+    first_token = first.group(1).lower() if first else ""
+    if first_token not in {"select", "with"}:
+        raise ValueError("只允许执行只读 SELECT/WITH 查询。")
+
+    keywords = {m.group(1).lower() for m in re.finditer(r"\b([A-Za-z_]\w*)\b", body)}
+    forbidden = sorted(keywords & _FORBIDDEN_SQL_KEYWORDS)
+    if forbidden:
+        raise ValueError(f"SQL 包含非只读关键字：{', '.join(forbidden)}。")
 
 
 def execute(sql: str, max_rows: int = 50) -> str:
@@ -31,12 +102,13 @@ def execute(sql: str, max_rows: int = 50) -> str:
         return "⚠ 未配置数据库连接（DATABASE_URL），无法执行查询。"
 
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import text
     except ImportError:
         return "⚠ 缺少依赖：请运行 pip install sqlalchemy"
 
     try:
-        engine = create_engine(cfg.DATABASE_URL)
+        validate_readonly_sql(sql)
+        engine = _get_engine()
         with engine.connect() as conn:
             result = conn.execute(text(sql))
             rows   = result.fetchmany(max_rows + 1)
@@ -84,12 +156,13 @@ def execute_with_data(
         return "⚠ 未配置数据库连接（DATABASE_URL），无法执行查询。", [], []
 
     try:
-        from sqlalchemy import create_engine, text as sa_text
+        from sqlalchemy import text as sa_text
     except ImportError:
         return "⚠ 缺少依赖：请运行 pip install sqlalchemy", [], []
 
     try:
-        engine = create_engine(cfg.DATABASE_URL)
+        validate_readonly_sql(sql)
+        engine = _get_engine()
         with engine.connect() as conn:
             result = conn.execute(sa_text(sql))
             rows   = result.fetchmany(max_rows + 1)

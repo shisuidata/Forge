@@ -28,6 +28,7 @@ import json
 import logging
 import re
 import shutil
+import hmac
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -46,6 +47,7 @@ from forge.executor import execute_with_data
 from config import cfg
 from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
+from web.routes.settings import router as settings_router
 from web.auth import (
     require_web_auth,
     require_api_auth,
@@ -60,6 +62,7 @@ logger = logging.getLogger(__name__)
 chat_router = APIRouter()
 # Admin 路由 — 挂载在 /admin 前缀下（全部路由需要 Web 登录验证）
 router = APIRouter(dependencies=[Depends(require_web_auth)])
+router.include_router(settings_router)
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -85,9 +88,9 @@ async def login_submit(
     next: str = Form(default="/chat"),
 ):
     expected = cfg.AUTH_ADMIN_PASSWORD
-    # auth disabled 或未设密码时任意密码均可通过
-    if not cfg.AUTH_ENABLED or not expected or password == expected:
-        response = RedirectResponse(url=next or "/chat", status_code=303)
+    # auth disabled 时任意密码均可通过；auth enabled 时必须配置并匹配密码
+    if not cfg.AUTH_ENABLED or (expected and hmac.compare_digest(password, expected)):
+        response = RedirectResponse(url=_safe_next_path(next), status_code=303)
         set_session_cookie(response, "admin")
         return response
     return templates.TemplateResponse(
@@ -131,23 +134,16 @@ def _save_metrics(metrics: dict) -> None:
     )
 
 
-def _mask_secret(value: str, visible: int = 4) -> str:
-    if not value:
-        return "(not set)"
-    if len(value) <= visible:
-        return "*" * len(value)
-    return "*" * (len(value) - visible) + value[-visible:]
-
-
-def _mask_db_url(url: str) -> str:
-    if not url:
-        return "(not set)"
-    return re.sub(r"(:)([^/@]+)(@)", lambda m: f"{m.group(1)}****{m.group(3)}", url)
-
-
 def _parse_lines(text: str) -> list[str]:
     """Split textarea value into a list, stripping blank lines."""
     return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _safe_next_path(next_path: str) -> str:
+    """Allow redirects only to local absolute paths."""
+    if not next_path or not next_path.startswith("/") or next_path.startswith("//"):
+        return "/chat"
+    return next_path
 
 
 # ── Chat API ──────────────────────────────────────────────────────────────────
@@ -416,14 +412,14 @@ delete 类型的 proposal 只需 {{"name": "要删除的标识符"}}。"""
 
 
 @chat_router.post("/api/admin-chat", response_class=JSONResponse)
-async def api_admin_chat(req: AdminChatRequest):
+async def api_admin_chat(req: AdminChatRequest, _auth=Depends(require_api_auth)):
     """管理助手 AI：返回结构化提议或文字回复。"""
     result = await _run_sync(_admin_ai_process, req.message, req.page)
     return result
 
 
 @chat_router.post("/api/admin-apply", response_class=JSONResponse)
-async def api_admin_apply(request: Request):
+async def api_admin_apply(request: Request, _auth=Depends(require_api_auth)):
     """应用管理助手的提议。"""
     body = await request.json()
     action_type = body.get("type", "")
@@ -431,13 +427,23 @@ async def api_admin_apply(request: Request):
 
     try:
         if action_type == "add_metric" or action_type == "update_metric":
+            proposal = dict(proposal)
             name = proposal.pop("name", "")
             if not name:
                 return {"ok": False, "error": "缺少指标名称"}
+            metric_for_validation = dict(proposal)
+            metric_for_validation["name"] = name
+            structural = _load_schema()
+            existing = _load_metrics()
+            validation = validate_metric(
+                metric_for_validation, structural, metric_name=name, all_metrics=existing
+            )
+            if not validation.valid:
+                return {"ok": False, "error": "；".join(validation.errors)}
             proposal["updated_at"] = str(date.today())
             # 过滤空值
             entry = {k: v for k, v in proposal.items() if v not in (None, "", [], {})}
-            metrics = _load_metrics()
+            metrics = existing
             metrics[name] = entry
             _save_metrics(metrics)
             return {"ok": True, "message": f"指标「{entry.get('label', name)}」已保存"}
@@ -452,6 +458,7 @@ async def api_admin_apply(request: Request):
             return {"ok": False, "error": f"指标「{name}」不存在"}
 
         elif action_type in ("add_disambiguation", "update_disambiguation"):
+            proposal = dict(proposal)
             key = proposal.pop("key", "")
             if not key:
                 return {"ok": False, "error": "缺少规则 key"}
@@ -461,6 +468,7 @@ async def api_admin_apply(request: Request):
             return {"ok": True, "message": f"歧义规则「{proposal.get('label', key)}」已保存"}
 
         elif action_type in ("add_convention", "update_convention"):
+            proposal = dict(proposal)
             key = proposal.pop("key", "")
             if not key:
                 return {"ok": False, "error": "缺少约定 key"}
@@ -1151,165 +1159,6 @@ async def knowledge_import_confirm(request: Request):
         pass
 
     return JSONResponse({"ok": True, "added": added})
-
-
-def _load_forge_yaml() -> dict:
-    """读取 forge.yaml 原始内容。"""
-    yaml_path = Path(__file__).resolve().parent.parent / "forge.yaml"
-    try:
-        return yaml.safe_load(yaml_path.read_text()) or {}
-    except (FileNotFoundError, OSError, yaml.YAMLError):
-        return {}
-
-
-def _save_forge_yaml(data: dict) -> None:
-    """写回 forge.yaml。"""
-    yaml_path = Path(__file__).resolve().parent.parent / "forge.yaml"
-    yaml_path.write_text(
-        yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
-    )
-
-
-@router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request, saved: str = ""):
-    y = _load_forge_yaml()
-    return templates.TemplateResponse(
-            request,
-            "settings.html",
-            {"y": y,
-            "mask_secret": _mask_secret,
-            "mask_db_url": _mask_db_url,
-            "saved": saved},
-        )
-
-
-@router.post("/settings/llm", response_class=RedirectResponse)
-async def settings_save_llm(
-    provider: str  = Form(...),
-    model:    str  = Form(default=""),
-    api_key:  str  = Form(default=""),
-    base_url: str  = Form(default=""),
-):
-    y = _load_forge_yaml()
-    y.setdefault("llm", {})
-    y["llm"]["provider"] = provider
-    y["llm"]["model"]    = model
-    if api_key and not api_key.startswith("*"):
-        y["llm"]["api_key"] = api_key
-    y["llm"]["base_url"] = base_url
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=llm", status_code=303)
-
-
-@router.post("/settings/database", response_class=RedirectResponse)
-async def settings_save_database(
-    url: str = Form(default=""),
-):
-    y = _load_forge_yaml()
-    y.setdefault("database", {})
-    y["database"]["url"] = url
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=database", status_code=303)
-
-
-@router.post("/settings/embedding", response_class=RedirectResponse)
-async def settings_save_embedding(
-    api_key:  str = Form(default=""),
-    base_url: str = Form(default=""),
-    model:    str = Form(default=""),
-    top_k:    str = Form(default="5"),
-):
-    y = _load_forge_yaml()
-    y.setdefault("embedding", {})
-    if api_key and not api_key.startswith("*"):
-        y["embedding"]["api_key"] = api_key
-    y["embedding"]["base_url"] = base_url
-    y["embedding"]["model"]    = model
-    y["embedding"]["top_k"]    = int(top_k) if top_k.isdigit() else 5
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=embedding", status_code=303)
-
-
-@router.post("/settings/registry", response_class=RedirectResponse)
-async def settings_save_registry(
-    schema_path:          str = Form(default=""),
-    metrics_path:         str = Form(default=""),
-    disambiguations_path: str = Form(default=""),
-    conventions_path:     str = Form(default=""),
-):
-    y = _load_forge_yaml()
-    y.setdefault("registry", {})
-    y["registry"]["schema_path"]          = schema_path
-    y["registry"]["metrics_path"]         = metrics_path
-    y["registry"]["disambiguations_path"] = disambiguations_path
-    y["registry"]["conventions_path"]     = conventions_path
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=registry", status_code=303)
-
-
-@router.post("/settings/feishu", response_class=RedirectResponse)
-async def settings_save_feishu(
-    app_id:             str = Form(default=""),
-    app_secret:         str = Form(default=""),
-    verification_token: str = Form(default=""),
-    encrypt_key:        str = Form(default=""),
-):
-    y = _load_forge_yaml()
-    y.setdefault("feishu", {})
-    y["feishu"]["app_id"] = app_id
-    if app_secret and not app_secret.startswith("*"):
-        y["feishu"]["app_secret"] = app_secret
-    y["feishu"]["verification_token"] = verification_token
-    y["feishu"]["encrypt_key"]        = encrypt_key
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=feishu", status_code=303)
-
-
-@router.post("/settings/server", response_class=RedirectResponse)
-async def settings_save_server(
-    host: str = Form(default="0.0.0.0"),
-    port: str = Form(default="8000"),
-):
-    y = _load_forge_yaml()
-    y.setdefault("server", {})
-    y["server"]["host"] = host
-    y["server"]["port"] = int(port) if port.isdigit() else 8000
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=server", status_code=303)
-
-
-@router.post("/settings/auth", response_class=RedirectResponse)
-async def settings_save_auth(
-    request: Request,
-    admin_password: str = Form(default=""),
-    api_keys: str = Form(default=""),
-):
-    # enabled 是 checkbox，未勾选时 Form 不会提交该字段，用 request.form 获取
-    form = await request.form()
-    enabled = "enabled" in form
-    y = _load_forge_yaml()
-    y.setdefault("server", {}).setdefault("auth", {})
-    y["server"]["auth"]["enabled"] = enabled
-    if admin_password and not admin_password.startswith("*"):
-        y["server"]["auth"]["admin_password"] = admin_password
-    # 解析 api_keys：按行分割，去空白
-    keys = [k.strip() for k in api_keys.splitlines() if k.strip()]
-    y["server"]["auth"]["api_keys"] = keys
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=auth", status_code=303)
-
-
-@router.post("/settings/memory", response_class=RedirectResponse)
-async def settings_save_memory(
-    db_url:  str = Form(default=""),
-    db_path: str = Form(default=".forge/memory.db"),
-):
-    y = _load_forge_yaml()
-    y.setdefault("memory", {})
-    y["memory"]["db_url"]  = db_url
-    y["memory"]["db_path"] = db_path
-    _save_forge_yaml(y)
-    return RedirectResponse(url="/admin/settings?saved=memory", status_code=303)
 
 
 # ── Memory Management ─────────────────────────────────────────────────────────

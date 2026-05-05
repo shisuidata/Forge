@@ -43,6 +43,7 @@ import yaml
 
 from config import cfg
 from forge.compiler import compile_query
+from forge.lint import lint_conventions
 from forge.cache import cache
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
@@ -54,6 +55,24 @@ logger = logging.getLogger(__name__)
 # 编译失败后最多重试次数（不含首次尝试）
 # 设为 2：首次失败 → 第 1 次重试 → 第 2 次重试 → 放弃
 MAX_RETRIES = 2
+
+
+def _compile_dialect() -> str:
+    """Resolve cfg.SQL_DIALECT, including auto-detection from DATABASE_URL."""
+    dialect = (getattr(cfg, "SQL_DIALECT", "sqlite") or "sqlite").lower()
+    if dialect != "auto":
+        return dialect
+
+    db_url = (getattr(cfg, "DATABASE_URL", "") or "").lower()
+    if db_url.startswith("postgresql") or db_url.startswith("postgres"):
+        return "postgresql"
+    if db_url.startswith("mysql"):
+        return "mysql"
+    if db_url.startswith("bigquery"):
+        return "bigquery"
+    if db_url.startswith("snowflake"):
+        return "snowflake"
+    return "sqlite"
 
 
 # ── 响应类型 ──────────────────────────────────────────────────────────────────
@@ -99,8 +118,10 @@ def process(user_id: str, user_text: str) -> AgentResponse:
     if pending_intent is not None:
         memory.clear_state(user_id, "pending_intent")
         enriched = f"{pending_intent.get('original_question', '')}（补充说明：{user_text}）"
+        effective_text = enriched
         memory.record(user_id, "user", enriched)
     else:
+        effective_text = user_text
         # ── 首次消息：检测是否需要发起澄清 ──────────────────────────────────
         clarification = _check_clarification_needed(user_text)
         if clarification:
@@ -124,13 +145,19 @@ def process(user_id: str, user_text: str) -> AgentResponse:
 
     for attempt in range(1 + MAX_RETRIES):
         # 从 WMB 构建基础消息 + 拼接重试上下文 + 上一轮用过的表
-        messages, knowledge, extra_tables = memory.build("query", user_id, user_text)
+        messages, knowledge, extra_tables = memory.build("query", user_id, effective_text)
         if retry_messages:
             messages = messages + retry_messages
-        result = llm.call(
-            messages, knowledge_context=knowledge,
-            extra_tables=extra_tables, allowed_tables=_allowed_tables,
-        )
+        try:
+            result = llm.call(
+                messages, knowledge_context=knowledge,
+                extra_tables=extra_tables, allowed_tables=_allowed_tables,
+            )
+        except Exception as exc:
+            logger.exception("LLM call failed")
+            err = f"⚠ LLM 调用失败：{exc}"
+            memory.record(user_id, "assistant", err, action="error")
+            return AgentResponse(text=err, action="error")
 
         # ── 文字回复：无工具调用，直接透传 ───────────────────────────────────
         if result["tool"] is None:
@@ -141,8 +168,19 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         # ── 查询模式：生成 Forge JSON 并编译 ─────────────────────────────────
         if result["tool"] == "generate_forge_query":
             forge_json = result["input"]
+            if attempt == 0:
+                warnings = lint_conventions(forge_json, effective_text)
+                if warnings and attempt < MAX_RETRIES:
+                    warning_text = "\n".join(f"- {w}" for w in warnings)
+                    retry_messages.append(
+                        {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
+                    )
+                    retry_messages.append(
+                        {"role": "user", "content": f"约定检查发现以下问题：\n{warning_text}\n请修正。"}
+                    )
+                    continue
             try:
-                sql = compile_query(forge_json)
+                sql = compile_query(forge_json, dialect=_compile_dialect())
             except Exception as exc:
                 if attempt < MAX_RETRIES:
                     # 重试消息不写 EMS，只在本次调用内传递
@@ -168,6 +206,8 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             # 存入 pending 状态
             memory.set_state(user_id, "pending_sql", sql)
             memory.set_state(user_id, "pending_forge", forge_json)
+            if cfg.FEEDBACK_ENABLED:
+                _maybe_write_staging(user_id, user_text, forge_json)
             return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review",
                                    retry_count=attempt)
 

@@ -220,6 +220,8 @@ tests/
 | [Day 3 · 工程稳固 / 产品门面 / 连锁故障](docs/devlog/day3_2026-03-18.md) | 2026-03-18 | Session 持久化、编译器拆分、飞书 Bot 四层连锁故障、demo 向导、forge config CLI |
 | [Day 5 · 先看自己错没错 / 三层系统优化](docs/devlog/day5_2026-03-19.md) | 2026-03-19 | 5 处设计缺陷修复、编译重试对齐、约定 lint 程序化验证、LAG 示例补全、M2.7 EA 72.5% |
 | [Day 6 · 从原型到产品](docs/devlog/day6_2026-03-25.md) | 2026-03-25 | PostgreSQL 支持、HMAC 认证、数据权限 ACL、Pipeline E2E、Web Admin 完整落地、EA 70.0% |
+| [Day 7 · 准确率回炉 / TopN lint](docs/devlog/day7_2026-05-05.md) | 2026-05-05 | 测试口径拆分、Z.AI GLM-5.1 接入受阻、DeepSeek single-run EA 55.0%→65.0%、TopN lint/prompt 优化 |
+| [Day 8 · 把准确率问题重新工程化](docs/devlog/day8_2026-05-06.md) | 2026-05-06 | 面向博客发布的阶段总结：测试分层、GLM-5.1 接入受阻、DeepSeek EA 55.0%→65.0%、TopN 错误形式化为 lint |
 
 ---
 

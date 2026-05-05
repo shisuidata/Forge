@@ -46,6 +46,28 @@ class TestAuth:
         assert resp.status_code == 303
         assert "forge_session" in resp.headers.get("set-cookie", "")
 
+    async def test_login_rejects_external_next_redirect(self, client: AsyncClient):
+        resp = await client.post(
+            "/login",
+            data={"password": "test", "next": "https://evil.example/path"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/chat"
+
+    async def test_login_requires_password_when_auth_enabled(self, client: AsyncClient, monkeypatch):
+        from config import cfg
+
+        monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+        monkeypatch.setattr(cfg, "AUTH_ADMIN_PASSWORD", "")
+
+        resp = await client.post(
+            "/login",
+            data={"password": "anything", "next": "/chat"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 401
+
     async def test_logout_clears_session(self, client: AsyncClient):
         resp = await client.get("/logout", follow_redirects=False)
         assert resp.status_code == 302
@@ -111,6 +133,90 @@ class TestExecuteRaw:
         data = resp.json()
         assert data["columns"] is not None
         assert data["exec_error"] is None
+
+    async def test_execute_raw_rejects_mutating_sql(self, client: AsyncClient):
+        """手动 SQL 执行接口只允许只读查询。"""
+        resp = await client.post(
+            "/api/execute-raw",
+            json={"sql": "DROP TABLE users", "user_id": "test_user"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["exec_error"] is not None
+        assert "只允许" in data["exec_error"] or "非只读" in data["exec_error"]
+
+
+class TestAdminAIAuth:
+    async def test_admin_ai_requires_auth_when_enabled(self, client: AsyncClient, monkeypatch):
+        from config import cfg
+
+        monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+        monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["secret"])
+
+        resp = await client.post(
+            "/api/admin-apply",
+            json={"type": "delete_metric", "proposal": {"name": "x"}},
+        )
+        assert resp.status_code == 401
+
+    async def test_admin_apply_rejects_invalid_metric(self, client: AsyncClient, monkeypatch, tmp_path):
+        from config import cfg
+
+        schema_path = tmp_path / "schema.registry.json"
+        metrics_path = tmp_path / "metrics.registry.yaml"
+        schema_path.write_text(
+            '{"tables":{"orders":{"columns":["id","total_amount"]}}}',
+            encoding="utf-8",
+        )
+        metrics_path.write_text("", encoding="utf-8")
+        monkeypatch.setattr(cfg, "REGISTRY_PATH", schema_path)
+        monkeypatch.setattr(cfg, "METRICS_PATH", metrics_path)
+
+        resp = await client.post(
+            "/api/admin-apply",
+            json={
+                "type": "add_metric",
+                "proposal": {
+                    "name": "bad_metric",
+                    "metric_class": "atomic",
+                    "label": "坏指标",
+                    "description": "不存在字段",
+                    "aggregation": "sum",
+                    "measure": "orders.missing_col",
+                },
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is False
+        assert "missing_col" in data["error"]
+
+
+class TestSettingsRoutes:
+    async def test_save_auth_settings_sets_cookie_secure(self, client: AsyncClient, monkeypatch):
+        import web.routes.settings as settings_routes
+
+        saved = {}
+        monkeypatch.setattr(settings_routes, "_load_forge_yaml", lambda: {})
+        monkeypatch.setattr(settings_routes, "_save_forge_yaml", lambda data: saved.update(data))
+
+        resp = await client.post(
+            "/admin/settings/auth",
+            data={
+                "enabled": "on",
+                "cookie_secure": "on",
+                "admin_password": "new-password",
+                "api_keys": "k1\nk2",
+            },
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        auth_cfg = saved["server"]["auth"]
+        assert auth_cfg["enabled"] is True
+        assert auth_cfg["cookie_secure"] is True
+        assert auth_cfg["admin_password"] == "new-password"
+        assert auth_cfg["api_keys"] == ["k1", "k2"]
 
 
 # ── Admin 页面可达性 ─────────────────────────────────────────────────────────

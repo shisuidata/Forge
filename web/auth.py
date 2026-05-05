@@ -54,7 +54,11 @@ def _verify_session_value(value: str) -> Optional[str]:
         return None
 
     # 过期检查
-    if time.time() - int(ts) > _SESSION_TTL:
+    try:
+        issued_at = int(ts)
+    except ValueError:
+        return None
+    if time.time() - issued_at > _SESSION_TTL:
         return None
 
     return user_id
@@ -79,6 +83,7 @@ def set_session_cookie(response: Response, user_id: str) -> None:
         max_age  = _SESSION_TTL,
         httponly = True,
         samesite = "lax",
+        secure   = bool(getattr(cfg, "AUTH_COOKIE_SECURE", False)),
     )
 
 
@@ -131,7 +136,7 @@ def verify_api_key(request: Request) -> bool:
         or request.query_params.get("api_key")
         or ""
     )
-    return key in cfg.AUTH_API_KEYS
+    return any(hmac.compare_digest(key, valid_key) for valid_key in cfg.AUTH_API_KEYS)
 
 
 # ── 内部异常（用于重定向）────────────────────────────────────────────────────

@@ -137,6 +137,10 @@ class Config:
         )
         if k
     ]
+    AUTH_COOKIE_SECURE: bool = (
+        os.getenv("AUTH_COOKIE_SECURE")
+        or _y("server", "auth", "cookie_secure", default="false")
+    ).lower() == "true"
 
 
 # 全局单例

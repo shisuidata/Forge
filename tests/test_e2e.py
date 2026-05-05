@@ -21,7 +21,8 @@ Forge Playwright E2E 测试。
 from __future__ import annotations
 
 import os
-import re
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -30,6 +31,20 @@ import pytest
 playwright = pytest.importorskip("playwright")
 
 BASE_URL = os.getenv("FORGE_BASE_URL", "http://localhost:8000")
+
+
+def _server_available() -> bool:
+    try:
+        with urllib.request.urlopen(f"{BASE_URL}/health", timeout=0.5) as resp:
+            return 200 <= resp.status < 500
+    except (OSError, urllib.error.URLError):
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _server_available(),
+    reason=f"Forge 服务未运行，跳过浏览器 E2E：{BASE_URL}",
+)
 
 
 @pytest.fixture(scope="session")
@@ -178,7 +193,7 @@ class TestAudit:
         page = logged_in_page
         page.goto("/admin/audit")
         assert page.locator("text=查询审计").first.is_visible()
-        assert page.locator("text=全部").is_visible()
+        assert page.get_by_role("link", name="全部").is_visible()
 
     def test_audit_status_filter(self, logged_in_page):
         page = logged_in_page

@@ -52,6 +52,15 @@ DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_MODEL    = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
+# Z.AI / GLM OpenAI-compatible API
+ZAI_API_KEY  = (
+    os.environ.get("ZAI_API_KEY", "")
+    or os.environ.get("GLM_API_KEY", "")
+    or os.environ.get("ZHIPU_API_KEY", "")
+)
+ZAI_BASE_URL = os.environ.get("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4")
+ZAI_MODEL    = os.environ.get("ZAI_MODEL", "glm-5.1")
+
 # 原生 Anthropic Claude API
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -304,6 +313,15 @@ def save_runs(method_id: str, data: dict) -> None:
     (d / "runs.json").write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def _openai_provider_defaults(cfg) -> tuple[str, str, str, str]:
+    """Return provider name, api key, base URL, and model for OpenAI-compatible methods."""
+    base_url = cfg.base_url or DEEPSEEK_BASE_URL
+    model = cfg.model
+    if "api.z.ai" in base_url:
+        return "z.ai", cfg.api_key or ZAI_API_KEY, base_url, model or ZAI_MODEL
+    return "openai-compat", cfg.api_key or DEEPSEEK_API_KEY, base_url, model
+
+
 # ── Main runner ───────────────────────────────────────────────────────────────
 
 def run_method(method_id: str, fresh: bool = False,
@@ -347,14 +365,16 @@ def run_method(method_id: str, fresh: bool = False,
     is_oai = cfg.llm_provider == "openai"
     if is_oai:
         # OpenAI-compatible（DeepSeek / SiliconFlow 等）
-        oai_api_key  = cfg.api_key  or DEEPSEEK_API_KEY
-        oai_base_url = cfg.base_url or DEEPSEEK_BASE_URL
-        oai_model    = cfg.model
+        provider_name, oai_api_key, oai_base_url, oai_model = _openai_provider_defaults(cfg)
         if not oai_api_key:
-            print(f"❌ OpenAI provider 需要 API Key（方法文件 API_KEY 或环境变量 DEEPSEEK_API_KEY）", file=sys.stderr)
+            print(
+                "❌ OpenAI-compatible provider 需要 API Key："
+                "方法文件 API_KEY，或对应环境变量 ZAI_API_KEY / GLM_API_KEY / ZHIPU_API_KEY / DEEPSEEK_API_KEY",
+                file=sys.stderr,
+            )
             sys.exit(1)
         print(f"\n🔬 {cfg.label}")
-        print(f"   Provider：openai-compat  模型：{oai_model}  并发：{max_workers}  每用例：{runs_per_method} 次")
+        print(f"   Provider：{provider_name}  模型：{oai_model}  并发：{max_workers}  每用例：{runs_per_method} 次")
         print(f"   Endpoint：{oai_base_url}")
         if compile_retries > 0:
             print(f"   编译重试：最多 {compile_retries} 次（模拟 agent 行为）")
@@ -549,10 +569,6 @@ def main() -> None:
         method_ids = list_methods()
     else:
         method_ids = [m.strip() for m in args.method.split(",") if m.strip()]
-
-    if not MINIMAX_API_KEY:
-        print("❌ 未设置 MINIMAX_API_KEY 环境变量", file=sys.stderr)
-        sys.exit(1)
 
     for mid in method_ids:
         run_method(mid, fresh=args.fresh,
