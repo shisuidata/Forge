@@ -3,15 +3,21 @@ forge.skill.md
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv/
 *.egg-info/
 dist/
 .env
+.env.*
+!.env.example
+!.env.production.example
 forge.yaml
 demo/*.db
 .DS_Store
 .claude/
 .forge/
 docs/conversation-logs/
+forge_audit.db
+uv.lock
 
 tests/accuracy/results/
 tests/spider2/data/
@@ -22,3 +28,8 @@ tests/benchmark/benchmark.db
 tests/benchmark/results/
 *.pkl
 .mcp.json
+web/static/charts/*.html
+website/.astro/
+website/.vercel/
+website/dist/
+website/node_modules/

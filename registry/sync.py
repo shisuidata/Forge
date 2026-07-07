@@ -203,6 +203,7 @@ def run_sync(database_url: str, registry_path: Path) -> dict:
     Returns:
         写入磁盘的 registry 字典，与文件内容完全一致。
     """
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
     live_tables = _introspect(database_url)
 
     existing: dict = {}

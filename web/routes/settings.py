@@ -85,6 +85,26 @@ async def settings_save_database(url: str = Form(default="")):
     return RedirectResponse(url="/admin/settings?saved=database", status_code=303)
 
 
+@router.post("/settings/execution", response_class=RedirectResponse)
+async def settings_save_execution(
+    request: Request,
+    max_rows: str = Form(default="200"),
+    display_rows: str = Form(default="50"),
+    timeout_seconds: str = Form(default="30"),
+):
+    form = await request.form()
+    y = _load_forge_yaml()
+    y.setdefault("execution", {})
+    y["execution"]["enabled"] = "enabled" in form
+    y["execution"]["raw_sql_enabled"] = "raw_sql_enabled" in form
+    y["execution"]["database_readonly_confirmed"] = "database_readonly_confirmed" in form
+    y["execution"]["max_rows"] = int(max_rows) if max_rows.isdigit() else 200
+    y["execution"]["display_rows"] = int(display_rows) if display_rows.isdigit() else 50
+    y["execution"]["timeout_seconds"] = int(timeout_seconds) if timeout_seconds.isdigit() else 30
+    _save_forge_yaml(y)
+    return RedirectResponse(url="/admin/settings?saved=execution", status_code=303)
+
+
 @router.post("/settings/embedding", response_class=RedirectResponse)
 async def settings_save_embedding(
     api_key: str = Form(default=""),

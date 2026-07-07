@@ -6,7 +6,9 @@ Forge 命令行入口。
     forge compile -             从 stdin 读取 Forge JSON 并编译
     forge sync                  连接数据库，将表结构同步到 schema.registry.json
     forge sync --db <url>       用指定的数据库 URL 覆盖 config 中的 DATABASE_URL
+    forge sync --out <path>     将结构层写入指定 schema.registry.json 路径
     forge sync-staging          将 .forge/staging/ 中的歧义确认记录合并入 disambiguations.registry.yaml
+    forge doctor                检查当前配置是否满足生产交付条件
     forge config                查看当前配置
     forge config <key> <value>  修改 forge.yaml 中的配置项
 
@@ -23,8 +25,14 @@ Forge 命令行入口。
     # 指定数据库 URL
     forge sync --db postgresql://user:pass@localhost:5432/mydb
 
+    # 指定输出路径（生产部署初始化 Registry 时常用）
+    forge sync --db "$DATABASE_URL" --out registry/data/schema.registry.json
+
     # 将用户对话中积累的歧义确认记录合并入语义库
     forge sync-staging
+
+    # 检查生产交付 readiness
+    forge doctor
 
     # 查看当前配置
     forge config
@@ -39,6 +47,7 @@ Forge 命令行入口。
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from .compiler import compile_query
 
@@ -156,12 +165,21 @@ def main() -> None:
         default=None,
         help="数据库 URL，优先级高于 config.DATABASE_URL",
     )
+    sync_parser.add_argument(
+        "--out",
+        metavar="PATH",
+        default=None,
+        help="schema.registry.json 输出路径，默认使用配置中的 REGISTRY_PATH",
+    )
 
     # ── sync-staging 子命令 ───────────────────────────────────────────────────
     subparsers.add_parser(
         "sync-staging",
         help="将 .forge/staging/ 中的歧义确认记录合并入 disambiguations.registry.yaml",
     )
+
+    # ── doctor 子命令 ───────────────────────────────────────────────────────
+    subparsers.add_parser("doctor", help="检查当前配置是否满足生产交付条件")
 
     # ── config 子命令 ─────────────────────────────────────────────────────────
     config_parser = subparsers.add_parser(
@@ -213,9 +231,10 @@ def main() -> None:
             )
             sys.exit(1)
 
-        registry = run_sync(database_url, cfg.REGISTRY_PATH)
+        registry_path = Path(args.out) if args.out else cfg.REGISTRY_PATH
+        registry = run_sync(database_url, registry_path)
         table_count = len(registry.get("tables", {}))
-        print(f"已同步 {table_count} 张表 → {cfg.REGISTRY_PATH}")
+        print(f"已同步 {table_count} 张表 → {registry_path}")
 
     # ── sync-staging 处理 ────────────────────────────────────────────────────
     elif args.command == "sync-staging":
@@ -237,6 +256,23 @@ def main() -> None:
             f"合并完成 → {cfg.DISAMBIGUATIONS_PATH}\n"
             f"  新增: {stats['added']}  更新: {stats['updated']}  跳过: {stats['skipped']}"
         )
+
+    # ── doctor 处理 ─────────────────────────────────────────────────────────
+    elif args.command == "doctor":
+        from main import _readiness_checks
+
+        checks = _readiness_checks()
+        failed = [c for c in checks if c["status"] == "fail"]
+        warned = [c for c in checks if c["status"] == "warn"]
+        overall = "fail" if failed else ("warn" if warned else "ok")
+
+        print(f"Forge readiness: {overall}")
+        print("=" * 50)
+        for check in checks:
+            mark = {"ok": "OK", "warn": "WARN", "fail": "FAIL"}.get(check["status"], check["status"])
+            print(f"[{mark:<4}] {check['name']}: {check['message']}")
+        if failed:
+            sys.exit(1)
 
     # ── config 处理 ──────────────────────────────────────────────────────────
     elif args.command == "config":

@@ -17,6 +17,10 @@ llm:
   api_key:   ""                    # API Key（建议放 .env，不要提交到 git）
   model:     "claude-sonnet-4-6"  # 模型 ID
   base_url:  ""                    # 仅 openai 模式需要，如 https://api.deepseek.com/v1
+  # 火山方舟 Ark：
+  # provider: "openai"
+  # model: "doubao-seed-2-1-pro-260628"
+  # base_url: "https://ark.cn-beijing.volces.com/api/v3"
 
 # ── Embedding 模型（RAG 召回用）────────────────────────────────────────────────
 embedding:
@@ -28,11 +32,23 @@ embedding:
 # ── 数据库连接 ────────────────────────────────────────────────────────────────
 database:
   url: ""
+  dialect: "auto"  # auto | sqlite | mysql | postgresql | bigquery | snowflake
   # 测试数据集示例：
   #   sqlite:///./tests/datasets/small/database.db     ← 4 张表小库
   #   sqlite:///./tests/datasets/large/database.db     ← 200 张表电商数仓
   # 生产示例：
   #   postgresql://user:pass@localhost:5432/mydb
+
+# ── SQL 执行安全 ─────────────────────────────────────────────────────────────
+execution:
+  enabled: true
+  raw_sql_enabled: false
+  max_rows: 200
+  display_rows: 50
+  timeout_seconds: 30
+  database_readonly_confirmed: false
+  # 生产环境必须使用数据库原生只读账号；确认后再改为 true。
+  # 应用层只读 SQL 校验不能替代数据库权限。
 
 # ── Registry 文件路径 ─────────────────────────────────────────────────────────
 # 三套测试数据集可选，取消注释切换：

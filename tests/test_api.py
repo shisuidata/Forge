@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
+from pathlib import Path
 
 
 # ── 基础端点 ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,79 @@ class TestHealthCheck:
         resp = await client.get("/", follow_redirects=False)
         assert resp.status_code == 302
         assert "/chat" in resp.headers["location"]
+
+    async def test_readiness_reports_config_issues(self, client: AsyncClient, monkeypatch, tmp_path):
+        from config import cfg
+
+        monkeypatch.setattr(cfg, "AUTH_ENABLED", False)
+        monkeypatch.setattr(cfg, "LLM_API_KEY", "")
+        monkeypatch.setattr(cfg, "EXECUTION_ENABLED", True)
+        monkeypatch.setattr(cfg, "DATABASE_URL", "")
+        monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", False)
+        monkeypatch.setattr(cfg, "EXECUTION_TIMEOUT_SECONDS", 0)
+        monkeypatch.setattr(cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+
+        resp = await client.get("/health/readiness")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "fail"
+        names = {check["name"] for check in data["checks"]}
+        assert {"auth", "database", "llm", "audit", "database_readonly", "query_timeout"} <= names
+
+    async def test_readiness_requires_readonly_confirmation(self, client: AsyncClient, monkeypatch, tmp_path):
+        from config import cfg
+
+        schema = tmp_path / "schema.registry.json"
+        metrics = tmp_path / "metrics.registry.yaml"
+        disambiguations = tmp_path / "disambiguations.registry.yaml"
+        conventions = tmp_path / "field_conventions.registry.yaml"
+        for path in (schema, metrics, disambiguations, conventions):
+            path.write_text("{}", encoding="utf-8")
+
+        monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+        monkeypatch.setattr(cfg, "AUTH_ADMIN_PASSWORD", "not-default")
+        monkeypatch.setattr(cfg, "AUTH_COOKIE_SECURE", True)
+        monkeypatch.setattr(cfg, "LLM_API_KEY", "sk-test")
+        monkeypatch.setattr(cfg, "LLM_PROVIDER", "openai")
+        monkeypatch.setattr(cfg, "LLM_MODEL", "deepseek-v4-pro")
+        monkeypatch.setattr(cfg, "EXECUTION_ENABLED", True)
+        monkeypatch.setattr(cfg, "DATABASE_URL", "sqlite:///:memory:")
+        monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", False)
+        monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", False)
+        monkeypatch.setattr(cfg, "EXECUTION_MAX_ROWS", 200)
+        monkeypatch.setattr(cfg, "EXECUTION_TIMEOUT_SECONDS", 30)
+        monkeypatch.setattr(cfg, "REGISTRY_PATH", schema)
+        monkeypatch.setattr(cfg, "METRICS_PATH", metrics)
+        monkeypatch.setattr(cfg, "DISAMBIGUATIONS_PATH", disambiguations)
+        monkeypatch.setattr(cfg, "CONVENTIONS_PATH", conventions)
+        monkeypatch.setattr(cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+
+        resp = await client.get("/health/readiness")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "fail"
+        readonly = next(check for check in data["checks"] if check["name"] == "database_readonly")
+        assert readonly["status"] == "fail"
+
+    def test_auth_enabled_reads_environment_variable(self, monkeypatch):
+        import os
+        import subprocess
+        import sys
+
+        env = os.environ.copy()
+        env["AUTH_ENABLED"] = "true"
+        result = subprocess.run(
+            [sys.executable, "-c", "from config import cfg; print(cfg.AUTH_ENABLED)"],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout.strip() == "True"
 
 
 # ── 认证流程 ──────────────────────────────────────────────────────────────────
@@ -145,6 +219,61 @@ class TestExecuteRaw:
         assert data["exec_error"] is not None
         assert "只允许" in data["exec_error"] or "非只读" in data["exec_error"]
 
+    async def test_execute_raw_can_be_disabled(self, client: AsyncClient, monkeypatch):
+        from config import cfg
+
+        monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", False)
+
+        resp = await client.post(
+            "/api/execute-raw",
+            json={"sql": "SELECT 1", "user_id": "test_user"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["exec_error"] is not None
+        assert "禁用" in data["exec_error"]
+
+
+class TestFeedbackAPI:
+    async def test_submit_feedback(self, client: AsyncClient, monkeypatch, tmp_path):
+        from agent import feedback
+
+        monkeypatch.setattr(feedback.audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+
+        resp = await client.post(
+            "/api/feedback",
+            json={
+                "user_id": "u1",
+                "feedback_type": "wrong_result",
+                "message": "这个 SQL 少了已完成订单过滤",
+                "question": "统计销售额",
+                "sql": "SELECT 1",
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["status"] == "pending"
+
+    async def test_submit_feedback_rejects_empty_message(self, client: AsyncClient, monkeypatch, tmp_path):
+        from agent import feedback
+
+        monkeypatch.setattr(feedback.audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+
+        resp = await client.post(
+            "/api/feedback",
+            json={
+                "user_id": "u1",
+                "feedback_type": "wrong_result",
+                "message": " ",
+            },
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["ok"] is False
+
 
 class TestAdminAIAuth:
     async def test_admin_ai_requires_auth_when_enabled(self, client: AsyncClient, monkeypatch):
@@ -217,6 +346,34 @@ class TestSettingsRoutes:
         assert auth_cfg["cookie_secure"] is True
         assert auth_cfg["admin_password"] == "new-password"
         assert auth_cfg["api_keys"] == ["k1", "k2"]
+
+    async def test_save_execution_settings(self, client: AsyncClient, monkeypatch):
+        import web.routes.settings as settings_routes
+
+        saved = {}
+        monkeypatch.setattr(settings_routes, "_load_forge_yaml", lambda: {})
+        monkeypatch.setattr(settings_routes, "_save_forge_yaml", lambda data: saved.update(data))
+
+        resp = await client.post(
+            "/admin/settings/execution",
+            data={
+                "enabled": "on",
+                "database_readonly_confirmed": "on",
+                "max_rows": "500",
+                "display_rows": "40",
+                "timeout_seconds": "45",
+            },
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        execution_cfg = saved["execution"]
+        assert execution_cfg["enabled"] is True
+        assert execution_cfg["raw_sql_enabled"] is False
+        assert execution_cfg["database_readonly_confirmed"] is True
+        assert execution_cfg["max_rows"] == 500
+        assert execution_cfg["display_rows"] == 40
+        assert execution_cfg["timeout_seconds"] == 45
 
 
 # ── Admin 页面可达性 ─────────────────────────────────────────────────────────

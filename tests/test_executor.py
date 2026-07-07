@@ -30,3 +30,42 @@ def test_validate_readonly_sql_accepts_read_queries(sql: str):
 def test_validate_readonly_sql_rejects_mutating_queries(sql: str):
     with pytest.raises(ValueError):
         validate_readonly_sql(sql)
+
+
+def test_execute_with_data_respects_configured_row_cap(monkeypatch):
+    import forge.executor as executor
+
+    monkeypatch.setattr(executor.cfg, "DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setattr(executor.cfg, "EXECUTION_ENABLED", True)
+    monkeypatch.setattr(executor.cfg, "EXECUTION_MAX_ROWS", 2)
+    monkeypatch.setattr(executor.cfg, "EXECUTION_DISPLAY_ROWS", 2)
+    monkeypatch.setattr(executor, "_engine", None)
+
+    sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3"
+    text, cols, rows = executor.execute_with_data(sql, max_rows=200)
+
+    assert cols == ["n"]
+    assert len(rows) == 2
+    assert "仅显示" in text or "显示前" in text
+
+
+def test_execute_with_data_can_be_disabled(monkeypatch):
+    import forge.executor as executor
+
+    monkeypatch.setattr(executor.cfg, "EXECUTION_ENABLED", False)
+
+    text, cols, rows = executor.execute_with_data("SELECT 1")
+
+    assert "禁用" in text
+    assert cols == []
+    assert rows == []
+
+
+def test_bounded_timeout_seconds(monkeypatch):
+    import forge.executor as executor
+
+    monkeypatch.setattr(executor.cfg, "EXECUTION_TIMEOUT_SECONDS", 45)
+    assert executor._bounded_timeout_seconds() == 45
+
+    monkeypatch.setattr(executor.cfg, "EXECUTION_TIMEOUT_SECONDS", -1)
+    assert executor._bounded_timeout_seconds() == 0

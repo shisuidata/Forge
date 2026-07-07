@@ -72,3 +72,29 @@ def test_sync_db_flag_overrides_config(tmp_path, monkeypatch):
 
     assert "events" in result["tables"]
     assert set(result["tables"]["events"]["columns"].keys()) == {"id", "name", "ts"}
+
+
+def test_sync_cli_out_flag_writes_requested_registry_path(tmp_path, monkeypatch, capsys):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT)",
+    ])
+    out_path = tmp_path / "registry" / "schema.registry.json"
+
+    from forge import cli
+
+    monkeypatch.setattr(sys, "argv", [
+        "forge",
+        "sync",
+        "--db",
+        url,
+        "--out",
+        str(out_path),
+    ])
+
+    cli.main()
+
+    output = capsys.readouterr().out
+    assert out_path.exists()
+    assert str(out_path) in output
+    registry = json.loads(out_path.read_text())
+    assert set(registry["tables"].keys()) == {"customers"}

@@ -8,6 +8,10 @@ Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以�
 
 | 基准 | 题数 | 指标 | 得分 |
 |---|---|---|---|
+| 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 40 | Case EA(any) | **100.0%** |
+| 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 40 | Case EA(all) | **92.5%** |
+| 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 120 runs | Run ACC | **97.5%** |
+| 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 120 runs | 编译失败率 | **0.0%** |
 | 自有用例（Method J） | 40 | LLM Judge | **8.65 / 10** |
 | 自有用例（Method J+Sem） | 40 | LLM Judge | **8.82 / 10** |
 | 自有用例（Method K，大 Schema） | 40 | LLM Judge | **8.07 / 10** |
@@ -21,6 +25,32 @@ Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以�
 | Spider2-Lite SQLite | 123 | 编译成功率 | **97.6%** |
 
 ---
+
+## 当前推荐交付基线：Method AF
+
+Method AF 使用 large 40 题电商数仓基准、DeepSeek V4 Pro、每题 3 次生成、编译重试 2 次。它在 Method AD 的基础上，把高频输出契约、字段约定、排序口径、过滤口径和反连接/窗口稳定性沉淀到 Registry/lint 中。
+
+| 类别 | Case EA | Run ACC |
+|---|---:|---:|
+| 多表JOIN+聚合 | 100.0% | 100.0% |
+| 复杂过滤 | 100.0% | 93.3% |
+| 分组+HAVING | 100.0% | 93.3% |
+| 排名与TopN | 100.0% | 100.0% |
+| 窗口聚合 | 100.0% | 100.0% |
+| 时序导航 | 100.0% | 93.3% |
+| ANTI/SEMI JOIN | 100.0% | 100.0% |
+| 综合复杂查询 | 100.0% | 100.0% |
+
+相对 Method AD：
+
+| 指标 | Method AD | Method AF |
+|---|---:|---:|
+| Case EA(any) | 100.0% | 100.0% |
+| Case EA(all) | 75.0% | 92.5% |
+| Run ACC | 89.2% | 97.5% |
+| 编译失败率 | 0.0% | 0.0% |
+
+详见 [2026-05-06 测试报告](test-report-2026-05-06.md)。
 
 ## 自有用例：40 题
 

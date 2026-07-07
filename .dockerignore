@@ -1,0 +1,17 @@
+.git
+.codex
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.env
+.env.*
+!.env.production.example
+forge_audit.db
+.forge
+web/static/charts/*.html
+tests/accuracy/results
+website/node_modules
+website/dist

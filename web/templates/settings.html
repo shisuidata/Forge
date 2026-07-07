@@ -103,6 +103,81 @@
   </div>
 
   {# ══════════════════════════════════════════════════════════════════════════ #}
+  {# SQL 执行安全                                                              #}
+  {# ══════════════════════════════════════════════════════════════════════════ #}
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">SQL 执行安全</h3>
+      <p class="text-xs text-gray-500 mt-0.5">控制已审核 SQL 的执行开关、手动 SQL 入口和结果返回上限。</p>
+    </div>
+    <form method="post" action="/admin/settings/execution" class="px-6 py-5 space-y-4">
+      <div class="flex items-center justify-between py-2">
+        <div>
+          <label class="text-xs font-medium text-gray-700">启用 SQL 执行</label>
+          <p class="text-xs text-gray-400 mt-0.5">关闭后只生成 SQL，不连接数据库执行。</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="enabled"
+                 {% if y.get('execution', {}).get('enabled', True) %}checked{% endif %}
+                 class="sr-only peer" />
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+      </div>
+      <div class="flex items-center justify-between py-2">
+        <div>
+          <label class="text-xs font-medium text-gray-700">允许手动 SQL 执行</label>
+          <p class="text-xs text-gray-400 mt-0.5">生产环境可关闭，仅允许 Agent 审核流程执行。</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="raw_sql_enabled"
+                 {% if y.get('execution', {}).get('raw_sql_enabled', True) %}checked{% endif %}
+                 class="sr-only peer" />
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+      </div>
+      <div class="flex items-center justify-between py-2">
+        <div>
+          <label class="text-xs font-medium text-gray-700">确认数据库账号只读</label>
+          <p class="text-xs text-gray-400 mt-0.5">生产环境必须使用数据库原生只读账号，应用层校验不能替代权限。</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" name="database_readonly_confirmed"
+                 {% if y.get('execution', {}).get('database_readonly_confirmed', False) %}checked{% endif %}
+                 class="sr-only peer" />
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+        </label>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">最大返回行数</label>
+          <input name="max_rows" type="number" min="1" max="10000"
+                 value="{{ y.get('execution', {}).get('max_rows', 200) }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">文本展示行数</label>
+          <input name="display_rows" type="number" min="1" max="500"
+                 value="{{ y.get('execution', {}).get('display_rows', 50) }}"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-700 mb-1.5">查询超时（秒）</label>
+        <input name="timeout_seconds" type="number" min="1" max="600"
+               value="{{ y.get('execution', {}).get('timeout_seconds', 30) }}"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+        <p class="text-xs text-gray-400 mt-1">生产环境建议 30-120 秒。SQLite/PostgreSQL/MySQL 会尽力应用单查询超时。</p>
+      </div>
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button type="submit"
+                class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+          保存执行配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# ══════════════════════════════════════════════════════════════════════════ #}
   {# Embedding 模型                                                            #}
   {# ══════════════════════════════════════════════════════════════════════════ #}
   <div class="border border-gray-200 rounded-lg mb-6">
@@ -395,6 +470,22 @@
             <tr>
               <td class="px-4 py-2.5 text-gray-500">Database URL</td>
               <td class="px-4 py-2.5 font-mono text-gray-800 break-all">{{ mask_db_url(y.get('database', {}).get('url', '')) }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">SQL Execution</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('execution', {}).get('enabled', True) }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Raw SQL</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('execution', {}).get('raw_sql_enabled', True) }}</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Query Timeout</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('execution', {}).get('timeout_seconds', 30) }}s</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5 text-gray-500">Readonly DB Confirmed</td>
+              <td class="px-4 py-2.5 font-mono text-gray-800">{{ y.get('execution', {}).get('database_readonly_confirmed', False) }}</td>
             </tr>
             <tr>
               <td class="px-4 py-2.5 text-gray-500">Staging Dir</td>

@@ -1,7 +1,7 @@
 # Forge
 
 > **面向数据团队的 AI 查询 Agent，让弱模型也能生成可信 SQL。**
-> ⚠️ 早期阶段，持续迭代中。企业日常查询场景已优于直接 SQL 生成；学术 benchmark 上还有差距。
+> 当前状态：已达到受控生产落地 / 封闭 Beta 候选标准；可用于设计型客户 PoC，不建议无约束规模化铺开。
 
 [English README](README_EN.md)
 
@@ -17,18 +17,18 @@
 
 **核心主张**：生成错误和业务逻辑错误应该系统性消灭，而不是靠更好的 prompt 碰运气。
 
-### Forge vs 直接 SQL 生成
+### 当前推荐基线
 
-40 题自有测试集，LLM Judge 评分（Claude Sonnet，每题 5 次均值）：
+large 40 题业务查询基准，DeepSeek V4 Pro，Method AF，每题 3 次生成：
 
-| 查询类型 | 直接 SQL | **Forge** | Δ |
-|---|---|---|---|
-| ANTI/SEMI JOIN | 7.80 | **8.60** | **+0.80** |
-| 排名 & TopN | 8.36 | **9.00** | +0.64 |
-| 时序导航 | 8.40 | **9.00** | +0.60 |
-| **总体（8 类）** | **8.38** | **8.82** | **+0.44** |
+| 指标 | 结果 |
+|---|---:|
+| Case EA(any) | **100.0%**（40/40） |
+| Case EA(all) | **92.5%**（37/40） |
+| Run ACC | **97.5%**（117/120） |
+| 编译失败率 | **0.0%**（120/120 成功） |
 
-所有分类均优于直接 SQL 生成，无退步。详见 [基准测试](docs/benchmarks.md)。
+这组结果说明：Forge 不只是“偶尔能答对”，而是在重复生成下已经有较强稳定性。详见 [测试报告](docs/test-report-2026-05-06.md) 和 [基准测试](docs/benchmarks.md)。
 
 ---
 
@@ -38,7 +38,7 @@
 # 1. 克隆 & 安装
 git clone https://github.com/shisuidata/Forge
 cd Forge
-pip install -e .
+bash scripts/bootstrap-dev.sh
 
 # 2. 配置（填入 LLM_API_KEY + EMBED_API_KEY）
 cp .env.example .env
@@ -50,18 +50,39 @@ bash scripts/demo-setup.sh
 uvicorn main:app --host 0.0.0.0 --port 8000  # Web UI + API
 ```
 
-**Docker 方式（推荐，自带 PostgreSQL）：**
+**Docker 开发方式（自带 PostgreSQL，热重载）：**
 
 ```bash
 docker compose up
 # 访问 http://localhost:8000/admin
 ```
 
+**生产交付方式：**
+
+```bash
+cp .env.production.example .env.production
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+forge doctor
+```
+
+生产部署必须使用数据库只读账号，并确认 `/health/readiness` 无 `fail` 项。详见 [生产交付部署说明](docs/production-deployment.md)。
+
 **接入自己的数据库：**
 
 ```bash
 # 修改 .env 中的 DATABASE_URL，然后同步 schema
 forge sync --db postgresql://user:pass@host/db
+# 或写入指定 Registry 路径
+forge sync --db "$DATABASE_URL" --out registry/data/schema.registry.json
+```
+
+**使用火山方舟 Ark（OpenAI 兼容接口）：**
+
+```env
+LLM_PROVIDER=openai
+LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+LLM_MODEL=doubao-seed-2-1-pro-260628
+LLM_API_KEY=你的火山方舟 API Key
 ```
 
 **运行测试：**
@@ -116,11 +137,10 @@ flowchart LR
 
 | 指标 | 值 |
 |---|---|
+| EA（large schema, DeepSeek V4 Pro, Method AF） | **100.0% Case EA / 97.5% Run ACC** |
+| Case EA(all)（large schema, DeepSeek V4 Pro, Method AF） | **92.5%** |
 | EA best（small schema, Claude/DeepSeek） | **95.0%** |
-| EA（large schema, MiniMax M2.7, Method S） | **70.0%** |
-| EA（large schema, MiniMax M2.7, Method R） | **72.5%** |
-| EA（large schema, DeepSeek V3.2） | **65.0%** |
-| 编译器测试用例 | **118** |
+| 全量自动化测试 | **302 passed, 23 skipped** |
 | Spider2-Lite 编译成功率 | **97.6%** |
 | Spider2-Lite EA | **9.2%** |
 
@@ -142,8 +162,9 @@ flowchart LR
 | 飞书 Bot（流式卡片 + 按钮回调） | ✅ |
 | 五通道知识收集（RSS / URL / 文档 / 对话 / 手动） | ✅ |
 | 文档导入（上传 .txt/.md → LLM 提取 → 确认入库） | ✅ |
-| 自动化测试（26 API + 22 Playwright E2E） | ✅ |
-| 启动健康检查（DB / LLM / Embedding 状态检测） | ✅ |
+| 自动化测试（API / compiler / executor / lint / docs / audit / feedback） | ✅ |
+| 部署就绪检查（`/health/readiness` + `forge doctor`） | ✅ |
+| 生产部署包（Dockerfile / compose.prod / env 模板 / 部署文档） | ✅ |
 
 ---
 
@@ -155,9 +176,10 @@ forge/
   ├── compiler.py          — 确定性编译器：Forge JSON → SQL
   ├── retriever.py         — Schema 向量检索器（四层召回 + ACL 过滤）
   ├── executor.py          — SQL 执行器
+  ├── lint.py              — 业务/字段/结果契约检查
   ├── cache.py             — 查询缓存（精确 + 模糊匹配）
   ├── chart.py             — 图表生成（ECharts）
-  └── cli.py               — CLI 入口
+  └── cli.py               — CLI 入口（compile / sync / doctor）
 
 agent/
   ├── agent.py             — Agent 调度（查询 / 指标定义 / 缓存反馈）
@@ -178,7 +200,8 @@ web/
 
 registry/
   ├── sync.py              — forge sync：直连数据库生成结构层
-  └── data/                — Registry 三层文件（schema / metrics / disambiguations）
+  ├── staging_sync.py      — 用户确认规则合并入 Registry
+  └── data/                — 生产 Registry 路径（schema / metrics / disambiguations / conventions）
 
 scripts/
   └── seed_mock_data.py    — Mock 数据填充（团队/用户/审计/会话/知识）
@@ -188,7 +211,8 @@ tests/
   ├── test_compiler*.py    — 编译器单元测试（118 个用例）
   ├── test_api.py          — API 端点测试（26 个用例）
   ├── test_e2e.py          — Playwright E2E 测试（22 个用例）
-  ├── accuracy/            — 自有 40 题基准（Method R/S）
+  ├── test_docs_links.py   — 公开文档本地链接检查
+  ├── accuracy/            — 自有 40 题基准（当前推荐 Method AF）
   └── spider2/             — Spider2-Lite SQLite 子集（123 题）
 ```
 
@@ -202,6 +226,11 @@ tests/
 | [工作原理与 DSL 能力](docs/how-it-works.md) | 执行流程详解、DSL 特性表、Schema RAG |
 | [基准测试详情](docs/benchmarks.md) | 版本演化、跨模型 EA 对比、Spider2 结果 |
 | [设计哲学与工程洞察](docs/philosophy.md) | 核心哲学、工程经验、开放问题 |
+| [商业化就绪清单](docs/commercial-readiness.md) | 当前商业化差距、已补齐的安全/审计能力、PoC 到正式交付路线 |
+| [商业化推进计划](docs/commercialization-plan.md) | P0/P1/P2 优先级、准确率闭环、PoC 到正式交付判定标准 |
+| [兼容性矩阵](docs/compatibility-matrix.md) | 数据库、数据仓库、Agent 入口、LLM 服务的支持边界 |
+| [交付前综合评估](docs/delivery-assessment-2026-05-07.md) | 业务板块、文档、目录、工作流、三轮测试和交付优化方案 |
+| [生产交付部署说明](docs/production-deployment.md) | 生产 compose、env、只读数据库账号、readiness、运维建议 |
 | [DSL 形式化语义](docs/dsl-semantics.md) | DSL 的形式化定义 |
 | [构建你的语义库](docs/registry.md) | Registry 结构层 + 语义层三文件详解，从零构建指南 |
 | [飞书 Bot 部署](docs/feishu-setup.md) | 飞书集成配置 |

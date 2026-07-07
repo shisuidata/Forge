@@ -40,6 +40,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from agent import audit
+from agent import feedback
 from agent.agent import process as agent_process
 from agent.agent import approve as agent_approve
 from agent.agent import cancel as agent_cancel
@@ -149,6 +150,7 @@ def _safe_next_path(next_path: str) -> str:
 # ── Chat API ──────────────────────────────────────────────────────────────────
 
 import asyncio
+import time
 from functools import partial
 
 class ChatRequest(BaseModel):
@@ -224,8 +226,11 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
     if resp.action == "approved" and resp.sql:
         # 1. 执行 SQL
         cols, rows_raw = [], []
+        execution_ms = None
         try:
+            started = time.perf_counter()
             text, cols, rows_raw = await _run_sync(execute_with_data, resp.sql)
+            execution_ms = int((time.perf_counter() - started) * 1000)
             result["columns"] = cols
             result["rows"] = [list(r) for r in rows_raw]
             result["row_count"] = len(rows_raw)
@@ -279,6 +284,14 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
             import logging
             logging.getLogger(__name__).warning("Pipeline resume failed: %s", exc)
 
+        await audit.update_latest_pending(
+            req.user_id,
+            "error" if result["exec_error"] else "approved",
+            error_message=result["exec_error"],
+            row_count=result["row_count"],
+            execution_ms=execution_ms,
+        )
+
     return result
 
 
@@ -286,6 +299,7 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
 async def api_cancel(req: ChatRequest, _auth=Depends(require_api_auth)):
     """用户取消 SQL。"""
     resp = await _run_sync(agent_cancel, req.user_id)
+    await audit.update_latest_pending(req.user_id, "cancelled")
     return {"text": resp.text, "action": resp.action}
 
 
@@ -294,14 +308,38 @@ class ExecuteRawRequest(BaseModel):
     user_id: str = "web_user"
 
 
+class FeedbackRequest(BaseModel):
+    user_id: str = "web_user"
+    feedback_type: str = "wrong_result"
+    message: str
+    audit_id: int | None = None
+    question: str | None = None
+    sql: str | None = None
+    expected: str | None = None
+
+
 @chat_router.post("/api/execute-raw", response_class=JSONResponse)
 async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth)):
     """直接执行用户编辑后的 SQL（跳过 Agent 编译）。"""
     result = {"text": "", "sql": req.sql, "action": "approved",
               "columns": None, "rows": None, "row_count": 0, "exec_error": None,
               "analysis": None, "chart_html": None}
+    execution_ms = None
+    if not cfg.RAW_SQL_ENABLED:
+        result["exec_error"] = "⚠ 手动 SQL 执行已被配置禁用。"
+        await audit.log(
+            user_id=req.user_id,
+            user_message="[手动编辑 SQL]",
+            forge_json=None,
+            sql=req.sql,
+            status="error",
+            error_message=result["exec_error"],
+        )
+        return result
     try:
+        started = time.perf_counter()
         text, cols, rows_raw = await _run_sync(execute_with_data, req.sql)
+        execution_ms = int((time.perf_counter() - started) * 1000)
         result["columns"] = cols
         result["rows"] = [list(r) for r in rows_raw]
         result["row_count"] = len(rows_raw)
@@ -317,8 +355,28 @@ async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth
         sql=req.sql,
         status="approved" if not result["exec_error"] else "error",
         error_message=result["exec_error"],
+        row_count=result["row_count"],
+        execution_ms=execution_ms,
     )
     return result
+
+
+@chat_router.post("/api/feedback", response_class=JSONResponse)
+async def api_feedback(req: FeedbackRequest, _auth=Depends(require_api_auth)):
+    """提交 SQL/结果反馈，进入待处理队列。"""
+    try:
+        feedback_id = await feedback.submit(
+            user_id=req.user_id,
+            audit_id=req.audit_id,
+            question=req.question,
+            sql=req.sql,
+            feedback_type=req.feedback_type,
+            message=req.message,
+            expected=req.expected,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
+    return {"ok": True, "feedback_id": feedback_id, "status": "pending"}
 
 
 # ── Admin AI 助手 API ─────────────────────────────────────────────────────────
@@ -520,8 +578,8 @@ async def dashboard_page(request: Request):
         from datetime import date as _date
         today_str = _date.today().isoformat()
         import aiosqlite
-        async with aiosqlite.connect(audit.DB_PATH) as db:
-            await db.execute(audit._DDL)
+        await audit._ensure_schema()
+        async with aiosqlite.connect(audit._db_path()) as db:
             cursor = await db.execute(
                 "SELECT COUNT(*) FROM audit_log WHERE timestamp >= ?",
                 (today_str,),

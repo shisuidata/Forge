@@ -2,7 +2,22 @@
 
 **面向数据团队的 AI 查询 Agent —— 自然语言输入，确定性 SQL 输出。**
 
-[English](README.md)
+[English](README_EN.md)
+
+---
+
+## 当前交付基线
+
+Forge 当前推荐基线是 Method AF：large 40 题电商数仓基准、DeepSeek V4 Pro、每题 3 次生成。
+
+| 指标 | 结果 |
+|---|---:|
+| Case EA(any) | **100.0%**（40/40） |
+| Case EA(all) | **92.5%**（37/40） |
+| Run ACC | **97.5%**（117/120） |
+| 编译失败率 | **0.0%**（120/120 成功） |
+
+项目已经达到受控生产落地 / 封闭 Beta 候选标准。生产部署请先阅读 [生产交付部署说明](docs/production-deployment.md)，并运行 `forge doctor` 确认没有 `fail` 项。
 
 ---
 
@@ -195,7 +210,7 @@ Forge 的优势在 ANTI/SEMI JOIN 仍然成立：直出 SQL 的 `NOT IN` 有 NUL
 ```bash
 git clone https://github.com/shisuidata/Forge
 cd Forge
-pip install -e .
+bash scripts/bootstrap-dev.sh
 ```
 
 ### 2. 配置
@@ -210,6 +225,20 @@ cp .env.example .env
 ```bash
 forge sync
 # 或指定连接：forge sync --db postgresql://user:pass@host/db
+# 或指定输出路径：forge sync --db "$DATABASE_URL" --out registry/data/schema.registry.json
+```
+
+### OpenAI 兼容模型 / 火山方舟
+
+Forge 的 `openai` provider 走 Chat Completions + tools/function calling，适合 DeepSeek、MiniMax、通义、火山方舟 Ark、本地 OpenAI 兼容服务。
+
+火山方舟示例：
+
+```env
+LLM_PROVIDER=openai
+LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+LLM_MODEL=doubao-seed-2-1-pro-260628
+LLM_API_KEY=你的火山方舟 API Key
 ```
 
 ### 4. 启动服务

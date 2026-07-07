@@ -320,3 +320,40 @@ def test_qualify_does_not_affect_non_qualify_queries():
     })
     assert "SELECT * FROM" not in result
     assert result.startswith("SELECT")
+
+
+def test_joined_cte_window_partition_keeps_cte_prefix():
+    """JOIN 多个 CTE 时，window partition 不能剥掉主 CTE 前缀。"""
+    result = compile_query({
+        "cte": [
+            {"name": "category_sales", "query": {
+                "scan": "order_items",
+                "group": ["order_items.category_id", "order_items.product_id"],
+                "agg": [{"fn": "sum", "col": "order_items.amount", "as": "product_sales"}],
+                "select": ["order_items.category_id", "order_items.product_id", "product_sales"],
+            }},
+            {"name": "category_total", "query": {
+                "scan": "category_sales",
+                "group": ["category_sales.category_id"],
+                "agg": [{"fn": "sum", "col": "category_sales.product_sales", "as": "category_total_sales"}],
+                "select": ["category_sales.category_id", "category_total_sales"],
+            }},
+        ],
+        "scan": "category_sales",
+        "joins": [{
+            "type": "inner",
+            "table": "category_total",
+            "on": {"left": "category_sales.category_id", "right": "category_total.category_id"},
+        }],
+        "select": ["category_sales.category_id", "category_sales.product_id", "product_sales", "rn"],
+        "window": [{
+            "fn": "row_number",
+            "partition": ["category_sales.category_id"],
+            "order": [{"col": "category_sales.product_sales", "dir": "desc"}],
+            "as": "rn",
+        }],
+        "qualify": [{"col": "rn", "op": "lte", "val": 3}],
+    })
+
+    assert "PARTITION BY category_sales.category_id" in result
+    assert "PARTITION BY category_id" not in result

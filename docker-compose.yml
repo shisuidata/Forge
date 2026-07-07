@@ -25,6 +25,7 @@ services:
     env_file: .env
     environment:
       MEMORY_DB_URL: "postgresql://forge:${PG_PASSWORD:-forge123}@postgres:5432/forge"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -89,6 +89,19 @@ class Config:
     SQL_DIALECT:  str = _env("SQL_DIALECT",  "database", "dialect", default="auto")
     # auto = 从 DATABASE_URL 自动推断；可手动指定 sqlite/mysql/postgresql/bigquery/snowflake
 
+    # ── SQL 执行安全 ───────────────────────────────────────────────────────────
+    EXECUTION_ENABLED: bool = _env("EXECUTION_ENABLED", "execution", "enabled", default="true").lower() == "true"
+    RAW_SQL_ENABLED: bool = _env("RAW_SQL_ENABLED", "execution", "raw_sql_enabled", default="true").lower() == "true"
+    EXECUTION_MAX_ROWS: int = int(_env("EXECUTION_MAX_ROWS", "execution", "max_rows", default="200"))
+    EXECUTION_DISPLAY_ROWS: int = int(_env("EXECUTION_DISPLAY_ROWS", "execution", "display_rows", default="50"))
+    EXECUTION_TIMEOUT_SECONDS: int = int(_env("EXECUTION_TIMEOUT_SECONDS", "execution", "timeout_seconds", default="30"))
+    DATABASE_READONLY_CONFIRMED: bool = _env(
+        "DATABASE_READONLY_CONFIRMED",
+        "execution",
+        "database_readonly_confirmed",
+        default="false",
+    ).lower() == "true"
+
     # ── 反馈机制（语义库自动维护）──────────────────────────────────────────────
     FEEDBACK_ENABLED: bool = _env("FEEDBACK_ENABLED", "feedback", "enabled", default="true").lower() == "true"
     # true = 开启查询缓存 + 歧义澄清 → staging → 自动合并语义库
@@ -120,12 +133,15 @@ class Config:
     LOG_LEVEL: str = _env("LOG_LEVEL", "logging", "level", default="INFO")
     LOG_FILE:  str = _env("LOG_FILE",  "logging", "file",  default="")  # 空=只输出到 stderr
 
+    # ── 审计 ─────────────────────────────────────────────────────────────────────
+    AUDIT_DB_PATH: str = _env("AUDIT_DB_PATH", "audit", "db_path", default="forge_audit.db")
+
     # ── Web 服务器 ─────────────────────────────────────────────────────────────
     HOST: str = _env("HOST", "server", "host", default="0.0.0.0")
     PORT: int = int(_env("PORT", "server", "port", default="8000"))
 
     # ── 认证鉴权 ───────────────────────────────────────────────────────────────
-    AUTH_ENABLED:        bool      = _y("server", "auth", "enabled", default="false").lower() == "true"
+    AUTH_ENABLED:        bool      = _env("AUTH_ENABLED", "server", "auth", "enabled", default="false").lower() == "true"
     AUTH_ADMIN_PASSWORD: str       = (
         os.getenv("AUTH_PASSWORD")
         or _y("server", "auth", "admin_password", default="")

@@ -17,6 +17,7 @@ order_status_filter:
   applies_to: [dwd_order_detail.order_status, dwd_order_item_detail.order_id]
   convention: |
     - 纯维度统计（"各品类总销售额"、"商品销量排行"）→ 不需要加 order_status 过滤
+    - 普通订单数/订单量/订单占比（例如"每个渠道按月统计订单数"）如果用户没有明确说"已完成/已支付/已取消/退款"等状态 → 不要默认加 order_status 过滤，应统计全部订单状态
     - 用户行为分析（"消费轨迹"、"下单时间间隔"、"复购分析"、"消费排名"）→ 默认加 dwd_order_detail.order_status = '已完成'
     - 若用户明确要求看全部状态或特定状态，以用户要求为准
   confirmed_by_users: true
@@ -25,11 +26,14 @@ category_group_by:
   label: 品类 GROUP BY 与 PARTITION BY
   applies_to: [dim_category.category_id, dim_category.category_name]
   convention: |
-    当按品类名称分组时，必须同时将 category_id 纳入 GROUP BY（或 PARTITION BY），
-    因为 dim_category 中可能存在同名但不同 ID 的品类，
-    仅按名称分组可能造成数据错误合并。
-    示例：group: ["dim_category.category_id", "dim_category.category_name"]
-  confirmed_by_users: false
+    常规 GROUP BY 按品类聚合时，应同时使用 dim_category.category_id 和
+    dim_category.category_name，避免真实维表中的同名品类被错误合并。
+    示例：group: ["dim_category.category_id", "dim_category.category_name"]。
+    但在"各品类内 TopN / 品类内排名 / 品类内占比"这类窗口查询中，
+    如果内层 CTE 已经按 product_id + product_name + category_name 聚合，
+    外层 window.partition 应使用展示粒度 category_name，不要再加入 category_id，
+    否则同名品类会被拆成多个 TopN 分区。
+  confirmed_by_users: true
 
 lag_lead_order:
   label: LAG/LEAD 时序方向
@@ -49,6 +53,11 @@ unit_price_calculation:
     AVG(dwd_order_detail.total_amount)（明确要求已完成订单时加 order_status = '已完成'）。
     "客单价在 X 到 Y 之间"是对单个订单金额的过滤（filter），而非对用户平均消费的 HAVING 过滤。
     不要用 SUM(total_amount)/COUNT(user_id) 这种用户级别的均值代替客单价。
+    也不要用 AVG(total_amount) OVER (...) + qualify 表达客单价范围。
+    large schema 中 dim_user 主键是 dim_user.user_id，不是 dim_user.id。
+    对"找出客单价在500到2000之间、25-34岁或35-44岁女性用户的已完成订单"，
+    最终只输出 dwd_order_detail.order_id、dim_user.user_name、dim_user.age_group、
+    dwd_order_detail.total_amount；不要额外输出 user_id/order_dt，也不要排序。
   confirmed_by_users: false
 
 category_output_name:
@@ -58,7 +67,73 @@ category_output_name:
     用户提问中出现"品类"、"类别"、"品类名"等词时，select 输出应包含 dim_category.category_name（可读名称），
     而不是 dim_category.category_id（内部 ID）。
     只有用户明确说"按品类 ID 分组"或"需要品类 ID"时，才输出 category_id。
-    若 GROUP BY 含 category_name，建议同时加 category_id（见 category_group_by 约定）。
+    常规 GROUP BY 可同时包含 category_id 和 category_name；窗口 PARTITION BY
+    则按具体问题粒度选择，TopN/占比通常使用 category_name。
+  confirmed_by_users: true
+
+product_name_grain:
+  label: 商品名称展示粒度
+  applies_to: [dim_product.product_id, dim_product.product_name]
+  convention: |
+    常规商品聚合应同时使用 dim_product.product_id 和 dim_product.product_name，
+    避免同名商品被错误合并。
+    只有在明确询问"去重商品名称"或 EXISTS/NOT EXISTS 只需要显示名称时，
+    外层 SELECT 可以只输出 product_name。
+    当问题是"找出有差评记录但所有差评均无图片的商品，显示商品名称"这类
+    只显示商品名称的反存在查询时，最终结果必须按 product_name 去重：
+    使用 distinct: true，或最终只按 dim_product.product_name 分组；
+    不要在最终 GROUP BY 中加入 product_id。
+  confirmed_by_users: true
+
+vip_level_grain:
+  label: 会员等级展示粒度
+  applies_to: [dim_vip_level.vip_level_id, dim_vip_level.level_name]
+  convention: |
+    用户说"会员等级"、"钻石会员"、"铂金会员"时，展示和分组粒度是
+    dim_vip_level.level_name。除非用户明确要求会员等级 ID，不要在
+    SELECT、GROUP BY 或 window.partition 中加入 dim_vip_level.vip_level_id。
+    large benchmark 中同一个 level_name 可能对应多个 vip_level_id；
+    如果按 vip_level_id 分组，会把同一个等级名称拆成多行，导致行数和金额膨胀。
+  confirmed_by_users: true
+
+member_category_spend_grain:
+  label: 会员品类消费额事实表粒度
+  applies_to: [dwd_order_item_detail.user_id, dwd_order_item_detail.actual_amount, dwd_order_detail.user_id]
+  convention: |
+    当问题是"钻石和铂金会员用户在各品类的消费总额，按会员等级和品类分组"这类
+    会员等级 × 品类消费额查询时，应以 dwd_order_item_detail 为事实表：
+    - 用 dwd_order_item_detail.user_id JOIN dim_user
+    - 用 dwd_order_item_detail.product_id JOIN dim_product，再 JOIN dim_category
+    - 用 SUM(dwd_order_item_detail.actual_amount) 计算消费总额
+    - GROUP BY dim_vip_level.level_name, dim_category.category_id, dim_category.category_name
+    不要通过 dwd_order_detail.user_id 回连用户维表；不要用订单头 total_amount/pay_amount
+    计算品类消费额；用户未明确要求已完成订单时，不要默认添加 order_status 过滤。
+  confirmed_by_users: true
+
+brand_diamond_avg_item_audit_fields:
+  label: 品牌钻石会员均价审核字段
+  applies_to: [dim_brand.brand_name, dim_vip_level.level_name, dwd_order_item_detail.actual_amount]
+  convention: |
+    当问题是"统计各品牌钻石会员用户在已完成订单中的平均商品实付单价
+    （AVG item actual_amount），按均价降序排列"时，最终输出除 brand_name
+    和 avg_item_price 外，还应保留：
+    - dim_vip_level.level_name
+    - COUNT(DISTINCT dwd_order_detail.order_id) AS order_count
+    GROUP BY 应包含 dim_brand.brand_id, dim_brand.brand_name, dim_vip_level.level_name。
+    这样审核者可以同时看到会员等级口径和订单样本量。
+  confirmed_by_users: true
+
+order_item_month_grain:
+  label: 品类月度订单量时间字段
+  applies_to: [dwd_order_item_detail.order_dt, dwd_order_detail.order_dt]
+  convention: |
+    当问题按"品类/商品"统计"按月订单量/订单数"且需要 JOIN 订单明细表时，
+    月份字段应使用 dwd_order_item_detail.order_dt，并用
+    COUNT(DISTINCT dwd_order_item_detail.order_id) 统计订单量。
+    不要从 dwd_order_detail.order_dt 分月后再 JOIN 明细表，否则容易和商品明细粒度不一致。
+    当问题是"每个品类按月"并需要 LEAD/LAG 展示下个月/上个月订单量时，
+    内层聚合应按展示粒度 category_name + month 分组，不要再加入 category_id，
+    否则同名品类会被拆成多个时间序列。
   confirmed_by_users: true
 
 refund_rate_join:
@@ -69,6 +144,62 @@ refund_rate_join:
     1. 从 dwd_order_detail 出发（总订单数分母）
     2. LEFT JOIN dwd_refund_detail ON dwd_refund_detail.order_id = dwd_order_detail.order_id
     3. 分子用 COUNT(DISTINCT dwd_refund_detail.order_id) 或 COUNT(DISTINCT dwd_refund_detail.refund_id)
+    4. 如果退款率要按用户维度（如年龄段、性别、会员等级）分组，退款分子也必须
+       先 JOIN dwd_order_detail，再通过 dwd_order_detail.user_id JOIN dim_user；
+       不要直接用 dwd_refund_detail.user_id 连接 dim_user。
+    5. 如果退款率要按品类分组，必须经过 dwd_order_item_detail：
+       dwd_order_item_detail.order_id = dwd_order_detail.order_id，
+       dwd_order_item_detail.product_id = dim_product.product_id，
+       dim_product.category_id = dim_category.category_id。
+       不要把 dwd_order_detail.order_id 直接连接 dim_product.product_id。
+    6. 分母必须用 COUNT(DISTINCT dwd_order_detail.order_id)，不要用 count_all。
+    7. 当用户明确写出"退款订单数/总订单数"时，结果应同时输出 total_orders、
+       refund_orders/refund_count 和 refund_rate，便于审核分子分母。
     注意：dwd_order_detail 表上【没有】refund_id 字段，退款数据必须从 dwd_refund_detail 表获取。
     注意：不要把"退款率"和"退货率"混淆——退货率来自 dwd_return_goods_detail。
+    注意：退款率输出为 0~1 小数，15% 写作 0.15；不要乘以 100，也不要输出百分比数值。
+  confirmed_by_users: true
+
+percentage_display:
+  label: 占比展示口径
+  applies_to: [derived_ratio]
+  convention: |
+    用户说"占比"、"比例"且不是"退款率/复购率/转化率"这类业务率指标时，
+    默认输出 0~1 小数，而不是百分比数值。
+    表达式应使用 numerator * 1.0 / denominator，并 ROUND(..., 4)。
+    例如：ROUND(product_sales * 1.0 / category_total_sales, 4) AS pct_of_category。
+    不要乘以 100。
+  confirmed_by_users: true
+
+result_contracts:
+  label: 高频查询结果列与排序契约
+  applies_to: [dwd_comment_detail, dwd_refund_detail, dwd_cart_detail, dim_channel]
+  convention: |
+    为了保证多次生成结果稳定，以下高频查询必须遵守固定输出和排序契约：
+    - "2025年12月以来，评分为4或5星且带图片的好评记录，按评分降序"：
+      必须过滤 comment_type='好评'、has_image=1、rating IN (4,5)、comment_dt >= '2025-12-01'；
+      最终只输出 comment_id、product_id、user_id、rating、comment_dt；
+      排序为 rating DESC, comment_dt DESC。
+    - "按退款总金额排名，找出退款金额最高的前5个商品"：
+      输出 product_name、total_refund、refund_count；
+      refund_count = COUNT(dwd_refund_detail.refund_id)；
+      用户未要求退款状态时，不要默认过滤 refund_status。
+    - "计算每个商品的销售额及其在所属品类总销售额中的占比"：
+      最终输出 product_name、category_name、product_revenue/product_sales、pct_of_category；
+      不输出 product_id，除非用户明确要求；
+      品类总额按 category_name 展示粒度计算，排序为 category_name ASC, product_revenue DESC。
+    - "每个商品相邻两次评价的评分变化"：
+      对全部 dwd_comment_detail 记录按 product_id 分区、comment_dt ASC 使用 LAG；
+      不要先用 row_number/limit 只取最近 N 条。
+    - "每个渠道按月统计已完成订单量，以及与上月相比的环比变化量"：
+      GROUP BY 和 LAG partition 使用 channel_name 展示粒度；
+      输出 prev_month_count 和 mom_change；
+      排序为 channel_name ASC, month ASC。
+    - "找出曾将某商品加入购物车但该商品从未出现在其已完成订单中的用户"：
+      最终输出 dim_user.user_id、dim_user.user_name，并按用户去重；
+      不要输出裸 user_id。
+    - "2025年11月以来，既有加购行为又有退款记录的用户"：
+      使用 COUNT(DISTINCT dwd_cart_detail.cart_id) AS cart_add_count；
+      使用 COUNT(DISTINCT dwd_refund_detail.refund_id) AS refund_count；
+      最终 SELECT 用 add_counts.cart_add_count 和 refund_counts.refund_count 这类限定字段。
   confirmed_by_users: true

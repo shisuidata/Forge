@@ -21,11 +21,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import aiosqlite
 
-# SQLite 数据库文件路径
+from config import cfg
+
+# 兼容旧代码/测试的默认值；实际读写通过 _db_path() 读取 cfg.AUDIT_DB_PATH。
 DB_PATH = "forge_audit.db"
 
 # 建表 DDL：IF NOT EXISTS 保证幂等，服务每次启动时调用不会报错
@@ -38,9 +41,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
     forge_json    TEXT,                      -- 生成的 Forge JSON（JSON 字符串）
     sql           TEXT,                      -- 编译后的 SQL
     status        TEXT    NOT NULL DEFAULT 'pending',  -- pending | approved | cancelled | error
-    error_message TEXT                       -- 仅 status=error 时填写
+    error_message TEXT,                      -- 仅 status=error 时填写
+    row_count     INTEGER DEFAULT 0,         -- 执行返回行数
+    execution_ms  INTEGER                    -- SQL 执行耗时（毫秒）
 );
 """
+
+_EXTRA_COLUMNS = {
+    "row_count": "ALTER TABLE audit_log ADD COLUMN row_count INTEGER DEFAULT 0",
+    "execution_ms": "ALTER TABLE audit_log ADD COLUMN execution_ms INTEGER",
+}
+
+
+def _db_path() -> str:
+    path = Path(str(getattr(cfg, "AUDIT_DB_PATH", "") or DB_PATH)).expanduser()
+    parent = path.parent
+    if str(parent) not in ("", "."):
+        parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 async def _ensure_schema() -> None:
@@ -50,8 +68,13 @@ async def _ensure_schema() -> None:
     每个公开函数调用前都会调用此方法，保证数据库在首次使用时自动初始化，
     无需在服务启动时单独执行迁移脚本。
     """
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         await db.execute(_DDL)
+        cursor = await db.execute("PRAGMA table_info(audit_log)")
+        existing = {row[1] for row in await cursor.fetchall()}
+        for col, ddl in _EXTRA_COLUMNS.items():
+            if col not in existing:
+                await db.execute(ddl)
         await db.commit()
 
 
@@ -63,6 +86,8 @@ async def log(
     sql:           str | None  = None,
     status:        str         = "pending",
     error_message: str | None  = None,
+    row_count:     int         = 0,
+    execution_ms:  int | None  = None,
 ) -> int:
     """
     写入一条新的审计记录。
@@ -83,14 +108,14 @@ async def log(
     ts = datetime.now(timezone.utc).isoformat()
     # forge_json 序列化为字符串存储，读取时由调用方反序列化
     forge_str = json.dumps(forge_json, ensure_ascii=False) if forge_json is not None else None
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         cursor = await db.execute(
             """
             INSERT INTO audit_log
-                (timestamp, user_id, user_message, forge_json, sql, status, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (timestamp, user_id, user_message, forge_json, sql, status, error_message, row_count, execution_ms)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (ts, user_id, user_message, forge_str, sql, status, error_message),
+            (ts, user_id, user_message, forge_str, sql, status, error_message, row_count, execution_ms),
         )
         await db.commit()
         return cursor.lastrowid  # type: ignore[return-value]
@@ -107,7 +132,7 @@ async def recent(limit: int = 50) -> list[dict[str, Any]]:
         字典列表，每条字典对应 audit_log 的一行记录。
     """
     await _ensure_schema()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         # Row 模式允许用列名访问字段，再转为普通 dict 方便序列化
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -150,7 +175,7 @@ async def search(
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
         # 总数
         count_cursor = await db.execute(f"SELECT COUNT(*) FROM audit_log{where}", params)
@@ -165,7 +190,7 @@ async def search(
 async def stats() -> dict[str, int]:
     """返回各状态的记录计数和总数。"""
     await _ensure_schema()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             "SELECT status, COUNT(*) as cnt FROM audit_log GROUP BY status"
@@ -178,7 +203,14 @@ async def stats() -> dict[str, int]:
         return result
 
 
-async def update_status(record_id: int, status: str) -> None:
+async def update_status(
+    record_id: int,
+    status: str,
+    *,
+    error_message: str | None = None,
+    row_count: int | None = None,
+    execution_ms: int | None = None,
+) -> None:
     """
     更新指定审计记录的状态。
 
@@ -190,9 +222,61 @@ async def update_status(record_id: int, status: str) -> None:
         status:    新状态值，应为 approved | cancelled | error 之一。
     """
     await _ensure_schema()
-    async with aiosqlite.connect(DB_PATH) as db:
+    fields = ["status = ?"]
+    params: list[Any] = [status]
+    if error_message is not None:
+        fields.append("error_message = ?")
+        params.append(error_message)
+    if row_count is not None:
+        fields.append("row_count = ?")
+        params.append(row_count)
+    if execution_ms is not None:
+        fields.append("execution_ms = ?")
+        params.append(execution_ms)
+    params.append(record_id)
+
+    async with aiosqlite.connect(_db_path()) as db:
         await db.execute(
-            "UPDATE audit_log SET status = ? WHERE id = ?",
-            (status, record_id),
+            f"UPDATE audit_log SET {', '.join(fields)} WHERE id = ?",
+            params,
         )
         await db.commit()
+
+
+async def update_latest_pending(
+    user_id: str,
+    status: str,
+    *,
+    error_message: str | None = None,
+    row_count: int | None = None,
+    execution_ms: int | None = None,
+) -> int | None:
+    """
+    更新某个用户最近一条 pending 审计记录。
+
+    Web/Feishu 的 approve/cancel 流程没有直接携带 audit id，因此用 user_id
+    找最近的 pending 记录完成状态闭环。
+    """
+    await _ensure_schema()
+    async with aiosqlite.connect(_db_path()) as db:
+        cursor = await db.execute(
+            """
+            SELECT id FROM audit_log
+            WHERE user_id = ? AND status = 'pending'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+    if not row:
+        return None
+    record_id = int(row[0])
+    await update_status(
+        record_id,
+        status,
+        error_message=error_message,
+        row_count=row_count,
+        execution_ms=execution_ms,
+    )
+    return record_id

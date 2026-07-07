@@ -367,7 +367,10 @@ def _coerce_cte_refs(q: dict) -> dict:
             if q.get("group"):
                 q["group"] = [_strip_prefix(g) for g in q["group"]]
             # window partition
-            if q.get("window"):
+            # 修复 21 冲突：当外层查询 JOIN 了其他 CTE 时，window partition
+            # 中的主 CTE 前缀必须保留，否则两个 CTE 共享 category_id/month 等列名时
+            # 会产生 ambiguous column name。
+            if q.get("window") and not _has_joined_ctes:
                 new_win = []
                 for w in q["window"]:
                     if w.get("partition"):
