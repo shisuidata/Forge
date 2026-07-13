@@ -57,3 +57,14 @@
 ❌ 错误：有 `window` 排名但没有 `qualify`。这会返回每个品类的全部商品。
 
 ❌ 错误：在明细表上直接排名。必须先聚合到商品粒度，再排名。
+
+当问题同时要求“商品销售额在品类中的占比”时，分母必须与用户看到的品类展示粒度一致：
+
+1. 第一层 CTE 按 `product_id + product_name + category_name` 聚合 `product_revenue`
+2. 第二层在聚合结果上计算
+   `SUM(product_revenue) OVER (PARTITION BY category_name)` 和
+   `ROW_NUMBER() OVER (PARTITION BY category_name ORDER BY product_revenue DESC)`
+3. 最外层过滤 `rn <= N`，只输出 `category_name、product_name、product_revenue、pct`
+
+不要另建按 `category_id` 分组的品类总额 CTE。一个展示名称可能对应多个内部 ID，
+按 ID 计算分母会把同名品类拆开，得到错误占比。

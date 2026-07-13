@@ -168,9 +168,9 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         # ── 查询模式：生成 Forge JSON 并编译 ─────────────────────────────────
         if result["tool"] == "generate_forge_query":
             forge_json = result["input"]
-            if attempt == 0:
-                warnings = lint_conventions(forge_json, effective_text)
-                if warnings and attempt < MAX_RETRIES:
+            warnings = lint_conventions(forge_json, effective_text)
+            if warnings:
+                if attempt < MAX_RETRIES:
                     warning_text = "\n".join(f"- {w}" for w in warnings)
                     retry_messages.append(
                         {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
@@ -179,6 +179,9 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                         {"role": "user", "content": f"约定检查发现以下问题：\n{warning_text}\n请修正。"}
                     )
                     continue
+                err = f"⚠ 查询生成失败（约定检查已重试 {MAX_RETRIES} 次仍未通过）：{warnings[0]}"
+                memory.record(user_id, "assistant", err, action="error")
+                return AgentResponse(text=err, action="error")
             try:
                 sql = compile_query(forge_json, dialect=_compile_dialect())
             except Exception as exc:

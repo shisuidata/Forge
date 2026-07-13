@@ -103,7 +103,7 @@ def _coerce(q: dict) -> dict:
     4. agg 中 count_all + col 字段共存时，删除多余的 col
     5. group 存在时，select 里的非聚合/非窗口/非 group_expr 别名字段自动补齐到 group
     6. having 中出现 fn 字段（内联聚合表达式）→ 替换为对应 agg alias
-    7. qualify 引用的 window 别名未在 select 中时，自动补齐
+    7. qualify 引用的 window 别名未在 select 中时，由编译阶段作为内部列补齐
     8. 顶层 "query" 为 JSON 字符串时解包
     9. select 中字符串含内联别名（"expr AS alias"）→ 转为 expr 对象
     10. 有 agg/group 但缺少 select 时，自动从 group + agg 别名生成 select
@@ -520,23 +520,7 @@ def _coerce_filter_vals(q: dict) -> dict:
 
 
 def _coerce_window_qualify(q: dict) -> dict:
-    """窗口函数与 qualify 修复。处理修复 7（qualify 引用的 window 别名补入 select）。"""
-    # 修复 7：qualify 引用的 window 别名未在 select 中时，自动补齐
-    # 解决：模型使用 window + qualify 时遗漏 rank alias，导致外层 WHERE 引用未定义列。
-    # 机制：qualify 编译为 SELECT * FROM (inner_sql) WHERE alias = val，
-    #       alias 必须出现在 inner_sql 的 SELECT 中才能被外层引用。
-    if q.get("qualify") and q.get("window"):
-        win_aliases = {w["as"] for w in q.get("window", []) if "as" in w}
-        current_sel = list(q.get("select", []))
-        sel_strs = {s for s in current_sel if isinstance(s, str)}
-        for qcond in q.get("qualify", []):
-            if isinstance(qcond, dict):
-                col = qcond.get("col")
-                if col and col in win_aliases and col not in sel_strs:
-                    current_sel.append(col)
-                    sel_strs.add(col)
-        q["select"] = current_sel
-
+    """窗口函数与 qualify 修复入口；内部列由 _compile 按可见性补齐。"""
     return q
 
 
@@ -683,6 +667,27 @@ def _compile(q: dict, dialect: str = "sqlite",
     dialect:      "sqlite" | "mysql" | "postgresql" | "bigquery" | "snowflake"，控制方言相关的 SQL 输出。
     nullable_cols: 可空列名集合，用于 neq 条件的 NULL 安全展开。
     """
+    # QUALIFY 由外层 WHERE 模拟。过滤引用的窗口别名必须出现在内层 SELECT，
+    # 但若用户没有显式选择它，就只能作为内部列存在，不能污染最终结果列。
+    visible_select = list(q.get("select", []))
+    hidden_qualify_aliases: list[str] = []
+    if q.get("qualify") and q.get("window"):
+        window_aliases = {w["as"] for w in q.get("window", []) if "as" in w}
+        selected_aliases = {
+            item if isinstance(item, str) else item.get("as")
+            for item in visible_select
+        }
+        for cond in q.get("qualify", []):
+            if not isinstance(cond, dict):
+                continue
+            col = cond.get("col")
+            if col in window_aliases and col not in selected_aliases:
+                hidden_qualify_aliases.append(col)
+                selected_aliases.add(col)
+        if hidden_qualify_aliases:
+            q = dict(q)
+            q["select"] = visible_select + hidden_qualify_aliases
+
     clauses: list[str] = []
 
     # SELECT [DISTINCT]：必须最先构建，以便解析 agg/window 别名
@@ -751,8 +756,11 @@ def _compile(q: dict, dialect: str = "sqlite",
     # 用途：实现 per-group TopN，如"每个品类成本排名前3的商品"
     if "qualify" in q:
         qualify_parts = [_condition(c, dialect, nullable_cols) for c in q["qualify"]]
+        outer_select = "*"
+        if hidden_qualify_aliases:
+            outer_select = ", ".join(_output_column_name(item) for item in visible_select)
         inner_sql = (
-            f"SELECT * FROM (\n"
+            f"SELECT {outer_select} FROM (\n"
             + "\n".join(f"  {line}" for line in inner_sql.splitlines())
             + f"\n) AS _q\nWHERE {' AND '.join(qualify_parts)}"
         )
@@ -815,6 +823,12 @@ def _compile(q: dict, dialect: str = "sqlite",
 
 
 # ── SELECT 表达式构建 ─────────────────────────────────────────────────────────
+
+def _output_column_name(item: str | dict) -> str:
+    """Return the column label exposed by an inner SELECT item."""
+    if isinstance(item, dict):
+        return item["as"]
+    return item.rpartition(".")[2]
 
 def _expand_aliases(expr_str: str, alias_map: dict[str, str]) -> str:
     """

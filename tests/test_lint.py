@@ -112,6 +112,74 @@ def test_lint_all_bad_reviews_without_images_rejects_comment_self_join():
     assert any("自连接" in warning and "歧义列" in warning for warning in warnings)
 
 
+def test_lint_all_bad_reviews_without_images_requires_stable_anti_join_key():
+    warnings = lint_conventions(
+        {
+            "cte": [
+                {
+                    "name": "bad_products",
+                    "query": {
+                        "scan": "dwd_comment_detail",
+                        "joins": [
+                            {
+                                "type": "inner",
+                                "table": "dim_product",
+                                "on": {
+                                    "left": "dwd_comment_detail.product_id",
+                                    "right": "dim_product.product_id",
+                                },
+                            }
+                        ],
+                        "filter": [
+                            {"col": "dwd_comment_detail.comment_type", "op": "eq", "val": "差评"}
+                        ],
+                        "group": ["dim_product.product_name"],
+                        "select": ["dim_product.product_name"],
+                    },
+                },
+                {
+                    "name": "bad_with_image",
+                    "query": {
+                        "scan": "dwd_comment_detail",
+                        "joins": [
+                            {
+                                "type": "inner",
+                                "table": "dim_product",
+                                "on": {
+                                    "left": "dwd_comment_detail.product_id",
+                                    "right": "dim_product.product_id",
+                                },
+                            }
+                        ],
+                        "filter": [
+                            {"col": "dwd_comment_detail.comment_type", "op": "eq", "val": "差评"},
+                            {"col": "dwd_comment_detail.has_image", "op": "eq", "val": 1},
+                        ],
+                        "group": ["dim_product.product_name"],
+                        "select": ["dim_product.product_name"],
+                    },
+                },
+            ],
+            "scan": "bad_products",
+            "joins": [
+                {
+                    "type": "anti",
+                    "table": "bad_with_image",
+                    "on": {
+                        "left": "bad_products.product_name",
+                        "right": "bad_with_image.product_name",
+                    },
+                }
+            ],
+            "distinct": True,
+            "select": ["bad_products.product_name"],
+        },
+        "找出有差评记录但所有差评均无图片的商品，显示商品名称",
+    )
+
+    assert any("product_id" in warning and "反连接" in warning for warning in warnings)
+
+
 def test_lint_all_bad_reviews_without_images_requires_distinct_product_name():
     warnings = lint_conventions(
         {
@@ -815,6 +883,31 @@ def test_lint_detail_vs_group_average_accepts_window_avg():
     assert not any("保留每条明细行" in warning for warning in warnings)
 
 
+def test_lint_brand_rating_deviation_rejects_unstable_output_contract():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_comment_detail",
+            "window": [{
+                "fn": "avg",
+                "col": "dwd_comment_detail.rating",
+                "partition": ["dim_brand.brand_id"],
+                "as": "brand_avg_rating",
+            }],
+            "select": [
+                "dwd_comment_detail.comment_id",
+                "dim_brand.brand_name",
+                "dwd_comment_detail.rating",
+                {"expr": "ROUND(brand_avg_rating, 4)", "as": "brand_avg_rating"},
+                {"expr": "ROUND(rating - brand_avg_rating, 4)", "as": "deviation"},
+            ],
+            "sort": [{"col": "dim_brand.brand_name", "dir": "asc"}],
+        },
+        "每个品牌商品评分的平均分，以及每条评价相对品牌平均分的偏差",
+    )
+
+    assert any("brand_name、rating、brand_avg_rating、rating_deviation" in warning for warning in warnings)
+
+
 def test_lint_order_detail_query_requires_item_id_and_item_date():
     warnings = lint_conventions(
         {
@@ -840,6 +933,44 @@ def test_lint_order_detail_query_requires_item_id_and_item_date():
 
     assert any("order_item_id" in warning for warning in warnings)
     assert any("dwd_order_item_detail.order_dt" in warning for warning in warnings)
+
+
+def test_lint_imported_brand_order_detail_rejects_unstable_output_contract():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_item_detail",
+            "select": [
+                "dwd_order_item_detail.order_item_id",
+                "dwd_order_item_detail.order_id",
+                "dwd_order_item_detail.product_id",
+                "dwd_order_item_detail.quantity",
+                "dwd_order_item_detail.actual_amount",
+                "dwd_order_item_detail.order_dt",
+            ],
+        },
+        "2025年12月内，国际品牌或国内知名品牌的进口商品的订单明细，按下单时间降序",
+    )
+
+    assert any("order_item_id、order_id、product_name、brand_name、actual_amount、order_dt" in warning for warning in warnings)
+
+
+def test_lint_refund_record_rejects_unstable_output_contract():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_refund_detail",
+            "select": [
+                "dwd_refund_detail.refund_id",
+                "dwd_refund_detail.order_id",
+                "dwd_refund_detail.user_id",
+                "dwd_refund_detail.refund_amount",
+                "dwd_refund_detail.refund_status",
+                "dwd_refund_detail.complete_dt",
+            ],
+        },
+        "找出退款状态为已退款且退款金额超过500元的退款记录，按退款金额降序",
+    )
+
+    assert any("refund_id、order_id、user_id、refund_amount、apply_dt" in warning for warning in warnings)
 
 
 def test_lint_order_lookup_requires_order_id():
@@ -1087,6 +1218,134 @@ def test_lint_rejects_qualified_window_alias_select():
     assert any("product_sales.rn" in warning and "窗口函数别名" in warning for warning in warnings)
 
 
+def test_lint_rejects_internal_rank_alias_when_rank_not_requested_in_output():
+    warnings = lint_conventions(
+        {
+            "scan": "product_sales",
+            "window": [
+                {
+                    "fn": "row_number",
+                    "partition": ["product_sales.category_name"],
+                    "order": [{"col": "product_sales.product_sales", "dir": "desc"}],
+                    "as": "rn",
+                }
+            ],
+            "qualify": [{"col": "rn", "op": "lte", "val": 3}],
+            "select": [
+                "product_sales.category_name",
+                "product_sales.product_name",
+                "product_sales.product_sales",
+                "rn",
+            ],
+        },
+        "各品类内，按销售额排名前3的商品及其销售额在品类中的占比",
+    )
+
+    assert any("内部字段" in warning and "rn" in warning for warning in warnings)
+
+
+def test_lint_category_topn_share_rejects_denominator_grouped_by_category_id():
+    warnings = lint_conventions(
+        {
+            "cte": [
+                {
+                    "name": "product_sales",
+                    "query": {
+                        "scan": "dwd_order_item_detail",
+                        "group": ["dim_product.product_id", "dim_category.category_name"],
+                        "agg": [{"fn": "sum", "col": "actual_amount", "as": "product_revenue"}],
+                        "select": ["dim_product.product_id", "dim_category.category_name", "product_revenue"],
+                    },
+                },
+                {
+                    "name": "category_totals",
+                    "query": {
+                        "scan": "dwd_order_item_detail",
+                        "group": ["dim_category.category_id", "dim_category.category_name"],
+                        "agg": [{"fn": "sum", "col": "actual_amount", "as": "category_total_sales"}],
+                        "select": ["dim_category.category_id", "dim_category.category_name", "category_total_sales"],
+                    },
+                },
+            ],
+            "scan": "product_sales",
+            "joins": [{
+                "type": "inner",
+                "table": "category_totals",
+                "on": {"left": "product_sales.category_id", "right": "category_totals.category_id"},
+            }],
+            "window": [{
+                "fn": "row_number",
+                "partition": ["product_sales.category_name"],
+                "order": [{"col": "product_sales.product_revenue", "dir": "desc"}],
+                "as": "rn",
+            }],
+            "qualify": [{"col": "rn", "op": "lte", "val": 3}],
+            "select": [
+                "product_sales.category_name",
+                "product_sales.product_name",
+                "product_sales.product_revenue",
+                {"expr": "product_revenue / category_total_sales", "as": "pct"},
+            ],
+        },
+        "各品类内，按销售额排名前3的商品及其销售额在品类中的占比",
+    )
+
+    assert any("category_name" in warning and "分母" in warning for warning in warnings)
+
+
+def test_lint_derived_metric_filter_rejects_having_without_aggregation():
+    warnings = lint_conventions(
+        {
+            "cte": [
+                {
+                    "name": "category_stats",
+                    "query": {
+                        "scan": "orders",
+                        "group": ["category_name"],
+                        "agg": [
+                            {"fn": "count_all", "as": "total_orders"},
+                            {"fn": "count", "col": "refund_id", "as": "refund_orders"},
+                        ],
+                        "select": ["category_name", "total_orders", "refund_orders"],
+                    },
+                }
+            ],
+            "scan": "category_stats",
+            "having": [{"col": "refund_rate", "op": "gt", "val": 0.15}],
+            "select": [
+                "category_name",
+                "total_orders",
+                "refund_orders",
+                {"expr": "refund_orders * 1.0 / total_orders", "as": "refund_rate"},
+            ],
+        },
+        "统计各品类的退款率（退款订单数/总订单数），找出退款率超过15%的品类",
+    )
+
+    assert any("filter" in warning and "HAVING" in warning for warning in warnings)
+
+
+def test_lint_order_interval_requires_completed_status():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "window": [
+                {
+                    "fn": "lag",
+                    "col": "dwd_order_detail.order_dt",
+                    "partition": ["dwd_order_detail.user_id"],
+                    "order": [{"col": "dwd_order_detail.order_dt", "dir": "asc"}],
+                    "as": "prev_order_dt",
+                }
+            ],
+            "select": ["dwd_order_detail.user_id", "dwd_order_detail.order_dt", "prev_order_dt"],
+        },
+        "每个用户相邻两次下单之间的时间间隔（天数），显示用户ID、下单时间和距上次下单天数",
+    )
+
+    assert any("order_status" in warning and "已完成" in warning for warning in warnings)
+
+
 def test_lint_order_user_join_requires_order_detail_user_id():
     warnings = lint_conventions(
         {
@@ -1297,6 +1556,24 @@ def test_lint_unit_price_rejects_window_avg_qualify():
     assert any("dim_user.user_id" in warning and "dim_user.id" in warning for warning in warnings)
 
 
+def test_lint_average_order_value_allows_order_count_threshold():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "group": ["dim_channel.channel_name"],
+            "agg": [
+                {"fn": "count_all", "as": "order_count"},
+                {"fn": "avg", "col": "dwd_order_detail.total_amount", "as": "avg_order_value"},
+            ],
+            "having": [{"col": "order_count", "op": "gt", "val": 10}],
+            "select": ["dim_channel.channel_name", "order_count", "avg_order_value"],
+        },
+        "各渠道中，已完成订单数超过10笔的渠道，列出渠道名称、订单数和平均客单价，按订单数降序",
+    )
+
+    assert not any("客单价在X到Y之间" in warning for warning in warnings)
+
+
 def test_lint_unit_price_order_lookup_requires_exact_output_contract():
     warnings = lint_conventions(
         {
@@ -1375,6 +1652,28 @@ def test_lint_good_review_with_images_requires_contract():
     assert any("comment_type = '好评'" in warning for warning in warnings)
     assert any("最终输出列" in warning and "order_item_id" in warning for warning in warnings)
     assert any("comment_dt DESC" in warning for warning in warnings)
+
+
+def test_lint_good_review_with_images_accepts_unqualified_single_table_columns():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_comment_detail",
+            "filter": [
+                {"col": "comment_type", "op": "eq", "val": "好评"},
+                {"col": "has_image", "op": "eq", "val": 1},
+                {"col": "rating", "op": "in", "val": [4, 5]},
+                {"col": "comment_dt", "op": "gte", "val": {"$date": "2025-12-01"}},
+            ],
+            "select": ["comment_id", "product_id", "user_id", "rating", "comment_dt"],
+            "sort": [
+                {"col": "rating", "dir": "desc"},
+                {"col": "comment_dt", "dir": "desc"},
+            ],
+        },
+        "2025年12月以来，评分为4或5星且带图片的好评记录，按评分降序",
+    )
+
+    assert not any("最终输出列" in warning or "稳定排序" in warning for warning in warnings)
 
 
 def test_lint_refund_product_ranking_requires_refund_count_and_no_status_filter():
@@ -1497,6 +1796,32 @@ def test_lint_adjacent_review_lag_rejects_topn_prefilter():
     )
 
     assert any("不要先用 row_number/limit" in warning for warning in warnings)
+
+
+def test_lint_adjacent_review_is_not_misclassified_as_per_group_topn():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_comment_detail",
+            "window": [
+                {
+                    "fn": "lag",
+                    "col": "dwd_comment_detail.rating",
+                    "partition": ["dwd_comment_detail.product_id"],
+                    "order": [{"col": "dwd_comment_detail.comment_dt", "dir": "asc"}],
+                    "as": "prev_rating",
+                }
+            ],
+            "select": [
+                "dwd_comment_detail.product_id",
+                "dwd_comment_detail.comment_dt",
+                "dwd_comment_detail.rating",
+                "prev_rating",
+            ],
+        },
+        "每个商品相邻两次评价的评分变化，显示商品ID、评价时间、当前评分和上一次评分",
+    )
+
+    assert not any("分组内 TopN" in warning for warning in warnings)
 
 
 def test_lint_channel_monthly_mom_rejects_channel_id_partition_and_aliases():

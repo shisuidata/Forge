@@ -8,6 +8,10 @@ Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以�
 
 | 基准 | 题数 | 指标 | 得分 |
 |---|---|---|---|
+| 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 40 | Case EA(any) | **100.0%** |
+| 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 40 | Case EA(all) | **100.0%** |
+| 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 120 runs | Run ACC | **100.0%** |
+| 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 120 runs | 编译失败率 | **0.0%** |
 | 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 40 | Case EA(any) | **100.0%** |
 | 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 40 | Case EA(all) | **92.5%** |
 | 自有用例（Method AF，DeepSeek V4 Pro，large，3 runs） | 120 runs | Run ACC | **97.5%** |
@@ -26,7 +30,41 @@ Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以�
 
 ---
 
-## 当前推荐交付基线：Method AF
+## 当前推荐交付基线：Method AI
+
+Method AI 使用 large 40 题电商数仓基准、火山方舟 Coding Plan 的
+`ark-code-latest`、每题 3 次生成、编译/lint 重试 2 次。它在 Method AH 的基础上增加：
+
+- `qualify` 内部排名列与最终结果列隔离
+- 退款记录、进口商品订单明细、品牌评分偏差的稳定结果列契约
+- 品类 TopN 占比按可见 `category_name` 计算分母
+- OpenAI-compatible 基准输出上限提升到 8192 token
+
+| 类别 | Case EA | Run ACC |
+|---|---:|---:|
+| 多表JOIN+聚合 | 100.0% | 100.0% |
+| 复杂过滤 | 100.0% | 100.0% |
+| 分组+HAVING | 100.0% | 100.0% |
+| 排名与TopN | 100.0% | 100.0% |
+| 窗口聚合 | 100.0% | 100.0% |
+| 时序导航 | 100.0% | 100.0% |
+| ANTI/SEMI JOIN | 100.0% | 100.0% |
+| 综合复杂查询 | 100.0% | 100.0% |
+
+相对同 Provider 的 Method AH 首轮结果：
+
+| 指标 | Method AH | Method AI |
+|---|---:|---:|
+| Case EA(any) | 97.5% | 100.0% |
+| Case EA(all) | 87.5% | 100.0% |
+| Run ACC | 94.2% | 100.0% |
+| 编译失败率 | 1.7% | 0.0% |
+
+相对上一交付基线 Method AF，Run ACC 从 97.5% 提升到 100.0%。Method AF 使用
+DeepSeek V4 Pro，Method AI 使用 Ark Coding Plan，因此这组只表示当前可复现交付结果，
+不作为严格的同模型 A/B。详见 [2026-07-13 测试报告](test-report-2026-07-13.md)。
+
+## 上一交付基线：Method AF
 
 Method AF 使用 large 40 题电商数仓基准、DeepSeek V4 Pro、每题 3 次生成、编译重试 2 次。它在 Method AD 的基础上，把高频输出契约、字段约定、排序口径、过滤口径和反连接/窗口稳定性沉淀到 Registry/lint 中。
 

@@ -40,13 +40,38 @@ import json
 import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import MetaData, Table, create_engine, func, inspect, select
 
 logger = logging.getLogger(__name__)
 
 
 _ENUM_MAX_DISTINCT = 30   # 去重值 ≤ 此数的字符串列自动采样为枚举
 _ENUM_SAMPLE_ROWS  = 5000  # 采样行数上限，避免在大表上全表扫描
+
+
+def _sample_enum_values(conn, table: Table, col_name: str) -> list:
+    """Return sorted low-cardinality values from a bounded row sample."""
+    column = table.c[col_name]
+    sample = (
+        select(column.label("sample_value"))
+        .where(column.is_not(None))
+        .limit(_ENUM_SAMPLE_ROWS)
+        .subquery()
+    )
+    sample_value = sample.c.sample_value
+    distinct_count = conn.execute(
+        select(func.count(func.distinct(sample_value)))
+    ).scalar_one()
+    if not 0 < distinct_count <= _ENUM_MAX_DISTINCT:
+        return []
+    return list(
+        conn.execute(
+            select(sample_value)
+            .distinct()
+            .order_by(sample_value)
+            .limit(_ENUM_MAX_DISTINCT)
+        ).scalars()
+    )
 
 
 def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
@@ -62,8 +87,6 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
     Returns:
         {table_name: {col_name: {"enum": [...]} or {}}}
     """
-    from sqlalchemy import text as sa_text
-
     engine = create_engine(database_url)
     inspector = inspect(engine)
     result: dict[str, dict[str, dict]] = {}
@@ -71,6 +94,7 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
     with engine.connect() as conn:
         for table_name in inspector.get_table_names():
             col_infos = inspector.get_columns(table_name)
+            table = Table(table_name, MetaData(), autoload_with=conn)
             table_cols: dict[str, dict] = {}
 
             for col in col_infos:
@@ -88,44 +112,18 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
                     table_cols[col_name] = {}
                     continue
 
-                # 对字符串型列尝试自动采样枚举值（跳过 id 类主键/外键）
+                # 对字符串和小整数列尝试自动采样枚举值（跳过 id 类主键/外键）
                 is_id_col = col_name == "id" or col_name.endswith("_id")
-                if not is_id_col and any(t in col_type for t in ("CHAR", "TEXT", "VARCHAR", "ENUM", "STRING")):
+                is_string_col = any(
+                    t in col_type for t in ("CHAR", "TEXT", "VARCHAR", "ENUM", "STRING")
+                )
+                is_small_int_col = any(
+                    t in col_type for t in ("BOOL", "TINYINT", "SMALLINT", "INTEGER", "INT")
+                )
+                if not is_id_col and (is_string_col or is_small_int_col):
                     try:
-                        # 先检查 DISTINCT 数量，避免高基数列（如 name、email）
-                        count_sql = sa_text(
-                            f"SELECT COUNT(DISTINCT {col_name}) FROM {table_name} "
-                            f"LIMIT {_ENUM_SAMPLE_ROWS}"
-                        )
-                        distinct_count = conn.execute(count_sql).scalar() or 0
-                        if 0 < distinct_count <= _ENUM_MAX_DISTINCT:
-                            vals_sql = sa_text(
-                                f"SELECT DISTINCT {col_name} FROM {table_name} "
-                                f"WHERE {col_name} IS NOT NULL ORDER BY {col_name} "
-                                f"LIMIT {_ENUM_MAX_DISTINCT}"
-                            )
-                            vals = [row[0] for row in conn.execute(vals_sql)]
-                            table_cols[col_name] = {"enum": vals}
-                            continue
-                    except Exception as exc:
-                        logger.debug("Enum sampling failed for %s.%s: %s", table_name, col_name, exc)
-
-                # 整数型 flag/状态列（如 is_vip）：跳过 id 和外键，只采样小基数非 ID 整数
-                is_id_col = col_name == "id" or col_name.endswith("_id")
-                if not is_id_col and any(t in col_type for t in ("BOOL", "TINYINT", "SMALLINT", "INTEGER", "INT")):
-                    try:
-                        count_sql = sa_text(
-                            f"SELECT COUNT(DISTINCT {col_name}) FROM {table_name} "
-                            f"LIMIT {_ENUM_SAMPLE_ROWS}"
-                        )
-                        distinct_count = conn.execute(count_sql).scalar() or 0
-                        if 0 < distinct_count <= _ENUM_MAX_DISTINCT:
-                            vals_sql = sa_text(
-                                f"SELECT DISTINCT {col_name} FROM {table_name} "
-                                f"WHERE {col_name} IS NOT NULL ORDER BY {col_name} "
-                                f"LIMIT {_ENUM_MAX_DISTINCT}"
-                            )
-                            vals = [row[0] for row in conn.execute(vals_sql)]
+                        vals = _sample_enum_values(conn, table, col_name)
+                        if vals:
                             table_cols[col_name] = {"enum": vals}
                             continue
                     except Exception as exc:

@@ -31,6 +31,10 @@ from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 logger = logging.getLogger(__name__)
 
 
+class LLMCompatibilityError(RuntimeError):
+    """Raised when a configured provider violates the expected response contract."""
+
+
 # ── Schema 检索器（模块级单例，懒初始化）─────────────────────────────────────
 
 _retriever: SchemaRetriever | None = None
@@ -412,10 +416,17 @@ def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
         "Authorization": f"Bearer {cfg.LLM_API_KEY}",
         "Content-Type": "application/json",
     }
-    payload = {
+    payload: dict = {
         "model": cfg.LLM_MODEL,
         "messages": [{"role": "system", "content": system}] + messages,
-        "tools": [
+    }
+    tool_choice_mode = getattr(cfg, "LLM_TOOL_CHOICE", "auto").lower()
+    if tool_choice_mode not in {"auto", "required", "named"}:
+        raise LLMCompatibilityError(
+            "LLM_TOOL_CHOICE 必须是 auto、required 或 named。"
+        )
+    if tools:
+        payload["tools"] = [
             {
                 "type": "function",
                 "function": {
@@ -425,19 +436,64 @@ def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
                 },
             }
             for t in tools
-        ],
-        "tool_choice": "auto",
-    }
-    r = httpx.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=30)
-    r.raise_for_status()
-    choice = r.json()["choices"][0]["message"]
-    if choice.get("tool_calls"):
-        tc = choice["tool_calls"][0]
+        ]
+        if tool_choice_mode == "named":
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": tools[0]["name"]},
+            }
+        else:
+            payload["tool_choice"] = tool_choice_mode
+
+    endpoint = f"{base_url.rstrip('/')}/chat/completions"
+    try:
+        r = httpx.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=max(1.0, float(getattr(cfg, "LLM_TIMEOUT_SECONDS", 120))),
+        )
+        r.raise_for_status()
+        body = r.json()
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        raise LLMCompatibilityError(
+            f"OpenAI-compatible provider 返回 HTTP {status}：{cfg.LLM_MODEL}@{base_url}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise LLMCompatibilityError(
+            f"无法连接 OpenAI-compatible provider：{cfg.LLM_MODEL}@{base_url}"
+        ) from exc
+    except (TypeError, ValueError) as exc:
+        raise LLMCompatibilityError("Provider 返回的响应不是合法 JSON。") from exc
+
+    choices = body.get("choices") if isinstance(body, dict) else None
+    if not choices:
+        raise LLMCompatibilityError("Provider 响应缺少非空 choices。")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    if not isinstance(message, dict):
+        raise LLMCompatibilityError("Provider 响应缺少 message 对象。")
+
+    tool_calls = message.get("tool_calls")
+    if tool_calls:
+        try:
+            function = tool_calls[0]["function"]
+            arguments = _json.loads(function["arguments"])
+            if not isinstance(arguments, dict):
+                raise TypeError("arguments must decode to an object")
+        except (KeyError, IndexError, TypeError, _json.JSONDecodeError) as exc:
+            raise LLMCompatibilityError(
+                "Provider 返回的 tool_calls.function.arguments 不合法。"
+            ) from exc
         return {
-            "tool":  tc["function"]["name"],
-            "input": _json.loads(tc["function"]["arguments"]),
+            "tool": function["name"],
+            "input": arguments,
         }
-    return {"tool": None, "text": choice.get("content", "")}
+    if tools and tool_choice_mode in {"required", "named"}:
+        raise LLMCompatibilityError(
+            f"Provider 在 {tool_choice_mode} 模式下未返回 tool_calls。"
+        )
+    return {"tool": None, "text": message.get("content") or ""}
 
 
 # ── 公开调用接口 ──────────────────────────────────────────────────────────────

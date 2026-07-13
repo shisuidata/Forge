@@ -68,17 +68,30 @@ paid_gmv:
     - "orders.status = 'completed'"
   period_col: orders.created_at
 
-# 衍生指标：由原子指标计算
-repurchase_rate:
-  metric_class: derived
-  label: 复购率
-  description: 下过 2 次及以上订单的用户占比
-  formula: repeat_buyers / total_buyers
-  components:
-    repeat_buyers:
-      description: 订单数 >= 2 的用户数
-    total_buyers:
-      description: 下过至少 1 次订单的用户数
+# 衍生指标：只引用已经注册的原子指标
+paid_orders:
+  metric_class: atomic
+  label: 支付订单数
+  description: 已完成支付的订单数量
+  measure: orders.id
+  aggregation: count_distinct
+  qualifiers:
+    - "orders.status = 'completed'"
+
+all_orders:
+  metric_class: atomic
+  label: 全部订单数
+  description: 创建成功的订单数量
+  measure: orders.id
+  aggregation: count_distinct
+
+payment_rate:
+  metric_class: derivative
+  label: 支付率
+  description: 支付订单占全部订单的比例
+  numerator: paid_orders
+  denominator: all_orders
+  period_col: orders.created_at
 ```
 
 **维护方式**：
@@ -170,7 +183,7 @@ registry:
 
 ```yaml
 指标英文名:
-  metric_class: atomic          # atomic（直接聚合）或 derived（公式）
+  metric_class: atomic          # atomic（直接聚合）或 derivative（原子指标比率）
   label: 指标中文名
   description: 一句话说明计算口径
   measure: 表名.列名             # 度量字段
@@ -181,6 +194,21 @@ registry:
   dimensions:                   # 可选：可切分的维度列
     - 表名.维度列
 ```
+
+衍生指标模板：
+
+```yaml
+指标英文名:
+  metric_class: derivative
+  label: 指标中文名
+  description: 分子除以分母的业务含义
+  numerator: 已注册的原子指标名
+  denominator: 已注册的原子指标名
+  period_col: 表名.时间列        # 可选，用于统一分子分母时间窗口
+  notes: 口径差异说明            # 可选
+```
+
+衍生指标只能引用原子指标，不能引用另一个衍生指标。删除被引用的原子指标时，Admin UI 会阻止操作并列出依赖项。
 
 ### Step 4：添加歧义消除规则
 

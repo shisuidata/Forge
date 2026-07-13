@@ -88,6 +88,55 @@ def test_process_retries_once_when_convention_lint_fails(isolated_agent, monkeyp
     assert fake_memory.get_state("u1", "pending_sql") == resp.sql
 
 
+def test_process_lints_every_retry_before_sql_review(isolated_agent, monkeypatch):
+    agent_mod, _ = isolated_agent
+    calls = []
+    missing_status = {
+        "scan": "dwd_order_detail",
+        "select": ["dwd_order_detail.user_id"],
+    }
+    wrong_direction = {
+        "scan": "dwd_order_detail",
+        "filter": [
+            {"col": "dwd_order_detail.order_status", "op": "eq", "val": "已完成"}
+        ],
+        "window": [
+            {
+                "fn": "lag",
+                "col": "dwd_order_detail.order_dt",
+                "partition": ["dwd_order_detail.user_id"],
+                "order": [{"col": "dwd_order_detail.order_dt", "dir": "desc"}],
+                "as": "prev_order_dt",
+            }
+        ],
+        "select": ["dwd_order_detail.user_id", "prev_order_dt"],
+    }
+    fixed = {
+        **wrong_direction,
+        "window": [
+            {
+                **wrong_direction["window"][0],
+                "order": [{"col": "dwd_order_detail.order_dt", "dir": "asc"}],
+            }
+        ],
+    }
+
+    def fake_call(*args, **kwargs):
+        outputs = [missing_status, wrong_direction, fixed]
+        result = outputs[len(calls)]
+        calls.append(result)
+        return {"tool": "generate_forge_query", "input": result}
+
+    monkeypatch.setattr(agent_mod.llm, "call", fake_call)
+
+    resp = agent_mod.process("u-retry", "每个用户相邻两次下单之间的时间间隔")
+
+    assert resp.action == "sql_review"
+    assert resp.retry_count == 2
+    assert len(calls) == 3
+    assert "ASC" in resp.sql
+
+
 def test_process_uses_configured_postgresql_dialect(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
     monkeypatch.setattr(agent_mod.cfg, "SQL_DIALECT", "auto")

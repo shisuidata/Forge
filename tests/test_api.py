@@ -12,6 +12,7 @@ Forge Web API 自动化测试。
 from __future__ import annotations
 
 import pytest
+import yaml
 from httpx import AsyncClient
 from pathlib import Path
 
@@ -319,6 +320,183 @@ class TestAdminAIAuth:
         data = resp.json()
         assert data["ok"] is False
         assert "missing_col" in data["error"]
+
+
+class TestAdminMetricRoutes:
+    @staticmethod
+    def _configure_registry(monkeypatch, tmp_path, metrics: dict | None = None):
+        from config import cfg
+
+        schema_path = tmp_path / "schema.registry.json"
+        metrics_path = tmp_path / "metrics.registry.yaml"
+        schema_path.write_text(
+            '{"tables":{"orders":{"columns":["id","status","total_amount","created_at"]}}}',
+            encoding="utf-8",
+        )
+        metrics_path.write_text(
+            yaml.safe_dump(metrics or {}, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(cfg, "REGISTRY_PATH", schema_path)
+        monkeypatch.setattr(cfg, "METRICS_PATH", metrics_path)
+        return metrics_path
+
+    async def test_create_atomic_metric_uses_current_registry_contract(
+        self, client: AsyncClient, monkeypatch, tmp_path
+    ):
+        metrics_path = self._configure_registry(monkeypatch, tmp_path)
+
+        resp = await client.post(
+            "/admin/metrics/metric",
+            data={
+                "name": "paid_gmv",
+                "label": "支付 GMV",
+                "description": "已完成订单的成交金额",
+                "metric_class": "atomic",
+                "measure": "orders.total_amount",
+                "aggregation": "sum",
+                "qualifiers": "orders.status = 'completed'\n\n",
+                "period_col": "orders.created_at",
+                "dimensions": "orders.status\n",
+                "notes": "财务确认口径",
+            },
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        saved = yaml.safe_load(metrics_path.read_text(encoding="utf-8"))
+        assert saved["paid_gmv"] == {
+            "label": "支付 GMV",
+            "description": "已完成订单的成交金额",
+            "metric_class": "atomic",
+            "measure": "orders.total_amount",
+            "aggregation": "sum",
+            "qualifiers": ["orders.status = 'completed'"],
+            "period_col": "orders.created_at",
+            "dimensions": ["orders.status"],
+            "notes": "财务确认口径",
+            "updated_at": saved["paid_gmv"]["updated_at"],
+        }
+        assert "type" not in saved["paid_gmv"]
+        assert "filters" not in saved["paid_gmv"]
+
+    async def test_create_derivative_metric_only_saves_derivative_fields(
+        self, client: AsyncClient, monkeypatch, tmp_path
+    ):
+        atomics = {
+            "paid_orders": {
+                "metric_class": "atomic",
+                "label": "支付订单",
+                "description": "支付订单数",
+                "measure": "orders.id",
+                "aggregation": "count_distinct",
+            },
+            "all_orders": {
+                "metric_class": "atomic",
+                "label": "全部订单",
+                "description": "全部订单数",
+                "measure": "orders.id",
+                "aggregation": "count_distinct",
+            },
+        }
+        metrics_path = self._configure_registry(monkeypatch, tmp_path, atomics)
+
+        resp = await client.post(
+            "/admin/metrics/metric",
+            data={
+                "name": "payment_rate",
+                "label": "支付率",
+                "description": "支付订单占全部订单的比例",
+                "metric_class": "derivative",
+                "numerator": "paid_orders",
+                "denominator": "all_orders",
+                "period_col": "orders.created_at",
+                "measure": "orders.total_amount",
+                "aggregation": "sum",
+            },
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        saved = yaml.safe_load(metrics_path.read_text(encoding="utf-8"))["payment_rate"]
+        assert saved["metric_class"] == "derivative"
+        assert saved["numerator"] == "paid_orders"
+        assert saved["denominator"] == "all_orders"
+        assert "measure" not in saved
+        assert "aggregation" not in saved
+
+    async def test_invalid_metric_renders_errors_and_preserves_form(
+        self, client: AsyncClient, monkeypatch, tmp_path
+    ):
+        self._configure_registry(monkeypatch, tmp_path)
+
+        resp = await client.post(
+            "/admin/metrics/metric",
+            data={
+                "name": "bad_metric",
+                "label": "错误指标",
+                "description": "引用不存在字段",
+                "metric_class": "atomic",
+                "measure": "orders.missing_col",
+                "aggregation": "sum",
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "orders.missing_col" in resp.text
+        assert "bad_metric" in resp.text
+        assert 'value="atomic"' in resp.text
+
+    async def test_metric_warnings_are_shown_after_save(
+        self, client: AsyncClient, monkeypatch, tmp_path
+    ):
+        metrics_path = self._configure_registry(monkeypatch, tmp_path)
+
+        resp = await client.post(
+            "/admin/metrics/metric",
+            data={
+                "name": "gmv",
+                "label": "GMV",
+                "description": "订单总金额",
+                "metric_class": "atomic",
+                "measure": "orders.total_amount",
+                "aggregation": "sum",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert "指标已保存" in resp.text
+        assert "qualifiers" in resp.text
+        assert "dimensions" in resp.text
+        assert "gmv" in yaml.safe_load(metrics_path.read_text(encoding="utf-8"))
+
+    async def test_delete_referenced_atomic_metric_returns_conflict(
+        self, client: AsyncClient, monkeypatch, tmp_path
+    ):
+        metrics = {
+            "paid_orders": {
+                "metric_class": "atomic",
+                "label": "支付订单",
+                "description": "支付订单数",
+                "measure": "orders.id",
+                "aggregation": "count_distinct",
+            },
+            "payment_rate": {
+                "metric_class": "derivative",
+                "label": "支付率",
+                "description": "支付订单占比",
+                "numerator": "paid_orders",
+                "denominator": "paid_orders",
+            },
+        }
+        metrics_path = self._configure_registry(monkeypatch, tmp_path, metrics)
+
+        resp = await client.delete("/admin/metrics/metric/paid_orders")
+
+        assert resp.status_code == 409
+        assert resp.json()["dependents"] == ["payment_rate"]
+        saved = yaml.safe_load(metrics_path.read_text(encoding="utf-8"))
+        assert "paid_orders" in saved
 
 
 class TestSettingsRoutes:

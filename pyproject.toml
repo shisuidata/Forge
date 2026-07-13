@@ -30,6 +30,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "playwright>=1.40",
     "pytest-playwright>=0.5",
+    "tqdm>=4.66",
 ]
 
 [project.scripts]

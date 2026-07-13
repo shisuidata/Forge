@@ -5,6 +5,10 @@
 **关键**：有 `cte` 的 Forge JSON 仍然必须有顶层 `scan` 和 `select`。\
 `cte` 定义命名子查询，主查询（`scan`/`filter`/`agg`/`select`）把这些名字当表用。
 
+外层查询只是在筛选 CTE 已算好的比率、计数或金额时，必须使用 `filter`，不要使用
+`having`。外层没有 `agg` 时写 `having` 会触发隐式重新分组，可能合并同名维度行。
+`having` 只用于当前层 `agg` 产生的聚合结果。
+
 **每个 CTE 项必须有 `name` 和 `query` 两个字段**，`query` 内是一个完整的 Forge JSON（含 scan 和 select）。
 
 ### 单 CTE 示例
@@ -32,6 +36,8 @@
 
 计算两个聚合值的比值，必须用 CTE 先算各自数量，再在主查询 `select` 中用 `expr` 相除。
 **`fn: 'expr'` 不存在，绝对不能用在 `agg` 里。**
+如果用户在问题中明确写出“分子/分母”，最终 `select` 必须同时输出分子、分母和比率，
+便于人工审核口径；不要只输出比率。
 
 ```json
 {

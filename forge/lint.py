@@ -11,6 +11,8 @@ Forge JSON 约定检查器（Convention Lint）
 """
 from __future__ import annotations
 
+import re
+
 
 def lint_conventions(forge_json: dict, question: str) -> list[str]:
     """检查 Forge JSON 是否违反字段使用约定，返回修复建议列表。"""
@@ -107,6 +109,21 @@ def lint_conventions(forge_json: dict, question: str) -> list[str]:
     # ── 规则 30：客单价订单查找结果列契约 ───────────────────────────────────
     _check_unit_price_order_lookup_contract(forge_json, q, warnings)
 
+    # ── 规则 31：派生指标过滤不能在外层误用 HAVING ─────────────────────────
+    _check_derived_metric_having(forge_json, q, warnings)
+
+    # ── 规则 32：内部排名别名不应污染结果列 ────────────────────────────────
+    _check_internal_rank_output(forge_json, q, warnings)
+
+    # ── 规则 33：退款记录结果列契约 ────────────────────────────────────────
+    _check_refund_record_output_contract(forge_json, q, warnings)
+
+    # ── 规则 34：品牌进口商品订单明细结果列契约 ────────────────────────────
+    _check_imported_brand_order_detail_contract(forge_json, q, warnings)
+
+    # ── 规则 35：品牌评分偏差结果列契约 ────────────────────────────────────
+    _check_brand_rating_deviation_contract(forge_json, q, warnings)
+
     return warnings
 
 
@@ -128,12 +145,13 @@ _TEMPORAL_NAV_WORDS = [
 ]
 _RANKING_FNS = {"row_number", "rank", "dense_rank"}
 _PER_GROUP_WORDS = ["各", "每个", "每组", "每类", "内"]
-_TOPN_WORDS = ["前", "top", "TOP", "排名第", "排名前", "最高", "最多", "最低", "最少"]
+_TOPN_WORDS = ["top", "TOP", "排名第", "排名前", "最高", "最多", "最低", "最少"]
 
 
 def _check_order_status(forge_json: dict, question: str, warnings: list[str]) -> None:
     """用户行为分析类查询应包含 order_status='已完成' 过滤。"""
-    if not any(kw in question for kw in _BEHAVIOR_KEYWORDS):
+    is_order_interval = "下单" in question and "间隔" in question
+    if not (any(kw in question for kw in _BEHAVIOR_KEYWORDS) or is_order_interval):
         return
     if _has_order_status_filter(forge_json):
         return
@@ -196,7 +214,11 @@ def _check_unit_price(forge_json: dict, question: str, warnings: list[str]) -> N
     if "客单价" not in question:
         return
     range_words = ["之间", "到", "以上", "以下", "超过", "低于", "大于", "小于"]
-    if not any(w in question for w in range_words):
+    has_unit_price_range = any(
+        re.search(rf"客单价.{{0,12}}{word}|{word}.{{0,12}}客单价", question)
+        for word in range_words
+    )
+    if not has_unit_price_range:
         return
     if _has_avg_amount_agg(forge_json):
         warnings.append(
@@ -314,7 +336,7 @@ def _check_refund_rate(forge_json: dict, question: str, warnings: list[str]) -> 
             "不要直接用 dwd_refund_detail.user_id 连接 dim_user。"
         )
     if "退款订单数/总订单数" in question or ("退款订单数" in question and "总订单数" in question):
-        selects = _collect_visible_select_labels(forge_json)
+        selects = _collect_direct_select_labels(forge_json)
         has_total = any("total_order" in field.lower() or "总订单" in field for field in selects)
         has_refund = any("refund_order" in field.lower() or "refund_count" in field.lower() or "退款订单" in field for field in selects)
         if not (has_total and has_refund):
@@ -562,7 +584,8 @@ def _check_qualified_window_alias_select(forge_json: dict, question: str, warnin
                 continue
             warnings.append(
                 f"窗口函数别名 {field_name} 是当前 SELECT 派生字段，不能写成 {item}。"
-                f"请从 select 中删除 {item}，只保留 window 定义，或在 select 中使用未限定的 {field_name}。"
+                f"请从 select 中删除 {item}，由 window 定义产生该字段；"
+                f"确需展示时只能使用未限定的 {field_name}。"
             )
 
 
@@ -651,6 +674,19 @@ def _check_all_bad_reviews_without_images(forge_json: dict, question: str, warni
             "comment_type='差评' AND has_image=1 的商品；"
             "不要只用 GROUP BY + HAVING 图片数=0。"
         )
+    for query in _iter_queries(forge_json):
+        for join in query.get("joins", []):
+            if not isinstance(join, dict) or join.get("type") != "anti":
+                continue
+            join_refs = _collect_refs_from_obj(join.get("on", {}))
+            if any("product_name" in ref for ref in join_refs):
+                warnings.append(
+                    "商品反连接必须使用稳定实体键 product_id，不要使用 product_name。"
+                    "同名商品会让按名称反连接错误排除其他商品。"
+                    "请让两个差评 CTE 都保留 product_id，用 product_id 反连接，"
+                    "最终结果再只显示并去重 product_name。"
+                )
+                break
     final_selects = _collect_direct_select_fields(forge_json)
     if "显示商品名称" in question and any("product_name" in field for field in final_selects):
         final_groups = _collect_direct_group_fields(forge_json)
@@ -782,13 +818,13 @@ def _check_good_review_with_images_contract(forge_json: dict, question: str, war
             "用户明确要求“好评记录”，必须添加 dwd_comment_detail.comment_type = '好评' 过滤。"
             "不要只用 rating 4/5 和 has_image 判断好评。"
         )
-    direct_selects = _collect_direct_select_labels(forge_json)
+    direct_selects = [_unqualified_field(field) for field in _collect_direct_select_labels(forge_json)]
     expected = [
-        "dwd_comment_detail.comment_id",
-        "dwd_comment_detail.product_id",
-        "dwd_comment_detail.user_id",
-        "dwd_comment_detail.rating",
-        "dwd_comment_detail.comment_dt",
+        "comment_id",
+        "product_id",
+        "user_id",
+        "rating",
+        "comment_dt",
     ]
     if direct_selects and direct_selects != expected:
         warnings.append(
@@ -796,10 +832,10 @@ def _check_good_review_with_images_contract(forge_json: dict, question: str, war
             "不要额外输出 comment_type、has_image、order_item_id、has_video 等过滤或内部字段，"
             "否则结果列契约不稳定。"
         )
-    sort_fields = _collect_direct_sort_fields(forge_json)
+    sort_fields = [(_unqualified_field(field), direction) for field, direction in _collect_direct_sort_fields(forge_json)]
     if sort_fields and sort_fields[:2] != [
-        ("dwd_comment_detail.rating", "desc"),
-        ("dwd_comment_detail.comment_dt", "desc"),
+        ("rating", "desc"),
+        ("comment_dt", "desc"),
     ]:
         warnings.append(
             "“按评分降序”的评价列表应使用稳定排序：rating DESC, comment_dt DESC。"
@@ -835,7 +871,7 @@ def _check_refund_product_ranking_contract(forge_json: dict, question: str, warn
 
 def _check_product_category_share_contract(forge_json: dict, question: str, warnings: list[str]) -> None:
     """每个商品在所属品类中的占比应按展示品类名计算并固定输出列。"""
-    if not ("每个商品" in question and "所属品类" in question and "占比" in question):
+    if not ("商品" in question and "品类" in question and "占比" in question):
         return
     final_selects = _collect_direct_select_labels(forge_json)
     if any("product_id" in field for field in final_selects) and not any(word in question for word in _PRODUCT_ID_WORDS):
@@ -851,6 +887,18 @@ def _check_product_category_share_contract(forge_json: dict, question: str, warn
             "请使用 SUM(product_revenue) OVER (PARTITION BY category_name)，"
             "不要用 category_id 单独计算品类总额。"
         )
+    for cte in forge_json.get("cte", []):
+        if not isinstance(cte, dict) or "category_total" not in str(cte.get("name", "")).lower():
+            continue
+        group_fields = _collect_direct_group_fields(cte.get("query", {}))
+        if any("category_id" in field for field in group_fields):
+            warnings.append(
+                "品类销售额占比的分母必须按可见展示粒度 category_name 汇总。"
+                "不要用 category_id 构造 category_totals 并回连；同名品类可能有多个 ID。"
+                "优先在商品销售额 CTE 上使用 SUM(product_revenue) OVER "
+                "(PARTITION BY category_name) 计算分母。"
+            )
+            break
     for query in _iter_queries(forge_json):
         if query is forge_json:
             continue
@@ -988,6 +1036,115 @@ def _check_unit_price_order_lookup_contract(forge_json: dict, question: str, war
         )
 
 
+def _check_derived_metric_having(forge_json: dict, question: str, warnings: list[str]) -> None:
+    """外层仅过滤 CTE 派生字段时应使用 WHERE，避免 HAVING 隐式重新分组。"""
+    for query in _iter_queries(forge_json):
+        if not query.get("having") or query.get("agg"):
+            continue
+        has_derived_select = any(isinstance(item, dict) and item.get("expr") for item in query.get("select", []))
+        scans_cte = any(
+            isinstance(cte, dict) and cte.get("name") == query.get("scan")
+            for cte in forge_json.get("cte", [])
+        )
+        if not (has_derived_select or scans_cte):
+            continue
+        warnings.append(
+            "当前层没有聚合，却使用 HAVING 过滤派生指标；编译器会为 HAVING 推断 GROUP BY，"
+            "可能合并同名维度行并改变结果。请把该条件移到 filter（WHERE）；"
+            "HAVING 只用于同一层 agg 聚合结果。"
+        )
+        return
+
+
+def _check_internal_rank_output(forge_json: dict, question: str, warnings: list[str]) -> None:
+    """TopN 排名别名默认只用于 qualify，除非用户明确要求展示名次。"""
+    explicitly_requests_rank = any(
+        phrase in question for phrase in ("显示排名", "显示名次", "输出排名", "输出名次", "排名列", "名次列")
+    )
+    if explicitly_requests_rank:
+        return
+    for query in _iter_queries(forge_json):
+        rank_aliases = {
+            str(window.get("as", ""))
+            for window in query.get("window", [])
+            if isinstance(window, dict) and str(window.get("fn", "")).lower() in _RANKING_FNS
+        }
+        if not rank_aliases:
+            continue
+        for item in query.get("select", []):
+            if not isinstance(item, str):
+                continue
+            alias = item.rpartition(".")[2]
+            if alias not in rank_aliases:
+                continue
+            warnings.append(
+                f"排名别名 {alias} 只是 TopN qualify 的内部字段，用户未要求显示排名。"
+                f"请从 select 中删除 {item}，保留 window 与 qualify 即可。"
+            )
+            return
+
+
+def _check_refund_record_output_contract(forge_json: dict, question: str, warnings: list[str]) -> None:
+    """退款记录列表应只返回审核和定位所需的稳定字段。"""
+    if not ("退款状态为已退款" in question and "退款金额超过" in question and "退款记录" in question):
+        return
+    actual = [_unqualified_field(field) for field in _collect_direct_select_labels(forge_json)]
+    expected = ["refund_id", "order_id", "user_id", "refund_amount", "apply_dt"]
+    if actual != expected:
+        warnings.append(
+            "退款记录结果列应固定为 refund_id、order_id、user_id、refund_amount、apply_dt。"
+            "refund_status 是过滤条件，不要输出；apply_dt 用于追溯申请时间，不要替换为 complete_dt。"
+        )
+
+
+def _check_imported_brand_order_detail_contract(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    """带商品和品牌条件的订单明细应返回业务可读的最小字段集。"""
+    if not (
+        "订单明细" in question
+        and "国际品牌" in question
+        and "国内知名品牌" in question
+        and "进口商品" in question
+    ):
+        return
+    actual = [_unqualified_field(field) for field in _collect_direct_select_labels(forge_json)]
+    expected = [
+        "order_item_id",
+        "order_id",
+        "product_name",
+        "brand_name",
+        "actual_amount",
+        "order_dt",
+    ]
+    if actual != expected:
+        warnings.append(
+            "品牌进口商品订单明细的结果列应固定为 "
+            "order_item_id、order_id、product_name、brand_name、actual_amount、order_dt。"
+            "过滤字段和内部 ID 不要额外输出。"
+        )
+
+
+def _check_brand_rating_deviation_contract(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    """品牌评分偏差查询保持行粒度、数值精度和结果列稳定。"""
+    if not ("每个品牌商品评分的平均分" in question and "每条评价" in question and "偏差" in question):
+        return
+    actual = [_unqualified_field(field) for field in _collect_direct_select_labels(forge_json)]
+    expected = ["brand_name", "rating", "brand_avg_rating", "rating_deviation"]
+    has_round = any(
+        isinstance(item, dict) and "round(" in str(item.get("expr", "")).lower()
+        for item in forge_json.get("select", [])
+    )
+    if actual != expected or forge_json.get("sort") or has_round:
+        warnings.append(
+            "品牌评分偏差结果列应固定为 brand_name、rating、brand_avg_rating、rating_deviation。"
+            "偏差表达式使用 rating - brand_avg_rating；不要输出 comment_id/product_id，"
+            "不要额外排序或 ROUND，以免改变结果契约和数值精度。"
+        )
+
+
 # ── 辅助函数 ──────────────────────────────────────────────────────────────────
 
 def _has_order_status_filter(fj: dict) -> bool:
@@ -1085,6 +1242,11 @@ def _collect_direct_sort_fields(query: dict) -> list[tuple[str, str]]:
             continue
         fields.append((str(item.get("col", "")), str(item.get("dir", "")).lower()))
     return fields
+
+
+def _unqualified_field(field: str) -> str:
+    """Return the column or alias portion of a simple qualified reference."""
+    return field.rpartition(".")[2]
 
 
 def _agg_is_order_count(agg: dict) -> bool:
@@ -1280,6 +1442,7 @@ def _looks_like_time_field(col: str) -> bool:
 
 def _question_asks_per_group_topn(question: str) -> bool:
     has_group_scope = any(w in question for w in _PER_GROUP_WORDS)
-    has_topn = any(w in question for w in _TOPN_WORDS)
+    has_explicit_front_n = bool(re.search(r"前\s*(?:\d+|[一二三四五六七八九十]+|[Nn])", question))
+    has_topn = any(w in question for w in _TOPN_WORDS) or has_explicit_front_n
     # 避免把"各品类销售额，按销售额排序"误判成组内 TopN；需要明确排名/前N/最高等 TopN 信号。
     return has_group_scope and has_topn

@@ -77,6 +77,12 @@ class Config:
         _env("LLM_BASE_URL", "llm", "base_url")
         or os.getenv("MINIMAX_BASE_URL", "")
     )
+    LLM_TOOL_CHOICE: str = _env(
+        "LLM_TOOL_CHOICE", "llm", "tool_choice", default="auto"
+    ).lower()
+    LLM_TIMEOUT_SECONDS: float = float(
+        _env("LLM_TIMEOUT_SECONDS", "llm", "timeout_seconds", default="120")
+    )
 
     # ── Embedding ─────────────────────────────────────────────────────────────
     EMBED_API_KEY:   str = _env("EMBED_API_KEY",   "embedding", "api_key")   or _env("LLM_API_KEY", "llm", "api_key")

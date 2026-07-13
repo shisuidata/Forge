@@ -26,12 +26,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import hmac
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
 
 import yaml
 from fastapi import APIRouter, Depends, Form, Request
@@ -130,9 +133,33 @@ def _load_metrics() -> dict:
 
 
 def _save_metrics(metrics: dict) -> None:
-    cfg.METRICS_PATH.write_text(
-        yaml.dump(metrics, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    path = cfg.METRICS_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = yaml.safe_dump(
+        metrics,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
     )
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp.write(content)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_path = Path(tmp.name)
+        yaml.safe_load(tmp_path.read_text(encoding="utf-8"))
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
 
 
 def _parse_lines(text: str) -> list[str]:
@@ -631,14 +658,15 @@ async def registry_redirect():
 # ── 指标库 ─────────────────────────────────────────────────────────────────────
 
 @router.get("/metrics", response_class=HTMLResponse)
-async def metrics_page(request: Request):
+async def metrics_page(request: Request, flash: str = ""):
     metrics = _load_metrics()
     atomics     = {k: v for k, v in metrics.items() if v.get("metric_class") == "atomic"}
     derivatives = {k: v for k, v in metrics.items() if v.get("metric_class") == "derivative"}
     return templates.TemplateResponse(
             request,
             "metrics.html",
-            {"atomics": atomics, "derivatives": derivatives, "all_metrics": metrics},
+            {"atomics": atomics, "derivatives": derivatives, "all_metrics": metrics,
+             "flash": flash},
         )
 
 
@@ -647,27 +675,40 @@ async def upsert_metric(
     request:     Request,
     name:        str           = Form(...),
     label:       str           = Form(...),
-    type:        str           = Form(...),
+    metric_class: str          = Form(...),
     description: str           = Form(...),
+    measure:     Optional[str] = Form(default=None),
+    aggregation: Optional[str] = Form(default=None),
     numerator:   Optional[str] = Form(default=None),
     denominator: Optional[str] = Form(default=None),
-    filters:     Optional[str] = Form(default=None),
+    qualifiers:  Optional[str] = Form(default=None),
+    period_col:  Optional[str] = Form(default=None),
     dimensions:  Optional[str] = Form(default=None),
     notes:       Optional[str] = Form(default=None),
 ):
     entry: dict = {
         "label":       label,
-        "type":        type,
         "description": description,
+        "metric_class": metric_class,
     }
-    if numerator:   entry["numerator"]   = numerator
-    if denominator: entry["denominator"] = denominator
-    if filters:     entry["filters"]     = _parse_lines(filters)
-    if dimensions:  entry["dimensions"]  = _parse_lines(dimensions)
-    if notes:       entry["notes"]       = notes
+    if metric_class == "atomic":
+        entry["measure"] = (measure or "").strip()
+        entry["aggregation"] = (aggregation or "").strip()
+        if qualifiers:
+            entry["qualifiers"] = _parse_lines(qualifiers)
+    elif metric_class == "derivative":
+        entry["numerator"] = (numerator or "").strip()
+        entry["denominator"] = (denominator or "").strip()
+    if period_col and period_col.strip():
+        entry["period_col"] = period_col.strip()
+    if dimensions:
+        entry["dimensions"] = _parse_lines(dimensions)
+    if notes and notes.strip():
+        entry["notes"] = notes.strip()
 
     structural  = _load_schema()
     all_metrics = _load_metrics()
+    is_edit = name in all_metrics
     result = validate_metric(entry, structural, metric_name=name, all_metrics=all_metrics)
     if not result.valid:
         atomics     = {k: v for k, v in all_metrics.items() if v.get("metric_class") == "atomic"}
@@ -680,7 +721,7 @@ async def upsert_metric(
                 "all_metrics":   all_metrics,
                 "form_errors":   result.errors,
                 "form_warnings": result.warnings,
-                "form_data":     {"name": name, **entry},
+                "form_data":     {"name": name, **entry, "_is_edit": is_edit},
             },
             status_code=422,
         )
@@ -689,12 +730,44 @@ async def upsert_metric(
     metrics = _load_metrics()
     metrics[name] = entry
     _save_metrics(metrics)
-    return RedirectResponse(url="/admin/metrics", status_code=303)
+    if result.warnings:
+        atomics = {k: v for k, v in metrics.items() if v.get("metric_class") == "atomic"}
+        derivatives = {k: v for k, v in metrics.items() if v.get("metric_class") == "derivative"}
+        return templates.TemplateResponse(
+            request,
+            "metrics.html",
+            {
+                "atomics": atomics,
+                "derivatives": derivatives,
+                "all_metrics": metrics,
+                "form_warnings": result.warnings,
+                "flash": "指标已保存，请检查以下口径警告。",
+            },
+        )
+    return RedirectResponse(
+        url="/admin/metrics?" + urlencode({"flash": "指标已保存"}),
+        status_code=303,
+    )
 
 
 @router.delete("/metrics/metric/{name}")
 async def delete_metric(name: str):
     metrics = _load_metrics()
+    dependents = sorted(
+        metric_name
+        for metric_name, metric in metrics.items()
+        if metric.get("metric_class") == "derivative"
+        and name in {metric.get("numerator"), metric.get("denominator")}
+    )
+    if dependents:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "deleted": None,
+                "dependents": dependents,
+                "error": f"指标 {name!r} 正被衍生指标引用，不能删除。",
+            },
+        )
     metrics.pop(name, None)
     _save_metrics(metrics)
     return {"deleted": name}
