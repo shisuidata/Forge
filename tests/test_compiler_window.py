@@ -308,6 +308,29 @@ def test_qualify_row_number_topn():
     assert "WHERE rn = 1" in result
 
 
+def test_qualify_hides_rank_alias_when_not_requested_in_select():
+    """qualify 所需的内部排名列不能泄漏到最终结果。"""
+    result = compile_query({
+        "scan": "product_sales",
+        "select": [
+            "product_sales.category_name",
+            "product_sales.product_name",
+            "product_sales.product_revenue",
+        ],
+        "window": [{
+            "fn": "row_number",
+            "partition": ["product_sales.category_name"],
+            "order": [{"col": "product_sales.product_revenue", "dir": "desc"}],
+            "as": "rn",
+        }],
+        "qualify": [{"col": "rn", "op": "lte", "val": 3}],
+    })
+
+    assert result.startswith("SELECT category_name, product_name, product_revenue FROM (")
+    assert "ROW_NUMBER() OVER" in result
+    assert "WHERE rn <= 3" in result
+
+
 def test_qualify_does_not_affect_non_qualify_queries():
     """无 qualify 字段时输出不变（不包一层子查询）"""
     result = compile_query({

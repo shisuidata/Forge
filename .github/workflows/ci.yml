@@ -20,14 +20,57 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run tests
-        run: |
-          pytest tests/test_compiler.py \
-                 tests/test_compiler_extended.py \
-                 tests/test_compiler_window.py \
-                 tests/test_session.py \
-                 tests/test_agent_logic.py \
-                 tests/test_registry_context.py \
-                 tests/test_metric_validator.py \
-                 tests/test_sync.py \
-                 tests/test_staging_sync.py \
-                 -v --tb=short
+        run: pytest -q
+
+  compatibility:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: forge
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: forge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forge -d forge"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: forge
+          MYSQL_USER: forge
+          MYSQL_PASSWORD: forge
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uforge -pforge"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: SQLite compatibility smoke
+        run: pytest tests/test_database_compatibility.py -v --tb=short
+
+      - name: PostgreSQL compatibility smoke
+        env:
+          FORGE_SMOKE_DATABASE_URL: postgresql+psycopg2://forge:forge@127.0.0.1:5432/forge
+        run: pytest tests/test_database_compatibility.py -v --tb=short
+
+      - name: MySQL compatibility smoke
+        env:
+          FORGE_SMOKE_DATABASE_URL: mysql+pymysql://forge:forge@127.0.0.1:3306/forge
+        run: pytest tests/test_database_compatibility.py -v --tb=short

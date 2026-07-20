@@ -98,3 +98,44 @@ def test_sync_cli_out_flag_writes_requested_registry_path(tmp_path, monkeypatch,
     assert str(out_path) in output
     registry = json.loads(out_path.read_text())
     assert set(registry["tables"].keys()) == {"customers"}
+
+
+def test_sync_quotes_reserved_and_mixed_case_identifiers(tmp_path):
+    url = _make_db_url(tmp_path, [
+        'CREATE TABLE "order" ("id" INTEGER PRIMARY KEY, "group" TEXT, "Status Code" TEXT)',
+        'INSERT INTO "order" ("group", "Status Code") VALUES '
+        "('retail', 'PAID'), ('retail', 'PENDING'), ('wholesale', 'PAID')",
+    ])
+
+    result = run_sync(url, tmp_path / "schema.registry.json")
+    columns = result["tables"]["order"]["columns"]
+
+    assert columns["group"]["enum"] == ["retail", "wholesale"]
+    assert columns["Status Code"]["enum"] == ["PAID", "PENDING"]
+
+
+def test_sync_enum_count_is_limited_to_sample_rows(tmp_path, monkeypatch):
+    import registry.sync as sync_module
+
+    monkeypatch.setattr(sync_module, "_ENUM_SAMPLE_ROWS", 5)
+    high_cardinality_tail = ", ".join(f"('tail-{i:02d}')" for i in range(31))
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE events (id INTEGER PRIMARY KEY, status TEXT)",
+        "INSERT INTO events (status) VALUES ('paid'), ('pending'), ('paid'), ('pending'), ('paid')",
+        f"INSERT INTO events (status) VALUES {high_cardinality_tail}",
+    ])
+
+    result = run_sync(url, tmp_path / "schema.registry.json")
+
+    assert result["tables"]["events"]["columns"]["status"]["enum"] == ["paid", "pending"]
+
+
+def test_sync_ignores_null_only_enum_columns(tmp_path):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE events (id INTEGER PRIMARY KEY, status TEXT)",
+        "INSERT INTO events (status) VALUES (NULL), (NULL)",
+    ])
+
+    result = run_sync(url, tmp_path / "schema.registry.json")
+
+    assert result["tables"]["events"]["columns"]["status"] == {}

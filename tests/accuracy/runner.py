@@ -44,7 +44,7 @@ MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/
 MINIMAX_MODEL    = os.environ.get("MINIMAX_MODEL", "MiniMax-M2.5-highspeed")
 
 # Fallback：限速时自动切换（key 和 model 可各自独立覆盖）
-MINIMAX_FALLBACK_KEY   = os.environ.get("MINIMAX_FALLBACK_KEY", "sk-api-FFEJeUuX8L5NY4P5XuiHj8bcyslSTWxTDiuH7j9AoRs5SKo66dfpjcDNW0GBEZav28JhFYi72tM2Fi2EaYrhoQybMr4LpFB0CIC0sEEQcHrYpWbzR3VlfYw")
+MINIMAX_FALLBACK_KEY   = os.environ.get("MINIMAX_FALLBACK_KEY", "")
 MINIMAX_FALLBACK_MODEL = os.environ.get("MINIMAX_FALLBACK_MODEL", "MiniMax-M2.5")
 
 # OpenAI-compatible provider（SiliconFlow / DeepSeek 官方）
@@ -152,16 +152,20 @@ def run_forge(client: anthropic.Anthropic, question: str,
                     "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}",
                     "attempts": attempt + 1}
 
-        # 约定 lint（仅在首次尝试时检查，避免浪费所有重试次数）
-        if attempt == 0 and max_compile_retries > 0:
+        # 每轮都执行约定 lint，避免修复一个问题时引入新的业务逻辑错误。
+        if max_compile_retries > 0:
             warnings = lint_conventions(forge_json, question)
             if warnings:
-                warning_text = "\n".join(f"- {w}" for w in warnings)
-                tqdm.write(f"    🔍 约定检查发现 {len(warnings)} 个问题，重试...")
-                messages.append({"role": "assistant", "content": raw})
-                messages.append({"role": "user", "content":
-                    f"约定检查发现以下问题：\n{warning_text}\n请修正后重新输出完整的 Forge JSON。"})
-                continue
+                if attempt < max_compile_retries:
+                    warning_text = "\n".join(f"- {w}" for w in warnings)
+                    tqdm.write(f"    🔍 约定检查发现 {len(warnings)} 个问题，重试...")
+                    messages.append({"role": "assistant", "content": raw})
+                    messages.append({"role": "user", "content":
+                        f"约定检查发现以下问题：\n{warning_text}\n请修正后重新输出完整的 Forge JSON。"})
+                    continue
+                return {"forge_json": forge_json, "sql": None,
+                        "error": f"约定检查失败: {warnings[0]}",
+                        "attempts": attempt + 1}
 
         # 编译
         try:
@@ -197,7 +201,7 @@ def run_sql(client: anthropic.Anthropic, question: str,
 # ── OpenAI-compatible API 调用（SiliconFlow / DeepSeek 官方等）────────────────
 
 def _call_model_oai(api_key: str, base_url: str, system: str,
-                    model: str, max_tokens: int = 4096,
+                    model: str, max_tokens: int = 8192,
                     question: str | None = None,
                     messages: list[dict] | None = None,
                     _retries: int = 5, _backoff: float = 10.0) -> str:
@@ -215,6 +219,8 @@ def _call_model_oai(api_key: str, base_url: str, system: str,
     for attempt in range(_retries):
         try:
             resp = _req.post(url, headers=headers, json=payload, timeout=120)
+            if resp.status_code in {401, 402, 403}:
+                resp.raise_for_status()
             if resp.status_code == 429:
                 wait = _backoff * (2 ** attempt)
                 tqdm.write(f"  ⚠ 限速，等待 {wait:.0f}s 后重试 (attempt {attempt+1}/{_retries})")
@@ -254,16 +260,20 @@ def run_forge_oai(api_key: str, base_url: str, question: str,
                     "error": f"JSON解析失败: {e}\n原始输出: {raw[:500]}",
                     "attempts": attempt + 1}
 
-        # 约定 lint
-        if attempt == 0 and max_compile_retries > 0:
+        # 每轮都执行约定 lint，避免重试结果绕过可信 SQL 门禁。
+        if max_compile_retries > 0:
             warnings = lint_conventions(forge_json, question)
             if warnings:
-                warning_text = "\n".join(f"- {w}" for w in warnings)
-                tqdm.write(f"    🔍 约定检查发现 {len(warnings)} 个问题，重试...")
-                messages.append({"role": "assistant", "content": raw})
-                messages.append({"role": "user", "content":
-                    f"约定检查发现以下问题：\n{warning_text}\n请修正后重新输出完整的 Forge JSON。"})
-                continue
+                if attempt < max_compile_retries:
+                    warning_text = "\n".join(f"- {w}" for w in warnings)
+                    tqdm.write(f"    🔍 约定检查发现 {len(warnings)} 个问题，重试...")
+                    messages.append({"role": "assistant", "content": raw})
+                    messages.append({"role": "user", "content":
+                        f"约定检查发现以下问题：\n{warning_text}\n请修正后重新输出完整的 Forge JSON。"})
+                    continue
+                return {"forge_json": forge_json, "sql": None,
+                        "error": f"约定检查失败: {warnings[0]}",
+                        "attempts": attempt + 1}
 
         try:
             sql = compile_query(forge_json)
@@ -327,15 +337,16 @@ def _openai_provider_defaults(cfg) -> tuple[str, str, str, str]:
 def run_method(method_id: str, fresh: bool = False,
                runs_override: int | None = None,
                workers_override: int | None = None,
-               compile_retries: int = 0) -> None:
+               compile_retries: int = 0,
+               cases_override: Path | None = None) -> None:
     from methods import load  # local import after sys.path setup
 
     cfg = load(method_id)
     runs_per_method = runs_override or cfg.runs
     max_workers     = workers_override or 10
 
-    # 用例文件优先级：method 文件声明 > --cases 参数 > 默认 cases.json
-    cases_path = Path(cfg.cases_file) if cfg.cases_file else CASES_FILE
+    # 显式 CLI 参数用于定向回归时必须覆盖 method 的默认数据集。
+    cases_path = cases_override or (Path(cfg.cases_file) if cfg.cases_file else CASES_FILE)
     if not cases_path.exists():
         print(f"❌ 找不到测试用例 {cases_path}", file=sys.stderr)
         sys.exit(1)
@@ -541,10 +552,10 @@ def main() -> None:
                              "设为 2 可模拟 agent.py 的 MAX_RETRIES 行为。")
     args = parser.parse_args()
 
-    global CASES_FILE
+    cases_override = None
     if args.cases:
         p = Path(args.cases)
-        CASES_FILE = p if p.is_absolute() else ACCURACY_DIR / args.cases
+        cases_override = p if p.is_absolute() else ACCURACY_DIR / args.cases
 
     from methods import list_methods  # noqa: E402
 
@@ -574,7 +585,8 @@ def main() -> None:
         run_method(mid, fresh=args.fresh,
                    runs_override=args.runs,
                    workers_override=args.workers,
-                   compile_retries=args.retry)
+                   compile_retries=args.retry,
+                   cases_override=cases_override)
 
 
 if __name__ == "__main__":

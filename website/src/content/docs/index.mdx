@@ -1,0 +1,191 @@
+---
+title: Forge — AI SQL Query Agent
+description: 面向数据团队的 AI 查询 Agent，让弱模型也能生成可信 SQL。
+template: splash
+hero:
+  tagline: 私有化部署的可信 SQL Agent。<br/>弱模型理解意图，Forge 用 Registry、DSL 和确定性编译守住业务口径与执行边界。
+  image:
+    file: ../../assets/forge-chat.png
+  actions:
+    - text: 快速开始
+      link: /guides/quickstart/
+      icon: right-arrow
+    - text: 客户 PoC
+      link: /guides/installation/#生产交付
+      icon: document
+    - text: GitHub
+      link: https://github.com/shisuidata/Forge
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, Tabs, TabItem, LinkCard } from '@astrojs/starlight/components';
+
+<div style="text-align: center; margin: 2rem 0 3rem;">
+  <p style="font-family: var(--sl-font-mono); font-size: 0.875rem; color: var(--sl-color-gray-2); max-width: 32rem; margin: 0 auto;">
+    "生成错误和业务逻辑错误应该系统性消灭，而不是靠更好的 prompt 碰运气。"
+  </p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; max-width: 40rem; margin: 0 auto 3rem; text-align: center;">
+  <div>
+    <div class="metric-value">100%</div>
+    <div class="metric-label">Case EA(any)</div>
+  </div>
+  <div>
+    <div class="metric-value" style="color: var(--sl-color-white);">97.5%</div>
+    <div class="metric-label">Run ACC</div>
+  </div>
+  <div>
+    <div class="metric-value" style="color: var(--sl-color-white);">337</div>
+    <div class="metric-label">自动化测试通过</div>
+  </div>
+  <div>
+    <div class="metric-value" style="color: var(--sl-color-white);">97.6%</div>
+    <div class="metric-label">编译成功率</div>
+  </div>
+</div>
+
+---
+
+## SQL 生成的三类错误
+
+LLM 生成 SQL 的错误不是一个笼统的"不准"，而是三个截然不同的问题。
+
+<CardGrid>
+  <Card title="生成错误 — 已解决" icon="approve-check">
+    推理对了，SQL 写错了。`INNER JOIN` 替代 `LEFT JOIN`、`NOT IN` 遇 NULL 静默返错。
+
+    **Forge 方案**：DSL 约束 + Structured Output，token 级别约束，物理上不可能出错。
+  </Card>
+  <Card title="业务逻辑错误 — 已解决" icon="approve-check">
+    指标定义歧义。"复购率"的分母是谁？"销售额"含不含退款？
+
+    **Forge 方案**：Registry 语义层，指标定义一次，全组织统一口径。
+  </Card>
+  <Card title="算法逻辑错误 — 超出边界" icon="warning">
+    不知该用什么算法。日期序列填充、递归 CTE。
+
+    **Forge 态度**：诚实标注，不假装能做。超出 DSL 表达能力的查询明确告知。
+  </Card>
+</CardGrid>
+
+---
+
+## 工作原理
+
+```
+自然语言 → Registry(语义+结构) → LLM(Structured Output) → Forge JSON → 确定性编译器 → SQL → 审核执行
+```
+
+**关键区别**：传统方案让 LLM 直接输出 SQL（概率生成，不可预测的错误）。Forge 让 LLM 输出结构化的 JSON，由确定性编译器翻译为 SQL。编译器的行为是可测试、可调试、可升级的——和 prompt 蝴蝶效应完全不同。
+
+<LinkCard title="深入了解工作原理" href="/concepts/how-it-works/" />
+
+---
+
+## 四个核心信念
+
+<CardGrid stagger>
+  <Card title="01 · 约束是自由的前提" icon="seti:lock">
+    收窄输出空间，让整类错误在物理上不可能发生。JSON Schema 在 token 级别约束——不是"建议"LLM，而是让它**不可能不这样做**。
+  </Card>
+  <Card title="02 · 意图与执行分离" icon="seti:pipeline">
+    LLM 负责理解意图（生成 JSON），编译器负责正确执行（翻译 SQL）。编译器修了一个 bug，所有 LLM 都受益。
+  </Card>
+  <Card title="03 · Registry 是组织数据资产" icon="seti:db">
+    结构层 `forge sync` 自动生成，语义层通过对话持续积累。"复购率"的定义只需说一次，从此全组织统一。
+  </Card>
+  <Card title="04 · 编译器修复优于 Prompt 修复" icon="seti:config">
+    改 prompt 是蝴蝶效应。改编译器是确定性的——14 个 `_coerce` 修复有单元测试保护，永远不会回退。
+  </Card>
+</CardGrid>
+
+---
+
+## 基准测试
+
+当前推荐基线是 large 40 题业务查询集，DeepSeek V4 Pro / Method AF，每题 3 次生成。Forge 已经不是 demo 级“偶尔能答对”，而是进入受控生产落地 / 封闭 Beta 候选阶段。
+
+| 指标 | 结果 |
+|---|---:|
+| Case EA(any) | **100.0%** |
+| Case EA(all) | **92.5%** |
+| Run ACC | **97.5%** |
+| 编译失败率 | **0.0%** |
+
+<LinkCard title="查看完整基准测试详情" href="/reference/benchmarks/" />
+
+---
+
+## 生产就绪
+
+<CardGrid>
+  <Card title="Web UI + Chat" icon="laptop">12 个 Admin 管理页面 + Dashboard 概览</Card>
+  <Card title="SQL 审核编辑" icon="pencil">生成后可修改 SQL 再执行</Card>
+  <Card title="结果导出" icon="document">CSV / JSON 一键下载</Card>
+  <Card title="认证 + 多租户" icon="setting">org / team / user 三层隔离</Card>
+  <Card title="数据权限" icon="approve-check-circle">Team 级别表可见性 ACL</Card>
+  <Card title="三层记忆系统" icon="seti:db">EMS + SMP + WMB</Card>
+  <Card title="Pipeline 引擎" icon="seti:pipeline">查询 → 分析 → 可视化</Card>
+  <Card title="飞书 Bot" icon="rocket">流式卡片 + 按钮回调</Card>
+  <Card title="知识收集" icon="open-book">五通道自动提取业务知识</Card>
+  <Card title="PostgreSQL" icon="seti:db">SQLite 零改动切换</Card>
+  <Card title="自动化测试" icon="approve-check">337 passed / 25 skipped</Card>
+  <Card title="生产门禁" icon="heart">forge doctor + production smoke</Card>
+</CardGrid>
+
+<CardGrid>
+  <Card title="客户 PoC 模板" icon="document">
+    `customer-poc-template/` 固化 golden questions、failure triage 和交付报告，避免每次从空白文档开始。
+  </Card>
+  <Card title="兼容性分层" icon="seti:db">
+    数据库支持拆成 SQL 编译、schema sync、查询执行和生产交付，不把 partial 说成 complete。
+  </Card>
+  <Card title="Provider 验收" icon="seti:config">
+    `scripts/provider_smoke.py` 和 `scripts/production-smoke.sh` 区分接口兼容、账号额度和当前可用性。
+  </Card>
+</CardGrid>
+
+---
+
+## 五分钟上手
+
+<Tabs>
+  <TabItem label="pip 安装">
+    ```bash
+    git clone https://github.com/shisuidata/Forge
+    cd Forge && pip install -e .
+    cp .env.example .env   # 填入 LLM_API_KEY + EMBED_API_KEY
+    bash scripts/demo-setup.sh
+    uvicorn main:app --host 0.0.0.0 --port 8000
+    ```
+  </TabItem>
+  <TabItem label="Docker（推荐）">
+    ```bash
+    git clone https://github.com/shisuidata/Forge
+    cd Forge
+    cp .env.example .env   # 填入 LLM_API_KEY + EMBED_API_KEY
+    docker compose up
+    # 访问 http://localhost:8000
+    ```
+  </TabItem>
+  <TabItem label="生产 Smoke">
+    ```bash
+    cp .env.production.example .env.production
+    docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+    bash scripts/production-smoke.sh
+    ```
+  </TabItem>
+  <TabItem label="接入自己的数据库">
+    ```bash
+    # 修改 .env 中的 DATABASE_URL
+    forge sync --db postgresql://user:pass@host/db
+    uvicorn main:app --host 0.0.0.0 --port 8000
+    ```
+  </TabItem>
+</Tabs>
+
+<div style="text-align: center; margin-top: 2rem; font-family: var(--sl-font-mono); font-size: 0.75rem; color: var(--sl-color-gray-3);">
+  Built by 拾穗数据 · Open source trusted SQL agent
+</div>

@@ -58,9 +58,9 @@ def _apply_statement_timeout(conn, timeout_seconds: int) -> None:
         return
     dialect = conn.dialect.name
     if dialect == "postgresql":
-        conn.execute_driver_sql("SET LOCAL statement_timeout = %s", (timeout_seconds * 1000,))
+        conn.exec_driver_sql("SET LOCAL statement_timeout = %s", (timeout_seconds * 1000,))
     elif dialect in {"mysql", "mariadb"}:
-        conn.execute_driver_sql(f"SET SESSION max_execution_time = {timeout_seconds * 1000}")
+        conn.exec_driver_sql(f"SET SESSION max_execution_time = {timeout_seconds * 1000}")
 
 
 @contextmanager

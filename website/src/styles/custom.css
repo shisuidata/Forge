@@ -1,0 +1,52 @@
+/* Forge custom Starlight theme */
+
+:root {
+	--sl-font: 'Noto Sans SC', system-ui, sans-serif;
+	--sl-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+	--sl-color-accent-low: #1a1500;
+	--sl-color-accent: #f0a830;
+	--sl-color-accent-high: #fef3c7;
+	--sl-color-white: #e8ecf4;
+	--sl-color-gray-1: #c8cdd8;
+	--sl-color-gray-2: #8896b0;
+	--sl-color-gray-3: #5a6a88;
+	--sl-color-gray-4: #2a3550;
+	--sl-color-gray-5: #1e2740;
+	--sl-color-gray-6: #151b2b;
+	--sl-color-black: #0a0e17;
+}
+
+/* Logo sizing */
+[data-type="logo"] img {
+	height: 1.75rem;
+	width: auto;
+}
+
+/* Hero section styling */
+.hero {
+	padding-block: 3rem !important;
+}
+
+/* Metric highlights */
+.metric-value {
+	font-family: var(--sl-font-mono);
+	font-size: 2rem;
+	font-weight: 700;
+	color: var(--sl-color-accent);
+}
+
+.metric-label {
+	font-size: 0.75rem;
+	color: var(--sl-color-gray-2);
+	margin-top: 0.25rem;
+}
+
+/* Custom card accents */
+.sl-card {
+	border-color: var(--sl-color-gray-4) !important;
+}
+
+/* Code block enhancements */
+pre {
+	border: 1px solid var(--sl-color-gray-4) !important;
+}

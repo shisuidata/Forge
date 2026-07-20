@@ -1,0 +1,10 @@
+{
+  "provider": "openai",
+  "model": "ark-code-latest",
+  "tool_choice": "auto",
+  "tool_call": "ok",
+  "schema": "ok",
+  "compile": "ok",
+  "checked_at": "2026-07-20T00:00:00Z",
+  "notes": "Do not include API keys or raw provider headers."
+}

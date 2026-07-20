@@ -17,10 +17,14 @@ llm:
   api_key:   ""                    # API Key（建议放 .env，不要提交到 git）
   model:     "claude-sonnet-4-6"  # 模型 ID
   base_url:  ""                    # 仅 openai 模式需要，如 https://api.deepseek.com/v1
+  tool_choice: "auto"              # auto | required | named
+  timeout_seconds: 120              # 聚合网关/私有模型首包较慢时可调大
   # 火山方舟 Ark：
   # provider: "openai"
   # model: "doubao-seed-2-1-pro-260628"
   # base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  # 方舟 Coding Plan 使用 model: "ark-code-latest"
+  # base_url: "https://ark.cn-beijing.volces.com/api/coding/v3"
 
 # ── Embedding 模型（RAG 召回用）────────────────────────────────────────────────
 embedding:

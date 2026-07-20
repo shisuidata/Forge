@@ -2,6 +2,9 @@
 
 `anti` = "不存在于右表"；`semi` = "存在于右表"。绝对禁用 NOT IN（NULL 陷阱）。
 
+ANTI/SEMI JOIN 必须使用稳定实体键（如 `product_id`、`user_id`、`order_id`）匹配，
+不能用 `product_name`、`user_name` 等展示名称。名称可能重复，只能在最终结果中展示和去重。
+
 ⚠️ **`scan` 必须是主表（保留行的那张表）**：
 - `scan` = 你想保留数据行的表（"从哪张表查"）
 - `joins[].table` + `type: anti` = 你要排除的那张表

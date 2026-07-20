@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
-from forge.executor import validate_readonly_sql
+from forge.executor import _apply_statement_timeout, validate_readonly_sql
 
 
 @pytest.mark.parametrize(
@@ -69,3 +71,27 @@ def test_bounded_timeout_seconds(monkeypatch):
 
     monkeypatch.setattr(executor.cfg, "EXECUTION_TIMEOUT_SECONDS", -1)
     assert executor._bounded_timeout_seconds() == 0
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected_sql", "expected_params"),
+    [
+        ("postgresql", "SET LOCAL statement_timeout = %s", (12000,)),
+        ("mysql", "SET SESSION max_execution_time = 12000", None),
+    ],
+)
+def test_apply_statement_timeout_uses_sqlalchemy_driver_api(
+    dialect, expected_sql, expected_params
+):
+    calls = []
+
+    class Connection:
+        def __init__(self, dialect_name):
+            self.dialect = SimpleNamespace(name=dialect_name)
+
+        def exec_driver_sql(self, sql, params=None):
+            calls.append((sql, params))
+
+    _apply_statement_timeout(Connection(dialect), 12)
+
+    assert calls == [(expected_sql, expected_params)]

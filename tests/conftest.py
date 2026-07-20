@@ -21,6 +21,7 @@ def app():
     cfg.AUTH_ENABLED = False
     cfg.LLM_API_KEY = ""
     cfg.EMBED_API_KEY = ""
+    cfg.DATABASE_URL = "sqlite:///:memory:"
 
     from main import app as _app
     return _app
