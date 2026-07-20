@@ -55,6 +55,14 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 curl http://localhost:8000/health/readiness
 ```
 
+6. 运行生产 smoke：
+
+```bash
+bash scripts/production-smoke.sh
+```
+
+该脚本会顺序执行 `forge doctor`、数据库只读连接的 `SELECT 1`、provider tool-call smoke，以及可选的 HTTP readiness 检查。它不会对客户数据库建表或写入。
+
 ## 数据库权限要求
 
 生产环境不能使用拥有写权限的数据库账号。
@@ -107,6 +115,24 @@ DATABASE_READONLY_CONFIRMED=true
 - 审计目录是否可写。
 
 生产交付前，`fail` 项必须清零。
+
+## 生产 smoke
+
+`scripts/production-smoke.sh` 面向交付前和升级后的最小验收：
+
+```bash
+PYTHON_BIN=.venv/bin/python \
+FORGE_BASE_URL=http://localhost:8000 \
+bash scripts/production-smoke.sh
+```
+
+行为边界：
+
+- `forge doctor` 有 `fail` 时直接失败。
+- `DATABASE_URL` 存在时只执行 `SELECT 1`。
+- `LLM_API_KEY` 存在时运行 `scripts/provider_smoke.py`，只验证 tool call、JSON Schema 和确定性编译。
+- `FORGE_BASE_URL` 存在时检查 `/health/readiness`，返回 `fail` 则失败。
+- 不运行 customer query，不创建临时表，不把 API Key 打印到输出。
 
 ## 运维建议
 

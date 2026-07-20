@@ -25,6 +25,12 @@ customer-poc/
 └── results/
 ```
 
+仓库提供了 `customer-poc-template/` 作为起点，包含 `cases.example.json`、`failure_triage.template.md`、`delivery_report.template.md` 和空 Registry 文件。复制模板后再填入客户私有内容：
+
+```bash
+cp -R customer-poc-template /path/to/customer-poc
+```
+
 当前 EA 自动比较器以 SQLite fixture 为标准入口。客户可以使用脱敏后的最小数据副本；真实 PostgreSQL/MySQL 连接用于 compatibility smoke 和最终人工审核，不要把生产数据复制进仓库。
 
 `cases.json` 沿用现有格式：
@@ -65,6 +71,13 @@ python tests/accuracy/triage_failures.py --method <id> \
 ```
 
 5. 根据 `failure_triage.md` 修 Registry 或工程规则，然后完整回归，不只重跑失败题。
+6. 交付前运行生产 smoke：
+
+```bash
+bash scripts/production-smoke.sh
+```
+
+`production-smoke` 默认只对客户数据库做 `SELECT 1`，不会创建表、写数据或执行客户查询；provider smoke 只验证 tool call/schema/compile，不执行 SQL。
 
 ## 失败处理
 
@@ -85,3 +98,4 @@ python tests/accuracy/triage_failures.py --method <id> \
 - `runs.json`、`ea.json`、`failure_triage.md`。
 - 数据库 compatibility smoke 结果、provider smoke 结果和 `forge doctor` 输出。
 - 已知能力边界、未解决问题、升级和回滚说明。
+- 填写完成的 `delivery_report.md`，明确 pass / conditional pass / blocked。

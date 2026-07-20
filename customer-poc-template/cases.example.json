@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "category": "核心指标",
+    "difficulty": 2,
+    "question": "本月各渠道支付 GMV 是多少？",
+    "reference_sql": "SELECT channel, SUM(paid_amount) AS gmv FROM orders WHERE status = 'paid' AND paid_at >= DATE '2026-07-01' GROUP BY channel ORDER BY gmv DESC"
+  },
+  {
+    "id": 2,
+    "category": "业务口径",
+    "difficulty": 3,
+    "question": "本月复购率是多少？复购用户定义为下过 2 次及以上已支付订单的用户。",
+    "reference_sql": "WITH user_orders AS (SELECT user_id, COUNT(*) AS order_count FROM orders WHERE status = 'paid' AND paid_at >= DATE '2026-07-01' GROUP BY user_id) SELECT COUNT(CASE WHEN order_count >= 2 THEN 1 END) * 1.0 / COUNT(*) AS repurchase_rate FROM user_orders"
+  }
+]

@@ -29,13 +29,13 @@ SQLite、PostgreSQL 16、MySQL 8 共用 `tests/test_database_compatibility.py`�
 
 ## LLM / AI 服务
 
-| 服务 | 配置方式 | 当前状态 | 注意事项 |
-|---|---|---|---|
-| Anthropic | `LLM_PROVIDER=anthropic` | ✅ 原生 tools | 适合强模型质量基线 |
-| OpenAI 兼容接口 | `LLM_PROVIDER=openai` + `LLM_BASE_URL` | ✅ Chat Completions tools | DeepSeek、MiniMax、通义、火山方舟等按兼容接口接入 |
-| 火山方舟 Ark | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3` | ✅ 已按官方 OpenAI 兼容接口验证请求形态 | `LLM_MODEL` 必须填具体模型/endpoint ID，API Key 建议放 `ARK_API_KEY` 或 `LLM_API_KEY` 环境变量 |
-| 火山方舟 Coding Plan | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3` | ⚠️ 需真实 smoke | 使用 Coding Plan 专属 Key 与 `ark-code-latest`/套餐模型名；不要使用普通 Ark 网关，否则不会走套餐额度 |
-| 本地 OpenAI 兼容模型 | `LLM_PROVIDER=openai` + 本地 `LLM_BASE_URL` | ⚠️ 可接入 | 必须验证 tool calling / function calling 是否真正兼容 |
+| 服务 | 配置方式 | 接口兼容 | 最近真实 smoke | 注意事项 |
+|---|---|---|---|---|
+| Anthropic SDK | `LLM_PROVIDER=anthropic` | ✅ 原生 tools | ⚠️ 2026-07-20 当前本机配置返回 429 quota | 适合强模型质量基线；演示前必须重跑 smoke |
+| OpenAI 兼容接口 | `LLM_PROVIDER=openai` + `LLM_BASE_URL` | ✅ Chat Completions tools | ✅ mock 契约测试；真实 provider 逐项记录 | DeepSeek、MiniMax、通义、火山方舟等按兼容接口接入 |
+| 火山方舟 Ark | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3` | ✅ 已按官方 OpenAI 兼容接口验证请求形态 | ✅ 历史真实 smoke 通过 | `LLM_MODEL` 必须填具体模型/endpoint ID，API Key 建议放 `ARK_API_KEY` 或 `LLM_API_KEY` 环境变量 |
+| 火山方舟 Coding Plan | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3` | ✅ OpenAI-compatible tools | ✅ 历史 Method AI 跑到 `120/120` | 使用 Coding Plan 专属 Key 与 `ark-code-latest`/套餐模型名；不要使用普通 Ark 网关，否则不会走套餐额度 |
+| 本地 OpenAI 兼容模型 | `LLM_PROVIDER=openai` + 本地 `LLM_BASE_URL` | ⚠️ 可接入 | ⚠️ 需客户环境 smoke | 必须验证 tool calling / function calling 是否真正兼容 |
 
 OpenAI 兼容接口可用 `LLM_TOOL_CHOICE=auto|required|named` 调整 function calling 形态。默认使用 `auto`；`named` 会强制第一个工具，只应用于单工具兼容测试或明确受控流程。
 对首包延迟较高的私有化或聚合网关，可用 `LLM_TIMEOUT_SECONDS` 调整请求超时，默认 120 秒。
@@ -44,9 +44,12 @@ OpenAI 兼容接口可用 `LLM_TOOL_CHOICE=auto|required|named` 调整 function 
 
 ```bash
 python scripts/provider_smoke.py
+bash scripts/production-smoke.sh
 ```
 
 该命令只验证 tool call、Forge Schema 和确定性编译，不连接或执行客户数据库。输出不包含 API Key。
+
+Provider 状态要同时记录两件事：接口契约是否兼容、当前账号/套餐/网关是否可用。2026-07-20 的本机 smoke 失败原因是 Token Plan 用量上限；这类失败不代表 Forge 编译链路坏了，但会阻断演示和交付验收。
 
 ## 中期适配边界
 
@@ -59,3 +62,4 @@ python scripts/provider_smoke.py
 - 对外只承诺已经跑通的层级：编译支持、sync 支持、执行支持、生产交付支持要分开写。
 - 每新增一个数据库或 LLM provider，至少补三类验证：配置示例、mock 单测、真实连通性 smoke。
 - 客户 PoC 默认优先 PostgreSQL/MySQL/SQLite，BigQuery/Snowflake 进入前先补 dry-run 和资源限制策略。
+- 对外演示前必须保存 `scripts/provider_smoke.py` 或 `scripts/production-smoke.sh` 的结果；不要只凭配置表宣称 provider 当前可用。
