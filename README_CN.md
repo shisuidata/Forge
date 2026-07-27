@@ -1,6 +1,6 @@
 # Forge
 
-**面向数据团队的 AI 查询 Agent —— 自然语言输入，确定性 SQL 输出。**
+**面向数据团队的 AI 查询 Agent，让弱模型也能生成可信 SQL。**
 
 [English](README_EN.md)
 
@@ -17,7 +17,7 @@ Forge 当前推荐基线是 Method AF：large 40 题电商数仓基准、DeepSee
 | Run ACC | **97.5%**（117/120） |
 | 编译失败率 | **0.0%**（120/120 成功） |
 
-项目已经达到受控生产落地 / 封闭 Beta 候选标准。生产部署请先阅读 [生产交付部署说明](docs/production-deployment.md)，并运行 `forge doctor` 确认没有 `fail` 项。
+项目已经达到受控生产落地 / 封闭 Beta 候选标准。生产部署请先阅读 [生产交付部署说明](docs/production-deployment.md)，并运行 `forge doctor --profile prod` 确认没有 `fail` 项。
 
 ---
 
@@ -230,7 +230,7 @@ forge sync
 
 ### OpenAI 兼容模型 / 火山方舟
 
-Forge 的 `openai` provider 走 Chat Completions + tools/function calling，适合 DeepSeek、MiniMax、通义、火山方舟 Ark、本地 OpenAI 兼容服务。
+Forge 的 `openai` provider 走 Chat Completions + tools/function calling，适合 DeepSeek、MiniMax、通义、火山方舟 Ark、本地 OpenAI 兼容服务。交付前用 `scripts/provider_smoke.py --json --out <path>` 记录当前账号和网关是否真正可用。
 
 火山方舟示例：
 
@@ -257,9 +257,10 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ```
 forge/
-  ├── compiler.py     — 确定性编译器：Forge JSON → SQL（3 方言，14 个容错修复）
+  ├── compiler.py     — 确定性编译器：Forge JSON → SQL
   ├── retriever.py    — 四层召回：指标直接匹配 → embedding → 列名 → FK 扩展
   ├── executor.py     — SQL 执行器
+  ├── adapters.py     — 数据库 / LLM provider 兼容适配契约
   ├── cache.py        — SQL 查询缓存（精确 + 模糊，双阶段用户反馈）
   └── chart.py        — 图表生成（pyecharts 交互 + matplotlib 静态）
 
@@ -274,7 +275,7 @@ demo/
   └── seed_large.py   — 200 张表电商数仓 mock 数据
 
 tests/
-  ├── accuracy/       — 自有 40 题基准（10 个版本）
+  ├── accuracy/       — 自有 40 题基准（当前推荐 Method AF）
   └── spider2/        — Spider2-Lite SQLite 子集（123 题）
 
 docs/devlog/          — 开发日志
@@ -291,6 +292,6 @@ main.py               — FastAPI 入口
 
 ## 当前状态
 
-编译引擎完成，53 个单元测试全绿。飞书 Bot 可用（WebSocket 长连接，交互卡片，SQL 语法高亮，图表生成）。SQL 查询缓存已集成（双阶段用户反馈 → verified 条目构成组织知识库）。
+当前推荐基线：large 40 题业务查询集，DeepSeek V4 Pro / Method AF，每题 3 次生成，Case EA(any) `100.0%`、Case EA(all) `92.5%`、Run ACC `97.5%`、编译失败率 `0.0%`。
 
-当前基准：**8.82 / 10**（Method J+语义库，40 用例 LLM Judge）；**95%**（Method M/O，small 数据集 EA，Claude + DeepSeek V3）；**65%**（Method N，large 200 表数仓 × DeepSeek V3）。
+当前工程基线：Web UI、Admin、SQL 审核执行、审计、Registry 管理、飞书 Bot、生产部署包、`forge doctor --profile dev|poc|prod --json`、`production-smoke` 和客户 PoC 模板已经具备；本地全量测试为 `342 passed, 25 skipped`。正式商业交付仍应按客户域运行 `schema sync -> golden questions -> accuracy run -> failure triage -> Registry 修正 -> 回归测试`。

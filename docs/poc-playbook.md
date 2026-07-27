@@ -25,11 +25,13 @@ customer-poc/
 └── results/
 ```
 
-仓库提供了 `customer-poc-template/` 作为起点，包含 `cases.example.json`、`failure_triage.template.md`、`delivery_report.template.md` 和空 Registry 文件。复制模板后再填入客户私有内容：
+仓库提供了 `customer-poc-template/` 作为起点，包含 `cases.example.json`、`failure_triage.template.md`、`delivery_report.template.md` 和空 Registry 文件。优先使用 CLI 初始化客户私有目录：
 
 ```bash
-cp -R customer-poc-template /path/to/customer-poc
+forge poc init /path/to/customer-poc
 ```
+
+手工 fallback：`cp -R customer-poc-template /path/to/customer-poc`，然后把 `cases.example.json` 复制为 `cases.json`，把两个 `*.template.md` 复制为正式交付文件。
 
 当前 EA 自动比较器以 SQLite fixture 为标准入口。客户可以使用脱敏后的最小数据副本；真实 PostgreSQL/MySQL 连接用于 compatibility smoke 和最终人工审核，不要把生产数据复制进仓库。
 
@@ -51,15 +53,22 @@ reference SQL 必须由客户数据负责人确认，不能由待评估模型自
 
 ## 执行流程
 
-1. 使用只读连接同步结构层：
+1. 初始化并校验 PoC 工作目录：
+
+```bash
+forge poc init /path/to/customer-poc
+forge poc validate /path/to/customer-poc
+```
+
+2. 使用只读连接同步结构层：
 
 ```bash
 forge sync --db "$DATABASE_URL" --out customer-poc/registry/schema.registry.json
 ```
 
-2. 录入 5–10 个核心原子指标及必要衍生指标，补充歧义和字段约定。
-3. 复制一个现有 `tests/accuracy/methods/method_*.py`，只调整客户 Registry、cases、provider 和模型，不在文件中写 API Key。
-4. 每题至少运行三次：
+3. 录入 5–10 个核心原子指标及必要衍生指标，补充歧义和字段约定。
+4. 复制一个现有 `tests/accuracy/methods/method_*.py`，只调整客户 Registry、cases、provider 和模型，不在文件中写 API Key。
+5. 每题至少运行三次：
 
 ```bash
 python tests/accuracy/runner.py --method <id> --runs 3 --retry 2 --fresh
@@ -70,14 +79,25 @@ python tests/accuracy/triage_failures.py --method <id> \
   --cases /absolute/path/customer-poc/cases.json
 ```
 
-5. 根据 `failure_triage.md` 修 Registry 或工程规则，然后完整回归，不只重跑失败题。
-6. 交付前运行生产 smoke：
+6. 根据 `failure_triage.md` 修 Registry 或工程规则，然后完整回归，不只重跑失败题。
+7. 交付前运行 smoke，并把证据保存进 PoC 目录：
 
 ```bash
+FORGE_PROFILE=poc \
+FORGE_SMOKE_OUT=/absolute/path/customer-poc/results/production-smoke.json \
+FORGE_SMOKE_ARTIFACT_DIR=/absolute/path/customer-poc/results \
 bash scripts/production-smoke.sh
 ```
 
 `production-smoke` 默认只对客户数据库做 `SELECT 1`，不会创建表、写数据或执行客户查询；provider smoke 只验证 tool call/schema/compile，不执行 SQL。
+
+8. 汇总交付报告：
+
+```bash
+forge poc report /path/to/customer-poc
+```
+
+报告会汇总 `results/doctor.json`、`results/provider-smoke.json`、`results/database-smoke.json`、`results/production-smoke.json`、`results/ea.json` 和工作目录校验结果。缺失证据会标记为 `missing`，不会伪装成通过。
 
 ## 失败处理
 
@@ -99,3 +119,13 @@ bash scripts/production-smoke.sh
 - 数据库 compatibility smoke 结果、provider smoke 结果和 `forge doctor` 输出。
 - 已知能力边界、未解决问题、升级和回滚说明。
 - 填写完成的 `delivery_report.md`，明确 pass / conditional pass / blocked。
+
+## CLI 快速参考
+
+```bash
+forge poc init /path/to/customer-poc
+forge poc validate /path/to/customer-poc --json
+forge poc report /path/to/customer-poc --json
+```
+
+`validate` 失败表示模板、Registry、问题集或 reference SQL 不完整；`report` 失败表示交付建议为 blocked。

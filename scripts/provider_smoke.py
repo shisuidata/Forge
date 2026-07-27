@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import argparse
 import sys
 from pathlib import Path
 
@@ -24,23 +25,46 @@ def _dialect() -> str:
         return configured
     if not cfg.DATABASE_URL:
         return "sqlite"
-    backend = make_url(cfg.DATABASE_URL).get_backend_name()
-    return "mysql" if backend == "mariadb" else backend
+    try:
+        backend = make_url(cfg.DATABASE_URL).get_backend_name()
+        return "mysql" if backend == "mariadb" else backend
+    except Exception:
+        return "unknown"
 
 
-def _print_result(**values) -> None:
-    print(json.dumps(values, ensure_ascii=False, indent=2))
-
-
-def main() -> int:
-    base = {
+def _result(status: str, **values) -> dict:
+    payload = {
         "provider": cfg.LLM_PROVIDER,
         "model": cfg.LLM_MODEL,
-        "tool_choice": getattr(cfg, "LLM_TOOL_CHOICE", "auto"),
+        "tool_call": values.get("tool_call", "unknown"),
+        "schema": values.get("schema", "unknown"),
+        "compile": values.get("compile", "unknown"),
+        "dialect": values.get("dialect", _dialect()),
+        "status": status,
+        "error": values.get("error", ""),
+        "sql_preview": values.get("sql_preview", ""),
     }
+    return payload
+
+
+def _emit(payload: dict, out: str | None, pretty: bool = True) -> None:
+    text = json.dumps(payload, ensure_ascii=False, indent=2 if pretty else None)
+    print(text)
+    if out:
+        path = Path(out)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true", dest="json_output", help="输出结构化 JSON")
+    parser.add_argument("--out", default=None, help="将结构化结果写入指定文件")
+    args = parser.parse_args(argv)
+
     if not cfg.LLM_API_KEY:
-        _print_result(**base, tool_call="skipped", schema="skipped", compile="skipped",
-                      error="LLM_API_KEY 未配置")
+        _emit(_result("skipped", tool_call="skipped", schema="skipped", compile="skipped",
+                      error="LLM_API_KEY 未配置"), args.out)
         return 2
 
     try:
@@ -78,19 +102,15 @@ def main() -> int:
             raise llm.LLMCompatibilityError("Provider 未调用 generate_forge_query。")
         forge_json = result.get("input")
         validate(instance=forge_json, schema=tool["input_schema"])
-        sql = compile_query(forge_json, dialect=_dialect())
+        dialect = _dialect()
+        sql = compile_query(forge_json, dialect=dialect)
     except Exception as exc:
-        _print_result(**base, tool_call="failed", schema="failed", compile="failed",
-                      error=str(exc))
+        _emit(_result("failed", tool_call="failed", schema="failed", compile="failed",
+                      error=str(exc)), args.out)
         return 1
 
-    _print_result(
-        **base,
-        tool_call="ok",
-        schema="ok",
-        compile="ok",
-        sql_preview=sql[:240],
-    )
+    _emit(_result("ok", tool_call="ok", schema="ok", compile="ok", dialect=dialect,
+                  sql_preview=sql[:240]), args.out)
     return 0
 
 
