@@ -66,9 +66,10 @@ forge poc validate /path/to/customer-poc
 forge sync --db "$DATABASE_URL" --out customer-poc/registry/schema.registry.json
 ```
 
-3. 录入 5–10 个核心原子指标及必要衍生指标，补充歧义和字段约定。
-4. 复制一个现有 `tests/accuracy/methods/method_*.py`，只调整客户 Registry、cases、provider 和模型，不在文件中写 API Key。
-5. 每题至少运行三次：
+3. 验证数据库账号确实只读，再设置 `DATABASE_READONLY_CONFIRMED=true`。只有当客户环境已确认该账号无法写入、无法 DDL、无法访问超出授权的敏感表时，才能打开这个开关；否则 `forge doctor --profile poc` 的 fail 是可信执行门禁，不能为了通过检查而绕过。
+4. 录入 5–10 个核心原子指标及必要衍生指标，补充歧义和字段约定。
+5. 复制一个现有 `tests/accuracy/methods/method_*.py`，只调整客户 Registry、cases、provider 和模型，不在文件中写 API Key。
+6. 每题至少运行三次：
 
 ```bash
 python tests/accuracy/runner.py --method <id> --runs 3 --retry 2 --fresh
@@ -79,8 +80,8 @@ python tests/accuracy/triage_failures.py --method <id> \
   --cases /absolute/path/customer-poc/cases.json
 ```
 
-6. 根据 `failure_triage.md` 修 Registry 或工程规则，然后完整回归，不只重跑失败题。
-7. 交付前运行 smoke，并把证据保存进 PoC 目录：
+7. 根据 `failure_triage.md` 修 Registry 或工程规则，然后完整回归，不只重跑失败题。
+8. 交付前运行 smoke，并把证据保存进 PoC 目录：
 
 ```bash
 FORGE_PROFILE=poc \
@@ -91,7 +92,7 @@ bash scripts/production-smoke.sh
 
 `production-smoke` 默认只对客户数据库做 `SELECT 1`，不会创建表、写数据或执行客户查询；provider smoke 只验证 tool call/schema/compile，不执行 SQL。
 
-8. 汇总交付报告：
+9. 汇总交付报告：
 
 ```bash
 forge poc report /path/to/customer-poc

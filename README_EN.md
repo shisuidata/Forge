@@ -4,9 +4,9 @@
 
 ---
 
-> **Reduce generation errors to near zero.**
+> **A trusted AI data-query layer for teams that cannot accept unreliable AI answers.**
 
-Natural language in, deterministic compilation, SQL out.
+Natural language in, Registry-backed Forge JSON, reviewable deterministic SQL out.
 
 [中文文档](README.md)
 
@@ -53,15 +53,17 @@ The largest gap is ANTI/SEMI JOIN (+0.80): direct SQL models frequently produce 
 
 ## The Problem We Solve
 
-SQL generation errors fall into two fundamentally different categories:
+AI data querying becomes unreliable when the model owns the whole chain: business definitions, schema selection, SQL generation, execution, and result traceability. Forge separates those responsibilities into a trustworthy query workflow.
 
-| Error type | Definition | Example | Forge's answer |
+| Trust gap | Definition | Example | Forge's answer |
 |---|---|---|---|
-| **Generation error** | Reasoning correct, translation to SQL wrong | `INNER JOIN` instead of `LEFT JOIN`; `NOT IN` silently fails on NULLs | ✅ DSL constraints + compiler |
-| **Business logic error** | Metric definition ambiguity across teams | Is "repurchase rate" denominator all users, or only users who placed an order? | ✅ Registry semantic layer |
-| **Algorithm logic error** | Model doesn't know which algorithm to use | Date series fill, period-over-period calculation | ❌ Outside Forge's scope, honestly labeled |
+| **Definition trust** | Metric definition ambiguity across teams | Is "repurchase rate" denominator all users, or only users who placed an order? | ✅ Registry semantic layer |
+| **Generation trust** | Reasoning correct, translation to SQL wrong | `INNER JOIN` instead of `LEFT JOIN`; `NOT IN` silently fails on NULLs | ✅ DSL constraints + compiler |
+| **Execution trust** | Users cannot see what the AI actually ran | SQL execution bypasses review | ✅ Review flow, read-only role, timeout, row cap |
+| **Traceability trust** | Failures do not become reusable knowledge | The same mistake repeats next week | ✅ Audit, feedback, failure triage |
+| **Capability trust** | Model does not know which algorithm to use | Date series fill, period-over-period calculation | ❌ Outside Forge's scope, honestly labeled |
 
-**Forge's core claim**: generation errors and business logic errors should be systematically eliminated, not left to luck with better prompts.
+**Forge's core claim**: trustworthy AI data querying requires a constrained, reviewable, auditable middle layer. Better prompts alone are not enough.
 
 ---
 

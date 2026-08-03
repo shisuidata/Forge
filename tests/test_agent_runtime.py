@@ -163,6 +163,88 @@ def test_process_uses_configured_postgresql_dialect(isolated_agent, monkeypatch)
     assert "DATE('now')" not in resp.sql
 
 
+def test_prepare_query_does_not_create_pending_execution_state(isolated_agent, monkeypatch):
+    agent_mod, fake_memory = isolated_agent
+    monkeypatch.setattr(
+        agent_mod.llm,
+        "call",
+        lambda *args, **kwargs: {
+            "tool": "generate_forge_query",
+            "input": {
+                "scan": "orders",
+                "select": ["orders.id"],
+            },
+        },
+    )
+
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+
+    assert result["status"] == "needs_review"
+    assert result["sql"] == "SELECT orders.id\nFROM orders"
+    assert result["review_required"] is True
+    assert result["can_execute"] is False
+    assert fake_memory.get_state("external-agent", "pending_sql") is None
+    assert fake_memory.get_state("external-agent", "pending_forge") is None
+
+
+def test_prepare_query_reuses_retry_and_dialect_logic(isolated_agent, monkeypatch):
+    agent_mod, fake_memory = isolated_agent
+    calls = []
+    missing_status = {
+        "scan": "dwd_order_detail",
+        "select": ["dwd_order_detail.user_id"],
+    }
+    fixed = {
+        "scan": "dwd_order_detail",
+        "select": ["dwd_order_detail.user_id"],
+        "filter": [
+            {"col": "dwd_order_detail.order_status", "op": "eq", "val": "已完成"}
+        ],
+    }
+
+    def fake_call(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {
+            "tool": "generate_forge_query",
+            "input": missing_status if len(calls) == 1 else fixed,
+        }
+
+    monkeypatch.setattr(agent_mod.llm, "call", fake_call)
+
+    result = agent_mod.prepare_query("u-prepare", "查询复购用户", dialect="postgresql")
+
+    assert result["status"] == "needs_review"
+    assert result["dialect"] == "postgresql"
+    assert result["retry_count"] == 1
+    assert len(calls) == 2
+    assert "order_status" in result["sql"]
+    assert fake_memory.get_state("u-prepare", "pending_sql") is None
+
+
+def test_prepare_query_reports_llm_error_without_secret_leak(isolated_agent, monkeypatch):
+    agent_mod, _ = isolated_agent
+
+    def fail_call(*args, **kwargs):
+        raise RuntimeError("upstream unavailable")
+
+    monkeypatch.setattr(agent_mod.llm, "call", fail_call)
+
+    result = agent_mod.prepare_query("u-error", "查询订单")
+
+    assert result["status"] == "error"
+    assert "LLM 调用失败" in result["error"]
+    assert "upstream unavailable" in result["error"]
+
+
+def test_prepare_query_rejects_unknown_dialect(isolated_agent):
+    agent_mod, _ = isolated_agent
+
+    result = agent_mod.prepare_query("u-dialect", "查询订单", dialect="oracle")
+
+    assert result["status"] == "error"
+    assert "dialect must be one of" in result["error"]
+
+
 def test_process_returns_error_when_llm_call_fails(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
 

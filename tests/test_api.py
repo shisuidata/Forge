@@ -172,6 +172,146 @@ class TestChatAPI:
         data = resp.json()
         assert "action" in data
 
+    async def test_prepare_query_returns_review_contract(self, client: AsyncClient, monkeypatch, tmp_path):
+        """外部 Agent prepare-query 只返回审核材料，不返回执行结果。"""
+        from agent import audit
+        import web.router as router_mod
+
+        monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+        monkeypatch.setattr(
+            router_mod,
+            "agent_prepare_query",
+            lambda user_id, question, dialect=None: {
+                "status": "needs_review",
+                "question": question,
+                "user_id": user_id,
+                "forge_json": {"scan": "orders", "select": ["orders.id"]},
+                "sql": "SELECT orders.id\nFROM orders",
+                "dialect": dialect or "sqlite",
+                "review_required": True,
+                "can_execute": False,
+                "retry_count": 0,
+                "text": "",
+                "error": "",
+            },
+        )
+
+        resp = await client.post(
+            "/api/prepare-query",
+            json={"question": "查询订单 ID", "user_id": "external-1", "dialect": "postgresql"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data) == {
+            "status",
+            "question",
+            "user_id",
+            "forge_json",
+            "sql",
+            "dialect",
+            "review_required",
+            "can_execute",
+            "retry_count",
+            "text",
+            "error",
+        }
+        assert data["status"] == "needs_review"
+        assert data["review_required"] is True
+        assert data["can_execute"] is False
+        assert "rows" not in data
+        assert "columns" not in data
+        assert "result" not in data
+
+    async def test_prepare_query_does_not_feed_approve_execution(self, client: AsyncClient, monkeypatch, tmp_path):
+        """prepare-query 不创建可由 /api/approve 消费的 pending SQL。"""
+        from agent import audit
+        import web.router as router_mod
+
+        monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+        monkeypatch.setattr(
+            router_mod,
+            "agent_prepare_query",
+            lambda user_id, question, dialect=None: {
+                "status": "needs_review",
+                "question": question,
+                "user_id": user_id,
+                "forge_json": {"scan": "orders", "select": ["orders.id"]},
+                "sql": "SELECT orders.id\nFROM orders",
+                "dialect": "sqlite",
+                "review_required": True,
+                "can_execute": False,
+                "retry_count": 0,
+                "text": "",
+                "error": "",
+            },
+        )
+
+        await client.post(
+            "/api/prepare-query",
+            json={"question": "查询订单 ID", "user_id": "external-no-approve"},
+        )
+        approve = await client.post(
+            "/api/approve",
+            json={"message": "", "user_id": "external-no-approve"},
+        )
+
+        assert approve.status_code == 200
+        data = approve.json()
+        assert data["action"] == "error"
+        assert data["rows"] is None
+        assert data["row_count"] == 0
+
+    async def test_prepare_query_rejects_without_api_key_when_auth_enabled(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from config import cfg
+
+        monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+        monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["valid-key"])
+
+        resp = await client.post(
+            "/api/prepare-query",
+            json={"question": "查询订单 ID", "user_id": "external-auth"},
+        )
+
+        assert resp.status_code == 401
+
+    async def test_prepare_query_returns_error_for_invalid_dialect(
+        self, client: AsyncClient, monkeypatch, tmp_path
+    ):
+        from agent import audit
+        import web.router as router_mod
+
+        monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+        monkeypatch.setattr(
+            router_mod,
+            "agent_prepare_query",
+            lambda user_id, question, dialect=None: {
+                "status": "error",
+                "question": question,
+                "user_id": user_id,
+                "forge_json": None,
+                "sql": None,
+                "dialect": "",
+                "review_required": True,
+                "can_execute": False,
+                "retry_count": 0,
+                "text": "",
+                "error": "dialect must be one of: auto, sqlite, postgresql, mysql, bigquery, snowflake",
+            },
+        )
+
+        resp = await client.post(
+            "/api/prepare-query",
+            json={"question": "查询订单 ID", "user_id": "external-dialect", "dialect": "oracle"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "error"
+        assert "dialect must be one of" in data["error"]
+
 
 # ── Execute Raw API ──────────────────────────────────────────────────────────
 

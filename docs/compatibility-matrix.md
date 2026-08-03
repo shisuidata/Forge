@@ -4,20 +4,21 @@ Forge 的兼容性分四层看：SQL 编译、数据库结构同步、SQL 执行
 
 ## 数据库 / 数据仓库
 
-状态口径：
+证据状态口径：
 
-- **已实现**：仓库已有代码路径。
-- **已验证**：有本地测试、CI smoke 或真实 provider/database smoke 证据。
-- **计划中**：只进入路线图，不对外交付承诺。
+- **planned**：只进入路线图，不对外交付承诺。
+- **implemented**：仓库已有代码路径，但还不能作为生产交付承诺。
+- **smoke_verified**：有本地测试、CI smoke 或真实 provider/database smoke 证据。
+- **production_verified**：有客户或生产环境交付证据，可作为商业交付承诺。
 
 | 平台 | SQL 编译 | `forge sync` | 查询执行 | 交付状态 | 当前建议 |
 |---|---|---|---|---|---|
-| SQLite | ✅ 已实现 + 已验证 | ✅ 已实现 + 已验证 | ✅ 已实现 + 已验证 | PoC 主线 | 本地 demo、测试、单机 PoC |
-| PostgreSQL | ✅ 已实现 + 已验证 | ✅ 已实现 + 已验证 | ✅ 已实现 + 已验证 | 生产首选 | 私有化部署首选关系型数据库 |
-| MySQL / MariaDB | ✅ 已实现 + 已验证；不支持 `FILTER` 时显式报错 | ✅ 已实现 + 已验证 | ✅ 已实现 + 已验证 | PoC 可用 | 需保留真实库回归证据 |
-| BigQuery | ✅ 编译层已实现 | ⚠️ 计划中 | ⚠️ 计划中 | partial | 先补 dry-run 和资源上限 |
-| Snowflake | ✅ 编译层已实现 | ⚠️ 计划中 | ⚠️ 计划中 | partial | 先补 warehouse/resource guardrail |
-| ClickHouse / Doris / StarRocks / DuckDB | ❌ 计划中 | ❌ 计划中 | ❌ 计划中 | 不承诺 | 先建立方言差异清单 |
+| SQLite | smoke_verified | smoke_verified | smoke_verified | PoC 主线 | 本地 demo、测试、单机 PoC |
+| PostgreSQL | smoke_verified | smoke_verified | smoke_verified | 生产首选 | 私有化部署首选关系型数据库 |
+| MySQL / MariaDB | smoke_verified；不支持 `FILTER` 时显式报错 | smoke_verified | smoke_verified | PoC 可用 | 需保留真实库回归证据 |
+| BigQuery | implemented | planned | planned | partial | 先补 dry-run 和资源上限 |
+| Snowflake | implemented | planned | planned | partial | 先补 warehouse/resource guardrail |
+| ClickHouse / Doris / StarRocks / DuckDB | planned | planned | planned | 不承诺 | 先建立方言差异清单 |
 
 SQLite、PostgreSQL 16、MySQL 8 共用 `tests/test_database_compatibility.py`，覆盖 schema introspection、枚举采样、目标方言编译、只读查询、行数上限和写 SQL 拒绝。CI 的 `compatibility` job 分别连接三个真实数据库运行同一套 smoke；只有 CI 绿灯的平台才能对外声明对应层级已验证。
 
@@ -29,21 +30,22 @@ SQLite、PostgreSQL 16、MySQL 8 共用 `tests/test_database_compatibility.py`�
 
 | 入口 | 状态 | 说明 |
 |---|---|---|
-| Web Chat / Admin | ✅ 已有 | 适合数据团队内部 PoC 和 Registry 管理 |
-| 飞书 Bot | ✅ 已有 | 适合国内团队协同场景 |
-| Pipeline API | ✅ 已有雏形 | 支持分析、可视化、报告类流程 |
-| 钉钉 / 企业微信 / Slack | ❌ 未产品化 | 建议抽象消息入口适配层后再做 |
-| MCP / OpenAI Agents / Claude Desktop | ❌ 未产品化 | 中期项；第一版只开放 `prepare_query`，返回待审核 SQL，不执行数据库 |
+| Web Chat / Admin | smoke_verified | 适合数据团队内部 PoC 和 Registry 管理 |
+| `POST /api/prepare-query` | implemented | 外部 Agent 只获取待审核 SQL，不执行数据库 |
+| 飞书 Bot | implemented | 适合国内团队协同场景，真实交付前需重跑 smoke |
+| Pipeline API | implemented | 支持分析、可视化、报告类流程，仍需客户域验收 |
+| 钉钉 / 企业微信 / Slack | planned | 建议抽象消息入口适配层后再做 |
+| MCP / OpenAI Agents / Claude Desktop | planned | 中期项；第一版只接 `prepare_query`，返回待审核 SQL，不执行数据库 |
 
 ## LLM / AI 服务
 
 | 服务 | 配置方式 | 接口兼容 | 最近真实 smoke | 注意事项 |
 |---|---|---|---|---|
-| Anthropic SDK | `LLM_PROVIDER=anthropic` | ✅ 原生 tools | ⚠️ 2026-07-20 当前本机配置返回 429 quota | 适合强模型质量基线；演示前必须重跑 smoke |
-| OpenAI 兼容接口 | `LLM_PROVIDER=openai` + `LLM_BASE_URL` | ✅ Chat Completions tools | ✅ mock 契约测试；真实 provider 逐项记录 | DeepSeek、MiniMax、通义、火山方舟等按兼容接口接入 |
-| 火山方舟 Ark | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3` | ✅ 已按官方 OpenAI 兼容接口验证请求形态 | ✅ 历史真实 smoke 通过 | `LLM_MODEL` 必须填具体模型/endpoint ID，API Key 建议放 `ARK_API_KEY` 或 `LLM_API_KEY` 环境变量 |
-| 火山方舟 Coding Plan | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3` | ✅ OpenAI-compatible tools | ✅ 历史 Method AI 跑到 `120/120` | 使用 Coding Plan 专属 Key 与 `ark-code-latest`/套餐模型名；不要使用普通 Ark 网关，否则不会走套餐额度 |
-| 本地 OpenAI 兼容模型 | `LLM_PROVIDER=openai` + 本地 `LLM_BASE_URL` | ⚠️ 可接入 | ⚠️ 需客户环境 smoke | 必须验证 tool calling / function calling 是否真正兼容 |
+| Anthropic SDK | `LLM_PROVIDER=anthropic` | implemented：原生 tools | 2026-07-20 本机配置返回 429 quota | 适合强模型质量基线；演示前必须重跑 smoke |
+| OpenAI 兼容接口 | `LLM_PROVIDER=openai` + `LLM_BASE_URL` | smoke_verified：Chat Completions tools mock 契约 | 真实 provider 逐项记录 | DeepSeek、MiniMax、通义、火山方舟等按兼容接口接入 |
+| 火山方舟 Ark | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3` | smoke_verified：官方 OpenAI 兼容请求形态 | 历史真实 smoke 通过 | `LLM_MODEL` 必须填具体模型/endpoint ID，API Key 建议放 `ARK_API_KEY` 或 `LLM_API_KEY` 环境变量 |
+| 火山方舟 Coding Plan | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3` | smoke_verified：OpenAI-compatible tools | 历史 Method AI 跑到 `120/120` | 使用 Coding Plan 专属 Key 与 `ark-code-latest`/套餐模型名；不要使用普通 Ark 网关，否则不会走套餐额度 |
+| 本地 OpenAI 兼容模型 | `LLM_PROVIDER=openai` + 本地 `LLM_BASE_URL` | implemented | 需客户环境 smoke | 必须验证 tool calling / function calling 是否真正兼容 |
 
 OpenAI 兼容接口可用 `LLM_TOOL_CHOICE=auto|required|named` 调整 function calling 形态。默认使用 `auto`；`named` 会强制第一个工具，只应用于单工具兼容测试或明确受控流程。
 对首包延迟较高的私有化或聚合网关，可用 `LLM_TIMEOUT_SECONDS` 调整请求超时，默认 120 秒。

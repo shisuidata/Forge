@@ -55,11 +55,16 @@ logger = logging.getLogger(__name__)
 # 编译失败后最多重试次数（不含首次尝试）
 # 设为 2：首次失败 → 第 1 次重试 → 第 2 次重试 → 放弃
 MAX_RETRIES = 2
+_ALLOWED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 
 
-def _compile_dialect() -> str:
+def _compile_dialect(dialect_override: str | None = None) -> str:
     """Resolve cfg.SQL_DIALECT, including auto-detection from DATABASE_URL."""
-    dialect = (getattr(cfg, "SQL_DIALECT", "sqlite") or "sqlite").lower()
+    dialect = (dialect_override or getattr(cfg, "SQL_DIALECT", "sqlite") or "sqlite").lower()
+    if dialect not in _ALLOWED_DIALECTS:
+        raise ValueError(
+            "dialect must be one of: auto, sqlite, postgresql, mysql, bigquery, snowflake"
+        )
     if dialect != "auto":
         return dialect
 
@@ -73,6 +78,119 @@ def _compile_dialect() -> str:
     if db_url.startswith("snowflake"):
         return "snowflake"
     return "sqlite"
+
+
+def prepare_query(user_id: str, question: str, dialect: str | None = None) -> dict:
+    """
+    Prepare reviewed SQL for external agents without creating executable pending state.
+
+    This is the embeddable component surface: callers get Forge JSON + SQL for
+    review, but must not be able to approve/execute it through Forge's internal
+    pending SQL flow.
+    """
+    payload = {
+        "status": "error",
+        "question": question,
+        "user_id": user_id,
+        "forge_json": None,
+        "sql": None,
+        "dialect": "",
+        "review_required": True,
+        "can_execute": False,
+        "retry_count": 0,
+        "text": "",
+        "error": "",
+    }
+    try:
+        resolved_dialect = _compile_dialect(dialect)
+        payload["dialect"] = resolved_dialect
+    except Exception as exc:
+        payload["error"] = str(exc)
+        return payload
+
+    clarification = _check_clarification_needed(question)
+    if clarification:
+        payload["status"] = "needs_clarification"
+        payload["text"] = clarification["prompt"]
+        return payload
+
+    retry_messages: list[dict] = []
+    from agent.tenant import tenants as _tenants
+    _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
+
+    for attempt in range(1 + MAX_RETRIES):
+        messages, knowledge, extra_tables = memory.build("query", user_id, question)
+        if retry_messages:
+            messages = messages + retry_messages
+        try:
+            result = llm.call(
+                messages,
+                knowledge_context=knowledge,
+                extra_tables=extra_tables,
+                allowed_tables=_allowed_tables,
+            )
+        except Exception as exc:
+            logger.exception("LLM call failed")
+            payload["error"] = f"LLM 调用失败：{exc}"
+            payload["retry_count"] = attempt
+            return payload
+
+        if result["tool"] is None:
+            payload["status"] = "needs_clarification"
+            payload["text"] = result.get("text", "")
+            payload["retry_count"] = attempt
+            return payload
+
+        if result["tool"] != "generate_forge_query":
+            payload["error"] = f"prepare_query 只支持数据查询工具，当前工具：{result['tool']}"
+            payload["retry_count"] = attempt
+            return payload
+
+        forge_json = result["input"]
+        warnings = lint_conventions(forge_json, question)
+        if warnings:
+            if attempt < MAX_RETRIES:
+                warning_text = "\n".join(f"- {w}" for w in warnings)
+                retry_messages.append(
+                    {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
+                )
+                retry_messages.append(
+                    {"role": "user", "content": f"约定检查发现以下问题：\n{warning_text}\n请修正。"}
+                )
+                continue
+            payload["error"] = f"查询生成失败（约定检查已重试 {MAX_RETRIES} 次仍未通过）：{warnings[0]}"
+            payload["retry_count"] = attempt
+            return payload
+
+        try:
+            sql = compile_query(forge_json, dialect=resolved_dialect)
+        except Exception as exc:
+            if attempt < MAX_RETRIES:
+                retry_messages.append(
+                    {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
+                )
+                retry_messages.append(
+                    {"role": "user", "content": f"编译错误（第 {attempt + 1} 次）：{exc}\n请修正。"}
+                )
+                continue
+            payload["error"] = f"查询生成失败（已重试 {MAX_RETRIES} 次）：{exc}"
+            payload["retry_count"] = attempt
+            return payload
+
+        payload.update(
+            {
+                "status": "needs_review",
+                "forge_json": forge_json,
+                "sql": sql,
+                "retry_count": attempt,
+                "text": "",
+                "error": "",
+            }
+        )
+        return payload
+
+    payload["error"] = "查询生成失败，请换一种方式提问。"
+    return payload
 
 
 # ── 响应类型 ──────────────────────────────────────────────────────────────────
