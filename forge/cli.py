@@ -9,6 +9,9 @@ Forge 命令行入口。
     forge sync --out <path>     将结构层写入指定 schema.registry.json 路径
     forge sync-staging          将 .forge/staging/ 中的歧义确认记录合并入 disambiguations.registry.yaml
     forge doctor                检查当前配置是否满足生产交付条件
+    forge poc init <dir>        初始化客户 PoC 工作目录
+    forge poc validate <dir>    检查客户 PoC 工作目录
+    forge poc report <dir>      汇总客户 PoC 交付报告
     forge config                查看当前配置
     forge config <key> <value>  修改 forge.yaml 中的配置项
 
@@ -145,6 +148,41 @@ def _cmd_config(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _print_doctor(payload: dict) -> None:
+    print(f"Forge readiness ({payload['profile']}): {payload['status']}")
+    print("=" * 50)
+    for check in payload["checks"]:
+        mark = {"ok": "OK", "warn": "WARN", "fail": "FAIL"}.get(check["status"], check["status"])
+        print(f"[{mark:<4}] {check['name']}: {check['message']}")
+
+
+def _cmd_poc(args: argparse.Namespace) -> None:
+    from . import poc
+
+    target = Path(args.directory)
+    if args.poc_command == "init":
+        result = poc.init_workspace(target)
+    elif args.poc_command == "validate":
+        result = poc.validate_workspace(target)
+    elif args.poc_command == "report":
+        result = poc.write_report(target, Path(args.out) if args.out else None)
+    else:
+        raise ValueError(f"unknown poc command: {args.poc_command}")
+
+    if args.json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif args.poc_command == "validate":
+        print(f"PoC workspace: {result['status']} ({result['path']})")
+        for issue in result["issues"]:
+            print(f"[{issue['level']}] {issue['path']}: {issue['message']}")
+    else:
+        print(result.get("message") or f"PoC {args.poc_command}: {result['status']}")
+        print(result["path"])
+
+    if result.get("status") == "fail" or result.get("ok") is False:
+        sys.exit(1)
+
+
 def main() -> None:
     """CLI 入口函数，由 pyproject.toml 的 [project.scripts] 注册为 forge 命令。"""
     parser = argparse.ArgumentParser(prog="forge", description="Forge DSL compiler & config")
@@ -179,7 +217,33 @@ def main() -> None:
     )
 
     # ── doctor 子命令 ───────────────────────────────────────────────────────
-    subparsers.add_parser("doctor", help="检查当前配置是否满足生产交付条件")
+    doctor_parser = subparsers.add_parser("doctor", help="检查当前配置是否满足生产交付条件")
+    doctor_parser.add_argument(
+        "--profile",
+        choices=("dev", "poc", "prod"),
+        default="prod",
+        help="检查口径：dev=开发态，poc=客户 PoC，prod=生产交付",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="输出结构化 JSON，供 smoke/report 自动汇总",
+    )
+
+    # ── poc 子命令 ────────────────────────────────────────────────────────────
+    poc_parser = subparsers.add_parser("poc", help="客户 PoC 工作目录工具")
+    poc_subparsers = poc_parser.add_subparsers(dest="poc_command", required=True)
+    for command, help_text in (
+        ("init", "初始化客户 PoC 工作目录"),
+        ("validate", "检查客户 PoC 工作目录"),
+        ("report", "汇总客户 PoC 交付报告"),
+    ):
+        sub = poc_subparsers.add_parser(command, help=help_text)
+        sub.add_argument("directory", help="客户 PoC 工作目录")
+        sub.add_argument("--json", action="store_true", dest="json_output", help="输出结构化 JSON")
+        if command == "report":
+            sub.add_argument("--out", default=None, help="交付报告输出路径，默认写入 <dir>/delivery_report.md")
 
     # ── config 子命令 ─────────────────────────────────────────────────────────
     config_parser = subparsers.add_parser(
@@ -259,24 +323,23 @@ def main() -> None:
 
     # ── doctor 处理 ─────────────────────────────────────────────────────────
     elif args.command == "doctor":
-        from main import _readiness_checks
+        from .readiness import readiness_payload
 
-        checks = _readiness_checks()
-        failed = [c for c in checks if c["status"] == "fail"]
-        warned = [c for c in checks if c["status"] == "warn"]
-        overall = "fail" if failed else ("warn" if warned else "ok")
-
-        print(f"Forge readiness: {overall}")
-        print("=" * 50)
-        for check in checks:
-            mark = {"ok": "OK", "warn": "WARN", "fail": "FAIL"}.get(check["status"], check["status"])
-            print(f"[{mark:<4}] {check['name']}: {check['message']}")
-        if failed:
+        payload = readiness_payload(args.profile)
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_doctor(payload)
+        if payload["status"] == "fail":
             sys.exit(1)
 
     # ── config 处理 ──────────────────────────────────────────────────────────
     elif args.command == "config":
         _cmd_config(args)
+
+    # ── poc 处理 ─────────────────────────────────────────────────────────────
+    elif args.command == "poc":
+        _cmd_poc(args)
 
 
 if __name__ == "__main__":

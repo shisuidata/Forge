@@ -1,6 +1,6 @@
 # Forge
 
-> **面向数据团队的 AI 查询 Agent，让弱模型也能生成可信 SQL。**
+> **面向数据团队的可信 AI 问数 Agent，解决 AI 参与数据查询时不可信的问题。**
 > 当前状态：已达到受控生产落地 / 封闭 Beta 候选标准；可用于设计型客户 PoC，不建议无约束规模化铺开。
 
 [English README](README_EN.md)
@@ -9,13 +9,17 @@
 
 ## 它解决什么问题
 
-| 错误类型 | 举例 | Forge 的答案 |
-|---|---|---|
-| **生成错误**：推理对了，SQL 写错了 | `INNER JOIN` 替代 `LEFT JOIN`；`NOT IN` 遇 NULL 静默返错 | ✅ DSL 约束 + 编译器 |
-| **业务逻辑错误**：指标定义歧义 | "复购率"的分母是谁？ | ✅ Registry 语义层 |
-| **算法逻辑错误**：不知该用什么算法 | 日期序列填充、同比计算 | ❌ 诚实标注，超出能力边界 |
+Forge 不是再做一个 SQL 生成器，而是 AI 参与数据查询时的可信中间层：既能独立提供问数消息面板和管理面板，也能作为开放组件嵌入其他 Agent。
 
-**核心主张**：生成错误和业务逻辑错误应该系统性消灭，而不是靠更好的 prompt 碰运气。
+| 不可信环节 | 举例 | Forge 的答案 |
+|---|---|---|
+| **口径不可信** | "复购率"的分母是谁？ | ✅ Registry 语义层 |
+| **生成不可信** | `INNER JOIN` 替代 `LEFT JOIN`；`NOT IN` 遇 NULL 静默返错 | ✅ DSL 约束 + 编译器 |
+| **执行不可信** | 用户不知道 AI 实际执行了什么 SQL | ✅ 审核、只读账号、超时、行数上限 |
+| **追溯不可信** | 错一次下次还错，无法回放 | ✅ audit、feedback、failure triage |
+| **能力边界不可信** | 日期序列填充、同比计算等算法型问题 | ❌ 诚实标注，超出能力边界 |
+
+**核心主张**：可信问数要把业务口径、生成、执行、追溯和兼容证据串成闭环，而不是靠更好的 prompt 碰运气。
 
 ### 当前推荐基线
 
@@ -62,7 +66,7 @@ docker compose up
 ```bash
 cp .env.production.example .env.production
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
-forge doctor
+forge doctor --profile prod
 bash scripts/production-smoke.sh
 ```
 
@@ -141,7 +145,7 @@ flowchart LR
 | EA（large schema, DeepSeek V4 Pro, Method AF） | **100.0% Case EA / 97.5% Run ACC** |
 | Case EA(all)（large schema, DeepSeek V4 Pro, Method AF） | **92.5%** |
 | EA best（small schema, Claude/DeepSeek） | **95.0%** |
-| 全量自动化测试 | **302 passed, 23 skipped** |
+| 全量自动化测试 | **342 passed, 25 skipped** |
 | Spider2-Lite 编译成功率 | **97.6%** |
 | Spider2-Lite EA | **9.2%** |
 
@@ -231,6 +235,7 @@ tests/
 | [商业化推进计划](docs/commercialization-plan.md) | P0/P1/P2 优先级、准确率闭环、PoC 到正式交付判定标准 |
 | [兼容性矩阵](docs/compatibility-matrix.md) | 数据库、数据仓库、Agent 入口、LLM 服务的支持边界 |
 | [客户 PoC 执行手册](docs/poc-playbook.md) | 客户域 golden questions、failure triage 和交付物 |
+| [外部 Agent 集成边界](docs/agent-integration.md) | MCP / OpenAI Agents / Claude Desktop 等外部入口的 prepare-query 只读边界 |
 | [交付前综合评估](docs/delivery-assessment-2026-05-07.md) | 业务板块、文档、目录、工作流、三轮测试和交付优化方案 |
 | [生产交付部署说明](docs/production-deployment.md) | 生产 compose、env、只读数据库账号、readiness、运维建议 |
 | [DSL 形式化语义](docs/dsl-semantics.md) | DSL 的形式化定义 |

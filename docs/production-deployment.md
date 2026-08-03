@@ -61,7 +61,7 @@ curl http://localhost:8000/health/readiness
 bash scripts/production-smoke.sh
 ```
 
-该脚本会顺序执行 `forge doctor`、数据库只读连接的 `SELECT 1`、provider tool-call smoke，以及可选的 HTTP readiness 检查。它不会对客户数据库建表或写入。
+该脚本会顺序执行 `forge doctor --profile "$FORGE_PROFILE" --json`、数据库只读连接的 `SELECT 1`、provider tool-call smoke，以及可选的 HTTP readiness 检查。它不会对客户数据库建表或写入。
 
 ## 数据库权限要求
 
@@ -122,17 +122,27 @@ DATABASE_READONLY_CONFIRMED=true
 
 ```bash
 PYTHON_BIN=.venv/bin/python \
+FORGE_PROFILE=prod \
 FORGE_BASE_URL=http://localhost:8000 \
 bash scripts/production-smoke.sh
 ```
 
 行为边界：
 
-- `forge doctor` 有 `fail` 时直接失败。
+- `forge doctor --profile "$FORGE_PROFILE" --json` 有 `fail` 时直接失败。
 - `DATABASE_URL` 存在时只执行 `SELECT 1`。
-- `LLM_API_KEY` 存在时运行 `scripts/provider_smoke.py`，只验证 tool call、JSON Schema 和确定性编译。
+- `LLM_API_KEY` 存在时运行 `scripts/provider_smoke.py --json --out <path>`，只验证 tool call、JSON Schema 和确定性编译。
 - `FORGE_BASE_URL` 存在时检查 `/health/readiness`，返回 `fail` 则失败。
 - 不运行 customer query，不创建临时表，不把 API Key 打印到输出。
+
+默认摘要写入 `.forge/production-smoke.json`，并在同一目录保存 `doctor.json`、`database-smoke.json`、`provider-smoke.json` 和 `http-readiness.json`。客户 PoC 中建议显式指定：
+
+```bash
+FORGE_PROFILE=poc \
+FORGE_SMOKE_OUT=/path/to/customer-poc/results/production-smoke.json \
+FORGE_SMOKE_ARTIFACT_DIR=/path/to/customer-poc/results \
+bash scripts/production-smoke.sh
+```
 
 ## 运维建议
 

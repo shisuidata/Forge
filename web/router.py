@@ -6,6 +6,7 @@ Routes
 ## Chat（查询对话）
 GET  /chat                           → 对话界面
 POST /api/chat                       → 发送消息，返回 AgentResponse JSON
+POST /api/prepare-query              → 外部 Agent 生成可审核 SQL（不执行）
 POST /api/approve                    → 确认 SQL
 POST /api/cancel                     → 取消 SQL
 
@@ -45,6 +46,7 @@ from pydantic import BaseModel
 from agent import audit
 from agent import feedback
 from agent.agent import process as agent_process
+from agent.agent import prepare_query as agent_prepare_query
 from agent.agent import approve as agent_approve
 from agent.agent import cancel as agent_cancel
 from forge.executor import execute_with_data
@@ -185,6 +187,12 @@ class ChatRequest(BaseModel):
     user_id: str = "web_user"
 
 
+class PrepareQueryRequest(BaseModel):
+    question: str
+    user_id: str = "external-agent"
+    dialect: Optional[str] = None
+
+
 def _run_sync(fn, *args):
     """在线程池中执行同步函数，避免阻塞事件循环。"""
     loop = asyncio.get_event_loop()
@@ -240,6 +248,22 @@ async def api_chat(req: ChatRequest, _auth=Depends(require_api_auth)):
             "action": resp.action,
             "retry_count": getattr(resp, "retry_count", 0),
         }
+
+
+@chat_router.post("/api/prepare-query", response_class=JSONResponse)
+async def api_prepare_query(req: PrepareQueryRequest, _auth=Depends(require_api_auth)):
+    """外部 Agent 嵌入入口：只生成可审核 SQL，不创建可执行 pending state。"""
+    result = await _run_sync(agent_prepare_query, req.user_id, req.question, req.dialect)
+    status = "pending" if result.get("status") == "needs_review" else "error"
+    await audit.log(
+        user_id=req.user_id,
+        user_message=req.question,
+        forge_json=result.get("forge_json"),
+        sql=result.get("sql"),
+        status=status,
+        error_message=result.get("error") or result.get("text") or None,
+    )
+    return result
 
 
 @chat_router.post("/api/approve", response_class=JSONResponse)
