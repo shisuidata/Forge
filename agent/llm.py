@@ -437,15 +437,20 @@ def _call_anthropic(
     kwargs: dict = {"api_key": config.api_key, "timeout": config.timeout_seconds}
     if config.base_url:
         kwargs["base_url"] = config.base_url
+    request: dict[str, Any] = {
+        "model": config.model,
+        "max_tokens": 2048,
+        "system": system,
+        "tools": tools,
+        "messages": messages,
+    }
+    if tools and config.tool_choice == "required":
+        request["tool_choice"] = {"type": "any"}
+    elif tools and config.tool_choice == "named":
+        request["tool_choice"] = {"type": "tool", "name": tools[0]["name"]}
     try:
         client = anthropic.Anthropic(**kwargs)
-        response = client.messages.create(
-            model=config.model,
-            max_tokens=2048,
-            system=system,
-            tools=tools,
-            messages=messages,
-        )
+        response = client.messages.create(**request)
     except anthropic.APITimeoutError as exc:
         raise LLMRequestTimeoutError("LLM Provider 调用超时") from exc
     except Exception as exc:
@@ -570,6 +575,39 @@ def _call_openai(
 
 # ── 公开调用接口 ──────────────────────────────────────────────────────────────
 
+def validate_model_snapshot(config: ModelConfigSnapshot) -> dict[str, Any]:
+    """Run a minimal, non-executable Tool Calling compatibility smoke."""
+    tool = {
+        "name": "forge_model_validation",
+        "description": "Return the fixed validation payload.",
+        "input_schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["ok"],
+            "properties": {"ok": {"type": "boolean", "enum": [True]}},
+        },
+    }
+    messages = [{"role": "user", "content": "Call forge_model_validation with ok=true."}]
+    if config.provider == "anthropic":
+        result = _call_anthropic(messages, "Model compatibility validation only.", [tool], config=config)
+    else:
+        result = _call_openai(messages, "Model compatibility validation only.", [tool], config=config)
+    passed = result.get("tool") == tool["name"] and result.get("input") == {"ok": True}
+    if not passed:
+        raise LLMCompatibilityError("模型未通过 Tool Calling 兼容性验证。")
+    return {
+        "tool_calling": True,
+        "structured_output": True,
+        "provider": config.provider,
+        "model": config.model,
+        "quality_gate": {
+            "passed": False,
+            "status": "not_run",
+            "reason": "尚未运行 Forge EA、Assurance、延迟与超时门禁。",
+        },
+    }
+
+
 def _extract_hint_tables(error: str, registry: dict) -> list[str]:
     """
     从编译错误信息中提取缺失的表名，用于二次召回。
@@ -603,7 +641,8 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
          system_override: str | None = None,
          knowledge_context: str = "",
          allowed_tables: list[str] | None = None,
-         timeout_seconds: float | None = None) -> dict:
+         timeout_seconds: float | None = None,
+         config_snapshot: ModelConfigSnapshot | None = None) -> dict:
     """
     LLM 统一调用入口。
 
@@ -618,8 +657,8 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
         {"tool": str, "input": dict}  — LLM 调用了工具
         {"tool": None, "text": str}   — LLM 直接文字回复
     """
-    # 每个新调用读取一次不可变配置快照；文件未变化时只命中内存缓存。
-    model_config = get_model_config()
+    # Orchestrators may pin one immutable snapshot across all retries.
+    model_config = config_snapshot or get_model_config()
     if timeout_seconds is not None:
         model_config = replace(
             model_config,

@@ -51,6 +51,20 @@ def isolated_agent(monkeypatch, tmp_path):
     monkeypatch.setattr(agent_mod.cfg, "FEEDBACK_ENABLED", False)
     monkeypatch.setattr(agent_mod.cfg, "SQL_DIALECT", "sqlite")
     monkeypatch.setattr(agent_mod.cfg, "DATABASE_URL", "")
+    monkeypatch.setattr(
+        agent_mod.llm,
+        "get_model_config",
+        lambda: SimpleNamespace(
+            provider="openai",
+            model="fixture-model",
+            api_key="fixture-key",
+            base_url="https://provider.example/v1",
+            tool_choice="required",
+            timeout_seconds=120.0,
+            revision="fixture-revision",
+            source="test",
+        ),
+    )
     registry_path = tmp_path / "schema.registry.json"
     registry_path.write_text(
         __import__("json").dumps({
@@ -203,6 +217,7 @@ def test_process_retries_unbound_table_and_self_join_before_review(isolated_agen
     assert resp.action == "sql_review"
     assert resp.retry_count == 1
     assert len(calls) == 2
+    assert {call["config_snapshot"].revision for call in calls} == {"fixture-revision"}
     assert "INNER JOIN dim_region" in resp.sql
     assert "SUM(dwd_order_detail.total_amount)" in resp.sql
     assert fake_memory.get_state("u-integrity", "pending_sql") == resp.sql

@@ -693,6 +693,87 @@ class TestAdminMetricRoutes:
 
 
 class TestSettingsRoutes:
+    async def test_model_profile_validate_and_cas_activate(self, client: AsyncClient, monkeypatch, tmp_path):
+        import web.routes.settings as settings_routes
+
+        db_path = tmp_path / "model-control.db"
+        monkeypatch.setattr(settings_routes, "model_control_db_path", lambda: db_path)
+        monkeypatch.setenv("MODEL_TEST_KEY", "secret-not-returned")
+        monkeypatch.setattr(
+            settings_routes,
+            "validate_model_snapshot",
+            lambda snapshot: {
+                "tool_calling": True,
+                "structured_output": True,
+                "provider": snapshot.provider,
+                "model": snapshot.model,
+                "quality_gate": {"passed": True, "status": "passed"},
+            },
+        )
+
+        created = await client.post("/admin/settings/model-profiles", json={
+            "profile_id": "query-model",
+            "name": "Query Model",
+            "provider": "openai",
+            "protocol": "openai_chat",
+            "model": "candidate-model",
+            "base_url": "https://provider.example/v1",
+            "tool_choice": "required",
+            "secret_ref": "env:MODEL_TEST_KEY",
+        })
+        assert created.status_code == 201
+        revision = created.json()["revision_id"]
+
+        validated = await client.post(f"/admin/settings/model-profiles/{revision}/validate")
+        assert validated.status_code == 200
+        assert validated.json()["report"]["tool_calling"] is True
+
+        activated = await client.post("/admin/settings/model-bindings/activate", json={
+            "revision_id": revision,
+            "expected_version": 0,
+        })
+        assert activated.status_code == 200
+        assert activated.json()["binding_version"] == 1
+        assert "secret-not-returned" not in activated.text + validated.text + created.text
+
+        conflict = await client.post("/admin/settings/model-bindings/activate", json={
+            "revision_id": revision,
+            "expected_version": 0,
+        })
+        assert conflict.status_code == 409
+
+    async def test_model_profile_failed_validation_cannot_activate(self, client: AsyncClient, monkeypatch, tmp_path):
+        import web.routes.settings as settings_routes
+
+        db_path = tmp_path / "model-control.db"
+        monkeypatch.setattr(settings_routes, "model_control_db_path", lambda: db_path)
+        monkeypatch.setenv("MODEL_TEST_KEY", "secret-not-returned")
+        monkeypatch.setattr(
+            settings_routes,
+            "validate_model_snapshot",
+            lambda snapshot: (_ for _ in ()).throw(
+                settings_routes.LLMCompatibilityError("provider raw detail")
+            ),
+        )
+        created = await client.post("/admin/settings/model-profiles", json={
+            "profile_id": "bad-model",
+            "name": "Bad Model",
+            "provider": "openai",
+            "protocol": "openai_chat",
+            "model": "bad-model",
+            "secret_ref": "env:MODEL_TEST_KEY",
+        })
+        revision = created.json()["revision_id"]
+
+        validated = await client.post(f"/admin/settings/model-profiles/{revision}/validate")
+        assert validated.status_code == 422
+        assert "provider raw detail" not in validated.text
+        activated = await client.post("/admin/settings/model-bindings/activate", json={
+            "revision_id": revision,
+            "expected_version": 0,
+        })
+        assert activated.status_code == 400
+
     async def test_save_llm_settings_reload_without_restart(self, client: AsyncClient, monkeypatch):
         import web.routes.settings as settings_routes
 

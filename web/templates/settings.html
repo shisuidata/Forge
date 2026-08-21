@@ -36,7 +36,10 @@
   <div class="border border-gray-200 rounded-lg mb-6">
     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
       <h3 class="text-sm font-semibold text-gray-900">LLM 模型</h3>
-      <p class="text-xs text-gray-500 mt-0.5">配置用于生成 Forge JSON 的大语言模型。保存后新任务立即加载，不需要重启。</p>
+      <p class="text-xs text-gray-500 mt-0.5">配置用于生成 Forge JSON 的大语言模型。新任务读取不可变 Revision，不需要重启。</p>
+      {% if model_control_active %}
+      <p class="text-xs text-blue-700 mt-2">Model Control Plane 已接管：{{ model_control_active.profile_id }}，Binding v{{ model_control_active.binding_version }}，Revision {{ model_control_active.revision_id[:15] }}…；下方旧配置表单不会覆盖 Active Binding。</p>
+      {% endif %}
       {% if model_status.configured %}
       <p class="text-xs text-green-700 mt-2">当前生效：{{ model_status.provider }} / {{ model_status.model }}（来源：{{ model_status.source }}，版本：{{ model_status.revision }}）</p>
       {% else %}
@@ -83,7 +86,7 @@
       <div class="flex justify-end pt-2 border-t border-gray-100">
         <button type="submit"
                 class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
-          保存 LLM 配置
+          {% if model_control_active %}已由 Model Control Plane 接管{% else %}保存 LLM 配置{% endif %}
         </button>
       </div>
     </form>

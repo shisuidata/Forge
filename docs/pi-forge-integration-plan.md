@@ -901,6 +901,8 @@ Scope 至少支持：
 
 1. 将当前文件 revision cache 升级为持久化 ModelProfile / Revision / ActiveBinding Store。
 2. 建立 SQLite `model_profiles/model_profile_revisions/active_model_bindings/model_switch_audit`。
+
+当前实施切片（已确认开始）：先完成 Forge `forge.query_planning` scope 的持久化控制面。Revision 只保存非密配置和 `secret_ref`，支持 `env:` 与 mode 600 `file:` Secret；真实 Tool Calling smoke 和质量/性能门禁均通过后才可 CAS activate，rollback 也使用 expected binding version。`get_model_config()` 优先读取 active binding，无 active 时兼容回退现有环境/YAML；该切片完成并经过 NAS 无重启切换验证后，再把同一 Store 接入 Pi 各 Stage 和完整 40 题激活门禁。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
