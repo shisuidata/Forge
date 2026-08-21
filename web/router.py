@@ -1058,6 +1058,20 @@ async def admin_root():
     return RedirectResponse(url="/admin/dashboard", status_code=302)
 
 
+@router.get("/architecture", response_class=HTMLResponse)
+async def architecture_atlas():
+    """Serve the standalone architecture atlas behind admin authentication."""
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "docs"
+        / "architecture-diagrams"
+        / "forge-platform-architecture.html"
+    )
+    if not path.exists():
+        return HTMLResponse("架构图尚未生成。", status_code=404)
+    return HTMLResponse(path.read_text(encoding="utf-8"))
+
+
 # ── Dashboard（概览）──────────────────────────────────────────────────────────
 
 @router.get("/dashboard", response_class=HTMLResponse)

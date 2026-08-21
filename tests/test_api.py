@@ -735,6 +735,7 @@ class TestSettingsRoutes:
 class TestAdminPages:
     @pytest.mark.parametrize("path", [
         "/admin/dashboard",
+        "/admin/architecture",
         "/admin/schema",
         "/admin/metrics",
         "/admin/semantic",
