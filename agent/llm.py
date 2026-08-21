@@ -24,6 +24,11 @@ from typing import Any
 import yaml
 
 from config import cfg
+from agent.model_config import (
+    LLMConfigurationError,
+    ModelConfigSnapshot,
+    get_model_config,
+)
 from agent.prompts import build_system
 from forge.schema_builder import build_tool_schema
 from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
@@ -33,6 +38,22 @@ logger = logging.getLogger(__name__)
 
 class LLMCompatibilityError(RuntimeError):
     """Raised when a configured provider violates the expected response contract."""
+
+
+def _direct_call_config(provider: str, config: ModelConfigSnapshot | None) -> ModelConfigSnapshot:
+    """Keep low-level test callers compatible; production call() passes a snapshot."""
+    if config is not None:
+        return config
+    return ModelConfigSnapshot(
+        provider=provider,
+        model=str(getattr(cfg, "LLM_MODEL", "")),
+        api_key=str(getattr(cfg, "LLM_API_KEY", "")),
+        base_url=str(getattr(cfg, "LLM_BASE_URL", "")),
+        tool_choice=str(getattr(cfg, "LLM_TOOL_CHOICE", "auto")),
+        timeout_seconds=max(1.0, float(getattr(cfg, "LLM_TIMEOUT_SECONDS", 120))),
+        revision="legacy-direct-call",
+        source="legacy-direct-call",
+    )
 
 
 # ── Schema 检索器（模块级单例，懒初始化）─────────────────────────────────────
@@ -364,7 +385,12 @@ def _build_tools(registry: dict) -> list[dict]:
 
 # ── Anthropic 后端 ────────────────────────────────────────────────────────────
 
-def _call_anthropic(messages: list[dict], system: str, tools: list[dict]) -> dict:
+def _call_anthropic(
+    messages: list[dict],
+    system: str,
+    tools: list[dict],
+    config: ModelConfigSnapshot | None = None,
+) -> dict:
     """
     调用 Anthropic Messages API。
 
@@ -377,17 +403,23 @@ def _call_anthropic(messages: list[dict], system: str, tools: list[dict]) -> dic
         统一格式的响应字典，参见模块文档。
     """
     import anthropic
-    kwargs: dict = {"api_key": cfg.LLM_API_KEY}
-    if cfg.LLM_BASE_URL:
-        kwargs["base_url"] = cfg.LLM_BASE_URL
-    client = anthropic.Anthropic(**kwargs)
-    response = client.messages.create(
-        model=cfg.LLM_MODEL,
-        max_tokens=2048,
-        system=system,
-        tools=tools,
-        messages=messages,
-    )
+    config = _direct_call_config("anthropic", config)
+    kwargs: dict = {"api_key": config.api_key}
+    if config.base_url:
+        kwargs["base_url"] = config.base_url
+    try:
+        client = anthropic.Anthropic(**kwargs)
+        response = client.messages.create(
+            model=config.model,
+            max_tokens=2048,
+            system=system,
+            tools=tools,
+            messages=messages,
+        )
+    except Exception as exc:
+        raise LLMCompatibilityError(
+            "LLM Provider 调用失败，请检查协议、Base URL、模型和凭证"
+        ) from exc
     for block in response.content:
         if block.type == "tool_use":
             return {"tool": block.name, "input": block.input}
@@ -397,7 +429,12 @@ def _call_anthropic(messages: list[dict], system: str, tools: list[dict]) -> dic
 
 # ── OpenAI 兼容后端 ───────────────────────────────────────────────────────────
 
-def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
+def _call_openai(
+    messages: list[dict],
+    system: str,
+    tools: list[dict],
+    config: ModelConfigSnapshot | None = None,
+) -> dict:
     """
     调用任意 OpenAI 兼容接口（包括 OpenAI、DeepSeek、通义等）。
 
@@ -411,16 +448,17 @@ def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
     """
     import httpx, json as _json
 
-    base_url = cfg.LLM_BASE_URL or "https://api.openai.com/v1"
+    config = _direct_call_config("openai", config)
+    base_url = config.base_url or "https://api.openai.com/v1"
     headers = {
-        "Authorization": f"Bearer {cfg.LLM_API_KEY}",
+        "Authorization": f"Bearer {config.api_key}",
         "Content-Type": "application/json",
     }
     payload: dict = {
-        "model": cfg.LLM_MODEL,
+        "model": config.model,
         "messages": [{"role": "system", "content": system}] + messages,
     }
-    tool_choice_mode = getattr(cfg, "LLM_TOOL_CHOICE", "auto").lower()
+    tool_choice_mode = config.tool_choice
     if tool_choice_mode not in {"auto", "required", "named"}:
         raise LLMCompatibilityError(
             "LLM_TOOL_CHOICE 必须是 auto、required 或 named。"
@@ -451,18 +489,18 @@ def _call_openai(messages: list[dict], system: str, tools: list[dict]) -> dict:
             endpoint,
             headers=headers,
             json=payload,
-            timeout=max(1.0, float(getattr(cfg, "LLM_TIMEOUT_SECONDS", 120))),
+            timeout=config.timeout_seconds,
         )
         r.raise_for_status()
         body = r.json()
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
         raise LLMCompatibilityError(
-            f"OpenAI-compatible provider 返回 HTTP {status}：{cfg.LLM_MODEL}@{base_url}"
+            f"LLM Provider 拒绝请求（HTTP {status}），请检查协议、模型和凭证"
         ) from exc
     except httpx.RequestError as exc:
         raise LLMCompatibilityError(
-            f"无法连接 OpenAI-compatible provider：{cfg.LLM_MODEL}@{base_url}"
+            "无法连接 LLM Provider，请检查 Base URL、网络和协议配置"
         ) from exc
     except (TypeError, ValueError) as exc:
         raise LLMCompatibilityError("Provider 返回的响应不是合法 JSON。") from exc
@@ -545,6 +583,9 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
         {"tool": str, "input": dict}  — LLM 调用了工具
         {"tool": None, "text": str}   — LLM 直接文字回复
     """
+    # 每个新调用读取一次不可变配置快照；文件未变化时只命中内存缓存。
+    model_config = get_model_config()
+
     # 统一 messages 格式：兼容 Message 对象和 dict 列表
     def _to_dicts(msgs):
         result = []
@@ -558,10 +599,9 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     # 纯文字模式：自定义 system prompt，无 tools
     if system_override is not None:
         messages = _to_dicts(history)
-        if cfg.LLM_PROVIDER == "anthropic":
-            return _call_anthropic(messages, system_override, tools=[])
-        else:
-            return _call_openai(messages, system_override, tools=[])
+        if model_config.provider == "anthropic":
+            return _call_anthropic(messages, system_override, tools=[], config=model_config)
+        return _call_openai(messages, system_override, tools=[], config=model_config)
     # 每次调用前实时读取 registry
     registry: dict = {}
     try:
@@ -626,10 +666,9 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     if knowledge_context:
         system = system + "\n\n" + knowledge_context
     messages = _to_dicts(history)
-    if cfg.LLM_PROVIDER == "anthropic":
-        return _call_anthropic(messages, system, tools)
-    else:
-        return _call_openai(messages, system, tools)
+    if model_config.provider == "anthropic":
+        return _call_anthropic(messages, system, tools, config=model_config)
+    return _call_openai(messages, system, tools, config=model_config)
 
 
 def call_with_retry(history: list[Any], compile_fn=None) -> tuple[dict, str | None]:

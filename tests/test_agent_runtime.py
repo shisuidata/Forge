@@ -184,6 +184,43 @@ def test_prepare_query_greeting_requires_input_without_calling_model(
     assert fake_memory.get_state("external-agent", "pending_sql") is None
 
 
+def test_prepare_query_reports_missing_llm_without_sql(isolated_agent, monkeypatch):
+    from agent.model_config import LLMNotConfiguredError
+
+    agent_mod, _ = isolated_agent
+    monkeypatch.setattr(
+        agent_mod.llm,
+        "call",
+        lambda *args, **kwargs: (_ for _ in ()).throw(LLMNotConfiguredError()),
+    )
+
+    result = agent_mod.prepare_query("external-agent", "查询订单")
+
+    assert result["status"] == "error"
+    assert result["sql"] is None
+    assert result["forge_json"] is None
+    assert result["error"] == "尚未配置 LLM，请管理员先在模型设置中完成配置。"
+
+
+def test_prepare_query_reports_bounded_llm_configuration_error(isolated_agent, monkeypatch):
+    from agent.model_config import LLMConfigurationError
+
+    agent_mod, _ = isolated_agent
+    monkeypatch.setattr(
+        agent_mod.llm,
+        "call",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            LLMConfigurationError("secret provider response")
+        ),
+    )
+
+    result = agent_mod.prepare_query("external-agent", "查询订单")
+
+    assert result["status"] == "error"
+    assert "LLM 配置错误" in result["error"]
+    assert "secret provider response" not in result["error"]
+
+
 def test_prepare_query_keeps_short_data_question_valid(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
     monkeypatch.setattr(
@@ -271,7 +308,7 @@ def test_prepare_query_reports_llm_error_without_secret_leak(isolated_agent, mon
 
     assert result["status"] == "error"
     assert "LLM 调用失败" in result["error"]
-    assert "upstream unavailable" in result["error"]
+    assert "upstream unavailable" not in result["error"]
 
 
 def test_prepare_query_rejects_unknown_dialect(isolated_agent):
@@ -295,7 +332,7 @@ def test_process_returns_error_when_llm_call_fails(isolated_agent, monkeypatch):
 
     assert resp.action == "error"
     assert "LLM 调用失败" in resp.text
-    assert "upstream unavailable" in resp.text
+    assert "upstream unavailable" not in resp.text
 
 
 def test_approve_clears_pending_sql_and_returns_sql(isolated_agent, monkeypatch):
