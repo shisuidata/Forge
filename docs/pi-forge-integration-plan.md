@@ -676,7 +676,25 @@ M4.1 Dev 部署结果（2026-08-21）：
 - 隔离 fake Forge 冒烟通过：readiness ok、消息首次 202/重复 200、同一 TaskRun、SQL review、hash 审批首次 202/重复 200、query_result。
 - Pi 进程重启后 PID 已变化，SQLite WAL 中的 TaskRun 恢复为 `ready_for_analysis`，presentation 仍为 `query_result`。
 - 缺失 Channel Key 和未知飞书身份均返回 403；目标机密钥仅生成并保存在 mode 600 配置文件，未写入仓库或日志。
-- 限制：当前 Forge 为 fake、模型目录使用不可调用的测试占位凭证，未访问真实数据库、模型或飞书；readiness 只证明目录/配置完整，不证明模型凭证有效。下一步必须先接隔离测试数据源和有效模型环境，再开启真实飞书测试应用。
+- 限制：当前 Forge 为 fake、模型目录使用不可调用的测试占位凭证，未访问真实数据库、模型或飞书；readiness 只证明目录/配置完整，不证明模型凭证有效。
+
+M4.1 数据源决定（2026-08-21）：
+
+- Dev 环境直接使用 Forge 仓库自带测试数据集，不引入客户数据或生产数据库。
+- 测试 Registry 与 SQLite 数据库必须复制到 `~/services/forge-m4.1/state/test-dataset`，运行期只读；不得修改 Git checkout 中的 fixture。
+- 该配置只允许 `dev` profile。PoC/生产 readiness 仍必须拒绝 `tests/datasets/*` benchmark Registry，不能因本次测试放宽门禁。
+- 先用真实 Forge QueryRun/Compiler/Executor 替换 fake Forge；模型凭证仍必须由目标机环境独立注入，不从本地复制。若目标机没有有效凭证，可使用仅限 M4.1 的确定性 OpenAI-compatible test model 验证编译和执行链路，但不得把它计为真实模型验收。
+- 数据集采用“先评估、后最小补齐”：先对 `tests/datasets/large` 的表、行数、时间跨度、NULL/空集、关联完整性和 40 题覆盖做清单；只有当前渠道场景缺少证据时，才在独立 mock fixture 中补充，不直接篡改 benchmark 原始数据。
+- M4.1 至少需要覆盖：正常聚合、空结果、NULL、结果截断、SQL hash 不匹配、重复审批、分析证据引用和一次补查所需的父子结果。若 large fixture 已覆盖则直接复用；否则新增版本化 `m4-channel` fixture 和生成脚本。
+
+M4.1 测试数据评估与真实执行结果（2026-08-21）：
+
+- `tests/datasets/large` 有 200 张表，40 个基准问题，覆盖多表聚合、复杂过滤、HAVING、TopN、窗口、时序、ANTI/SEMI JOIN 和综合查询；大量事实表超过 1,500 行，多表包含真实 NULL 分布。
+- 当前渠道里程碑所需的数据行为均已覆盖，无需立即扩充 fixture：正常聚合返回 6 行；空集 0 行；NULL 保留；超过上限时返回 200 行且 `truncated=true`；hash 不匹配返回 409；正确重试和同幂等键重放通过。
+- 数据库和 Registry 已复制到 NAS `state/test-dataset`，原始文件 mode 400、数据库使用 SQLite `mode=ro`；写入尝试被拒绝且冒烟前后 SHA-256 不变。Runtime cache 使用独立目录，不写 fixture。
+- NAS 已启动真实 `forge-m41-api.service`（127.0.0.1:18001）和确定性测试模型 `forge-m41-llm.service`（127.0.0.1:18002）；Pi 已切换到真实 Forge QueryRun/Compiler/Executor，原 `forge-m41-fake.service` 已停用。
+- 真实跨服务链路再次通过：ChannelEvent → 确定性测试模型 → Forge JSON → Compiler → SQL review → hash 审批 → SQLite 只读执行 → 6 行 query_result；重复消息和审批仍幂等。
+- 结论：large fixture 足够 M4.1 的渠道、审批、执行和持久化测试，暂不制造新数据。它是广覆盖随机合成数据，不适合作为“已知根因”准确率金标；进入归因分析/一次补查里程碑时，如需断言特定因果结论，再新增小型、版本化且有 ground truth 的 `m4-channel` fixture，不污染现有 40 题 benchmark。
 
 剩余：
 
