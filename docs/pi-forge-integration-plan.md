@@ -781,7 +781,7 @@ M4.1 用户配置接管与服务重启规则：
 - 本地验证：Python 405 passed / 25 skipped，Pi Orchestrator 50 passed；Python LSP 未配置，已用 compileall、自动测试与 scoped diff check 替代。
 - NAS `762fe2c` 真实回归：截图原问题“各城市的订单总额是多少？”生成了包含 `dim_city`、`SUM(total_amount)`、`GROUP BY city_name` 的可执行 SQL，审批后返回 14 行且无执行错误；不再出现未绑定表和恒真自连接。
 - 剩余语义风险：当前模型选择 `订单明细 → 用户 → 地址 → 城市`，若用户存在多个地址可能重复放大金额。引用完整性门禁只能保证 SQL 结构合法，不能证明业务 join 粒度正确；该问题纳入模型准确率验证与 Registry 关系约束，不在 Compiler 中猜测修复。
-- 紧急补丁复审发现并已修复两个收口项：JOIN ON 现在必须整体同时引用待连接表和至少一个既有作用域表，阻断 `joined.a = joined.b` 隐性笛卡尔积；旧 Pipeline 执行失败后持久标记 `failed`，不会被下一次成功审批错误恢复。复审无剩余阻断项；Python 407 passed / 25 skipped，Pi Orchestrator 50 passed，可继续 Model Control Plane。
+- 紧急补丁复审发现并已修复两个收口项：JOIN ON 现在必须整体同时引用待连接表和至少一个既有作用域表，阻断 `joined.a = joined.b` 隐性笛卡尔积；旧 Pipeline 执行失败后持久标记 `failed`，不会被下一次成功审批错误恢复。复审无剩余阻断项；Python 407 passed / 25 skipped，Pi Orchestrator 50 passed。main `689b833` 已部署 NAS，Forge/Pi 均 active，可继续 Model Control Plane。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 
