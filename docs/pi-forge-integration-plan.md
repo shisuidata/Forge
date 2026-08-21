@@ -827,7 +827,9 @@ M4.1 用户配置接管与服务重启规则：
 - QueryRun 保障绑定已实现：SQLite 采用兼容迁移新增完整 Assurance Report/hash、Assurance/Policy/Model/Registry revisions；`needs_review` 缺少报告或报告 SQL/hash 不一致时直接转 failed。
 - 审批现在同时校验 `sql_hash + assurance_report_hash + approver + expiry + Registry version + Assurance revision + Policy revision`；错误 report hash 与策略漂移均有回归测试。模型切换不改变已经生成的 SQL，因此在途 QueryRun 固定原 model revision，不与当前 active model 比较。
 - Forge 内部 QueryRun API、Pi Client、Task Event、渠道审批动作和 QueryResultArtifact 已贯通 Assurance lineage；旧卡片缺少 Assurance hash 时失败关闭。
-- 当前验证：Python 413 passed / 25 skipped；Pi typecheck 通过，50 tests passed。下一步将同一 Policy/EA 门禁接入 Model Profile validate/activate。
+- 当前验证：Python 414 passed / 25 skipped；Pi typecheck 通过，50 tests passed。main `81656a1` 已部署 NAS，SQLite 兼容迁移成功；真实 ChannelEvent → review action 已携带 Assurance hash，审批 202 后进入 `query_result`。
+- 真实复杂问题“各城市订单总额”在当前模型多次自修正时触发 Pi/Forge 请求 timeout，说明下一步 Model Profile 门禁还必须验证延迟与重试预算，不能只看准确率；简单订单查询完整闭环通过。
+- 下一步将同一 Policy/EA 门禁接入 Model Profile validate/activate。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 
