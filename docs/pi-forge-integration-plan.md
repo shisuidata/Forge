@@ -911,6 +911,8 @@ QualityValidationRun 已完成基础实现：后台逐题固定候选 revision�
 用户已明确授权将本轮提供的 Coding Plan Key 仅写入 NAS mode 600 `forge.env` 的 `LLM_API_KEY`，Revision 继续只保存 `env:LLM_API_KEY`，不把 Key 写入 SQLite、Artifact、日志或响应。配置已完成，Secret 扫描确认未进入 Model DB 或 worker script；真实 Tool Calling/Structured Output smoke 通过（1.94s）。
 
 40 题 Run `mvr_b08feedf6ffa49adb6cf20216f161a74` 已完成并失败关闭：Execution Accuracy 20%（8/40，门槛 80%）、Assurance 通过率 45%（门槛 90%）、平均重试 1.375（门槛 ≤1）；P95 130.81s 与 timeout 0% 达标。分类正确数：时序导航 3/5、复杂过滤 2/5、ANTI/SEMI JOIN 1/5、分组/HAVING 1/5、窗口聚合 1/5，多表 JOIN+聚合、TopN、综合复杂查询均 0/5。Activation Gate 已实测阻断，ActiveBinding 仍为空；`deepseek-v4-flash` 不得作为 Forge 生产默认模型。
+
+下一候选使用同一 Coding Plan 的 `ark-code-latest`（Pi Stage 已验证 readiness=ready）；无副作用 Tool Calling/Structured Output smoke 已通过（1.80s），同阈值 40 题 Run `mvr_aae21f3ebb32464693fd5465ed1d7600` 已启动并处于 running，结果通过前不激活。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
