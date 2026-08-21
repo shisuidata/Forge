@@ -716,6 +716,8 @@ M4.1 问候语错误生成 SQL 修复决定：
 - 修复必须放在 Forge `prepare_query` 的模型前置门禁，而不是仅修改测试模型：标准化后的纯问候语返回 `needs_clarification`，不得调用模型、不得生成 SQL 或 QueryRun review。
 - 保持范围最小，只识别明确的纯问候语，不用“长度过短”等启发式误伤“用户数”“GMV”等合法短查询。
 - 增加单元测试和 NAS 真实 ChannelEvent 回归：`hello` presentation 必须为 `needs_input` 且无 SQL 审批 action；标准数据问题仍为 `query_review`。
+- 已完成：Forge commit `3323f7f` / main merge `2453bc9` 部署到 NAS；完整 Python suite 393 passed / 25 skipped；真实 ChannelEvent `hello` 返回 `needs_input`、0 actions、无 SQL。部署时同时修正 Pi 到内网 Forge 地址，避免 Forge 改为内网 IP 后仍请求 loopback。
+- 当前模型边界：NAS Forge 使用确定性 M4.1 测试模型；Pi 的 Coding Plan catalog 仍是 `volcengine-coding-plan / ark-code-latest`，但 NAS 仅有不可调用占位 Key。尚未完成真实 Coding Plan 模型验收，也未确认 `ark-code-latest` 当前是否映射到用户所说的 DeepSeek V4 Flash。
 
 剩余：
 
