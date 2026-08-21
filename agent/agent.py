@@ -43,8 +43,7 @@ from datetime import date
 import yaml
 
 from config import cfg
-from forge.compiler import compile_query
-from forge.lint import lint_conventions
+from forge.assurance import QueryAssuranceError, assure_query
 from forge.cache import cache
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
@@ -102,6 +101,7 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
         "retry_count": 0,
         "text": "",
         "error": "",
+        "assurance_report": None,
     }
     try:
         resolved_dialect = _compile_dialect(dialect)
@@ -158,33 +158,26 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
             return payload
 
         forge_json = result["input"]
-        warnings = lint_conventions(forge_json, question)
-        if warnings:
-            if attempt < MAX_RETRIES:
-                warning_text = "\n".join(f"- {w}" for w in warnings)
-                retry_messages.append(
-                    {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
-                )
-                retry_messages.append(
-                    {"role": "user", "content": f"约定检查发现以下问题：\n{warning_text}\n请修正。"}
-                )
-                continue
-            payload["error"] = f"查询生成失败（约定检查已重试 {MAX_RETRIES} 次仍未通过）：{warnings[0]}"
-            payload["retry_count"] = attempt
-            return payload
-
         try:
-            sql = compile_query(forge_json, dialect=resolved_dialect)
-        except Exception as exc:
+            assurance = assure_query(
+                forge_json,
+                question,
+                dialect=resolved_dialect,
+                allowed_tables=_allowed_tables,
+                model_revision=result.get("model_revision", "unknown"),
+            )
+            sql = assurance.sql
+        except QueryAssuranceError as exc:
             if attempt < MAX_RETRIES:
                 retry_messages.append(
                     {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
                 )
                 retry_messages.append(
-                    {"role": "user", "content": f"编译错误（第 {attempt + 1} 次）：{exc}\n请修正。"}
+                    {"role": "user", "content": f"查询保障校验失败（第 {attempt + 1} 次）：{exc}\n请修正。"}
                 )
                 continue
-            payload["error"] = f"查询生成失败（已重试 {MAX_RETRIES} 次）：{exc}"
+            payload["error"] = f"查询生成失败（保障校验已重试 {MAX_RETRIES} 次）：{exc}"
+            payload["assurance_report"] = exc.report.to_dict()
             payload["retry_count"] = attempt
             return payload
 
@@ -196,6 +189,7 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
                 "retry_count": attempt,
                 "text": "",
                 "error": "",
+                "assurance_report": assurance.to_dict(),
             }
         )
         return payload
@@ -306,36 +300,27 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         # ── 查询模式：生成 Forge JSON 并编译 ─────────────────────────────────
         if result["tool"] == "generate_forge_query":
             forge_json = result["input"]
-            warnings = lint_conventions(forge_json, effective_text)
-            if warnings:
+            try:
+                assurance = assure_query(
+                    forge_json,
+                    effective_text,
+                    dialect=_compile_dialect(),
+                    allowed_tables=_allowed_tables,
+                    model_revision=result.get("model_revision", "unknown"),
+                )
+                sql = assurance.sql
+            except QueryAssuranceError as exc:
                 if attempt < MAX_RETRIES:
-                    warning_text = "\n".join(f"- {w}" for w in warnings)
                     retry_messages.append(
                         {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
                     )
                     retry_messages.append(
-                        {"role": "user", "content": f"约定检查发现以下问题：\n{warning_text}\n请修正。"}
+                        {"role": "user", "content": f"查询保障校验失败（第 {attempt + 1} 次）：{exc}\n请修正。"}
                     )
                     continue
-                err = f"⚠ 查询生成失败（约定检查已重试 {MAX_RETRIES} 次仍未通过）：{warnings[0]}"
+                err = f"⚠ 查询生成失败（保障校验已重试 {MAX_RETRIES} 次）：{exc}"
                 memory.record(user_id, "assistant", err, action="error")
                 return AgentResponse(text=err, action="error")
-            try:
-                sql = compile_query(forge_json, dialect=_compile_dialect())
-            except Exception as exc:
-                if attempt < MAX_RETRIES:
-                    # 重试消息不写 EMS，只在本次调用内传递
-                    retry_messages.append(
-                        {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
-                    )
-                    retry_messages.append(
-                        {"role": "user", "content": f"编译错误（第 {attempt + 1} 次）：{exc}\n请修正。"}
-                    )
-                    continue
-                else:
-                    err = f"⚠ 查询生成失败（已重试 {MAX_RETRIES} 次）：{exc}"
-                    memory.record(user_id, "assistant", err, action="error")
-                    return AgentResponse(text=err, action="error")
 
             # 编译成功
             memory.record(user_id, "assistant", "",
@@ -347,6 +332,7 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             # 存入 pending 状态
             memory.set_state(user_id, "pending_sql", sql)
             memory.set_state(user_id, "pending_forge", forge_json)
+            memory.set_state(user_id, "pending_assurance", assurance.to_dict())
             if cfg.FEEDBACK_ENABLED:
                 _maybe_write_staging(user_id, user_text, forge_json)
             return AgentResponse(sql=sql, forge_json=forge_json, action="sql_review",
