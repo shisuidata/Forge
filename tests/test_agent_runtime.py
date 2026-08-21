@@ -327,6 +327,13 @@ def test_prepare_query_keeps_short_data_question_valid(isolated_agent, monkeypat
 def test_prepare_query_does_not_create_pending_execution_state(isolated_agent, monkeypatch):
     agent_mod, fake_memory = isolated_agent
     monkeypatch.setattr(
+        fake_memory,
+        "build",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("prepare_query must not read legacy conversation memory")
+        ),
+    )
+    monkeypatch.setattr(
         agent_mod.llm,
         "call",
         lambda *args, **kwargs: {
