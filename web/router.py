@@ -758,7 +758,11 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
             from agent.memory import memory as _mem
             from agent.pipeline import runner as _runner, QueryResult, Artifact
             run_data = _mem.get_state(req.user_id, "pipeline_run")
-            if not result["exec_error"] and run_data and run_data.get("status") == "pending_approval":
+            if result["exec_error"] and run_data and run_data.get("status") == "pending_approval":
+                run_data["status"] = "failed"
+                run_data["error"] = "SQL 执行失败，Pipeline 已终止。"
+                _mem.set_state(req.user_id, "pipeline_run", run_data)
+            elif run_data and run_data.get("status") == "pending_approval":
                 # 找到 generate stage artifact，注入 rows / columns
                 stages = run_data.get("stages", [])
                 for s in stages:

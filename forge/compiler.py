@@ -123,9 +123,9 @@ def _validate_reference_integrity(query: dict) -> None:
             raise ValueError(
                 f"JOIN 表 '{table}' 已在当前查询作用域中；Forge DSL 不支持无别名自连接。"
             )
+        _validate_join_condition(join, set(visible_tables))
         if join.get("type") not in {"semi", "anti"}:
             visible_tables.add(table)
-        _validate_join_condition(join, visible_tables | {table})
 
     local_payload = {
         key: value for key, value in query.items()
@@ -141,13 +141,15 @@ def _validate_reference_integrity(query: dict) -> None:
         )
 
 
-def _validate_join_condition(join: dict, allowed_tables: set[str]) -> None:
-    """Validate JOIN ON references and reject tautological same-column joins."""
+def _validate_join_condition(join: dict, prior_tables: set[str]) -> None:
+    """Require JOIN ON to connect the new table to the existing query scope."""
     on = join.get("on")
     if not on:
         return
     conditions = on if isinstance(on, list) else [on]
     joined_table = join["table"]
+    all_refs: set[str] = set()
+    allowed_tables = prior_tables | {joined_table}
     for condition in conditions:
         if not isinstance(condition, dict):
             continue
@@ -156,13 +158,16 @@ def _validate_join_condition(join: dict, allowed_tables: set[str]) -> None:
         if isinstance(left, str) and isinstance(right, str) and left == right:
             raise ValueError("JOIN 条件不能把同一字段与自身比较。")
         refs = _collect_qualified_tables(condition)
+        all_refs.update(refs)
         unknown = refs - allowed_tables
         if unknown:
             raise ValueError(
                 "JOIN 条件引用了未声明的表：" + ", ".join(sorted(unknown)) + "。"
             )
-        if refs and joined_table not in refs:
-            raise ValueError(f"JOIN 条件必须引用待连接表 '{joined_table}'。")
+    if joined_table not in all_refs:
+        raise ValueError(f"JOIN 条件必须引用待连接表 '{joined_table}'。")
+    if not (all_refs & prior_tables):
+        raise ValueError("JOIN 条件必须连接待连接表与当前查询中的已有表。")
 
 
 def _validate_condition_subqueries(value: Any) -> None:
