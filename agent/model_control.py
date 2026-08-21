@@ -9,6 +9,7 @@ from pathlib import Path
 import sqlite3
 import threading
 from typing import Any
+import uuid
 
 MODEL_SCOPE_QUERY_PLANNING = "forge.query_planning"
 _ALLOWED_PROVIDERS = {"openai", "anthropic"}
@@ -89,6 +90,25 @@ def _connect(path: Path) -> sqlite3.Connection:
                         binding_version INTEGER NOT NULL,
                         actor TEXT NOT NULL,
                         created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS model_quality_validation_runs (
+                        run_id TEXT PRIMARY KEY,
+                        revision_id TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        thresholds_json TEXT NOT NULL,
+                        metrics_json TEXT NOT NULL DEFAULT '{}',
+                        error_code TEXT,
+                        created_at TEXT NOT NULL,
+                        started_at TEXT,
+                        completed_at TEXT,
+                        FOREIGN KEY(revision_id) REFERENCES model_profile_revisions(revision_id)
+                    );
+                    CREATE TABLE IF NOT EXISTS model_quality_validation_cases (
+                        run_id TEXT NOT NULL,
+                        case_id TEXT NOT NULL,
+                        result_json TEXT NOT NULL,
+                        PRIMARY KEY(run_id, case_id),
+                        FOREIGN KEY(run_id) REFERENCES model_quality_validation_runs(run_id)
                     );
                 """)
                 db.commit()
@@ -251,6 +271,7 @@ class ModelControlStore:
         *,
         expected_version: int,
         actor: str,
+        current_lineage: dict[str, str],
         scope: str = MODEL_SCOPE_QUERY_PLANNING,
         action: str = "activate",
     ) -> int:
@@ -268,8 +289,18 @@ class ModelControlStore:
                 "SELECT validation_report_json FROM model_profile_revisions WHERE revision_id=?",
                 (revision_id,),
             ).fetchone()["validation_report_json"])
-            if validation_report.get("quality_gate", {}).get("passed") is not True:
+            quality_gate = validation_report.get("quality_gate", {})
+            if quality_gate.get("passed") is not True:
                 raise ModelControlError("Model Profile Revision 尚未通过质量与性能门禁。")
+            if quality_gate.get("lineage") != current_lineage:
+                raise ModelControlError("Model Profile Revision 的 Registry 或 Assurance lineage 已过期。")
+            validation_running = db.execute(
+                "SELECT 1 FROM model_quality_validation_runs "
+                "WHERE revision_id=? AND status IN ('queued','running')",
+                (revision_id,),
+            ).fetchone()
+            if validation_running:
+                raise ModelControlError("Model Profile Revision 的质量验证尚未结束。")
             current = db.execute(
                 "SELECT revision_id,binding_version FROM active_model_bindings WHERE scope=?",
                 (scope,),
@@ -300,6 +331,7 @@ class ModelControlStore:
         *,
         expected_version: int,
         actor: str,
+        current_lineage: dict[str, str],
         scope: str = MODEL_SCOPE_QUERY_PLANNING,
     ) -> int:
         with _connect(self.path) as db:
@@ -315,9 +347,126 @@ class ModelControlStore:
             current["previous_revision_id"],
             expected_version=expected_version,
             actor=actor,
+            current_lineage=current_lineage,
             scope=scope,
             action="rollback",
         )
+
+    def create_quality_validation_run(
+        self,
+        revision_id: str,
+        *,
+        thresholds: dict[str, Any],
+    ) -> str:
+        if self.get_revision(revision_id) is None:
+            raise ModelControlError("Model Profile Revision 不存在。")
+        run_id = "mvr_" + uuid.uuid4().hex
+        with _connect(self.path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            bound = db.execute(
+                "SELECT 1 FROM active_model_bindings WHERE revision_id=?",
+                (revision_id,),
+            ).fetchone()
+            if bound:
+                raise ModelControlError("Active Model Profile Revision 不允许重新验证。")
+            active = db.execute(
+                "SELECT 1 FROM model_quality_validation_runs "
+                "WHERE revision_id=? AND status IN ('queued','running')",
+                (revision_id,),
+            ).fetchone()
+            if active:
+                raise ModelControlError("该 Revision 已有进行中的 Quality Validation Run。")
+            db.execute(
+                "INSERT INTO model_quality_validation_runs"
+                "(run_id,revision_id,status,thresholds_json,created_at) VALUES(?,?,?,?,?)",
+                (run_id, revision_id, "queued", _canonical_json(thresholds), _now()),
+            )
+        return run_id
+
+    def mark_quality_validation_running(self, run_id: str) -> None:
+        with _connect(self.path) as db:
+            updated = db.execute(
+                "UPDATE model_quality_validation_runs SET status='running',started_at=? "
+                "WHERE run_id=? AND status='queued'",
+                (_now(), run_id),
+            ).rowcount
+        if updated != 1:
+            raise ModelControlError("Quality Validation Run 不可启动。")
+
+    def record_quality_validation_case(
+        self,
+        run_id: str,
+        case_id: str,
+        result: dict[str, Any],
+    ) -> None:
+        with _connect(self.path) as db:
+            db.execute(
+                "INSERT OR REPLACE INTO model_quality_validation_cases(run_id,case_id,result_json) "
+                "VALUES(?,?,?)",
+                (run_id, str(case_id), _canonical_json(result)),
+            )
+
+    def complete_quality_validation_run(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        metrics: dict[str, Any],
+        error_code: str | None = None,
+    ) -> None:
+        if status not in {"passed", "failed", "interrupted"}:
+            raise ModelControlError("Quality Validation Run 终态不受支持。")
+        with _connect(self.path) as db:
+            updated = db.execute(
+                "UPDATE model_quality_validation_runs SET status=?,metrics_json=?,error_code=?,"
+                "completed_at=? WHERE run_id=? AND status='running'",
+                (status, _canonical_json(metrics), error_code, _now(), run_id),
+            ).rowcount
+        if updated != 1:
+            raise ModelControlError("Quality Validation Run 状态已变化。")
+
+    def get_quality_validation_run(self, run_id: str) -> dict[str, Any] | None:
+        with _connect(self.path) as db:
+            row = db.execute(
+                "SELECT * FROM model_quality_validation_runs WHERE run_id=?",
+                (run_id,),
+            ).fetchone()
+            cases = db.execute(
+                "SELECT case_id,result_json FROM model_quality_validation_cases "
+                "WHERE run_id=? ORDER BY case_id",
+                (run_id,),
+            ).fetchall()
+        if row is None:
+            return None
+        return {
+            "run_id": row["run_id"],
+            "revision_id": row["revision_id"],
+            "status": row["status"],
+            "thresholds": json.loads(row["thresholds_json"]),
+            "metrics": json.loads(row["metrics_json"]),
+            "error_code": row["error_code"],
+            "created_at": row["created_at"],
+            "started_at": row["started_at"],
+            "completed_at": row["completed_at"],
+            "cases": [
+                {"case_id": item["case_id"], **json.loads(item["result_json"])}
+                for item in cases
+            ],
+        }
+
+    def reconcile_quality_validation_runs(self) -> int:
+        """Mark abandoned work interrupted; never replay provider or SQL calls."""
+        with _connect(self.path) as db:
+            rows = db.execute(
+                "SELECT run_id FROM model_quality_validation_runs WHERE status='running'"
+            ).fetchall()
+            for row in rows:
+                db.execute(
+                    "UPDATE model_quality_validation_runs SET status='interrupted',"
+                    "error_code='process_restarted',completed_at=? WHERE run_id=?",
+                    (_now(), row["run_id"]),
+                )
+        return len(rows)
 
     def list_audit(self, scope: str = MODEL_SCOPE_QUERY_PLANNING) -> list[dict[str, Any]]:
         with _connect(self.path) as db:

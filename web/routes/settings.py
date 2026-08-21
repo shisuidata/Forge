@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import re
 import time
@@ -24,8 +25,12 @@ from agent.model_config import (
     model_control_db_path,
     reset_model_config_cache,
 )
-from agent.model_control import (
-    MODEL_SCOPE_QUERY_PLANNING,
+from agent.model_quality import (
+    DEFAULT_THRESHOLDS,
+    current_quality_lineage,
+    run_quality_validation,
+)
+from agent.model_control import (    MODEL_SCOPE_QUERY_PLANNING,
     ModelBindingConflictError,
     ModelControlError,
     ModelControlStore,
@@ -61,6 +66,13 @@ class ModelActivationRequest(BaseModel):
 
 class ModelRollbackRequest(BaseModel):
     expected_version: int
+
+
+class ModelQualityValidationRequest(BaseModel):
+    thresholds: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_THRESHOLDS))
+
+
+_quality_validation_tasks: set[asyncio.Task] = set()
 
 
 def _load_forge_yaml() -> dict:
@@ -221,6 +233,55 @@ async def validate_model_profile_revision(revision_id: str):
         raise HTTPException(status_code=422, detail=report["error"]) from exc
 
 
+async def _execute_quality_validation(store: ModelControlStore, run_id: str) -> None:
+    try:
+        await asyncio.to_thread(run_quality_validation, store, run_id)
+    except Exception as exc:
+        logger.warning(
+            "Model quality validation failed: run=%s error=%s",
+            run_id,
+            type(exc).__name__,
+        )
+
+
+@router.post("/settings/model-profiles/{revision_id}/quality-validations", status_code=202)
+async def start_model_quality_validation(
+    revision_id: str,
+    payload: ModelQualityValidationRequest,
+):
+    unknown = set(payload.thresholds) - set(DEFAULT_THRESHOLDS)
+    thresholds = {**DEFAULT_THRESHOLDS, **payload.thresholds}
+    if unknown or any(not math.isfinite(value) or value < 0 for value in thresholds.values()):
+        raise HTTPException(status_code=400, detail="Quality Validation thresholds 不合法。")
+    store = ModelControlStore(model_control_db_path())
+    revision = store.get_revision(revision_id)
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Model Profile Revision 不存在。")
+    report = revision["validation_report"]
+    if not (
+        revision["validation_status"] == "passed"
+        and report.get("tool_calling") is True
+        and report.get("structured_output") is True
+    ):
+        raise HTTPException(status_code=409, detail="候选 Revision 尚未通过 Provider smoke。")
+    try:
+        run_id = store.create_quality_validation_run(revision_id, thresholds=thresholds)
+    except ModelControlError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    task = asyncio.create_task(_execute_quality_validation(store, run_id))
+    _quality_validation_tasks.add(task)
+    task.add_done_callback(_quality_validation_tasks.discard)
+    return {"run_id": run_id, "revision_id": revision_id, "status": "queued"}
+
+
+@router.get("/settings/model-quality-validations/{run_id}")
+async def get_model_quality_validation(run_id: str):
+    run = ModelControlStore(model_control_db_path()).get_quality_validation_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Quality Validation Run 不存在。")
+    return run
+
+
 @router.post("/settings/model-bindings/activate")
 async def activate_model_profile(payload: ModelActivationRequest):
     store = ModelControlStore(model_control_db_path())
@@ -229,6 +290,7 @@ async def activate_model_profile(payload: ModelActivationRequest):
             payload.revision_id,
             expected_version=payload.expected_version,
             actor="admin:web",
+            current_lineage=current_quality_lineage(),
         )
     except ModelBindingConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -242,7 +304,11 @@ async def activate_model_profile(payload: ModelActivationRequest):
 async def rollback_model_profile(payload: ModelRollbackRequest):
     store = ModelControlStore(model_control_db_path())
     try:
-        version = store.rollback(expected_version=payload.expected_version, actor="admin:web")
+        version = store.rollback(
+            expected_version=payload.expected_version,
+            actor="admin:web",
+            current_lineage=current_quality_lineage(),
+        )
         active = store.get_active(MODEL_SCOPE_QUERY_PLANNING)
     except ModelBindingConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

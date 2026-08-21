@@ -56,8 +56,10 @@
 | Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 进行中：飞书 gated path | ChannelEvent、独立服务鉴权、只读身份映射、SQLite 幂等入站、ChannelPresentation Renderer 已完成；`FEISHU_PI_ENABLED` 新路径已覆盖消息 → SQL 审核 → hash 绑定批准 → 结果，默认关闭；待真实飞书凭证 smoke、补充信息/取消/补查和钉钉复用 |
+| Phase 4.2 多轮需求澄清交互闭环 | 已纳入计划，待实施 | Structured Skill、Artifact 和 `needs_input` 状态已具备，但 Web/渠道交互、历史上下文注入、指标反问渲染与确认门禁尚未形成完整闭环 |
 | Phase 4.4 Model Control Plane | 基础热加载已实现，版本控制待建设 | Forge 查询模型使用不可变 `ModelConfigSnapshot` + mtime/revision cache；Web 保存后新任务无需重启；缺失/错误配置失败关闭。待建设 Profile Store、真实验证、CAS 激活、回滚及 Pi Stage 绑定 |
 | Phase 4.5 Registry Studio | 需求已确认，待设计实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
+| Phase 4.6 Plan 与多子任务编排 | 已纳入计划，待实施 | 当前 TaskRun 能推进固定 Stage 和一次补查，但没有把用户最终交付物建模成可见计划；“生成包含可视化图表的报告”可能在 QueryResult 后停住。将新增版本化 ExecutionPlan、依赖调度、交付物完成门禁和跨渠道计划进度 |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
 | Phase 2 QueryRun 审批执行闭环 | 已完成，待提交 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
 | Forge 内部 QueryRun 审批 API | 已完成，待提交 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
@@ -86,6 +88,8 @@
 | Pi 正式状态使用单一 SQLite 真相源 | Task、Event、Artifact 共用一个数据库文件；WAL + busy timeout；Task transition 使用 status CAS，Event sequence 在事务内生成；内存 Store 仅用于测试和显式注入 |
 | Pi Orchestrator 运行时最低 Node 22.19 | 状态层复用 `node:sqlite`，避免新增 native 第三方依赖；锁定 Node 版本并在升级前运行持久化与重启测试 |
 | 长耗时 Stage 使用持久化 Attempt/Lease | 每次模型或 Forge 调用先创建唯一 Attempt，记录 retry status 与 lease；成功/失败终止 Attempt，进程崩溃后仅回收过期 lease，不盲目重放副作用 |
+| 需求澄清必须形成真正的多轮闭环 | 用户补充输入必须与原始需求、上一轮 Clarification/Metric Artifact 和最新待答问题共同进入隔离 Skill；Forge 的 `needs_clarification` 回流 Pi 状态机，不得只显示为错误或绕过确认 |
+| 复杂任务必须先形成可执行 Plan，并以交付物而非最后一次工具调用判断完成 | Pi 把用户目标拆成有依赖的 PlanStep；Forge 仍只负责可信查询执行。查询成功只能完成 query step，不能让“可视化报告”等复合任务停在结果表；只有所有 required deliverables 通过 Artifact 契约后 TaskRun 才能 completed |
 
 ## 1. 集成目标
 
@@ -732,7 +736,8 @@ M4.1 用户配置接管与服务重启规则：
 剩余：
 
 - 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。
-- 完成 `provide_input`、`cancel_task`、`request_supplement` 的 child Task lineage 与卡片交互后再开放这些按钮。
+- 按 Phase 4.2 完成 `provide_input` 多轮澄清，再开放真实渠道入口。
+- 完成 `cancel_task`、`request_supplement` 的 child Task lineage 与卡片交互后再开放这些按钮。
 - 飞书稳定后新增钉钉 SDK Adapter；只允许复用 ChannelEvent/Presentation，不复制业务状态机。
 
 第一批实施契约：
@@ -758,6 +763,22 @@ M4.1 用户配置接管与服务重启规则：
 - 三个渠道使用同一 TaskRun 状态机。
 - 不在 Bot 内复制 Skill 路由和 Forge 查询逻辑。
 - 同一用户的权限在各渠道保持一致。
+
+### Phase 4.2：多轮需求澄清交互闭环
+
+> 状态：已确认纳入未来计划，待实施。该阶段不改变 Pi/Forge 职责边界。
+
+目标是完成“反问 → 用户回答 → 合并上下文 → 再判断 → 确认后继续”的真正闭环：
+
+1. 定义版本化 `ClarificationTurnInput`，包含 `original_message/current_user_input/latest_open_questions/prior_clarification_artifacts/prior_metric_definition_artifacts/forge_clarification_prompt`；只传当前回答视为契约错误。
+2. Web、飞书、钉钉统一使用 `provide_input` Task 语义；渠道只提交 `task_run_id + answer + idempotency_key`，不拼 prompt、不推进状态。
+3. Renderer 同时展示 Clarification 与 MetricDefinition 的问题、确认摘要和回答入口；Web 的 `needs_input` 不再按普通错误展示。
+4. Forge 的 `needs_clarification` 作为最后兜底回流同一 Pi 澄清状态机，不生成 SQL、不创建平行 Session。
+5. `prepareQuery()` 增加确认门禁：最新 Clarification/Metric Artifact 未确认时不得创建 QueryRun；简单明确查询走可审计的 `confirmed` 快速路径。
+6. 每轮生成不可变 Artifact 并保存 lineage；设置最大轮数、取消和重述入口，禁止无限反问。
+7. 自由文本回复只能依据 `channel + conversation_id + owner identity + waiting TaskRun` 恢复；多个候选任务时要求用户选择，不得猜测绑定。
+
+门禁：覆盖单轮、多轮、一次回答多题、指标确认、Forge 兜底反问、重复投递、跨进程恢复、多个等待任务、取消和最大轮数；第二轮 Skill 输入必须断言包含原始问题、历史 Artifact 和上一轮问答；Web、飞书、钉钉产生等价状态与 Artifact。
 
 ### Phase 4.3.1：SQL 引用完整性与失败状态修复（2026-08-21 现场反馈）
 
@@ -904,7 +925,9 @@ Scope 至少支持：
 
 当前实施切片（已完成基础控制面）：Forge `forge.query_planning` scope 已具备持久化 Revision/Binding/Audit。Revision 只保存非密配置和 `secret_ref`，支持 `env:` 与严格 mode 600 `file:` Secret；真实 Tool Calling smoke 和质量/性能门禁均通过后才可 CAS activate，rollback 也使用 expected binding version。`get_model_config()` 优先读取 active binding，无 active 时兼容回退现有环境/YAML；同一查询准备的全部受控重试固定一次 Model snapshot，避免切换中途改变 QueryRun。
 
-当前验证：Python 442 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS main `24d9bab` 已部署，Model Control SQLite 为 mode 600；现有 YAML Key 没有对应 `env:`/专用 mode 600 Secret 文件，迁移脚本因此失败关闭并阻止激活，未读取、复制或回显旧 Key，legacy fallback 仍可在 43.7s 内生成审核 SQL。下一步先建设 EA/Assurance/延迟质量验证执行器；当前 `deepseek-v4-flash` 即使 Tool Calling smoke 成功也不能绕过质量门禁。
+当前验证：Python 442 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS main `24d9bab` 已部署，Model Control SQLite 为 mode 600；现有 YAML Key 没有对应 `env:`/专用 mode 600 Secret 文件，迁移脚本因此失败关闭并阻止激活，未读取、复制或回显旧 Key，legacy fallback 仍可在 43.7s 内生成审核 SQL。
+
+当前实施切片（已确认开始）：建设持久化 QualityValidationRun。后台执行 40 题候选模型准备流程，逐题固定候选 revision，记录 Assurance pass、retry、latency、timeout，并在显式只读 benchmark database 上用 reference SQL 做结果集等价评分；API 使用 `202 + run_id + polling`，重启只把遗留 running 标记 interrupted，不自动重放模型或 SQL。只有准确率、Assurance 通过率、平均重试、P95 延迟、超时率和 Tool Calling/Structured Output 全部达标，才把 revision 标记为 activation eligible。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
@@ -966,6 +989,82 @@ Scope 至少支持：
 5. 实现大图可缩放、可聚焦的 ER 视图及确认关系交互。
 6. 最后开放受控编辑，不把结构编辑与生产数据库 migration 混在同一阶段。
 
+### Phase 4.6：Plan 与多子任务编排
+
+> 状态：已确认纳入未来计划，待实施。现场案例是用户要求“为这份数据做包含可视化图表的报告”，系统只完成 SQL 审批和查询结果，未继续分析、可视化和报告。根因是 TaskRun 尚未持久化“最终交付物 + 子任务依赖”的执行计划，也没有在 QueryResult 后自动调度下一就绪步骤。
+
+目标流程：
+
+```text
+用户目标与已确认口径
+→ Pi 生成 ExecutionPlanArtifact v1
+→ 用户查看/必要时确认计划
+→ 调度 ready PlanStep
+   query → SQL 审批 → QueryResult
+   analysis → AnalysisArtifact
+   visualization → ChartArtifact
+   report → RenderedOutputArtifact
+→ 每步完成后解锁依赖步骤
+→ required deliverables 全部满足
+→ TaskRun completed
+```
+
+上述案例的最小计划：
+
+```json
+{
+  "goal": "基于指定数据生成包含可视化图表的分析报告",
+  "required_deliverables": ["analysis", "charts", "report"],
+  "steps": [
+    {"step_id": "query_data", "type": "query", "depends_on": []},
+    {"step_id": "analyze_data", "type": "analysis", "depends_on": ["query_data"]},
+    {"step_id": "build_charts", "type": "visualization", "depends_on": ["analyze_data"]},
+    {"step_id": "write_report", "type": "report", "depends_on": ["analyze_data", "build_charts"]}
+  ]
+}
+```
+
+计划与状态契约：
+
+1. 新增版本化 `ExecutionPlanArtifact`，至少包含 `plan_id/revision/goal/required_deliverables/steps/assumptions/approval_policy/completion_policy`。
+2. `PlanStep` 包含 `step_id/type/title/depends_on/required/skill_or_tool/input_artifact_refs/expected_artifact_types/status/approval_requirement/retry_policy`；状态统一为 `blocked/ready/running/waiting_for_input/waiting_for_approval/succeeded/failed/skipped/cancelled`。
+3. 一个用户目标仍由一个顶级 TaskRun 管理。普通串行 Stage 使用 PlanStep + StageAttempt；只有独立补查、可单独审批/取消或需要 lineage 的业务分支才创建 child TaskRun，避免为每一步复制 Task 状态。
+4. Plan 不原地修改。目标变化、分析补查或失败重规划时创建新 revision，记录替代关系、原因和操作者；输入未变化的成功 Artifact 可复用，受影响步骤重新计算状态。
+5. Pi Plan Runtime 是唯一计划调度者；Forge 不读取计划自行推进业务步骤。模型可以提出计划草案，服务端负责 Schema、DAG、白名单、状态转换、幂等和完成判定。
+6. 查询步骤仍完整经过 Forge QueryRun、Assurance Report、SQL hash 审批和只读执行；Plan 不能预先批准未来 SQL 或绕过审批。
+7. Completion Gate 根据 `required_deliverables` 和 `expected_artifact_types` 确定性检查。缺少 Chart/Report Artifact、存在失败 required step 或待审批动作时，TaskRun 不得标记 `completed`。
+8. 第一版只支持有向无环图和确定性串行调度；后续才允许无依赖安全步骤受控并行。设置最大步骤数、重规划次数、补查次数和总 Deadline Budget，禁止无限 Agent loop。首版继续遵守 Phase 3“补查最多一次且必须由用户选择模型已有建议”的门禁；如需放宽必须另行确认并更新计划。
+9. 每个步骤绑定 StageAttempt、输入/输出 Artifact、模型 revision、耗时和错误；崩溃恢复只做持久化状态对账，不盲目重放 SQL、模型调用或副作用。
+
+交互要求：
+
+- Web、飞书、钉钉展示同一份 Plan Presentation：总体目标、步骤状态、当前步骤、阻断原因、所需用户动作和最终交付物。
+- 清晰且低风险的标准模板可自动接受；涉及重大口径假设、昂贵查询、多个数据源或用户明确要求“先给计划”时进入 `waiting_for_plan_approval`。
+- SQL 审批成功后，只要 analysis/visualization/report 已解锁，Pi 自动继续，不要求用户再说“接着做报告”；只有计划声明的人工确认点才暂停。
+- 用户可以取消整个计划、重试失败步骤、跳过 optional step 或修改目标触发 replan。
+- 最终报告必须引用 AnalysisArtifact 和 ChartArtifact；图表必须引用实际 QueryResult/Analysis evidence，不允许虚构数据绘图。
+
+首批实施顺序：
+
+1. 定义 `execution-plan.schema.json`、PlanStep 状态机、DAG 与 Completion Gate。
+2. 复用首批四个 MVP Skills，并新增受控可视化能力，建立 `query → analysis → report` 和 `query → analysis → visualization → report` 两个确定性模板。
+3. 新增 Pi Plan Store/Scheduler，把现有固定 Stage 接到 PlanStep，复用既有 StageAttempt/Lease/timeout，不新增第二套重试状态。
+4. 增加 `ChartArtifact` 契约及受控图表生成/渲染 Stage，让报告 Writer 显式消费 ChartArtifact。
+5. 改造 Web 主链：查询成功后自动推进计划并持续显示进度与最终交付物；随后复用 ChannelPresentation 接入飞书、钉钉。
+6. 最后支持 replan、optional step 和安全并行。
+
+门禁：
+
+- 截图场景 E2E：用户要求含图表报告，SQL 审批后自动产出 AnalysisArtifact、至少一个 ChartArtifact 和 RenderedOutputArtifact；页面不能停在 QueryResult，也不能缺少交付物却显示完成。
+- 查询失败、SQL 被拒、空数据、结果截断、证据不足、图表失败和报告失败分别停在可解释且可恢复的 PlanStep。
+- DAG 校验拒绝循环、未知依赖、重复 step ID、无生产者的必需 Artifact 和超限计划。
+- 重复事件、HTTP 重试和进程重启不重复执行成功步骤；查询审批仍只执行一次。
+- replan 保留旧 revision 与 Artifact lineage，不把旧结果错误绑定到变化后的目标。
+- Web、飞书、钉钉计划语义一致；渠道不能绕过 Pi Scheduler 调用下游 Skill。
+- TaskRun、PlanStep、StageAttempt、QueryRun 和 Artifact 可通过同一 `task_run_id/correlation_id` 回放。
+
+退出条件：至少两个复合任务模板完成真实 Provider + Forge + Web E2E，其中必须包含“带可视化图表的分析报告”；任一暂停点恢复后可以从持久化计划继续；旧 Web 依赖用户手动点击 `analyze/render_report` 的路径退出主流程，仅保留显式人工控制模式。
+
 ### Phase 5：扩展 Skills 与组织能力
 
 按价值逐批接入：
@@ -1013,6 +1112,8 @@ Scope 至少支持：
 5. 查询超时和结果截断。
 6. 分析证据不足。
 7. 渠道重复投递。
+8. 复合任务在 QueryResult 后继续执行分析、图表和报告，直到 Plan required deliverables 全部完成。
+9. Plan 中途失败、进程重启和 replan 后从正确步骤恢复，不重复执行已完成查询。
 
 ### 8.5 质量评测
 
@@ -1055,6 +1156,7 @@ Scope 至少支持：
 | Forge 在 `executing` 状态进程崩溃 | 当前不会重复执行，但需要增加超时回收与人工恢复 runbook |
 | Coding Plan 分析/报告阶段延迟波动 | Stage Attempt、lease、timeout 和 202 + polling 已落地；同步接口仅作兼容，渠道主路径不得依赖长连接 |
 | `node:sqlite` 在当前 Node 版本仍输出 ExperimentalWarning | 服务最低 Node 22.19，部署锁定已验证 Node 版本；Node 升级必须先跑 SQLite 重启、并发 CAS 和全套回归 |
+| Plan 由模型自由扩张导致无限循环、成本失控或绕过审批 | 服务端校验 DAG、步骤/重规划/补查/Deadline 上限；只调度白名单 Skill/Tool；每个 QueryRun 仍独立审批；Completion Gate 只认已校验 Artifact |
 
 ## 11. 职责迁移门禁
 
