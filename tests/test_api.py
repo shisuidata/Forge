@@ -707,7 +707,11 @@ class TestSettingsRoutes:
                 "structured_output": True,
                 "provider": snapshot.provider,
                 "model": snapshot.model,
-                "quality_gate": {"passed": True, "status": "passed"},
+                "quality_gate": {
+                    "passed": True,
+                    "status": "passed",
+                    "lineage": settings_routes.current_quality_lineage(),
+                },
             },
         )
 
@@ -727,6 +731,28 @@ class TestSettingsRoutes:
         validated = await client.post(f"/admin/settings/model-profiles/{revision}/validate")
         assert validated.status_code == 200
         assert validated.json()["report"]["tool_calling"] is True
+
+        def fake_quality(store, run_id):
+            store.mark_quality_validation_running(run_id)
+            store.complete_quality_validation_run(
+                run_id,
+                status="passed",
+                metrics={"passed": True},
+            )
+
+        monkeypatch.setattr(settings_routes, "run_quality_validation", fake_quality)
+        queued = await client.post(
+            f"/admin/settings/model-profiles/{revision}/quality-validations",
+            json={"thresholds": settings_routes.DEFAULT_THRESHOLDS},
+        )
+        assert queued.status_code == 202
+        import asyncio
+        await asyncio.sleep(0.05)
+        polled = await client.get(
+            f"/admin/settings/model-quality-validations/{queued.json()['run_id']}"
+        )
+        assert polled.status_code == 200
+        assert polled.json()["status"] == "passed"
 
         activated = await client.post("/admin/settings/model-bindings/activate", json={
             "revision_id": revision,

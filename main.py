@@ -46,6 +46,18 @@ logger = logging.getLogger("forge.startup")
 @app.on_event("startup")
 async def _startup_checks():
     """启动时的健康检查和安全提示。"""
+    # Long model validations are never replayed after process restart.
+    try:
+        from agent.model_config import model_control_db_path
+        from agent.model_control import ModelControlStore
+        control_path = model_control_db_path()
+        if control_path.exists():
+            interrupted = ModelControlStore(control_path).reconcile_quality_validation_runs()
+            if interrupted:
+                logger.warning("Marked %s model validation run(s) interrupted", interrupted)
+    except Exception as exc:
+        logger.warning("Model validation reconciliation unavailable: %s", type(exc).__name__)
+
     # ── #9 默认密码安全警告 ──
     if cfg.AUTH_ENABLED and cfg.AUTH_ADMIN_PASSWORD in ("123456", ""):
         logger.warning(

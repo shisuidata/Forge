@@ -97,6 +97,17 @@ def _compile_dialect(dialect_override: str | None = None) -> str:
 
 
 def prepare_query(user_id: str, question: str, dialect: str | None = None) -> dict:
+    """Public prepare-only surface; model selection always comes from ActiveBinding."""
+    return _prepare_query(user_id, question, dialect=dialect, model_snapshot=None)
+
+
+def _prepare_query(
+    user_id: str,
+    question: str,
+    dialect: str | None = None,
+    *,
+    model_snapshot=None,
+) -> dict:
     """
     Prepare reviewed SQL for external agents without creating executable pending state.
 
@@ -133,14 +144,15 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
 
     retry_messages: list[dict] = []
     deadline = _prepare_deadline()
-    try:
-        model_snapshot = llm.get_model_config()
-    except LLMNotConfiguredError:
-        payload["error"] = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
-        return payload
-    except LLMConfigurationError:
-        payload["error"] = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
-        return payload
+    if model_snapshot is None:
+        try:
+            model_snapshot = llm.get_model_config()
+        except LLMNotConfiguredError:
+            payload["error"] = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
+            return payload
+        except LLMConfigurationError:
+            payload["error"] = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
+            return payload
     from agent.tenant import tenants as _tenants
     _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
 
