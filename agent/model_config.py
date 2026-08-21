@@ -10,10 +10,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sqlite3
+import stat
 import threading
 from typing import Any
 
 import yaml
+
+from agent.model_control import MODEL_SCOPE_QUERY_PLANNING, ModelControlStore
 
 
 class LLMNotConfiguredError(RuntimeError):
@@ -39,6 +43,10 @@ class ModelConfigSnapshot:
 _lock = threading.RLock()
 _cached_signature: tuple[Any, ...] | None = None
 _cached_snapshot: ModelConfigSnapshot | None = None
+
+
+def model_control_db_path() -> Path:
+    return Path(os.getenv("MODEL_CONTROL_DB_PATH", ".forge/model_control.db")).expanduser().resolve()
 
 
 def model_config_path() -> Path:
@@ -68,12 +76,67 @@ def _yaml_llm(path: Path) -> dict[str, Any]:
     return llm
 
 
+def _resolve_secret(secret_ref: str) -> str:
+    if secret_ref.startswith("env:"):
+        value = os.getenv(secret_ref[4:], "").strip()
+        if not value:
+            raise LLMNotConfiguredError("Active Model Profile 的 Secret 环境变量不可用")
+        return value
+    if secret_ref.startswith("file:"):
+        path = Path(secret_ref[5:]).expanduser().resolve()
+        try:
+            file_stat = path.stat()
+            if stat.S_IMODE(file_stat.st_mode) != 0o600:
+                raise LLMConfigurationError("Model Secret 文件权限必须为 600")
+            value = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError as exc:
+            raise LLMNotConfiguredError("Active Model Profile 的 Secret 文件不存在") from exc
+        except OSError as exc:
+            raise LLMConfigurationError("Active Model Profile 的 Secret 文件不可读取") from exc
+        if not value:
+            raise LLMNotConfiguredError("Active Model Profile 的 Secret 文件为空")
+        return value
+    raise LLMConfigurationError("Active Model Profile 的 secret_ref 不受支持")
+
+
+def _control_signature(path: Path) -> tuple[Any, ...]:
+    signatures: list[Any] = [str(path)]
+    for candidate in (path, Path(str(path) + "-wal")):
+        try:
+            stat = candidate.stat()
+            signatures.extend((stat.st_mtime_ns, stat.st_size))
+        except FileNotFoundError:
+            signatures.extend((None, None))
+    return tuple(signatures)
+
+
 def _value(env_name: str, yaml_body: dict[str, Any], yaml_name: str, default: str = "") -> str:
     env_value = os.getenv(env_name)
     if env_value not in (None, ""):
         return str(env_value)
     value = yaml_body.get(yaml_name, default)
     return "" if value is None else str(value)
+
+
+def get_revision_model_config(
+    revision_id: str,
+    *,
+    db_path: str | Path | None = None,
+) -> ModelConfigSnapshot:
+    revision = ModelControlStore(db_path or model_control_db_path()).get_revision(revision_id)
+    if revision is None:
+        raise LLMConfigurationError("Model Profile Revision 不存在")
+    config = revision["config"]
+    return ModelConfigSnapshot(
+        provider=str(config["provider"]),
+        model=str(config["model"]),
+        api_key=_resolve_secret(str(config["secret_ref"])),
+        base_url=str(config.get("base_url", "")),
+        tool_choice=str(config.get("tool_choice", "required")),
+        timeout_seconds=float(config.get("timeout_seconds", 120)),
+        revision=revision_id,
+        source="model-control-validation",
+    )
 
 
 def get_model_config() -> ModelConfigSnapshot:
@@ -95,10 +158,36 @@ def get_model_config() -> ModelConfigSnapshot:
             "LLM_TIMEOUT_SECONDS",
         )
     )
-    signature = (str(path), *stat_signature, *env_signature)
+    control_path = model_control_db_path()
+    control_signature = _control_signature(control_path)
+    signature = (str(path), *stat_signature, *env_signature, *control_signature)
     with _lock:
         if _cached_signature == signature and _cached_snapshot is not None:
             return _cached_snapshot
+
+        try:
+            active = (
+                ModelControlStore(control_path).get_active(MODEL_SCOPE_QUERY_PLANNING)
+                if control_path.exists() else None
+            )
+        except (OSError, sqlite3.DatabaseError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise LLMConfigurationError("Model Control Plane 状态不可用") from exc
+        if active is not None:
+            config = active.config
+            api_key = _resolve_secret(str(config["secret_ref"]))
+            snapshot = ModelConfigSnapshot(
+                provider=str(config["provider"]),
+                model=str(config["model"]),
+                api_key=api_key,
+                base_url=str(config.get("base_url", "")),
+                tool_choice=str(config.get("tool_choice", "required")),
+                timeout_seconds=float(config.get("timeout_seconds", 120)),
+                revision=active.revision_id,
+                source=f"model-control:{active.scope}:v{active.binding_version}",
+            )
+            _cached_signature = signature
+            _cached_snapshot = snapshot
+            return snapshot
 
         body = _yaml_llm(path)
         provider = _value("LLM_PROVIDER", body, "provider").strip().lower()

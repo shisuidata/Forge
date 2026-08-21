@@ -133,6 +133,14 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
 
     retry_messages: list[dict] = []
     deadline = _prepare_deadline()
+    try:
+        model_snapshot = llm.get_model_config()
+    except LLMNotConfiguredError:
+        payload["error"] = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
+        return payload
+    except LLMConfigurationError:
+        payload["error"] = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
+        return payload
     from agent.tenant import tenants as _tenants
     _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
 
@@ -151,6 +159,7 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
                 extra_tables=extra_tables,
                 allowed_tables=_allowed_tables,
                 timeout_seconds=_remaining_call_budget(deadline),
+                config_snapshot=model_snapshot,
             )
         except llm.LLMRequestTimeoutError:
             payload["status"] = "timed_out"
@@ -190,7 +199,7 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
                 question,
                 dialect=resolved_dialect,
                 allowed_tables=_allowed_tables,
-                model_revision=result.get("model_revision", "unknown"),
+                model_revision=result.get("model_revision", model_snapshot.revision),
             )
             sql = assurance.sql
         except QueryAssuranceError as exc:
@@ -288,6 +297,16 @@ def process(user_id: str, user_text: str) -> AgentResponse:
     # 重试期间的临时消息用 retry_messages 维护，不写入 EMS（避免污染）
     retry_messages: list[dict] = []
     deadline = _prepare_deadline()
+    try:
+        model_snapshot = llm.get_model_config()
+    except LLMNotConfiguredError:
+        err = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
+        memory.record(user_id, "assistant", err, action="error")
+        return AgentResponse(text=err, action="error")
+    except LLMConfigurationError:
+        err = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
+        memory.record(user_id, "assistant", err, action="error")
+        return AgentResponse(text=err, action="error")
 
     # 数据权限：查询该用户所属团队的可见表白名单
     from agent.tenant import tenants as _tenants
@@ -303,6 +322,7 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                 messages, knowledge_context=knowledge,
                 extra_tables=extra_tables, allowed_tables=_allowed_tables,
                 timeout_seconds=_remaining_call_budget(deadline),
+                config_snapshot=model_snapshot,
             )
         except llm.LLMRequestTimeoutError:
             err = _PREPARE_TIMEOUT_MESSAGE
@@ -338,7 +358,7 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                     effective_text,
                     dialect=_compile_dialect(),
                     allowed_tables=_allowed_tables,
-                    model_revision=result.get("model_revision", "unknown"),
+                    model_revision=result.get("model_revision", model_snapshot.revision),
                 )
                 sql = assurance.sql
             except QueryAssuranceError as exc:

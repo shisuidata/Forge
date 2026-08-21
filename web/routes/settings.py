@@ -1,25 +1,66 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import re
+import time
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 import yaml
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 
 from config import cfg
 from agent.model_config import (
     LLMConfigurationError,
     LLMNotConfiguredError,
     get_model_config,
+    get_revision_model_config,
+    model_control_db_path,
     reset_model_config_cache,
+)
+from agent.model_control import (
+    MODEL_SCOPE_QUERY_PLANNING,
+    ModelBindingConflictError,
+    ModelControlError,
+    ModelControlStore,
+)
+from agent.llm import (
+    LLMCompatibilityError,
+    LLMRequestTimeoutError,
+    validate_model_snapshot,
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+
+
+class ModelRevisionCreateRequest(BaseModel):
+    profile_id: str
+    name: str
+    provider: str
+    protocol: str
+    model: str
+    base_url: str = ""
+    tool_choice: str = "required"
+    timeout_seconds: float = 120
+    secret_ref: str
+    capabilities: dict[str, Any] = Field(default_factory=dict)
+
+
+class ModelActivationRequest(BaseModel):
+    revision_id: str
+    expected_version: int
+
+
+class ModelRollbackRequest(BaseModel):
+    expected_version: int
 
 
 def _load_forge_yaml() -> dict:
@@ -60,6 +101,15 @@ def _mask_db_url(url: str) -> str:
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, saved: str = "", error: str = ""):
     y = _load_forge_yaml()
+    control_path = model_control_db_path()
+    try:
+        control_active = (
+            ModelControlStore(control_path).get_active(MODEL_SCOPE_QUERY_PLANNING)
+            if control_path.exists() else None
+        )
+    except Exception as exc:
+        logger.warning("Model Control Plane status unavailable: %s", type(exc).__name__)
+        control_active = None
     try:
         active_model = get_model_config()
         model_status = {
@@ -81,6 +131,12 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
             "saved": saved,
             "error": error,
             "model_status": model_status,
+            "model_control_active": None if control_active is None else {
+                "revision_id": control_active.revision_id,
+                "profile_id": control_active.profile_id,
+                "binding_version": control_active.binding_version,
+                "validation_report": control_active.validation_report,
+            },
             "llm_env_override": any(
                 os.getenv(name)
                 for name in ("LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL")
@@ -95,6 +151,111 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
     )
 
 
+@router.get("/settings/model-control")
+async def model_control_status():
+    store = ModelControlStore(model_control_db_path())
+    try:
+        active = store.get_active(MODEL_SCOPE_QUERY_PLANNING)
+        audit = store.list_audit(MODEL_SCOPE_QUERY_PLANNING)
+    except Exception as exc:
+        logger.warning("Model Control Plane status unavailable: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Model Control Plane 状态不可用。") from exc
+    return {
+        "scope": MODEL_SCOPE_QUERY_PLANNING,
+        "active": None if active is None else {
+            "revision_id": active.revision_id,
+            "profile_id": active.profile_id,
+            "binding_version": active.binding_version,
+            "validation_report": active.validation_report,
+        },
+        "audit": audit,
+    }
+
+
+@router.post("/settings/model-profiles", status_code=201)
+async def create_model_profile_revision(payload: ModelRevisionCreateRequest):
+    try:
+        revision_id = ModelControlStore(model_control_db_path()).create_revision(
+            profile_id=payload.profile_id,
+            name=payload.name,
+            config={
+                "provider": payload.provider,
+                "protocol": payload.protocol,
+                "model": payload.model,
+                "base_url": payload.base_url,
+                "tool_choice": payload.tool_choice,
+                "timeout_seconds": payload.timeout_seconds,
+                "secret_ref": payload.secret_ref,
+                "capabilities": payload.capabilities,
+            },
+        )
+    except ModelControlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"revision_id": revision_id, "validation_status": "pending"}
+
+
+@router.post("/settings/model-profiles/{revision_id}/validate")
+async def validate_model_profile_revision(revision_id: str):
+    store = ModelControlStore(model_control_db_path())
+    started = time.monotonic()
+    try:
+        snapshot = get_revision_model_config(revision_id, db_path=model_control_db_path())
+        report = await asyncio.to_thread(validate_model_snapshot, snapshot)
+        report["latency_ms"] = round((time.monotonic() - started) * 1000, 1)
+        store.record_validation(revision_id, passed=True, report=report)
+        return {"revision_id": revision_id, "status": "passed", "report": report}
+    except ModelControlError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (LLMNotConfiguredError, LLMConfigurationError, LLMCompatibilityError, LLMRequestTimeoutError) as exc:
+        report = {
+            "tool_calling": False,
+            "structured_output": False,
+            "error": "模型协议、凭证或 Tool Calling 验证未通过。",
+            "latency_ms": round((time.monotonic() - started) * 1000, 1),
+        }
+        try:
+            store.record_validation(revision_id, passed=False, report=report)
+        except ModelControlError as store_exc:
+            status = 404 if store.get_revision(revision_id) is None else 409
+            raise HTTPException(status_code=status, detail=str(store_exc)) from exc
+        raise HTTPException(status_code=422, detail=report["error"]) from exc
+
+
+@router.post("/settings/model-bindings/activate")
+async def activate_model_profile(payload: ModelActivationRequest):
+    store = ModelControlStore(model_control_db_path())
+    try:
+        version = store.activate(
+            payload.revision_id,
+            expected_version=payload.expected_version,
+            actor="admin:web",
+        )
+    except ModelBindingConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ModelControlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    reset_model_config_cache()
+    return {"scope": MODEL_SCOPE_QUERY_PLANNING, "revision_id": payload.revision_id, "binding_version": version}
+
+
+@router.post("/settings/model-bindings/rollback")
+async def rollback_model_profile(payload: ModelRollbackRequest):
+    store = ModelControlStore(model_control_db_path())
+    try:
+        version = store.rollback(expected_version=payload.expected_version, actor="admin:web")
+        active = store.get_active(MODEL_SCOPE_QUERY_PLANNING)
+    except ModelBindingConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ModelControlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    reset_model_config_cache()
+    return {
+        "scope": MODEL_SCOPE_QUERY_PLANNING,
+        "revision_id": active.revision_id if active else None,
+        "binding_version": version,
+    }
+
+
 @router.post("/settings/llm", response_class=RedirectResponse)
 async def settings_save_llm(
     provider: str = Form(...),
@@ -102,6 +263,14 @@ async def settings_save_llm(
     api_key: str = Form(default=""),
     base_url: str = Form(default=""),
 ):
+    control_path = model_control_db_path()
+    if control_path.exists() and ModelControlStore(control_path).get_active(MODEL_SCOPE_QUERY_PLANNING):
+        return RedirectResponse(
+            url="/admin/settings?error=" + quote(
+                "forge.query_planning 已由 Model Control Plane 管理；请创建、验证并激活新 Revision。"
+            ),
+            status_code=303,
+        )
     y = _load_forge_yaml()
     y.setdefault("llm", {})
     y["llm"]["provider"] = provider
