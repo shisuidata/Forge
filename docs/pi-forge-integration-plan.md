@@ -811,7 +811,7 @@ Scope 至少支持：
 - Web 保存 LLM 后原子替换 YAML、失效 cache，新任务即时生效，不再显示“必须重启”。页面显示当前 provider/model/source/revision，并提示环境变量覆盖。
 - 缺少 LLM 时明确返回“尚未配置 LLM”，不调用模型、不生成 Forge JSON 或 SQL；配置/协议错误返回有界错误，不回显 Provider 原始响应和密钥。
 - 数据库设置页显示进程实际生效的脱敏 URL、环境变量来源和只读确认，避免 YAML 为空时误判“数据库未配置”。
-- 当前验证：完整 Python suite 401 passed / 25 skipped；热加载、缺失、部分配置、未知 Provider、环境覆盖、Web 无重启保存和错误脱敏均有自动测试。
+- 当前验证：完整 Python suite 402 passed / 25 skipped；热加载、缺失、部分配置、未知 Provider、环境覆盖、Web 无重启保存和错误脱敏均有自动测试。
 - NAS 已部署 main `ae67a7c`。Forge 查询模型从错误的 `anthropic + /api/coding` 改为 `openai + /api/coding/v3 + deepseek-v4-flash`，修改前后 Forge PID 均为 `3814124`，证明新任务热加载无需重启。
 - 配置错误时真实 ChannelEvent 返回有界“LLM 配置错误”，不回显 Provider 原始响应；修正后下一条任务进入 `query_review`，批准后通过只读数据库执行。
 - 当前质量风险：`deepseek-v4-flash` 本次真实输出未满足用户问题，错误增加 2026 时间过滤、遗漏渠道和 GMV，最终结果为空。热切换与协议兼容已通过，但该模型尚未通过 Forge 40 题准确率门禁，不能作为默认生产模型；需要在模型中心展示验证结果并阻止未达标模型直接激活。
@@ -824,7 +824,7 @@ Scope 至少支持：
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
 
-架构全景图：`docs/architecture-diagrams/forge-platform-architecture.html`。当前包含 11 个中文视角：产品架构、技术分层、元数据模型、端到端流程、关键闭环、实现与部署、控制面演进、模型运行时、安全信任、状态一致性、API 集成。
+架构全景图：`docs/architecture-diagrams/forge-platform-architecture.html`。当前包含 11 个中文视角：产品架构、技术分层、元数据模型、端到端流程、关键闭环、实现与部署、控制面演进、模型运行时、安全信任、状态一致性、API 集成。NAS 已部署到 `/admin/architecture`：匿名访问 302，登录后 200。
 
 ### Phase 4.5：Registry Studio（结构层多视图与安全编辑）
 
