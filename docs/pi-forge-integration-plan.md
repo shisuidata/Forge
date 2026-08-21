@@ -710,6 +710,13 @@ M4.1 内网 Web 部署结果：
 - Forge Web 认证和 Pi Web 代理已开启；独立随机管理员密码只保存在 NAS mode 600 `config/forge.env`，未回显或提交。
 - Pi 由 enabled user systemd unit 常驻，`Linger=yes`、`Restart=on-failure`、当前 `active`；机器重启或用户退出后仍由 systemd 管理。持久状态在 SQLite，模型 Session 只在 Stage 执行时按需创建，不是常驻对话进程。
 
+M4.1 问候语错误生成 SQL 修复决定：
+
+- 现象：输入 `hello` 仍生成固定 SQL。直接原因是 M4.1 确定性测试模型对所有输入返回同一 `generate_forge_query`；产品层根因是 Forge 在调用模型前没有拒绝纯问候语。
+- 修复必须放在 Forge `prepare_query` 的模型前置门禁，而不是仅修改测试模型：标准化后的纯问候语返回 `needs_clarification`，不得调用模型、不得生成 SQL 或 QueryRun review。
+- 保持范围最小，只识别明确的纯问候语，不用“长度过短”等启发式误伤“用户数”“GMV”等合法短查询。
+- 增加单元测试和 NAS 真实 ChannelEvent 回归：`hello` presentation 必须为 `needs_input` 且无 SQL 审批 action；标准数据问题仍为 `query_review`。
+
 剩余：
 
 - 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。

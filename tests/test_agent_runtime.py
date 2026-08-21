@@ -163,6 +163,44 @@ def test_process_uses_configured_postgresql_dialect(isolated_agent, monkeypatch)
     assert "DATE('now')" not in resp.sql
 
 
+@pytest.mark.parametrize("greeting", ["hello", "Hello!", "你好", "您好。", "在吗？"])
+def test_prepare_query_greeting_requires_input_without_calling_model(
+    isolated_agent, monkeypatch, greeting
+):
+    agent_mod, fake_memory = isolated_agent
+
+    def unexpected_model_call(*args, **kwargs):
+        raise AssertionError("pure greeting must not call the model")
+
+    monkeypatch.setattr(agent_mod.llm, "call", unexpected_model_call)
+
+    result = agent_mod.prepare_query("external-agent", greeting)
+
+    assert result["status"] == "needs_clarification"
+    assert result["sql"] is None
+    assert result["forge_json"] is None
+    assert result["can_execute"] is False
+    assert "指标" in result["text"]
+    assert fake_memory.get_state("external-agent", "pending_sql") is None
+
+
+def test_prepare_query_keeps_short_data_question_valid(isolated_agent, monkeypatch):
+    agent_mod, _ = isolated_agent
+    monkeypatch.setattr(
+        agent_mod.llm,
+        "call",
+        lambda *args, **kwargs: {
+            "tool": "generate_forge_query",
+            "input": {"scan": "dim_user", "agg": [{"fn": "count", "col": "dim_user.user_id", "as": "user_count"}], "select": ["user_count"]},
+        },
+    )
+
+    result = agent_mod.prepare_query("external-agent", "用户数")
+
+    assert result["status"] == "needs_review"
+    assert result["sql"] is not None
+
+
 def test_prepare_query_does_not_create_pending_execution_state(isolated_agent, monkeypatch):
     agent_mod, fake_memory = isolated_agent
     monkeypatch.setattr(
