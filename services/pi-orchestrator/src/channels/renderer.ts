@@ -41,6 +41,21 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     latestEvent(input.events, "skill.execution_failed") ??
     latestEvent(input.events, "query.execution_failed") ??
     latestEvent(input.events, "query.prepare_failed");
+  const prepareTimeout = latestEvent(input.events, "query.prepare_timed_out");
+  if (input.task.status === "ready_for_query" && prepareTimeout !== undefined) {
+    return {
+      ...common,
+      kind: "error",
+      title: "查询准备超时，可重试",
+      markdown: typeof prepareTimeout.payload.error === "string"
+        ? prepareTimeout.payload.error
+        : "查询准备超时，请稍后重新提交。",
+      fields: [{ label: "TaskRun", value: input.task.task_run_id }],
+      table: null,
+      actions: [],
+    };
+  }
+
   if (["failed", "cancelled", "expired"].includes(input.task.status)) {
     return {
       ...common,

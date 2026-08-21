@@ -4,7 +4,7 @@ import { ForgeClientError } from "./client.js";
 export interface QueryRunReview {
   query_run_id: string;
   task_run_id: string;
-  status: "needs_review" | "needs_clarification" | "failed" | "cancelled";
+  status: "needs_review" | "needs_clarification" | "timed_out" | "failed" | "cancelled";
   question: string;
   user_id: string;
   datasource_id: string;

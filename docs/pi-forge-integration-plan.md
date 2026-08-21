@@ -56,6 +56,7 @@
 | Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 进行中：飞书 gated path | ChannelEvent、独立服务鉴权、只读身份映射、SQLite 幂等入站、ChannelPresentation Renderer 已完成；`FEISHU_PI_ENABLED` 新路径已覆盖消息 → SQL 审核 → hash 绑定批准 → 结果，默认关闭；待真实飞书凭证 smoke、补充信息/取消/补查和钉钉复用 |
+| Phase 4.2 多轮需求澄清交互闭环 | 已纳入计划，待实施 | 当前 Structured Skill、Artifact 和 `needs_input` 状态已具备，但 Web 主路径仍可跳过前置澄清，渠道未完整提交 `provide_input`，后续轮次未注入原始需求与历史 Artifact，指标反问未被通用 Renderer 完整展示；实施契约与门禁见 Phase 4.2 |
 | Phase 4.4 Model Control Plane | 基础热加载已实现，版本控制待建设 | Forge 查询模型使用不可变 `ModelConfigSnapshot` + mtime/revision cache；Web 保存后新任务无需重启；缺失/错误配置失败关闭。待建设 Profile Store、真实验证、CAS 激活、回滚及 Pi Stage 绑定 |
 | Phase 4.5 Registry Studio | 需求已确认，待设计实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
@@ -86,6 +87,7 @@
 | Pi 正式状态使用单一 SQLite 真相源 | Task、Event、Artifact 共用一个数据库文件；WAL + busy timeout；Task transition 使用 status CAS，Event sequence 在事务内生成；内存 Store 仅用于测试和显式注入 |
 | Pi Orchestrator 运行时最低 Node 22.19 | 状态层复用 `node:sqlite`，避免新增 native 第三方依赖；锁定 Node 版本并在升级前运行持久化与重启测试 |
 | 长耗时 Stage 使用持久化 Attempt/Lease | 每次模型或 Forge 调用先创建唯一 Attempt，记录 retry status 与 lease；成功/失败终止 Attempt，进程崩溃后仅回收过期 lease，不盲目重放副作用 |
+| 需求澄清必须形成真正的多轮闭环 | 用户补充输入必须与原始需求、上一轮 Clarification/Metric Artifact 和最新待答问题共同进入隔离 Skill；Web、飞书、钉钉复用同一 `provide_input` 语义；Forge 的 `needs_clarification` 作为兜底重新进入 Pi 澄清状态机，不得只显示为错误或绕过确认直接准备查询 |
 
 ## 1. 集成目标
 
@@ -732,7 +734,8 @@ M4.1 用户配置接管与服务重启规则：
 剩余：
 
 - 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。
-- 完成 `provide_input`、`cancel_task`、`request_supplement` 的 child Task lineage 与卡片交互后再开放这些按钮。
+- 按 Phase 4.2 完成 `provide_input` 的跨渠道多轮澄清闭环，再开放真实渠道入口。
+- 完成 `cancel_task`、`request_supplement` 的 child Task lineage 与卡片交互后再开放这些按钮。
 - 飞书稳定后新增钉钉 SDK Adapter；只允许复用 ChannelEvent/Presentation，不复制业务状态机。
 
 第一批实施契约：
@@ -758,6 +761,63 @@ M4.1 用户配置接管与服务重启规则：
 - 三个渠道使用同一 TaskRun 状态机。
 - 不在 Bot 内复制 Skill 路由和 Forge 查询逻辑。
 - 同一用户的权限在各渠道保持一致。
+
+### Phase 4.2：多轮需求澄清交互闭环
+
+> 状态：已确认纳入未来计划，待实施。该阶段修复的是交互和上下文完整性，不改变 Pi 作为唯一 Orchestrator、Forge 作为可信执行层的职责边界。
+
+当前缺口：
+
+- Web `/tasks` 主路径创建 TaskRun 后直接进入 `prepare-query`，没有稳定执行 `data-requirement-clarifier → metric-definition-reviewer` 前置链路；收到 `needs_clarification` 时主要按错误提示展示，缺少原 TaskRun 内的回答入口。
+- 渠道 Application 已识别 `provide_input`，但 `needs_input` Presentation 还没有可提交动作；普通后续消息也尚未可靠关联到正在等待输入的 TaskRun。
+- 第二轮及后续澄清当前主要把最新一条回答交给隔离 Skill，没有同时注入 `original_message`、上一轮 `ClarificationArtifact`、相关 `MetricDefinitionArtifact` 和最新待答问题，容易丢失“这句话在回答什么”。
+- 通用 Renderer 主要读取 `ClarificationArtifact.open_questions`，没有完整展示指标审查产生的 `MetricDefinitionArtifact.open_questions`。
+- `prepareQuery()` 当前可从 `needs_input` 直接进入 `ready_for_query`；缺少“最新澄清/指标 Artifact 已确认”的统一门禁，渠道可能绕过未解决问题。
+- 旧 Forge `pending_intent` 会拼接单轮原问题和回答，但它属于迁移期兼容状态，不能成为新主链的长期解法。
+
+目标流程：
+
+```text
+原始需求
+→ Pi 运行需求澄清 Skill
+→ ClarificationArtifact(needs_input / needs_confirmation / confirmed)
+→ 渠道展示结构化反问
+→ 用户在同一 TaskRun 提交 provide_input
+→ Pi 用原始需求 + 历史 Artifact + 当前回答重新澄清
+→ 必要时进入 MetricDefinitionArtifact 的确认轮次
+→ 所有阻断问题 confirmed
+→ ready_for_query
+→ Forge prepare-query
+→ 若 Forge 仍返回 needs_clarification，回流同一 Pi 澄清状态机
+```
+
+实施契约：
+
+1. 定义版本化 `ClarificationTurnInput`，至少包含 `original_message/current_user_input/latest_open_questions/prior_clarification_artifacts/prior_metric_definition_artifacts/forge_clarification_prompt`；只传当前回答视为契约错误。
+2. `clarifyRequirement()` 和 `reviewMetricDefinition()` 继续使用独立、无文件/无 Shell/无数据库权限的 Stage Session，但输入改为上述有界结构化上下文；Artifact 仍只能通过唯一终止型 Tool 提交。
+3. 增加统一 `provide_input` Task API。Web 表单、飞书卡片/回复和钉钉动作只提交 `task_run_id + answer + idempotency_key`，不得自行拼接 prompt 或推进状态。
+4. 对飞书/钉钉自由文本回复，只能通过服务端保存的 `channel + conversation_id + owner identity + waiting TaskRun` 关系恢复；存在多个候选任务时必须要求用户选择，不得猜测绑定。
+5. Channel Renderer 同时支持 Clarification 与 MetricDefinition 的 `open_questions`、确认摘要和可回答动作；允许一次回答全部问题，也允许保留未解决问题继续下一轮。
+6. Web 收到 `needs_input` 时显示问题、已确认摘要和输入控件，不再作为普通错误；提交后轮询同一 TaskRun 的 Event/Artifact/Attempt。
+7. Forge 的确定性歧义规则继续作为查询准备前的最后兜底。`needs_clarification` 必须生成可追踪事件并回流 Pi 澄清流程，不能生成 SQL，也不能创建新的平行 Session 状态。
+8. `prepareQuery()` 增加前置门禁：只要最新 Clarification 或 MetricDefinition Artifact 仍为 `needs_input/needs_confirmation/draft`，就拒绝进入 QueryRun；明确无需澄清的简单查询应生成可审计的 `confirmed` 快速路径，而不是无记录绕过。
+9. 每轮保存新的不可变 Artifact，并在 Event 中记录其来源 Artifact ID；不覆盖历史，不把未确认回答提升为 Registry 组织事实。
+10. 为澄清轮次设置最大轮数和用户可取消/重述入口；达到上限时返回有界 `incomplete`，不得无限反问。
+
+门禁：
+
+- Web、飞书、钉钉对同一 fixture 产生等价的反问、状态转换和最终 Clarification/Metric Artifact。
+- 测试覆盖：单轮澄清、多轮逐题回答、一次回答多个问题、指标确认、Forge 兜底反问、重复投递、跨进程恢复、多个等待任务的歧义绑定、取消和最大轮数。
+- 第二轮 Skill 输入测试必须断言包含原始问题、上一轮问题与回答、历史 Artifact ID；不得只包含最新回答。
+- 未确认口径不能调用 Forge `createQueryRun`；Forge 返回 `needs_clarification` 时不能出现 SQL review。
+- Renderer 必须展示 Clarification 和 MetricDefinition 两类问题，并提供同一 `provide_input` 语义。
+- 旧 `pending_intent` 不进入 Pi 新主路径；Phase 4 渠道迁移完成后随旧 Agent 对话入口一起进入退役计划。
+
+退出条件：
+
+- 用户可以从任一已启用渠道完成“反问 → 回答 → 再判断 → 确认 → SQL 审核”，全程保持同一个 TaskRun。
+- 任一暂停点重启 Pi 后仍能恢复问题、上下文和幂等回答，不重复调用 Skill 或 Forge。
+- 任务事件可以完整回放每轮已知事实、假设、待确认问题、用户回答和最终确认依据。
 
 ### Phase 4.3.1：SQL 引用完整性与失败状态修复（2026-08-21 现场反馈）
 
@@ -828,8 +888,12 @@ M4.1 用户配置接管与服务重启规则：
 - 审批现在同时校验 `sql_hash + assurance_report_hash + approver + expiry + Registry version + Assurance revision + Policy revision`；错误 report hash 与策略漂移均有回归测试。模型切换不改变已经生成的 SQL，因此在途 QueryRun 固定原 model revision，不与当前 active model 比较。
 - Forge 内部 QueryRun API、Pi Client、Task Event、渠道审批动作和 QueryResultArtifact 已贯通 Assurance lineage；旧卡片缺少 Assurance hash 时失败关闭。
 - 当前验证：Python 414 passed / 25 skipped；Pi typecheck 通过，50 tests passed。main `81656a1` 已部署 NAS，SQLite 兼容迁移成功；真实 ChannelEvent → review action 已携带 Assurance hash，审批 202 后进入 `query_result`。
-- 真实复杂问题“各城市订单总额”在当前模型多次自修正时触发 Pi/Forge 请求 timeout，说明下一步 Model Profile 门禁还必须验证延迟与重试预算，不能只看准确率；简单订单查询完整闭环通过。
-- 下一步将同一 Policy/EA 门禁接入 Model Profile validate/activate。
+- 真实复杂问题“各城市订单总额”在当前模型多次自修正时触发 Pi/Forge 请求 timeout。修复方向已确认：建立端到端统一 Deadline Budget，单次模型调用、受控重试、Forge HTTP Client、Pi Stage timeout 与 lease 必须满足严格包含关系；剩余预算不足时不得开始下一次模型调用，而应返回可重试的有界超时状态。
+- 同时把准确率、Assurance 通过率、平均重试次数、P95 延迟、超时率和 Tool Calling 兼容性纳入 Model Profile validate/activate 门禁；不能只看接口连通。
+- Deadline/Retry Budget 已实现：查询准备总预算默认 210s，Forge HTTP 220s，Pi Stage 240s，lease 300s；Pi 启动时强制 `Forge HTTP < Stage < lease`，示例配置明确记录层级。
+- 每次 LLM 调用使用 `min(模型配置 timeout, 当前剩余预算 - 5s 收尾预留)`；预算不足不再启动下一次重试。OpenAI/Anthropic timeout 被识别为独立有界 `LLMRequestTimeoutError`，不再误报“模型配置错误”。
+- `prepare_query` 返回稳定 `timed_out`，QueryRun 持久化该状态；Pi 将 Attempt 标记 `timed_out` 并恢复 `ready_for_query/query_prepare_retry`，渠道明确显示“查询准备超时，可重试”，不把超时任务永久置为 failed。
+- 当前验证：Python 417 passed / 25 skipped；Pi typecheck 通过，52 tests passed。待 NAS 复杂问题回归后实施 Model Profile 激活门禁。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 

@@ -89,6 +89,9 @@ class Config:
     LLM_TIMEOUT_SECONDS: float = float(
         _env("LLM_TIMEOUT_SECONDS", "llm", "timeout_seconds", default="120")
     )
+    QUERY_PREPARE_TIMEOUT_SECONDS: float = float(
+        _env("QUERY_PREPARE_TIMEOUT_SECONDS", "llm", "prepare_timeout_seconds", default="210")
+    )
 
     # ── Embedding ─────────────────────────────────────────────────────────────
     EMBED_API_KEY:   str = _env("EMBED_API_KEY",   "embedding", "api_key")   or _env("LLM_API_KEY", "llm", "api_key")

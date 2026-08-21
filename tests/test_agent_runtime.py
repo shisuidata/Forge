@@ -70,6 +70,27 @@ def isolated_agent(monkeypatch, tmp_path):
     return agent_mod, fake_memory
 
 
+def test_prepare_query_returns_bounded_timeout_without_retrying_provider(
+    isolated_agent, monkeypatch
+):
+    agent_mod, _ = isolated_agent
+    calls = []
+
+    def timeout_call(*args, **kwargs):
+        calls.append(kwargs)
+        raise agent_mod.llm.LLMRequestTimeoutError("provider detail")
+
+    monkeypatch.setattr(agent_mod.llm, "call", timeout_call)
+
+    result = agent_mod.prepare_query("u-timeout", "查询订单")
+
+    assert result["status"] == "timed_out"
+    assert result["error"] == "查询准备超时，请稍后重试或缩小问题范围。"
+    assert result["retry_count"] == 0
+    assert len(calls) == 1
+    assert calls[0]["timeout_seconds"] <= agent_mod.cfg.QUERY_PREPARE_TIMEOUT_SECONDS
+
+
 def test_process_retries_once_when_convention_lint_fails(isolated_agent, monkeypatch):
     agent_mod, fake_memory = isolated_agent
     calls = []

@@ -600,6 +600,12 @@ export class OrchestratorApplication {
         this.#events.append(taskRunId, "query.clarification_requested", {
           prompt: result.error,
         });
+      } else if (result.status === "timed_out") {
+        finalizedTask = this.#transition(finalizedTask, "ready_for_query", "query_prepare_retry");
+        this.#events.append(taskRunId, "query.prepare_timed_out", {
+          error: result.error || "查询准备超时，请重试。",
+          retryable: true,
+        });
       } else {
         finalizedTask = this.#transition(finalizedTask, "failed", "query_prepare");
         this.#events.append(taskRunId, "query.prepare_failed", {
@@ -609,9 +615,11 @@ export class OrchestratorApplication {
 
       this.#finishAttempt(
         attempt,
-        result.status === "needs_review" || result.status === "needs_clarification"
-          ? "succeeded"
-          : "failed",
+        result.status === "timed_out"
+          ? "timed_out"
+          : result.status === "needs_review" || result.status === "needs_clarification"
+            ? "succeeded"
+            : "failed",
         result.error,
       );
       return { task: finalizedTask, result, events: this.#events.list(taskRunId) };

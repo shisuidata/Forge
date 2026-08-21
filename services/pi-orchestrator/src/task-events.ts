@@ -6,6 +6,7 @@ export type TaskEventType =
   | "query.review_requested"
   | "query.clarification_requested"
   | "query.prepare_failed"
+  | "query.prepare_timed_out"
   | "query.approval_submitted"
   | "query.completed"
   | "query.execution_failed"

@@ -62,6 +62,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
   if (stageLeaseMs <= stageTimeoutMs) {
     throw new Error("PI_STAGE_LEASE_MS must be greater than PI_STAGE_TIMEOUT_MS");
   }
+  const forgeTimeoutMs = parsePositiveInteger(
+    env.FORGE_REQUEST_TIMEOUT_MS,
+    220_000,
+    "FORGE_REQUEST_TIMEOUT_MS",
+  );
+  if (forgeTimeoutMs >= stageTimeoutMs) {
+    throw new Error("FORGE_REQUEST_TIMEOUT_MS must be less than PI_STAGE_TIMEOUT_MS");
+  }
   return {
     host: env.PI_ORCHESTRATOR_HOST ?? "127.0.0.1",
     port: parsePort(env.PI_ORCHESTRATOR_PORT),
@@ -80,11 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
     forgeBaseUrl: (env.FORGE_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, ""),
     forgeApiKey: env.FORGE_API_KEY || undefined,
     forgePiServiceKey: env.FORGE_PI_SERVICE_KEY || undefined,
-    forgeTimeoutMs: parsePositiveInteger(
-      env.FORGE_REQUEST_TIMEOUT_MS,
-      130_000,
-      "FORGE_REQUEST_TIMEOUT_MS",
-    ),
+    forgeTimeoutMs,
     stageTimeoutMs,
     stageLeaseMs,
     reconciliationIntervalMs: parsePositiveInteger(

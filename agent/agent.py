@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from datetime import date
 
 import yaml
@@ -57,6 +58,20 @@ logger = logging.getLogger(__name__)
 # 设为 2：首次失败 → 第 1 次重试 → 第 2 次重试 → 放弃
 MAX_RETRIES = 2
 _ALLOWED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
+_PREPARE_TIMEOUT_MESSAGE = "查询准备超时，请稍后重试或缩小问题范围。"
+
+
+def _prepare_deadline() -> float:
+    budget = max(5.0, float(getattr(cfg, "QUERY_PREPARE_TIMEOUT_SECONDS", 210)))
+    return time.monotonic() + budget
+
+
+def _remaining_call_budget(deadline: float) -> float:
+    # Reserve time for Assurance, persistence and the HTTP response.
+    remaining = deadline - time.monotonic() - 5.0
+    if remaining < 1.0:
+        raise llm.LLMRequestTimeoutError(_PREPARE_TIMEOUT_MESSAGE)
+    return remaining
 
 
 def _compile_dialect(dialect_override: str | None = None) -> str:
@@ -117,6 +132,7 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
         return payload
 
     retry_messages: list[dict] = []
+    deadline = _prepare_deadline()
     from agent.tenant import tenants as _tenants
     _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
 
@@ -130,7 +146,13 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
                 knowledge_context=knowledge,
                 extra_tables=extra_tables,
                 allowed_tables=_allowed_tables,
+                timeout_seconds=_remaining_call_budget(deadline),
             )
+        except llm.LLMRequestTimeoutError:
+            payload["status"] = "timed_out"
+            payload["error"] = _PREPARE_TIMEOUT_MESSAGE
+            payload["retry_count"] = attempt
+            return payload
         except LLMNotConfiguredError:
             payload["error"] = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
             payload["retry_count"] = attempt
@@ -261,6 +283,7 @@ def process(user_id: str, user_text: str) -> AgentResponse:
     # ── 带编译重试的 agent loop ───────────────────────────────────────────────
     # 重试期间的临时消息用 retry_messages 维护，不写入 EMS（避免污染）
     retry_messages: list[dict] = []
+    deadline = _prepare_deadline()
 
     # 数据权限：查询该用户所属团队的可见表白名单
     from agent.tenant import tenants as _tenants
@@ -275,7 +298,12 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             result = llm.call(
                 messages, knowledge_context=knowledge,
                 extra_tables=extra_tables, allowed_tables=_allowed_tables,
+                timeout_seconds=_remaining_call_budget(deadline),
             )
+        except llm.LLMRequestTimeoutError:
+            err = _PREPARE_TIMEOUT_MESSAGE
+            memory.record(user_id, "assistant", err, action="error")
+            return AgentResponse(text=err, action="error")
         except LLMNotConfiguredError:
             err = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
             memory.record(user_id, "assistant", err, action="error")

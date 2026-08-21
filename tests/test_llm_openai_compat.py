@@ -234,3 +234,20 @@ def test_openai_http_error_is_sanitized(monkeypatch):
         llm._call_openai([], "system", tools=[])
 
     assert "secret-must-not-leak" not in str(exc_info.value)
+
+
+def test_openai_timeout_has_distinct_bounded_error(monkeypatch):
+    import httpx
+    from agent import llm
+
+    request = httpx.Request("POST", "https://provider.example/v1/chat/completions")
+
+    def fake_post(*args, **kwargs):
+        raise httpx.ReadTimeout("internal timeout detail", request=request)
+
+    monkeypatch.setattr("httpx.post", fake_post)
+
+    with pytest.raises(llm.LLMRequestTimeoutError, match="调用超时") as exc_info:
+        llm._call_openai([], "system", tools=[])
+
+    assert "internal timeout detail" not in str(exc_info.value)

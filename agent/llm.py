@@ -18,6 +18,7 @@ LLM 客户端模块 — 支持 Anthropic 原生 SDK 和任意 OpenAI 兼容接�
 from __future__ import annotations
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,10 @@ logger = logging.getLogger(__name__)
 
 class LLMCompatibilityError(RuntimeError):
     """Raised when a configured provider violates the expected response contract."""
+
+
+class LLMRequestTimeoutError(TimeoutError):
+    """Raised when one provider call exhausts its allocated deadline budget."""
 
 
 def _direct_call_config(provider: str, config: ModelConfigSnapshot | None) -> ModelConfigSnapshot:
@@ -404,7 +409,7 @@ def _call_anthropic(
     """
     import anthropic
     config = _direct_call_config("anthropic", config)
-    kwargs: dict = {"api_key": config.api_key}
+    kwargs: dict = {"api_key": config.api_key, "timeout": config.timeout_seconds}
     if config.base_url:
         kwargs["base_url"] = config.base_url
     try:
@@ -416,6 +421,8 @@ def _call_anthropic(
             tools=tools,
             messages=messages,
         )
+    except anthropic.APITimeoutError as exc:
+        raise LLMRequestTimeoutError("LLM Provider 调用超时") from exc
     except Exception as exc:
         raise LLMCompatibilityError(
             "LLM Provider 调用失败，请检查协议、Base URL、模型和凭证"
@@ -493,6 +500,8 @@ def _call_openai(
         )
         r.raise_for_status()
         body = r.json()
+    except httpx.TimeoutException as exc:
+        raise LLMRequestTimeoutError("LLM Provider 调用超时") from exc
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
         raise LLMCompatibilityError(
@@ -568,7 +577,8 @@ def _extract_hint_tables(error: str, registry: dict) -> list[str]:
 def call(history: list[Any], extra_tables: list[str] | None = None,
          system_override: str | None = None,
          knowledge_context: str = "",
-         allowed_tables: list[str] | None = None) -> dict:
+         allowed_tables: list[str] | None = None,
+         timeout_seconds: float | None = None) -> dict:
     """
     LLM 统一调用入口。
 
@@ -585,6 +595,11 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     """
     # 每个新调用读取一次不可变配置快照；文件未变化时只命中内存缓存。
     model_config = get_model_config()
+    if timeout_seconds is not None:
+        model_config = replace(
+            model_config,
+            timeout_seconds=max(1.0, min(model_config.timeout_seconds, timeout_seconds)),
+        )
 
     # 统一 messages 格式：兼容 Message 对象和 dict 列表
     def _to_dicts(msgs):
