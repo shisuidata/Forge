@@ -382,6 +382,7 @@ class TestExecuteRaw:
         assert resp.status_code == 200
         data = resp.json()
         assert data["exec_error"] is not None
+        assert data["action"] == "execution_failed"
         assert "禁用" in data["exec_error"]
 
 
