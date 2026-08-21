@@ -223,6 +223,9 @@ class TestChatAPI:
         assert "columns" not in data
         assert "result" not in data
 
+        records = await audit.recent(limit=1)
+        assert records[0]["status"] == "needs_external_review"
+
     async def test_prepare_query_does_not_feed_approve_execution(self, client: AsyncClient, monkeypatch, tmp_path):
         """prepare-query 不创建可由 /api/approve 消费的 pending SQL。"""
         from agent import audit
@@ -261,6 +264,9 @@ class TestChatAPI:
         assert data["action"] == "error"
         assert data["rows"] is None
         assert data["row_count"] == 0
+
+        records = await audit.recent(limit=1)
+        assert records[0]["status"] == "needs_external_review"
 
     async def test_prepare_query_rejects_without_api_key_when_auth_enabled(
         self, client: AsyncClient, monkeypatch
@@ -640,6 +646,36 @@ class TestAdminMetricRoutes:
 
 
 class TestSettingsRoutes:
+    async def test_save_llm_settings_reload_without_restart(self, client: AsyncClient, monkeypatch):
+        import web.routes.settings as settings_routes
+
+        saved = {}
+        resets = []
+        monkeypatch.setattr(settings_routes, "_load_forge_yaml", lambda: {})
+        monkeypatch.setattr(settings_routes, "_save_forge_yaml", lambda data: saved.update(data))
+        monkeypatch.setattr(settings_routes, "reset_model_config_cache", lambda: resets.append(True))
+        monkeypatch.setattr(
+            settings_routes,
+            "get_model_config",
+            lambda: object(),
+        )
+
+        resp = await client.post(
+            "/admin/settings/llm",
+            data={
+                "provider": "openai",
+                "model": "new-model",
+                "api_key": "new-secret",
+                "base_url": "https://provider.example/v1",
+            },
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        assert resp.headers["location"].endswith("saved=llm")
+        assert resets == [True]
+        assert saved["llm"]["model"] == "new-model"
+
     async def test_save_auth_settings_sets_cookie_secure(self, client: AsyncClient, monkeypatch):
         import web.routes.settings as settings_routes
 

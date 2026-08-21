@@ -49,6 +49,7 @@ from forge.cache import cache
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
 from agent.memory import memory
+from agent.model_config import LLMConfigurationError, LLMNotConfiguredError
 from agent import llm
 
 logger = logging.getLogger(__name__)
@@ -130,9 +131,18 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
                 extra_tables=extra_tables,
                 allowed_tables=_allowed_tables,
             )
-        except Exception as exc:
+        except LLMNotConfiguredError:
+            payload["error"] = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
+            payload["retry_count"] = attempt
+            return payload
+        except (LLMConfigurationError, llm.LLMCompatibilityError):
+            logger.warning("LLM configuration or compatibility validation failed")
+            payload["error"] = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
+            payload["retry_count"] = attempt
+            return payload
+        except Exception:
             logger.exception("LLM call failed")
-            payload["error"] = f"LLM 调用失败：{exc}"
+            payload["error"] = "LLM 调用失败，请稍后重试或联系管理员。"
             payload["retry_count"] = attempt
             return payload
 
@@ -272,9 +282,18 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                 messages, knowledge_context=knowledge,
                 extra_tables=extra_tables, allowed_tables=_allowed_tables,
             )
-        except Exception as exc:
+        except LLMNotConfiguredError:
+            err = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
+            memory.record(user_id, "assistant", err, action="error")
+            return AgentResponse(text=err, action="error")
+        except (LLMConfigurationError, llm.LLMCompatibilityError):
+            logger.warning("LLM configuration or compatibility validation failed")
+            err = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
+            memory.record(user_id, "assistant", err, action="error")
+            return AgentResponse(text=err, action="error")
+        except Exception:
             logger.exception("LLM call failed")
-            err = f"⚠ LLM 调用失败：{exc}"
+            err = "LLM 调用失败，请稍后重试或联系管理员。"
             memory.record(user_id, "assistant", err, action="error")
             return AgentResponse(text=err, action="error")
 

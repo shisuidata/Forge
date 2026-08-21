@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forge 完整架构图</title>
+<style>
+:root{--bg:#0a0e1a;--panel:#0f1524;--panel2:#111a2c;--line:#4fd1ff;--line2:rgba(79,209,255,.34);--ink:#e8f3ff;--muted:rgba(232,243,255,.68);--faint:rgba(232,243,255,.42);--accent:#ffb26b;--ok:#6bffb5;--warn:#ff6b8a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}.nav{position:relative;z-index:30;height:52px;background:rgba(10,14,26,.96);border-bottom:1px solid var(--line2);display:flex;align-items:center;padding:0 32px;gap:8px}.nav b{font-size:14px;margin-right:auto}.nav a{color:var(--muted);text-decoration:none;font-size:12px;border:1px solid var(--line2);padding:7px 11px}.nav a:hover{color:var(--ink);border-color:var(--line)}.sheet{width:1600px;height:940px;margin:28px auto 48px;position:relative;background:var(--bg);border:1px solid var(--line2);overflow:hidden}.head{position:absolute;left:54px;top:38px}.head .no{font:11px ui-monospace,"JetBrains Mono",monospace;color:var(--line);letter-spacing:.13em}.head h1{font-size:34px;font-weight:500;margin:8px 0 6px}.head p{font-size:14px;color:var(--muted);margin:0}.stamp{position:absolute;right:52px;top:48px;color:var(--faint);font:11px ui-monospace,monospace;letter-spacing:.08em}.group{position:absolute;border:1.5px solid var(--line2);background:rgba(15,21,36,.7);padding:18px}.group.main{border-color:var(--line)}.group.trust{border-color:var(--accent)}.group h2{font-size:17px;margin:0 0 13px}.group h2 small{display:block;color:var(--faint);font-size:11px;font-weight:400;margin-top:5px}.card{border:1px solid var(--line2);background:rgba(79,209,255,.035);padding:11px 12px;margin-top:9px}.card.key{border-color:var(--line)}.card.guard{border-color:var(--accent)}.card.future{border-style:dashed}.card h3{font-size:14px;margin:0 0 5px}.card p{font-size:11.5px;color:var(--muted);line-height:1.52;margin:0}.card .flag{float:right;color:var(--accent);font:9px ui-monospace,monospace;letter-spacing:.08em}.arrow-line{position:absolute;height:1px;background:var(--line);opacity:.7}.arrow-line:after{content:"";position:absolute;right:-1px;top:-4px;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:7px solid var(--line)}.arrow-line.back{background:none;border-top:1px dashed var(--line);opacity:.48}.arrow-line.back:after{transform:rotate(180deg);right:auto;left:-1px}.label{position:absolute;color:var(--muted);font:10px ui-monospace,monospace;background:var(--bg);padding:2px 6px}.boundary{position:absolute;border-left:1px dashed rgba(255,178,107,.55);height:680px}.boundary span{position:absolute;left:7px;top:12px;color:var(--accent);font:9px ui-monospace,monospace;letter-spacing:.09em;writing-mode:vertical-rl}.band{position:absolute;border:1px solid var(--line2);background:rgba(15,21,36,.7);padding:15px 18px}.band h2{font-size:14px;margin:0 0 12px}.cols{display:grid;gap:10px}.state{border-left:2px solid var(--line);padding-left:10px;min-width:0}.state b{display:block;font-size:12px}.state span{font-size:10.5px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}.foot{position:absolute;left:54px;bottom:24px;color:var(--faint);font:10px ui-monospace,monospace;letter-spacing:.05em}.rule-note{position:absolute;border:1px solid rgba(255,178,107,.6);padding:12px 14px;color:var(--muted);font-size:11px;line-height:1.55}.rule-note b{color:var(--accent);display:block;margin-bottom:5px}.step{position:absolute;width:220px;min-height:112px;border:1.5px solid var(--line2);background:var(--panel);padding:14px}.step.guard{border-color:var(--accent)}.step .num{font:11px ui-monospace,monospace;color:var(--line)}.step h3{font-size:15px;margin:6px 0}.step p{font-size:11px;line-height:1.5;color:var(--muted);margin:0}.step-arrow{position:absolute;height:1px;background:var(--line);opacity:.7}.step-arrow:after{content:"";position:absolute;right:-1px;top:-4px;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:7px solid var(--line)}.section-title{position:absolute;font:12px ui-monospace,monospace;color:var(--faint);letter-spacing:.11em}.code{font-family:ui-monospace,"JetBrains Mono",monospace}.status{display:inline-block;border:1px solid var(--line2);padding:2px 6px;color:var(--muted);font:9px ui-monospace,monospace;margin-top:6px}.status.ok{color:var(--ok);border-color:rgba(107,255,181,.4)}.status.plan{color:var(--accent);border-color:rgba(255,178,107,.45)}.loop-panel{position:absolute;border:1px solid var(--line2);background:rgba(15,21,36,.7);padding:16px}.loop-panel h2{font-size:16px;margin:0}.loop-panel>p{font-size:11px;color:var(--muted);margin:5px 0 0}.loop-node{position:absolute;width:150px;min-height:70px;border:1px solid var(--line2);background:var(--panel);padding:10px;text-align:center}.loop-node.guard{border-color:var(--accent)}.loop-node b{font-size:12px;display:block}.loop-node span{font-size:10px;color:var(--muted);line-height:1.4;display:block;margin-top:5px}.loop-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.loop-path{fill:none;stroke:var(--line);stroke-width:1.4;marker-end:url(#loopArrow)}.loop-path.return{stroke:var(--accent);stroke-dasharray:5 5}.loop-text{fill:var(--muted);font:10px ui-monospace,monospace}.loop-text.return{fill:var(--accent)}
+@media(max-width:1640px){.sheet{transform-origin:top left;margin-left:16px}}
+@media print{.nav{display:none}.sheet{page-break-after:always;margin:0;border:0}}
+</style>
+</head>
+<body>
+<nav class="nav"><b>Forge 架构全景</b><a href="#product">产品</a><a href="#overview">技术</a><a href="#metadata">元数据</a><a href="#flow">流程</a><a href="#loops">闭环</a><a href="#implementation">实现部署</a><a href="#control">演进</a><a href="#model-runtime">模型运行时</a><a href="#security">安全</a><a href="#state">状态一致性</a><a href="#api">接口集成</a></nav>
+
+<!-- 01 产品架构 -->
+<section class="sheet" id="product">
+  <header class="head"><div class="no">01 · 产品架构</div><h1>用户、产品工作台、平台能力与核心资产</h1><p>Forge 不是单一 SQL 生成器，而是面向数据团队的可信 AI 数据任务平台。</p></header><div class="stamp">PRODUCT CAPABILITY MAP</div>
+
+  <div class="group" style="left:54px;top:158px;width:220px;height:590px"><h2>用户与角色<small>谁在使用产品</small></h2>
+    <div class="card"><h3>业务分析师</h3><p>提问、确认指标、审核 SQL、查看结果与报告</p></div>
+    <div class="card"><h3>数据工程师</h3><p>同步结构、维护 DDL/ER、审查 SQL 与数据质量</p></div>
+    <div class="card"><h3>数据负责人</h3><p>维护指标口径、权限、模型策略和团队资产</p></div>
+    <div class="card"><h3>平台管理员</h3><p>配置数据源、模型、渠道、部署与审计策略</p></div>
+    <div class="card"><h3>外部业务用户</h3><p>通过 Web、飞书或钉钉发起受控数据任务</p></div>
+  </div>
+
+  <div class="group main" style="left:322px;top:158px;width:360px;height:590px"><h2>产品工作台<small>用户直接看到和操作的功能</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card key"><h3>AI 查询工作台</h3><p>澄清需求、SQL 审核、执行结果、分析和报告</p></div><div class="card"><h3>任务中心</h3><p>进度、事件、重试、恢复、父子任务与历史</p></div><div class="card future"><h3>Registry Studio</h3><p>表格、DDL、ER 图、JSON 和版本审核</p></div></div>
+      <div><div class="card future"><h3>模型中心</h3><p>配置、验证、切换、回滚和用量可观测</p></div><div class="card"><h3>审计中心</h3><p>问题、SQL、审批、执行、反馈和证据追踪</p></div><div class="card"><h3>组织与权限</h3><p>组织、团队、用户、数据源和字段可见性</p></div></div>
+    </div>
+    <div class="card"><h3>多渠道入口</h3><p>Web、飞书、钉钉共享同一个 TaskRun，不复制业务流程。</p></div>
+  </div>
+
+  <div class="group" style="left:730px;top:158px;width:360px;height:590px"><h2>平台能力<small>产品功能背后的统一能力</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card"><h3>Pi 任务编排</h3><p>多阶段、暂停恢复、补查、Attempt 和渠道恢复</p></div><div class="card"><h3>数据 Skills</h3><p>需求、指标、归因、报告及后续专业能力</p></div><div class="card"><h3>Artifact 契约</h3><p>结构化产物、Schema 校验和证据绑定</p></div></div>
+      <div><div class="card guard"><h3>Forge 可信执行</h3><p>Registry、Compiler、审批、只读执行和 ACL</p></div><div class="card"><h3>模型路由</h3><p>按阶段选择模型、版本固定、验证与回滚</p></div><div class="card"><h3>渠道适配</h3><p>统一事件、身份、展示和幂等 Action</p></div></div>
+    </div>
+    <div class="card key"><h3>统一安全规则</h3><p>Pi 不访问数据库；所有 SQL 必须通过 Forge；高风险动作必须人工确认。</p></div>
+  </div>
+
+  <div class="group trust" style="left:1138px;top:158px;width:406px;height:590px"><h2>核心产品资产<small>使用越多，组织能力越强</small></h2>
+    <div class="card key"><h3>组织 Registry</h3><p>结构层、指标、维度、歧义规则、字段约定和业务上下文</p></div>
+    <div class="card"><h3>任务与证据资产</h3><p>TaskRun、QueryRun、Artifact、证据引用和报告</p></div>
+    <div class="card"><h3>模型配置资产</h3><p>ModelProfile、能力验证、激活版本和切换审计</p></div>
+    <div class="card"><h3>反馈与审计资产</h3><p>SQL 反馈、执行历史、审批记录、失败原因和改进候选</p></div>
+    <div class="card guard"><h3>资产边界</h3><p>对话内容不能自动提升为组织事实；任何正式知识都需要确认、版本和回滚。</p></div>
+  </div>
+
+  <div class="arrow-line" style="left:274px;top:350px;width:48px"></div><div class="label" style="left:278px;top:325px">使用</div>
+  <div class="arrow-line" style="left:682px;top:350px;width:48px"></div><div class="label" style="left:682px;top:325px">调用</div>
+  <div class="arrow-line" style="left:1090px;top:350px;width:48px"></div><div class="label" style="left:1090px;top:325px">沉淀</div>
+
+  <div class="band" style="left:54px;top:790px;width:1490px;height:104px"><h2>产品部署形态</h2><div class="cols" style="grid-template-columns:repeat(4,1fr)">
+    <div class="state"><b>私有化部署</b><span>运行在客户内网，连接客户只读数据库。</span></div><div class="state"><b>客户自配模型</b><span>兼容 Coding Plan、本地模型和 OpenAI-compatible API。</span></div><div class="state"><b>多数据源</b><span>按组织和团队隔离数据源、Registry 与权限。</span></div><div class="state"><b>多渠道交付</b><span>同一任务可在 Web、飞书和钉钉继续处理。</span></div>
+  </div>
+  <div class="foot">产品核心价值：通过结构约束消灭 SQL 生成错误，通过 Registry 消除业务口径歧义，通过证据链保证分析可信。</div>
+</section>
+
+<!-- 02 总体架构 -->
+<section class="sheet" id="overview">
+  <header class="head"><div class="no">02 · 技术总体分层</div><h1>可信 AI 数据任务平台</h1><p>Pi 负责编排，Forge 负责可信执行，拾穗 DATA Skills 负责专业方法，渠道只负责交互。</p></header><div class="stamp">目标架构 · 2026</div>
+
+  <div class="group" style="left:52px;top:160px;width:220px;height:590px"><h2>渠道适配层<small>只负责消息收发与呈现</small></h2>
+    <div class="card key"><h3>Web 任务台</h3><p>查看任务、事件、SQL 审核、结果与报告</p></div>
+    <div class="card"><h3>飞书适配器</h3><p>消息、卡片、按钮回调</p></div>
+    <div class="card future"><span class="flag">规划中</span><h3>钉钉适配器</h3><p>复用相同渠道契约</p></div>
+    <div class="card"><h3>统一渠道呈现</h3><p>进度、补充信息、SQL 审核、结果、分析、报告</p></div>
+    <div class="card guard"><h3>安全约束</h3><p>不选择 Skill，不保存数据库凭证，不直接执行 SQL</p></div>
+  </div>
+
+  <div class="group" style="left:318px;top:205px;width:205px;height:455px"><h2>可信入口<small>鉴权、身份与事件去重</small></h2>
+    <div class="card key"><h3>渠道事件 API</h3><p>独立服务密钥；按渠道与事件 ID 幂等</p></div>
+    <div class="card"><h3>身份映射</h3><p>外部用户 → 组织、团队、用户</p></div>
+    <div class="card"><h3>任务归属校验</h3><p>会话、任务、操作者三重校验</p></div>
+    <div class="card"><h3>持久化收件箱</h3><p>未知身份直接拒绝</p></div>
+  </div>
+
+  <div class="group main" style="left:570px;top:160px;width:300px;height:590px"><h2>Pi 智能体编排平台<small>唯一业务流程编排器</small></h2>
+    <div class="card key"><h3>TaskRun 任务状态机</h3><p>澄清 → 查询 → 分析 → 报告；支持暂停、恢复、补查和取消</p></div>
+    <div class="card"><h3>受限 Pi Session</h3><p>每个阶段只加载一个 Skill；禁用文件和 Shell 工具</p></div>
+    <div class="card"><h3>阶段尝试记录</h3><p>租约、超时、幂等、重试；启动对账不重放副作用</p></div>
+    <div class="card key"><h3>Forge 受控工具</h3><p>准备、审批、取消、获取结果；自动携带可信身份</p></div>
+    <div class="card guard"><h3>Pi 安全边界</h3><p>不连接数据库，不复制 Registry、Compiler 或 Executor</p></div>
+  </div>
+
+  <div class="group" style="left:918px;top:205px;width:220px;height:455px"><h2>拾穗 DATA Skills<small>专业数据方法与交付能力</small></h2>
+    <div class="card"><h3>需求澄清</h3><p>已知信息、缺口、验收标准</p></div>
+    <div class="card"><h3>指标口径审查</h3><p>公式、粒度、窗口和边界</p></div>
+    <div class="card"><h3>归因分析</h3><p>发现、假设、证据与补查建议</p></div>
+    <div class="card"><h3>报告写作</h3><p>结构化报告，服务端确定性渲染</p></div>
+    <div class="card guard"><h3>证据约束</h3><p>结论只能引用真实查询结果行</p></div>
+  </div>
+
+  <div class="group trust" style="left:1186px;top:160px;width:360px;height:590px"><h2>Forge 可信执行层<small>唯一 SQL 执行权与安全否决点</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card"><h3>查询规划</h3><p>自然语言 → Forge JSON</p></div><div class="card"><h3>结构与语义校验</h3><p>JSON Schema、字段约定、Lint</p></div><div class="card key"><h3>确定性编译器</h3><p>Forge JSON → 方言 SQL</p></div></div>
+      <div><div class="card future"><span class="flag">阶段 4.5</span><h3>结构层工作台</h3><p>表格、DDL、ER 图、JSON</p></div><div class="card"><h3>QueryRun 查询记录</h3><p>SQL 摘要、身份、过期、Registry 版本</p></div><div class="card guard"><h3>只读执行器</h3><p>ACL、单语句、超时、行数上限</p></div></div>
+    </div>
+    <div class="card key"><h3>Forge 事实真相</h3><p>查询记录、SQL、审批、结果、审计和 Registry 版本</p></div>
+  </div>
+
+  <div class="boundary" style="left:290px;top:148px"><span>渠道信任边界</span></div><div class="boundary" style="left:1160px;top:148px"><span>执行信任边界</span></div>
+  <div class="arrow-line" style="left:272px;top:330px;width:46px"></div><div class="label" style="left:276px;top:305px">事件</div>
+  <div class="arrow-line" style="left:523px;top:330px;width:47px"></div><div class="label" style="left:518px;top:305px">可信身份</div>
+  <div class="arrow-line" style="left:870px;top:330px;width:48px"></div><div class="label" style="left:873px;top:305px">运行 Skill</div>
+  <div class="arrow-line" style="left:1138px;top:440px;width:48px"></div><div class="label" style="left:1128px;top:414px">调用 Forge</div>
+  <div class="arrow-line back" style="left:1138px;top:500px;width:48px"></div><div class="label" style="left:1124px;top:510px">审核与结果</div>
+
+  <div class="rule-note" style="left:52px;top:790px;width:310px;height:104px"><b>不可突破的职责边界</b>Pi 有调度权但不能访问数据库；Forge 有执行权但不编排完整业务流程。</div>
+  <div class="band" style="left:390px;top:790px;width:1156px;height:104px"><h2>状态真相源</h2><div class="cols" style="grid-template-columns:repeat(4,1fr)">
+    <div class="state"><b>Pi 状态库</b><span>任务、事件、Artifact、阶段尝试</span></div><div class="state"><b>Forge 状态库</b><span>查询、SQL、审批、结果、审计</span></div><div class="state"><b>Registry</b><span>结构、指标、约定、版本和草案</span></div><div class="state"><b>模型控制面</b><span>模型配置、激活版本、切换审计</span></div>
+  </div></div>
+  <div class="foot">实线表示调用；虚线表示结果回传；橙色边框表示安全否决点。</div>
+</section>
+
+<!-- 03 元数据模型 -->
+<section class="sheet" id="metadata">
+  <header class="head"><div class="no">03 · 元数据模型架构</div><h1>从组织、数据源到语义与版本</h1><p>结构层和语义层共同组成 Registry；运行时 QueryRun 必须绑定明确的数据源与 Registry 版本。</p></header><div class="stamp">CANONICAL METADATA MODEL</div>
+
+  <div class="group" style="left:54px;top:158px;width:250px;height:588px"><h2>组织与权限模型<small>决定谁能看到什么</small></h2>
+    <div class="card key"><h3>Organization</h3><p>组织：租户与资产隔离边界</p></div>
+    <div class="card"><h3>Team</h3><p>团队：数据域和协作边界</p></div>
+    <div class="card"><h3>User / Service Identity</h3><p>用户与服务身份：操作者和调用方</p></div>
+    <div class="card guard"><h3>ACL Policy</h3><p>数据源、表、字段、指标和操作权限</p></div>
+    <div class="card"><h3>Channel Identity</h3><p>飞书/钉钉用户映射到可信内部身份</p></div>
+  </div>
+
+  <div class="group main" style="left:352px;top:158px;width:506px;height:588px"><h2>物理结构层 · Canonical Schema<small>DDL、ER、表格、JSON 的唯一真相源</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card key"><h3>DataSource</h3><p>数据源、方言、连接引用、只读能力</p></div><div class="card"><h3>Catalog / Schema</h3><p>数据库目录与命名空间</p></div><div class="card"><h3>Table / View</h3><p>名称、类型、注释、业务别名和标签</p></div><div class="card"><h3>Column</h3><p>顺序、原始类型、规范类型、nullable、default、注释、enum</p></div></div>
+      <div><div class="card"><h3>Primary Key</h3><p>主键字段与顺序</p></div><div class="card"><h3>Foreign Key</h3><p>真实外键关系；ER 图主要事实来源</p></div><div class="card"><h3>Unique / Index</h3><p>唯一约束、普通索引和组合顺序</p></div><div class="card guard"><h3>Inferred Relation</h3><p>根据命名推断的关系必须标记“待确认”，不能冒充外键</p></div></div>
+    </div>
+    <div class="card"><h3>结构投影</h3><p>统一结构模型 → 表格视图 / 方言 DDL / ER 图 / JSON；视图布局信息与结构事实分离保存。</p></div>
+  </div>
+
+  <div class="group" style="left:906px;top:158px;width:300px;height:588px"><h2>业务语义层<small>告诉模型字段和指标“意味着什么”</small></h2>
+    <div class="card key"><h3>Metric</h3><p>指标公式、粒度、时间窗口、过滤条件和边界</p></div>
+    <div class="card"><h3>Dimension</h3><p>业务维度、层级、枚举和展示名称</p></div>
+    <div class="card"><h3>Disambiguation</h3><p>业务歧义规则与必须澄清的问题</p></div>
+    <div class="card"><h3>Field Convention</h3><p>状态字段、时间字段、排序和 Join 使用约定</p></div>
+    <div class="card"><h3>Business Context</h3><p>组织术语、背景知识与已确认事实</p></div>
+    <div class="card"><h3>Lineage / Ownership</h3><p>指标依赖、数据负责人和变更影响范围</p></div>
+  </div>
+
+  <div class="group trust" style="left:1254px;top:158px;width:290px;height:588px"><h2>版本与运行时绑定<small>保证每次查询都可重现</small></h2>
+    <div class="card"><h3>RegistryDraft</h3><p>同步、DDL 导入或界面编辑产生的草案</p></div>
+    <div class="card"><h3>RegistryDiff</h3><p>新增、删除、类型、约束和语义变化</p></div>
+    <div class="card guard"><h3>RegistryRevision</h3><p>审核后发布的不可变版本，可回滚</p></div>
+    <div class="card"><h3>Source Fingerprint</h3><p>数据库结构指纹和同步时间</p></div>
+    <div class="card key"><h3>QueryRun Binding</h3><p>绑定 datasource_id、registry_revision、model_revision、org/team/user</p></div>
+    <div class="card"><h3>Evidence Reference</h3><p>查询结果行 qr_*#row:N，供分析和报告引用</p></div>
+  </div>
+
+  <div class="arrow-line" style="left:304px;top:350px;width:48px"></div><div class="label" style="left:307px;top:325px">授权</div>
+  <div class="arrow-line" style="left:858px;top:350px;width:48px"></div><div class="label" style="left:861px;top:325px">解释</div>
+  <div class="arrow-line" style="left:1206px;top:350px;width:48px"></div><div class="label" style="left:1208px;top:325px">版本化</div>
+
+  <div class="band" style="left:54px;top:790px;width:1490px;height:104px"><h2>关键关系</h2><div class="cols" style="grid-template-columns:repeat(5,1fr)">
+    <div class="state"><b>组织 1:N 团队</b><span>团队拥有数据源可见性和 Registry scope。</span></div><div class="state"><b>数据源 1:N Schema</b><span>Schema 继续包含表/视图和字段。</span></div><div class="state"><b>表 N:N 表</b><span>通过真实外键或待确认关系构成 ER。</span></div><div class="state"><b>指标 N:N 字段</b><span>指标公式引用字段、维度和过滤规则。</span></div><div class="state"><b>QueryRun → Revision</b><span>每次查询固定结构、语义和模型版本。</span></div>
+  </div>
+  <div class="foot">DDL 编辑只修改 RegistryDraft，不直接执行数据库 DDL；数据库 migration 属于独立高风险能力。</div>
+</section>
+
+<!-- 04 任务流程 -->
+<section class="sheet" id="flow">
+  <header class="head"><div class="no">04 · 端到端任务流程</div><h1>从用户问题到证据化报告</h1><p>每个高风险步骤都有持久化状态、人工审批和可恢复边界。</p></header><div class="stamp">TASKRUN · QUERYRUN · ARTIFACT</div>
+  <div class="section-title" style="left:60px;top:148px">A. 输入与澄清</div>
+  <div class="step" style="left:60px;top:180px"><div class="num">01</div><h3>渠道接收消息</h3><p>验证服务密钥，按事件 ID 去重，映射可信用户身份。</p></div>
+  <div class="step" style="left:320px;top:180px"><div class="num">02</div><h3>创建 TaskRun</h3><p>Pi 创建唯一任务，记录渠道、会话、组织、团队和用户。</p></div>
+  <div class="step" style="left:580px;top:180px"><div class="num">03</div><h3>需求与指标澄清</h3><p>纯问候或信息不足时进入 needs_input，不生成 SQL。</p></div>
+  <div class="step" style="left:840px;top:180px"><div class="num">04</div><h3>结构化 Artifact</h3><p>Skill 只能通过受控工具提交经过 Schema 校验的产物。</p></div>
+  <div class="step-arrow" style="left:280px;top:236px;width:40px"></div><div class="step-arrow" style="left:540px;top:236px;width:40px"></div><div class="step-arrow" style="left:800px;top:236px;width:40px"></div>
+
+  <div class="section-title" style="left:60px;top:360px">B. 查询准备、审核与可信执行</div>
+  <div class="step" style="left:60px;top:392px"><div class="num">05</div><h3>Forge 查询规划</h3><p>Registry 注入 → 模型生成 Forge JSON → Schema 和 Lint 校验。</p></div>
+  <div class="step" style="left:320px;top:392px"><div class="num">06</div><h3>确定性编译</h3><p>Compiler 生成方言 SQL，并保存 SQL 摘要与 Registry 版本。</p></div>
+  <div class="step guard" style="left:580px;top:392px"><div class="num">07</div><h3>人工审核 SQL</h3><p>用户审核固定 SQL；审批绑定 QueryRun ID 与 SQL hash。</p></div>
+  <div class="step guard" style="left:840px;top:392px"><div class="num">08</div><h3>只读执行</h3><p>Forge 复核身份、过期、结构漂移和权限后执行。</p></div>
+  <div class="step-arrow" style="left:280px;top:448px;width:40px"></div><div class="step-arrow" style="left:540px;top:448px;width:40px"></div><div class="step-arrow" style="left:800px;top:448px;width:40px"></div>
+
+  <div class="section-title" style="left:60px;top:572px">C. 证据分析、补查与交付</div>
+  <div class="step" style="left:60px;top:604px"><div class="num">09</div><h3>查询结果 Artifact</h3><p>保存列、行、截断状态、执行耗时和证据引用。</p></div>
+  <div class="step" style="left:320px;top:604px"><div class="num">10</div><h3>证据化分析</h3><p>Finding 只能引用真实 qr_*#row:N；假设不能冒充结论。</p></div>
+  <div class="step guard" style="left:580px;top:604px"><div class="num">11</div><h3>一次性补查</h3><p>只允许从模型建议中选择一次；子任务仍需独立 SQL 审批。</p></div>
+  <div class="step" style="left:840px;top:604px"><div class="num">12</div><h3>确定性报告</h3><p>报告不得扩大分析结论；Markdown 由服务端渲染。</p></div>
+  <div class="step-arrow" style="left:280px;top:660px;width:40px"></div><div class="step-arrow" style="left:540px;top:660px;width:40px"></div><div class="step-arrow" style="left:800px;top:660px;width:40px"></div>
+
+  <div class="group" style="left:1120px;top:180px;width:420px;height:536px"><h2>全流程可靠性与安全门禁<small>每个阶段都可以解释、恢复和审计</small></h2>
+    <div class="card"><h3>StageAttempt</h3><p>模型和 Forge 调用都绑定尝试次数、租约、超时与幂等键。</p></div>
+    <div class="card"><h3>重启恢复</h3><p>启动只回收过期租约并恢复可重试状态，不自动重放模型或 SQL。</p></div>
+    <div class="card guard"><h3>Forge 独立否决</h3><p>SQL hash 不匹配、身份不符、审批过期、Registry 漂移或非只读账户均拒绝执行。</p></div>
+    <div class="card"><h3>渠道幂等</h3><p>重复消息不创建第二个 TaskRun；重复按钮不执行第二次 SQL。</p></div>
+    <div class="card"><h3>模型版本固定</h3><p>新任务读取当前激活模型；在途任务和重试固定原模型版本。</p></div>
+    <div class="card guard"><h3>证据边界</h3><p>报告只能复用 AnalysisArtifact 中已验证的 finding 和 evidence。</p></div>
+  </div>
+  <div class="band" style="left:60px;top:790px;width:1480px;height:96px"><h2>关键状态</h2><div class="cols" style="grid-template-columns:repeat(8,1fr)">
+    <div class="state"><b>created</b><span>已创建</span></div><div class="state"><b>needs_input</b><span>等待补充</span></div><div class="state"><b>waiting_approval</b><span>等待 SQL 审批</span></div><div class="state"><b>querying</b><span>只读执行中</span></div><div class="state"><b>ready_analysis</b><span>待分析</span></div><div class="state"><b>incomplete</b><span>证据不足</span></div><div class="state"><b>ready_report</b><span>待报告</span></div><div class="state"><b>completed</b><span>已完成</span></div>
+  </div>
+  <div class="foot">高风险动作必须人工确认；查询完成不等于业务分析任务完成。</div>
+</section>
+
+<!-- 03 关键闭环 -->
+<section class="sheet" id="loops">
+  <header class="head"><div class="no">05 · 关键闭环</div><h1>系统不是单向流水线，而是受控循环</h1><p>每个循环都有终止条件、人工确认和持久化状态，禁止模型无限自主重试。</p></header><div class="stamp">BOUNDED LOOPS · HUMAN IN THE LOOP</div>
+
+  <div class="loop-panel" style="left:54px;top:158px;width:720px;height:320px"><h2>闭环 A：需求澄清与 SQL 审核</h2><p>用户信息不足或拒绝 SQL 时，回到需求而不是直接修改并执行 SQL。</p>
+    <svg class="loop-svg" viewBox="0 0 720 320"><defs><marker id="loopArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4fd1ff"/></marker></defs><path class="loop-path" d="M175 176H235"/><path class="loop-path" d="M385 176H445"/><path class="loop-path" d="M595 176H645"/><path class="loop-path return" d="M645 215V270H309V215"/><text class="loop-text return" x="348" y="287">信息不足 / 用户拒绝 → 回到需求澄清</text><text class="loop-text" x="606" y="120">批准 → 执行</text></svg>
+    <div class="loop-node" style="left:24px;top:140px"><b>用户问题</b><span>自然语言需求</span></div><div class="loop-node" style="left:234px;top:140px"><b>需求澄清</b><span>needs_input</span></div><div class="loop-node" style="left:444px;top:140px"><b>准备 SQL</b><span>Forge JSON → SQL</span></div><div class="loop-node guard" style="left:624px;top:140px;width:72px"><b>审核</b><span>批准 / 拒绝</span></div>
+  </div>
+
+  <div class="loop-panel" style="left:826px;top:158px;width:718px;height:320px"><h2>闭环 B：证据不足时的一次性补查</h2><p>分析只能补查一次，且只能选择 AnalysisArtifact 给出的建议查询。</p>
+    <svg class="loop-svg" viewBox="0 0 718 320"><defs><marker id="loopArrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4fd1ff"/></marker></defs><path class="loop-path" style="marker-end:url(#loopArrowB)" d="M174 176H224"/><path class="loop-path" style="marker-end:url(#loopArrowB)" d="M374 176H424"/><path class="loop-path" style="marker-end:url(#loopArrowB)" d="M574 176H624"/><path class="loop-path return" style="marker-end:url(#loopArrowB)" d="M659 215V270H299V215"/><path class="loop-path" style="marker-end:url(#loopArrowB)" d="M299 140V104H680"/><text class="loop-text" x="430" y="96">分析完整，或补查一次后 → 报告</text><text class="loop-text return" x="330" y="287">合并父子结果 → 只重新分析一次</text></svg>
+    <div class="loop-node" style="left:24px;top:140px"><b>父查询结果</b><span>QueryResultArtifact</span></div><div class="loop-node" style="left:224px;top:140px"><b>分析不完整</b><span>incomplete + 建议</span></div><div class="loop-node guard" style="left:424px;top:140px"><b>子 QueryRun</b><span>独立 SQL 审批执行</span></div><div class="loop-node" style="left:624px;top:140px;width:70px"><b>合并</b><span>证据</span></div>
+  </div>
+
+  <div class="loop-panel" style="left:54px;top:520px;width:720px;height:300px"><h2>闭环 C：模型配置验证与切换</h2><p>配置失败不能替换当前可用模型；修正后重新验证，无需重启服务。</p>
+    <svg class="loop-svg" viewBox="0 0 720 300"><path class="loop-path" d="M175 166H245"/><path class="loop-path" d="M395 166H465"/><path class="loop-path" d="M615 166H675"/><path class="loop-path return" d="M395 206V252H100V206"/><text class="loop-text return" x="160" y="268">验证失败 → 返回编辑，旧模型继续服务</text></svg>
+    <div class="loop-node" style="left:24px;top:130px"><b>编辑模型配置</b><span>Provider / 协议 / 模型</span></div><div class="loop-node guard" style="left:244px;top:130px"><b>真实验证</b><span>连接、工具调用、结构化输出</span></div><div class="loop-node" style="left:464px;top:130px"><b>生成版本</b><span>不可变 revision</span></div><div class="loop-node" style="left:644px;top:130px;width:52px"><b>激活</b><span>CAS</span></div>
+  </div>
+
+  <div class="loop-panel" style="left:826px;top:520px;width:718px;height:300px"><h2>闭环 D：Registry 同步与结构变更审核</h2><p>数据库结构变化先形成差异草案；危险变更必须审核后才发布新 Registry 版本。</p>
+    <svg class="loop-svg" viewBox="0 0 718 300"><path class="loop-path" d="M174 166H224"/><path class="loop-path" d="M374 166H424"/><path class="loop-path" d="M574 166H624"/><path class="loop-path return" d="M574 206V252H299V206"/><text class="loop-text return" x="326" y="268">拒绝 / 修订 → 更新草案后再次审核</text></svg>
+    <div class="loop-node" style="left:24px;top:130px"><b>数据库内省</b><span>只读读取 Schema</span></div><div class="loop-node" style="left:224px;top:130px"><b>结构差异草案</b><span>新增、删除、类型和约束</span></div><div class="loop-node guard" style="left:424px;top:130px"><b>人工审核</b><span>危险变化明确确认</span></div><div class="loop-node" style="left:624px;top:130px;width:70px"><b>发布</b><span>Revision</span></div>
+  </div>
+  <div class="foot">所有循环都是有界循环：澄清等待用户、SQL 等待审批、补查最多一次、模型和 Registry 切换必须人工激活。</div>
+</section>
+
+<!-- 04 实现部署 -->
+<section class="sheet" id="implementation">
+  <header class="head"><div class="no">06 · 当前实现与部署拓扑</div><h1>代码模块、服务进程与端口</h1><p>当前 M4.1 环境运行在 NAS Ubuntu；Web 对内网开放，Pi、模型和数据库保持隔离。</p></header><div class="stamp">DEV NAS · 192.168.8.10</div>
+
+  <div class="group main" style="left:54px;top:158px;width:460px;height:570px"><h2>Pi Orchestrator 服务<small>services/pi-orchestrator · Node 22</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card"><h3>server.ts</h3><p>Task API、ChannelEvent API、健康检查</p></div><div class="card"><h3>application.ts</h3><p>TaskRun 和 Stage 推进</p></div><div class="card"><h3>skill-executor.ts</h3><p>隔离 Pi Session 与结构化工具</p></div><div class="card"><h3>channels/*</h3><p>身份、事件幂等、统一 Renderer</p></div></div>
+      <div><div class="card"><h3>sqlite-store.ts</h3><p>Task、Event、Artifact、Attempt</p></div><div class="card"><h3>stage-attempts.ts</h3><p>租约、超时和重启对账</p></div><div class="card"><h3>forge/*-client.ts</h3><p>受控调用 Forge QueryRun API</p></div><div class="card guard"><h3>运行时限制</h3><p>无数据库凭证；关闭 Pi 内置工具</p></div></div>
+    </div>
+    <div class="card key"><h3>监听地址</h3><p class="code">127.0.0.1:14310　·　forge-m41-pi.service</p><span class="status ok">active</span></div>
+  </div>
+
+  <div class="group trust" style="left:566px;top:158px;width:556px;height:570px"><h2>Forge Web 与可信执行服务<small>Python · FastAPI · SQLAlchemy</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card"><h3>web/router.py</h3><p>Web 页面、设置、任务代理</p></div><div class="card"><h3>web/routes/query_runs.py</h3><p>内部 QueryRun API</p></div><div class="card"><h3>agent/agent.py</h3><p>查询准备与问候语前置门禁</p></div><div class="card"><h3>agent/llm.py</h3><p>Provider 协议与 Tool Calling</p></div></div>
+      <div><div class="card"><h3>registry/sync.py</h3><p>数据库结构内省与 Registry 合并</p></div><div class="card"><h3>forge/compiler.py</h3><p>确定性 SQL 编译</p></div><div class="card"><h3>forge/query_runs.py</h3><p>审批、幂等、执行与结果</p></div><div class="card guard"><h3>forge/executor.py</h3><p>唯一数据库执行入口</p></div></div>
+    </div>
+    <div class="card key"><h3>监听地址</h3><p class="code">192.168.8.10:18001　·　forge-m41-api.service</p><span class="status ok">active · 内网认证</span></div>
+  </div>
+
+  <div class="group" style="left:1174px;top:158px;width:370px;height:570px"><h2>外部资源与数据<small>密钥和数据库不进入 Pi</small></h2>
+    <div class="card"><h3>LLM Provider</h3><p>Forge 查询规划模型；Pi Skills 使用独立模型绑定。</p><span class="status plan">正在改造为热切换</span></div>
+    <div class="card"><h3>拾穗 DATA Skills</h3><p>独立仓库，当前白名单仅四个 MVP Skill。</p></div>
+    <div class="card guard"><h3>测试数据库</h3><p>large fixture 只读副本；SQLite mode=ro，文件 SHA-256 保持不变。</p></div>
+    <div class="card"><h3>Registry</h3><p>结构层、指标、歧义规则和字段约定。</p></div>
+    <div class="card"><h3>Secret 文件</h3><p>仅 NAS mode 600；不进入 Git、Artifact 或日志。</p></div>
+    <div class="card"><h3>飞书 / 钉钉</h3><p>飞书 gated path 已实现；钉钉待复用。</p></div>
+  </div>
+
+  <div class="band" style="left:54px;top:772px;width:1490px;height:122px"><h2>持久化文件与恢复边界</h2><div class="cols" style="grid-template-columns:repeat(5,1fr)">
+    <div class="state"><b>orchestrator.sqlite3</b><span>Pi Task/Event/Artifact/Attempt<br>SQLite WAL</span></div><div class="state"><b>query-runs.sqlite3</b><span>Forge QueryRun 与执行结果</span></div><div class="state"><b>forge-audit.sqlite3</b><span>查询与审批审计</span></div><div class="state"><b>schema.registry.json</b><span>当前结构层；将升级为版本化统一结构模型</span></div><div class="state"><b>forge.yaml / Model Store</b><span>当前需重启；阶段 4.4 改为无重启切换</span></div>
+  </div>
+  <div class="foot">当前部署目录：~/services/forge-m4.1　·　Web 页面：http://192.168.8.10:18001/tasks</div>
+</section>
+
+<!-- 04 控制面 -->
+<section class="sheet" id="control">
+  <header class="head"><div class="no">07 · 控制面与下一阶段</div><h1>模型控制面与 Registry Studio</h1><p>配置可以方便切换，但必须保留版本、验证、审计和回滚，不能依赖进程重启。</p></header><div class="stamp">PHASE 4.4 / 4.5</div>
+
+  <div class="group main" style="left:54px;top:158px;width:720px;height:580px"><h2>阶段 4.4 · 模型配置控制面<small>用户切换模型无需重启服务</small></h2>
+    <div class="cols" style="grid-template-columns:repeat(4,1fr)">
+      <div class="card key"><h3>1. 模型配置</h3><p>Provider、协议、Base URL、模型、能力和密钥引用。</p></div>
+      <div class="card"><h3>2. 配置验证</h3><p>真实检查连接、Tool Calling 和结构化输出。</p></div>
+      <div class="card"><h3>3. 不可变版本</h3><p>验证成功生成 ModelProfile Revision。</p></div>
+      <div class="card key"><h3>4. 原子激活</h3><p>按组织、团队和 Stage 更新 ActiveBinding。</p></div>
+    </div>
+    <div class="card guard" style="margin-top:20px"><h3>失败关闭</h3><p>未配置 LLM：不调用模型、不生成 SQL，明确返回“尚未配置 LLM”。配置错误：保留旧的激活版本，并返回有界的“LLM 配置错误”；原始 Key 和服务端响应不进入用户消息。</p></div>
+    <div class="cols" style="grid-template-columns:1fr 1fr;margin-top:12px">
+      <div class="card"><h3>Forge 查询规划模型</h3><p>作用域：forge.query_planning。QueryRun 保存 model revision。</p></div>
+      <div class="card"><h3>Pi Skill 模型</h3><p>澄清、指标、分析、报告可统一默认或按 Stage 覆盖。</p></div>
+    </div>
+    <div class="card"><h3>切换语义</h3><p>新任务读取新版本；在途任务和 retry 固定旧版本；失败不影响当前版本；支持一键回滚和切换审计。</p></div>
+  </div>
+
+  <div class="group" style="left:826px;top:158px;width:718px;height:580px"><h2>阶段 4.5 · Registry Studio<small>结构层多视图与安全编辑</small></h2>
+    <div class="cols" style="grid-template-columns:repeat(4,1fr)">
+      <div class="card"><h3>表格视图</h3><p>浏览和维护表、字段、类型、约束与注释。</p></div>
+      <div class="card"><h3>DDL 视图</h3><p>按方言确定性渲染；编辑只形成草案。</p></div>
+      <div class="card"><h3>ER 图</h3><p>显示真实外键；推断关系必须人工确认。</p></div>
+      <div class="card"><h3>JSON 视图</h3><p>高级用户查看统一结构模型原文。</p></div>
+    </div>
+    <div class="card key" style="margin-top:20px"><h3>唯一真相源：Canonical Schema</h3><p>数据源、catalog/schema、表、字段、类型、nullable、default、主键、外键、唯一约束、索引、注释、标签和版本元数据。</p></div>
+    <div class="card"><h3>安全编辑流程</h3><p>数据库内省 / DDL 导入 / 表格编辑 / ER 编辑 → RegistryDraft → Schema 校验 → 确定性差异 → 人工审核 → RegistryRevision。</p></div>
+    <div class="card guard"><h3>不直接执行数据库 DDL</h3><p>结构层编辑不等于 ALTER TABLE。数据库 Migration 是未来独立的高风险能力。</p></div>
+    <div class="card"><h3>漂移与并发</h3><p>删除字段、类型收窄、nullable 收紧、PK/FK 变化必须审核；发布使用 revision CAS，保留完整 diff 和回滚点。</p></div>
+  </div>
+
+  <div class="band" style="left:54px;top:782px;width:1490px;height:110px"><h2>共同设计原则</h2><div class="cols" style="grid-template-columns:repeat(4,1fr)">
+    <div class="state"><b>一个真相源</b><span>视图和进程不能各自保存互相漂移的状态。</span></div><div class="state"><b>先验证再激活</b><span>配置保存不代表配置可用；验证失败不影响当前版本。</span></div><div class="state"><b>在途任务固定</b><span>模型和 Registry revision 在任务开始时快照固定。</span></div><div class="state"><b>全程可审计</b><span>谁在何时修改、验证、激活和回滚都必须可追踪。</span></div>
+  </div>
+  <div class="foot">阶段 4.4 优先于阶段 4.5：先解决模型切换与配置失败关闭，再建设结构层工作台。</div>
+</section>
+
+<!-- 08 模型与 Agent 运行时 -->
+<section class="sheet" id="model-runtime">
+  <header class="head"><div class="no">08 · 模型与 Agent 运行时架构</div><h1>不同阶段可以使用不同模型，但共享统一配置控制面</h1><p>模型只负责受限推理；任务状态、结构约束、SQL 执行和证据验证都由确定性服务控制。</p></header><div class="stamp">MODEL ROUTING · SKILL RUNTIME</div>
+  <div class="group" style="left:54px;top:160px;width:310px;height:580px"><h2>模型配置入口<small>组织管理员操作</small></h2>
+    <div class="card"><h3>ModelProfile</h3><p>Provider、协议、Base URL、模型 ID、能力声明和 secret_ref</p></div>
+    <div class="card guard"><h3>配置验证器</h3><p>连通性、鉴权、Tool Calling、Structured Output 和超时</p></div>
+    <div class="card"><h3>Profile Revision</h3><p>验证通过后生成不可变版本</p></div>
+    <div class="card key"><h3>ActiveBinding</h3><p>按组织、团队、Stage 原子激活</p></div>
+    <div class="card"><h3>切换审计</h3><p>操作者、旧版本、新版本、验证结果和回滚</p></div>
+  </div>
+  <div class="group main" style="left:412px;top:160px;width:500px;height:580px"><h2>Pi Skill 模型运行时<small>阶段固定、Session 隔离</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card"><h3>需求澄清 Stage</h3><p>输出 ClarificationArtifact</p></div><div class="card"><h3>指标审查 Stage</h3><p>输出 MetricDefinitionArtifact</p></div></div>
+      <div><div class="card"><h3>归因分析 Stage</h3><p>输出 AnalysisArtifact</p></div><div class="card"><h3>报告 Stage</h3><p>输出 RenderedOutputArtifact</p></div></div>
+    </div>
+    <div class="card key"><h3>隔离 Pi Session</h3><p>每次只注入一个 Skill、一个结构化提交工具和当前任务上下文；内置 Shell/文件工具关闭。</p></div>
+    <div class="card"><h3>StageAttempt 固定版本</h3><p>开始时保存 model_revision；超时、重试和恢复继续使用原版本。</p></div>
+    <div class="card guard"><h3>产物二次校验</h3><p>服务端重新验证 Artifact Schema 和证据引用；模型文本不直接成为任务状态。</p></div>
+  </div>
+  <div class="group trust" style="left:960px;top:160px;width:584px;height:580px"><h2>Forge 查询规划模型<small>自然语言到 Forge JSON</small></h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div><div class="card"><h3>Schema RAG</h3><p>只召回当前用户有权访问的表和字段</p></div><div class="card"><h3>Registry Context</h3><p>指标、歧义、字段约定和业务上下文</p></div><div class="card"><h3>Tool Calling</h3><p>模型只能提交 generate_forge_query</p></div></div>
+      <div><div class="card"><h3>Forge JSON Schema</h3><p>约束表、字段、Join、聚合、窗口和过滤</p></div><div class="card"><h3>Lint / Retry</h3><p>约定错误可有界重试；不能无限循环</p></div><div class="card key"><h3>model_revision</h3><p>QueryRun 固定查询模型版本</p></div></div>
+    </div>
+    <div class="card guard"><h3>失败关闭语义</h3><p>未配置 LLM：明确返回“尚未配置 LLM”，不生成 SQL。配置错误：返回有界错误并保持现有激活版本。Provider 原始密钥和内部响应不返回给用户。</p></div>
+    <div class="card"><h3>确定性后处理</h3><p>无论模型是谁，Forge JSON 都必须经过 Schema、Lint、Compiler 和人工 SQL 审核。</p></div>
+  </div>
+  <div class="band" style="left:54px;top:790px;width:1490px;height:104px"><h2>支持的模型接入形态</h2><div class="cols" style="grid-template-columns:repeat(4,1fr)"><div class="state"><b>火山方舟 Coding Plan</b><span>ark-code-latest 或套餐允许的具体模型。</span></div><div class="state"><b>OpenAI-compatible API</b><span>显式验证 Chat Completions/Responses 与工具协议。</span></div><div class="state"><b>Anthropic-compatible API</b><span>Messages API 与 Tool Use 协议必须匹配。</span></div><div class="state"><b>本地私有模型</b><span>通过兼容网关接入，仍需能力验证和超时保护。</span></div></div></div>
+  <div class="foot">模型可替换，可信边界不可替换：模型没有数据库连接、审批权和 SQL 执行权。</div>
+</section>
+
+<!-- 09 安全架构 -->
+<section class="sheet" id="security">
+  <header class="head"><div class="no">09 · 安全与信任架构</div><h1>身份、权限、审批、密钥和数据边界</h1><p>默认失败关闭；服务身份和最终用户身份同时校验；任何模型或渠道都不能越过 Forge。</p></header><div class="stamp">ZERO TRUST BETWEEN LAYERS</div>
+  <div class="group" style="left:54px;top:158px;width:280px;height:590px"><h2>身份与认证<small>谁在调用</small></h2>
+    <div class="card"><h3>Web Session</h3><p>管理员密码登录、签名 Cookie、内网部署</p></div><div class="card"><h3>Channel Service Key</h3><p>渠道调用 Pi 的独立密钥</p></div><div class="card"><h3>Pi Service Key</h3><p>Pi 调用 Forge 内部 API 的独立密钥</p></div><div class="card"><h3>最终用户身份</h3><p>org_id、team_id、user_id 绑定任务和审批</p></div><div class="card guard"><h3>禁止复用</h3><p>渠道密钥、Pi 密钥、模型 Key 和数据库凭证相互隔离</p></div>
+  </div>
+  <div class="group" style="left:382px;top:158px;width:280px;height:590px"><h2>授权与多租户<small>能访问什么</small></h2>
+    <div class="card"><h3>组织边界</h3><p>Registry、数据源、模型配置和审计按组织隔离</p></div><div class="card"><h3>团队边界</h3><p>团队可见表、字段、指标和模型策略</p></div><div class="card"><h3>数据 ACL</h3><p>Forge 在规划和执行阶段都独立校验</p></div><div class="card"><h3>任务归属</h3><p>只有任务所属用户或授权管理员可以审批</p></div><div class="card guard"><h3>未知身份</h3><p>无法映射或权限不足时直接拒绝，不降级为匿名</p></div>
+  </div>
+  <div class="group trust" style="left:710px;top:158px;width:400px;height:590px"><h2>执行安全门禁<small>Forge 独立否决</small></h2>
+    <div class="card guard"><h3>SQL hash 审批</h3><p>审核内容与执行内容必须完全一致</p></div><div class="card"><h3>QueryRun 状态</h3><p>仅 needs_review 可审批；过期、取消、已执行均拒绝</p></div><div class="card"><h3>Registry 漂移</h3><p>结构版本变化后必须重新准备 SQL</p></div><div class="card"><h3>只读执行</h3><p>只允许单条 SELECT/WITH；数据库账户本身也必须只读</p></div><div class="card"><h3>资源限制</h3><p>语句超时、最大行数、结果截断和有界错误</p></div><div class="card guard"><h3>人工确认</h3><p>SQL、补查、模型激活和 Registry 发布均需要明确授权</p></div>
+  </div>
+  <div class="group" style="left:1158px;top:158px;width:386px;height:590px"><h2>密钥与敏感数据<small>什么不能泄漏</small></h2>
+    <div class="card"><h3>Secret Store / Vault</h3><p>ModelProfile 只保存 secret_ref，不保存明文 Key</p></div><div class="card"><h3>文件权限</h3><p>测试环境敏感配置 mode 600，不提交 Git</p></div><div class="card"><h3>日志脱敏</h3><p>不记录 API Key、数据库密码、渠道 Token 和完整敏感结果</p></div><div class="card"><h3>Artifact 最小化</h3><p>只保存任务所需字段和有界结果集</p></div><div class="card"><h3>网络隔离</h3><p>Pi、模型和数据库只在内网或 loopback；仅 Web 按需开放</p></div><div class="card guard"><h3>模型无权限</h3><p>模型不能读取密钥、直接访问数据库或绕过审批</p></div>
+  </div>
+  <div class="band" style="left:54px;top:790px;width:1490px;height:104px"><h2>四条信任边界</h2><div class="cols" style="grid-template-columns:repeat(4,1fr)"><div class="state"><b>渠道 → Pi</b><span>服务鉴权、身份映射、事件幂等。</span></div><div class="state"><b>Pi → Forge</b><span>服务身份 + 最终用户身份 + TaskRun。</span></div><div class="state"><b>Forge → 数据库</b><span>只读账户、ACL、超时与资源上限。</span></div><div class="state"><b>平台 → 模型</b><span>最小上下文、无密钥暴露、结构化输出校验。</span></div></div></div>
+  <div class="foot">安全原则：调度权与执行权分离；身份可信与内容可信分离；模型能力与系统权限分离。</div>
+</section>
+
+<!-- 10 状态一致性 -->
+<section class="sheet" id="state">
+  <header class="head"><div class="no">10 · 状态、一致性与恢复架构</div><h1>每类状态只有一个真相源</h1><p>不允许 Pi 与 Forge 双写任务状态；不允许渠道保存第二套业务状态机。</p></header><div class="stamp">DURABLE STATE · CAS · IDEMPOTENCY</div>
+  <div class="group main" style="left:54px;top:158px;width:350px;height:580px"><h2>Pi 状态数据库<small>orchestrator.sqlite3 · WAL</small></h2>
+    <div class="card"><h3>TaskRun</h3><p>任务身份、状态、当前阶段、父子关系和渠道信息</p></div><div class="card"><h3>TaskEvent</h3><p>事务内生成递增 sequence，记录所有状态变化</p></div><div class="card"><h3>Artifact</h3><p>结构化 Skill 产物、Schema 版本和 producer</p></div><div class="card"><h3>StageAttempt</h3><p>stage、attempt number、lease、timeout 和 retry status</p></div><div class="card"><h3>ChannelEvent</h3><p>(channel,event_id) 唯一，关联 TaskRun</p></div><div class="card guard"><h3>一致性规则</h3><p>Task 状态使用 CAS；Task 创建/转换和对应 Event 共用事务</p></div>
+  </div>
+  <div class="group trust" style="left:452px;top:158px;width:350px;height:580px"><h2>Forge 状态数据库<small>查询与可信执行真相</small></h2>
+    <div class="card"><h3>QueryRun</h3><p>任务、用户、数据源、SQL、hash、状态和过期时间</p></div><div class="card"><h3>Approval</h3><p>审批人、审批时间、幂等键和 SQL hash</p></div><div class="card"><h3>QueryResult</h3><p>列、行、行数、截断、耗时和执行时间</p></div><div class="card"><h3>Audit / Feedback</h3><p>查询审计、错误反馈和改进候选</p></div><div class="card"><h3>Registry Revision</h3><p>结构和语义版本、diff、操作者和回滚点</p></div><div class="card guard"><h3>一致性规则</h3><p>审批原子 claim 后才执行；重复幂等键返回原结果</p></div>
+  </div>
+  <div class="group" style="left:850px;top:158px;width:330px;height:580px"><h2>跨服务关联键<small>关联但不双写</small></h2>
+    <div class="card key"><h3>task_run_id</h3><p>跨渠道、Pi、Forge 和 Artifact 的顶级关联 ID</p></div><div class="card"><h3>query_run_id</h3><p>每次 SQL 准备、审批和执行的唯一 ID</p></div><div class="card"><h3>correlation_id</h3><p>日志与外部事件追踪</p></div><div class="card"><h3>registry_revision</h3><p>固定查询使用的结构与语义版本</p></div><div class="card"><h3>model_revision</h3><p>固定 Stage 和 QueryRun 使用的模型版本</p></div><div class="card"><h3>evidence_ref</h3><p>qr_*#row:N，连接结果、分析和报告</p></div>
+  </div>
+  <div class="group" style="left:1228px;top:158px;width:316px;height:580px"><h2>故障恢复<small>不盲目重放副作用</small></h2>
+    <div class="card"><h3>进程重启</h3><p>从 SQLite 恢复等待审批、待分析和待报告状态</p></div><div class="card"><h3>租约过期</h3><p>startup reconciliation 只标记 interrupted 并恢复 retry status</p></div><div class="card guard"><h3>禁止自动重放</h3><p>不自动调用模型，不自动批准，不自动再次执行 SQL</p></div><div class="card"><h3>重复请求</h3><p>事件、Task 创建、补查、审批均使用幂等键</p></div><div class="card"><h3>并发更新</h3><p>CAS 失败说明状态已被其他实例推进，当前实例停止写入</p></div><div class="card"><h3>备份</h3><p>SQLite 使用在线备份或停服复制，不能遗漏 WAL</p></div>
+  </div>
+  <div class="band" style="left:54px;top:790px;width:1490px;height:104px"><h2>状态归属原则</h2><div class="cols" style="grid-template-columns:repeat(4,1fr)"><div class="state"><b>任务状态归 Pi</b><span>Forge 不推进业务 Stage。</span></div><div class="state"><b>执行状态归 Forge</b><span>Pi 不伪造 QueryRun 和结果。</span></div><div class="state"><b>展示状态归 Renderer</b><span>渠道只消费，不成为真相源。</span></div><div class="state"><b>长期知识归 Registry</b><span>Session 内容必须审核后才能入库。</span></div></div></div>
+  <div class="foot">跨服务通过稳定 ID 和不可变 Artifact 协作，不通过共享可变内存或双写数据库协作。</div>
+</section>
+
+<!-- 11 API 集成 -->
+<section class="sheet" id="api">
+  <header class="head"><div class="no">11 · API 与集成契约架构</div><h1>渠道、Pi、Forge、模型和数据库之间的接口边界</h1><p>每个接口只开放完成本层职责所需的最小能力。</p></header><div class="stamp">CONTRACT-FIRST INTEGRATION</div>
+  <div class="group" style="left:54px;top:158px;width:300px;height:580px"><h2>渠道 → Pi<small>X-Channel-Service-Key</small></h2>
+    <div class="card key"><h3>POST /v1/channel-events</h3><p>message / action；外部身份、会话、消息和 TaskRun</p></div><div class="card"><h3>GET /presentation</h3><p>读取渠道无关的统一呈现模型</p></div><div class="card"><h3>ChannelEvent</h3><p>事件 ID、渠道、类型、用户、会话和 payload</p></div><div class="card"><h3>ChannelAction</h3><p>approve_query、analyze、render_report 等受控动作</p></div><div class="card guard"><h3>禁止能力</h3><p>渠道不能调用 Agent.process、Executor 或数据库</p></div>
+  </div>
+  <div class="group main" style="left:402px;top:158px;width:340px;height:580px"><h2>Web / Adapter → Pi Task API<small>TaskRun 控制面</small></h2>
+    <div class="card"><h3>POST /v1/tasks</h3><p>创建任务并返回 polling URL</p></div><div class="card"><h3>Stage APIs</h3><p>clarify、review-metric、prepare-query、analyze、render-report</p></div><div class="card"><h3>Approval APIs</h3><p>approve-query、supplements、resume-analysis</p></div><div class="card"><h3>Read APIs</h3><p>task、events、artifacts、attempts、presentation</p></div><div class="card key"><h3>202 + Polling</h3><p>长任务异步执行；客户端不依赖长 HTTP 连接</p></div>
+  </div>
+  <div class="group trust" style="left:790px;top:158px;width:370px;height:580px"><h2>Pi → Forge<small>X-Pi-Service-Key</small></h2>
+    <div class="card key"><h3>POST /api/internal/query-runs</h3><p>携带 task_run_id、组织、团队、用户、问题和幂等键</p></div><div class="card"><h3>GET /query-runs/{id}</h3><p>读取待审核 SQL 和状态</p></div><div class="card guard"><h3>POST /approve</h3><p>提交 approver_user_id + sql_hash；Forge 独立验证并执行</p></div><div class="card"><h3>POST /cancel</h3><p>取消尚未执行的 QueryRun</p></div><div class="card"><h3>GET /result</h3><p>读取有界结果和执行元数据</p></div><div class="card"><h3>外部 /prepare-query</h3><p>保持“只生成、不执行”的安全语义</p></div>
+  </div>
+  <div class="group" style="left:1208px;top:158px;width:336px;height:580px"><h2>Forge → 外部依赖<small>协议适配与最小权限</small></h2>
+    <div class="card"><h3>LLM API</h3><p>Anthropic Messages、OpenAI-compatible 或 Coding Plan；只发送最小 Schema 上下文</p></div><div class="card guard"><h3>数据库连接</h3><p>SQLAlchemy 方言；只读账户；所有 SQL 已经审核</p></div><div class="card"><h3>Registry 文件 / Store</h3><p>结构、指标、约定和业务上下文</p></div><div class="card"><h3>Secret Store</h3><p>通过 secret_ref 获取模型 Key 和数据库凭证</p></div><div class="card"><h3>可观测性出口</h3><p>日志、指标、Tracing；按 task_run_id 关联</p></div>
+  </div>
+  <div class="band" style="left:54px;top:790px;width:1490px;height:104px"><h2>核心 Artifact 契约</h2><div class="cols" style="grid-template-columns:repeat(6,1fr)"><div class="state"><b>Clarification</b><span>需求与缺口</span></div><div class="state"><b>MetricDefinition</b><span>指标口径</span></div><div class="state"><b>QueryPlan</b><span>Forge JSON 与 SQL</span></div><div class="state"><b>QueryResult</b><span>结果和证据行</span></div><div class="state"><b>Analysis</b><span>发现、假设、限制</span></div><div class="state"><b>RenderedOutput</b><span>报告结构和确定性正文</span></div></div></div>
+  <div class="foot">接口设计原则：显式身份、显式幂等、显式版本、显式审批；不通过自由文本隐式推进关键状态。</div>
+</section>
+</body></html>

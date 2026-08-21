@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+
+from config import cfg
+from agent.model_config import (
+    LLMConfigurationError,
+    LLMNotConfiguredError,
+    get_model_config,
+    reset_model_config_cache,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -22,11 +32,15 @@ def _load_forge_yaml() -> dict:
 
 
 def _save_forge_yaml(data: dict) -> None:
-    """写回 forge.yaml。"""
+    """Atomically write forge.yaml so hot readers never observe partial YAML."""
     yaml_path = Path(__file__).resolve().parents[2] / "forge.yaml"
-    yaml_path.write_text(
-        yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    temp_path = yaml_path.with_suffix(".yaml.tmp")
+    temp_path.write_text(
+        yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False),
+        encoding="utf-8",
     )
+    os.chmod(temp_path, 0o600)
+    os.replace(temp_path, yaml_path)
 
 
 def _mask_secret(value: str, visible: int = 4) -> str:
@@ -44,8 +58,19 @@ def _mask_db_url(url: str) -> str:
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request, saved: str = ""):
+async def settings_page(request: Request, saved: str = "", error: str = ""):
     y = _load_forge_yaml()
+    try:
+        active_model = get_model_config()
+        model_status = {
+            "configured": True,
+            "provider": active_model.provider,
+            "model": active_model.model,
+            "source": active_model.source,
+            "revision": active_model.revision[:15] + "…",
+        }
+    except (LLMNotConfiguredError, LLMConfigurationError) as exc:
+        model_status = {"configured": False, "error": str(exc)}
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -54,6 +79,18 @@ async def settings_page(request: Request, saved: str = ""):
             "mask_secret": _mask_secret,
             "mask_db_url": _mask_db_url,
             "saved": saved,
+            "error": error,
+            "model_status": model_status,
+            "llm_env_override": any(
+                os.getenv(name)
+                for name in ("LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL")
+            ),
+            "database_status": {
+                "configured": bool(cfg.DATABASE_URL),
+                "masked_url": _mask_db_url(cfg.DATABASE_URL),
+                "env_override": bool(os.getenv("DATABASE_URL")),
+                "readonly_confirmed": bool(cfg.DATABASE_READONLY_CONFIRMED),
+            },
         },
     )
 
@@ -73,6 +110,14 @@ async def settings_save_llm(
         y["llm"]["api_key"] = api_key
     y["llm"]["base_url"] = base_url
     _save_forge_yaml(y)
+    reset_model_config_cache()
+    try:
+        get_model_config()
+    except (LLMNotConfiguredError, LLMConfigurationError) as exc:
+        return RedirectResponse(
+            url=f"/admin/settings?error={quote(str(exc))}",
+            status_code=303,
+        )
     return RedirectResponse(url="/admin/settings?saved=llm", status_code=303)
 
 

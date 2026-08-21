@@ -13,14 +13,21 @@
     <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
     </svg>
-    <span class="text-sm text-green-800">配置已保存到 forge.yaml，重启服务后生效。</span>
+    <span class="text-sm text-green-800">
+      {% if saved == 'llm' %}LLM 配置已保存，新任务立即生效，无需重启服务。{% else %}配置已保存到 forge.yaml。{% endif %}
+    </span>
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 bg-red-50 border border-red-200 rounded-md px-4 py-3 text-sm text-red-800">
+    配置未生效：{{ error }}
   </div>
   {% endif %}
 
   <p class="text-sm text-gray-500 mb-8">
     修改后保存到 <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">forge.yaml</code>。
-    敏感字段（API Key、Secret）建议通过 <code class="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">.env</code> 文件配置，环境变量优先级高于此文件。
-    <strong>修改后需重启服务才能生效。</strong>
+    敏感字段（API Key、Secret）建议通过受限配置文件或 Secret Store 管理，环境变量优先级高于此文件。
+    <strong>LLM 配置对新任务即时生效；数据库、监听地址和记忆存储等进程级配置仍需重启。</strong>
   </p>
 
   {# ══════════════════════════════════════════════════════════════════════════ #}
@@ -29,7 +36,13 @@
   <div class="border border-gray-200 rounded-lg mb-6">
     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
       <h3 class="text-sm font-semibold text-gray-900">LLM 模型</h3>
-      <p class="text-xs text-gray-500 mt-0.5">配置用于生成 Forge JSON 的大语言模型。</p>
+      <p class="text-xs text-gray-500 mt-0.5">配置用于生成 Forge JSON 的大语言模型。保存后新任务立即加载，不需要重启。</p>
+      {% if model_status.configured %}
+      <p class="text-xs text-green-700 mt-2">当前生效：{{ model_status.provider }} / {{ model_status.model }}（来源：{{ model_status.source }}，版本：{{ model_status.revision }}）</p>
+      {% else %}
+      <p class="text-xs text-red-700 mt-2">当前不可用：{{ model_status.error }}</p>
+      {% endif %}
+      {% if llm_env_override %}<p class="text-xs text-amber-700 mt-1">环境变量正在覆盖页面配置；页面修改不会改变这些覆盖项。</p>{% endif %}
     </div>
     <form method="post" action="/admin/settings/llm" class="px-6 py-5 space-y-4">
       <div class="grid grid-cols-2 gap-4">
@@ -83,6 +96,11 @@
     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
       <h3 class="text-sm font-semibold text-gray-900">数据库连接</h3>
       <p class="text-xs text-gray-500 mt-0.5">Forge 直连数据库执行已审核的 SQL 并展示结果。</p>
+      {% if database_status.configured %}
+      <p class="text-xs text-green-700 mt-2">当前进程已配置：{{ database_status.masked_url }}；只读确认：{{ '是' if database_status.readonly_confirmed else '否' }}。{% if database_status.env_override %}来源为环境变量。{% endif %}</p>
+      {% else %}
+      <p class="text-xs text-red-700 mt-2">当前进程尚未配置数据库连接。</p>
+      {% endif %}
     </div>
     <form method="post" action="/admin/settings/database" class="px-6 py-5 space-y-4">
       <div>

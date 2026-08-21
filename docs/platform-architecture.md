@@ -1,6 +1,8 @@
 # Forge AI 数据任务平台架构
 
 > 状态：已确认目标架构 · Last updated: 2026-08-21。本文描述 Pi、Forge、拾穗 DATA Skills 与渠道之间的长期边界，不表示所有模块均已实现。
+>
+> 中文架构全景图：[`architecture-diagrams/forge-platform-architecture.html`](architecture-diagrams/forge-platform-architecture.html)，包含产品、技术、元数据、流程、闭环、部署、模型、安全、状态和接口等 11 个视角。
 
 ## 1. 产品定位
 
@@ -101,6 +103,7 @@ Pi 是任务底座和 Agent Runtime，负责：
 - 调用受控的 Forge Tools。
 - 将上一步 Artifact 交给下一阶段。
 - 记录 Stage 状态、耗时、失败和模型用量。
+- 按 Stage 读取版本化 ActiveModelBinding，并在 StageAttempt 中固定 model revision。
 
 生产运行时只暴露业务所需的自定义工具。默认的 `bash`、`write`、`edit` 和任意文件读取能力不进入客户运行环境。
 
@@ -122,6 +125,7 @@ Forge 是唯一可信执行层，负责：
 - 生成待审核 SQL，并确保审核内容与实际执行内容一致。
 - 查询超时、结果行数上限、敏感数据和表权限控制。
 - QueryRun、审批、执行、Audit、Feedback 与回放。
+- Forge 查询规划模型的 ModelProfile 验证、热切换、revision 固定与审计。
 - 结构层 Canonical Schema、版本、差异、草案审核与回滚。
 - 从同一 Canonical Schema 确定性投影表格、DDL、ER 图和 JSON 视图。
 
@@ -280,6 +284,7 @@ web session / feishu open_id / dingtalk user_id
 
 | 数据 | 真相源 | 说明 |
 |---|---|---|
+| ModelProfile Revision 与 ActiveBinding | Platform Model Control Plane | 目标态：Key 只保存 secret_ref；切换使用 CAS，新任务生效，在途任务固定旧 revision。当前 Forge 已实现文件 snapshot 热加载，持久化控制面待建设 |
 | 当前对话和推理上下文 | Pi Session | 可压缩、可过期，不作为组织事实 |
 | TaskRun 与 Stage 状态 | Pi Task Store | 支持暂停、恢复和渠道切换 |
 | QueryRun、SQL、审批、执行 | Forge | 可信查询审计真相源 |

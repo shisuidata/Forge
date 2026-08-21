@@ -56,6 +56,7 @@
 | Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 进行中：飞书 gated path | ChannelEvent、独立服务鉴权、只读身份映射、SQLite 幂等入站、ChannelPresentation Renderer 已完成；`FEISHU_PI_ENABLED` 新路径已覆盖消息 → SQL 审核 → hash 绑定批准 → 结果，默认关闭；待真实飞书凭证 smoke、补充信息/取消/补查和钉钉复用 |
+| Phase 4.4 Model Control Plane | 基础热加载已实现，版本控制待建设 | Forge 查询模型使用不可变 `ModelConfigSnapshot` + mtime/revision cache；Web 保存后新任务无需重启；缺失/错误配置失败关闭。待建设 Profile Store、真实验证、CAS 激活、回滚及 Pi Stage 绑定 |
 | Phase 4.5 Registry Studio | 需求已确认，待设计实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
 | Phase 2 QueryRun 审批执行闭环 | 已完成，待提交 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
@@ -68,6 +69,7 @@
 |---|---|---|
 | 2026-08-21 | 采用 Pi + Forge + 拾穗 DATA Skills + 多渠道四层架构 | Forge 从单体 Agent 演进为可信执行层 |
 | 2026-08-21 | 结构层支持表格、DDL、ER 图和 JSON 多视图 | Canonical Schema 仍是唯一真相源；各视图不得各自保存状态，编辑只修改 Registry 草案，不直接执行数据库 DDL |
+| 2026-08-21 | 模型切换不得依赖服务重启 | 模型配置改为版本化 ModelProfile + ActiveBinding；切换前验证，切换后新任务生效，在途任务固定旧 revision，可审计回滚 |
 | 2026-08-21 | Pi 拥有流程调度权，Forge 拥有可信执行权与否决权 | 禁止形成双 Orchestrator |
 | 2026-08-21 | 计划文档随需求确认和实施结果持续更新 | 文档更新成为开发门禁，而非事后总结 |
 | 2026-08-21 | Pi Runtime 默认关闭内置工具，仅显式加载四个 MVP Skills | 客户运行环境不继承个人 Pi 配置，也不具备文件或 Shell 权限 |
@@ -721,6 +723,12 @@ M4.1 问候语错误生成 SQL 修复决定：
 - 已完成：Forge commit `3323f7f` / main merge `2453bc9` 部署到 NAS；完整 Python suite 393 passed / 25 skipped；真实 ChannelEvent `hello` 返回 `needs_input`、0 actions、无 SQL。部署时同时修正 Pi 到内网 Forge 地址，避免 Forge 改为内网 IP 后仍请求 loopback。
 - 当前模型边界：NAS Forge 使用确定性 M4.1 测试模型；Pi 的 Coding Plan catalog 仍是 `volcengine-coding-plan / ark-code-latest`，但 NAS 仅有不可调用占位 Key。尚未完成真实 Coding Plan 模型验收，也未确认 `ark-code-latest` 当前是否映射到用户所说的 DeepSeek V4 Flash。
 
+M4.1 用户配置接管与服务重启规则：
+
+- 用户已在 NAS 配置 LLM，并要求确认测试数据库连接后重启服务。操作前只检查配置项是否存在、来源优先级、文件权限和 readiness，不读取或回显 Key/连接密码。
+- 数据库继续使用项目 `large` fixture 的独立只读副本；如环境变量已配置则不重复覆盖。Web 设置与 systemd `EnvironmentFile` 冲突时必须明确唯一生效来源，避免页面显示“已保存”但进程仍使用旧值。
+- 重启顺序为测试模型/真实外部模型依赖 → Forge API → Pi Orchestrator；重启后验证 Forge database/readonly/llm readiness、Pi readiness、`hello` 不生成 SQL和标准查询审核链路。
+
 剩余：
 
 - 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。
@@ -750,6 +758,70 @@ M4.1 问候语错误生成 SQL 修复决定：
 - 三个渠道使用同一 TaskRun 状态机。
 - 不在 Bot 内复制 Skill 路由和 Forge 查询逻辑。
 - 同一用户的权限在各渠道保持一致。
+
+### Phase 4.4：Model Control Plane（无需重启的模型切换）
+
+现状问题：
+
+- Python `Config` 是进程导入时创建的全局单例，Web 保存 `forge.yaml` 后运行进程仍使用旧值，只能靠重启刷新。
+- systemd `EnvironmentFile` 的 `LLM_*` 会覆盖 Web 写入的 YAML，出现“页面显示已保存，实际仍调用旧模型”。
+- Forge 查询规划模型与 Pi Skill 模型分属两份配置，用户无法看清当前哪个 Stage 使用哪个模型。
+- M4.1 已出现 `anthropic + Coding Plan base URL + deepseek-v4-flash` 组合请求 400，说明仅保存 provider/model/base_url 而不验证协议兼容性是不够的。
+
+目标模型：
+
+```text
+ModelProfile（provider/protocol/base_url/model/capabilities/secret_ref）
+        ↓ validate
+ModelProfileRevision（不可变）
+        ↓ atomic activate (CAS)
+ActiveModelBinding（scope + stage → revision）
+        ↓ snapshot
+TaskRun / QueryRun / StageAttempt.model_revision
+```
+
+Scope 至少支持：
+
+- `forge.query_planning`：自然语言到 Forge JSON。
+- `pi.clarification`、`pi.metric_review`、`pi.analysis`、`pi.report`：允许统一默认，也允许按 Stage 覆盖。
+- `org/team` 默认；Task 级临时覆盖只能由授权管理员设置并写审计。
+
+切换流程：
+
+1. 用户新建或编辑 ModelProfile 草案；API Key 只写 Secret Store/Vault，Profile 保存 `secret_ref`。
+2. 服务端做协议校验、模型能力检查和最小无副作用 smoke；例如 Structured Output / Tool Calling 必须真实通过。
+3. 验证成功后生成不可变 revision；用户点击激活时使用 expected current revision 做 CAS。
+4. 新 Task/QueryRun 读取一次 ActiveBinding 并固定 revision；在途任务和 retry 继续使用原 revision，避免中途换模型改变结果。
+5. 客户端/连接池按 revision 缓存并有界淘汰；不重启进程，不修改全局单例。
+6. 激活失败不影响当前模型；支持一键回滚到上一 revision，完整记录操作者、时间、验证结果和影响 scope。
+
+门禁：
+
+- 不允许每次 LLM 调用重新读取 YAML；使用进程内 revision cache + 持久化 Store + 原子失效通知。
+- 不允许把 API Key 放进 Web 响应、SQLite Artifact、Task metadata 或日志。
+- `readiness` 分开报告 active revision 是否可用，以及 draft validation 是否失败；不能只检查“Key 非空”。
+- Provider、协议和 base URL 必须成套验证，不能把 Anthropic SDK 指向只兼容 OpenAI Chat Completions 的地址。
+- 模型切换不是普通用户对话动作；需要组织管理员权限和审计。
+- 数据库连接、Registry revision 和执行账户不随模型切换热更新；本阶段只处理模型路由。
+
+当前已完成：
+
+- 新增热加载 `ModelConfigSnapshot`：每次新 LLM 调用获取一次不可变快照；配置未变化时命中内存 cache，`forge.yaml` mtime/size 或 LLM 环境变量变化时自动生成新 revision。
+- `agent/llm.py` 不再在生产调用路径直接读取全局 `cfg.LLM_*`；同一调用始终使用同一 snapshot。
+- Web 保存 LLM 后原子替换 YAML、失效 cache，新任务即时生效，不再显示“必须重启”。页面显示当前 provider/model/source/revision，并提示环境变量覆盖。
+- 缺少 LLM 时明确返回“尚未配置 LLM”，不调用模型、不生成 Forge JSON 或 SQL；配置/协议错误返回有界错误，不回显 Provider 原始响应和密钥。
+- 数据库设置页显示进程实际生效的脱敏 URL、环境变量来源和只读确认，避免 YAML 为空时误判“数据库未配置”。
+- 当前验证：完整 Python suite 401 passed / 25 skipped；热加载、缺失、部分配置、未知 Provider、环境覆盖、Web 无重启保存和错误脱敏均有自动测试。
+
+仍待实施：
+
+1. 将当前文件 revision cache 升级为持久化 ModelProfile / Revision / ActiveBinding Store。
+2. 建立 SQLite `model_profiles/model_profile_revisions/active_model_bindings/model_switch_audit`。
+3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
+4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
+5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
+
+架构全景图：`docs/architecture-diagrams/forge-platform-architecture.html`。当前包含 11 个中文视角：产品架构、技术分层、元数据模型、端到端流程、关键闭环、实现与部署、控制面演进、模型运行时、安全信任、状态一致性、API 集成。
 
 ### Phase 4.5：Registry Studio（结构层多视图与安全编辑）
 
