@@ -72,6 +72,37 @@ def test_context_includes_table_names():
     assert "users"  in ctx
 
 
+def test_context_includes_only_confirmed_relationships():
+    structural = {
+        **STRUCTURAL,
+        "relationships": [
+            {
+                "id": "orders_user",
+                "from": "orders.user_id",
+                "to": "users.id",
+                "cardinality": "many_to_one",
+                "status": "confirmed",
+                "source": "manual",
+            },
+            {
+                "id": "unconfirmed_edge",
+                "from": "orders.id",
+                "to": "users.id",
+                "cardinality": "many_to_one",
+                "status": "inferred",
+                "source": "naming",
+            },
+        ],
+    }
+    schema_path, metrics_path = _setup(structural, {})
+    import config
+    with patch.object(config.cfg, "REGISTRY_PATH", schema_path), \
+         patch.object(config.cfg, "METRICS_PATH", metrics_path):
+        ctx = llm_mod._registry_context()
+    assert "orders.user_id -> users.id [many_to_one]" in ctx
+    assert "orders.id -> users.id" not in ctx
+
+
 def test_context_includes_column_names():
     schema_path, metrics_path = _setup(STRUCTURAL, {})
     import config

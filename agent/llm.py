@@ -181,6 +181,31 @@ def _registry_context(question: str | None = None) -> str:
                     lines.append(f"  {table}: {', '.join(col_parts)}")
                 else:
                     lines.append(f"  {table}: {', '.join(cols)}")
+            selected_tables = list(tables)
+
+        visible_tables = set(selected_tables)
+        visible_relationships = [
+            relation for relation in schema.get("relationships", [])
+            if isinstance(relation, dict)
+            and (
+                relation.get("status") == "confirmed"
+                or (
+                    relation.get("status") == "declared"
+                    and relation.get("source") == "database"
+                )
+            )
+            and isinstance(relation.get("from"), str)
+            and isinstance(relation.get("to"), str)
+            and relation["from"].split(".", 1)[0] in visible_tables
+            and relation["to"].split(".", 1)[0] in visible_tables
+        ]
+        if visible_relationships:
+            lines.append("\n已确认关系（JOIN 只能使用以下关系）：")
+            for relation in visible_relationships:
+                lines.append(
+                    f"  {relation['from']} -> {relation['to']} "
+                    f"[{relation['cardinality']}]"
+                )
     except (FileNotFoundError, OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
         logger.debug("Failed to load schema registry: %s", exc)
         lines.append("表结构：未找到，请先运行 forge sync。")

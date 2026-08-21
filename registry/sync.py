@@ -137,7 +137,39 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
     return result
 
 
-def _merge(existing: dict, live_tables: dict[str, dict[str, dict]]) -> dict:
+def _introspect_declared_relationships(database_url: str) -> list[dict[str, str]]:
+    """Read database-declared foreign keys as trusted Registry relationships."""
+    engine = create_engine(database_url)
+    inspector = inspect(engine)
+    relationships: list[dict[str, str]] = []
+    for table_name in inspector.get_table_names():
+        for fk_index, foreign_key in enumerate(inspector.get_foreign_keys(table_name)):
+            referred_table = foreign_key.get("referred_table")
+            constrained = foreign_key.get("constrained_columns") or []
+            referred = foreign_key.get("referred_columns") or []
+            # Composite keys must be represented atomically in the future Canonical
+            # Schema. Importing each component as an independent trusted edge would
+            # incorrectly permit partial-key JOINs, so fail closed by omitting them.
+            if not referred_table or len(constrained) != 1 or len(referred) != 1:
+                continue
+            name = foreign_key.get("name") or f"fk_{table_name}_{referred_table}_{fk_index}"
+            relationships.append({
+                "id": f"db:{name}",
+                "from": f"{table_name}.{constrained[0]}",
+                "to": f"{referred_table}.{referred[0]}",
+                "cardinality": "many_to_one",
+                "status": "declared",
+                "source": "database",
+            })
+    engine.dispose()
+    return relationships
+
+
+def _merge(
+    existing: dict,
+    live_tables: dict[str, dict[str, dict]],
+    live_relationships: list[dict[str, str]] | None = None,
+) -> dict:
     """
     将数据库实时结构与现有 registry 增量合并，保留用户手动添加的列元数据。
 
@@ -185,7 +217,34 @@ def _merge(existing: dict, live_tables: dict[str, dict[str, dict]]) -> dict:
 
         merged[table_name] = {"columns": merged_cols}
 
-    return {"tables": merged}
+    known_fields = {
+        f"{table}.{column}"
+        for table, info in merged.items()
+        for column in info["columns"]
+    }
+    relationships: list[dict] = []
+    edge_indexes: dict[tuple[str, str], int] = {}
+    for relationship in existing.get("relationships", []):
+        if not isinstance(relationship, dict):
+            continue
+        from_field, to_field = relationship.get("from"), relationship.get("to")
+        if from_field not in known_fields or to_field not in known_fields:
+            continue
+        edge = tuple(sorted((from_field, to_field)))
+        if edge not in edge_indexes:
+            edge_indexes[edge] = len(relationships)
+            relationships.append(relationship)
+    for relationship in live_relationships or []:
+        edge = tuple(sorted((relationship["from"], relationship["to"])))
+        existing_index = edge_indexes.get(edge)
+        if existing_index is None:
+            edge_indexes[edge] = len(relationships)
+            relationships.append(relationship)
+        elif relationships[existing_index].get("status") not in {"confirmed", "declared"}:
+            # A database declaration supersedes a naming-only draft, while an
+            # administrator-confirmed definition retains its richer metadata.
+            relationships[existing_index] = relationship
+    return {"tables": merged, "relationships": relationships}
 
 
 def run_sync(database_url: str, registry_path: Path) -> dict:
@@ -203,6 +262,7 @@ def run_sync(database_url: str, registry_path: Path) -> dict:
     """
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     live_tables = _introspect(database_url)
+    live_relationships = _introspect_declared_relationships(database_url)
 
     existing: dict = {}
     if registry_path.exists():
@@ -211,6 +271,6 @@ def run_sync(database_url: str, registry_path: Path) -> dict:
         except (OSError, json.JSONDecodeError) as exc:
             logger.warning("Failed to read existing registry, starting fresh: %s", exc)
 
-    registry = _merge(existing, live_tables)
+    registry = _merge(existing, live_tables, live_relationships)
     registry_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False))
     return registry

@@ -17,7 +17,26 @@ def assurance_registry(tmp_path, monkeypatch):
                 "id": {}, "user_id": {}, "status": {}, "total_amount": {},
             }},
             "users": {"columns": {"id": {}, "name": {}}},
-        }
+            "order_items": {"columns": {"id": {}, "order_id": {}, "amount": {}}},
+        },
+        "relationships": [
+            {
+                "id": "orders_user",
+                "from": "orders.user_id",
+                "to": "users.id",
+                "cardinality": "many_to_one",
+                "status": "confirmed",
+                "source": "manual",
+            },
+            {
+                "id": "items_order",
+                "from": "order_items.order_id",
+                "to": "orders.id",
+                "cardinality": "many_to_one",
+                "status": "confirmed",
+                "source": "manual",
+            },
+        ],
     }), encoding="utf-8")
     monkeypatch.setattr(cfg, "REGISTRY_PATH", path)
     return path
@@ -46,6 +65,7 @@ def test_assurance_returns_versioned_hash_bound_report(assurance_registry):
     assert [gate.gate for gate in report.gates] == [
         "contract_scope_type",
         "registry_acl_alias",
+        "relationship_grain",
         "convention_policy",
         "scope_type_compile",
         "sql_safety",
@@ -110,6 +130,65 @@ def test_assurance_accepts_defined_aggregate_alias(assurance_registry):
             "sort": [{"col": "order_total", "dir": "desc"}],
         },
         "订单总额",
+        dialect="sqlite",
+    )
+    assert report.status == "passed"
+
+
+def test_assurance_rejects_join_without_confirmed_relationship(assurance_registry):
+    registry = json.loads(assurance_registry.read_text())
+    registry["relationships"][0]["status"] = "inferred"
+    assurance_registry.write_text(json.dumps(registry))
+
+    with pytest.raises(QueryAssuranceError, match="人工确认") as caught:
+        assure_query(
+            {
+                "scan": "orders",
+                "joins": [{
+                    "type": "inner",
+                    "table": "users",
+                    "on": {"left": "orders.user_id", "right": "users.id"},
+                }],
+                "select": ["orders.id", "users.name"],
+            },
+            "查询订单用户",
+            dialect="sqlite",
+        )
+    assert caught.value.report.gates[-1].gate == "relationship_grain"
+
+
+def test_assurance_rejects_aggregate_fanout_from_existing_side(assurance_registry):
+    with pytest.raises(QueryAssuranceError, match="放大已有侧聚合度量"):
+        assure_query(
+            {
+                "scan": "orders",
+                "joins": [{
+                    "type": "inner",
+                    "table": "order_items",
+                    "on": {"left": "orders.id", "right": "order_items.order_id"},
+                }],
+                "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "revenue"}],
+                "select": ["revenue"],
+            },
+            "订单总额",
+            dialect="sqlite",
+        )
+
+
+def test_assurance_allows_many_to_one_aggregate_join(assurance_registry):
+    report = assure_query(
+        {
+            "scan": "orders",
+            "joins": [{
+                "type": "inner",
+                "table": "users",
+                "on": {"left": "orders.user_id", "right": "users.id"},
+            }],
+            "group": ["users.name"],
+            "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "revenue"}],
+            "select": ["users.name", "revenue"],
+        },
+        "各用户订单总额",
         dialect="sqlite",
     )
     assert report.status == "passed"
