@@ -44,7 +44,11 @@ def test_assurance_returns_versioned_hash_bound_report(assurance_registry):
     assert report.registry_revision and len(report.registry_revision) == 64
     assert report.model_revision == "unknown"
     assert [gate.gate for gate in report.gates] == [
-        "contract_registry_acl", "convention_policy", "scope_type_compile", "sql_safety"
+        "contract_scope_type",
+        "registry_acl_alias",
+        "convention_policy",
+        "scope_type_compile",
+        "sql_safety",
     ]
     assert all(gate.status == "passed" for gate in report.gates)
 
@@ -59,7 +63,7 @@ def test_assurance_rejects_unknown_registry_field_without_leaking_enum(assurance
 
     report = caught.value.report
     assert report.status == "failed"
-    assert report.gates[-1].gate == "contract_registry_acl"
+    assert report.gates[-1].gate == "registry_acl_alias"
     assert "不存在" in str(caught.value)
     assert "secret_unknown" not in str(caught.value)
 
@@ -103,6 +107,7 @@ def test_assurance_accepts_defined_aggregate_alias(assurance_registry):
             "scan": "orders",
             "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "order_total"}],
             "select": ["order_total"],
+            "sort": [{"col": "order_total", "dir": "desc"}],
         },
         "订单总额",
         dialect="sqlite",
