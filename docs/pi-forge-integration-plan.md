@@ -778,7 +778,9 @@ M4.1 用户配置接管与服务重启规则：
 - Agent 会把上述确定性错误反馈给模型进入受控重试；截图对应案例的回归测试确认首次错误输出不会进入审核，修正为 `dwd_order_detail → dim_city + SUM + GROUP BY` 后才生成 SQL review。
 - Executor 对数据库错误做有界分类，原始异常只进服务端日志；Web/API 不再返回 SQLAlchemy 堆栈和内部错误链接。
 - 旧 `/chat` 只有执行成功才显示绿色“执行成功”；失败显示红色“执行失败”、action=`execution_failed`，且失败数据不再恢复旧 Pipeline 分析阶段。
-- 本地验证：Python 404 passed / 25 skipped，Pi Orchestrator 50 passed；Python LSP 未配置，已用 compileall、自动测试与 scoped diff check 替代。
+- 本地验证：Python 405 passed / 25 skipped，Pi Orchestrator 50 passed；Python LSP 未配置，已用 compileall、自动测试与 scoped diff check 替代。
+- NAS `762fe2c` 真实回归：截图原问题“各城市的订单总额是多少？”生成了包含 `dim_city`、`SUM(total_amount)`、`GROUP BY city_name` 的可执行 SQL，审批后返回 14 行且无执行错误；不再出现未绑定表和恒真自连接。
+- 剩余语义风险：当前模型选择 `订单明细 → 用户 → 地址 → 城市`，若用户存在多个地址可能重复放大金额。引用完整性门禁只能保证 SQL 结构合法，不能证明业务 join 粒度正确；该问题纳入模型准确率验证与 Registry 关系约束，不在 Compiler 中猜测修复。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 

@@ -841,6 +841,8 @@ async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth
     execution_ms = None
     if not cfg.RAW_SQL_ENABLED:
         result["exec_error"] = "⚠ 手动 SQL 执行已被配置禁用。"
+        result["action"] = "execution_failed"
+        result["text"] = "SQL 执行失败，请重新生成或修改查询。"
         await audit.log(
             user_id=req.user_id,
             user_message="[手动编辑 SQL]",
