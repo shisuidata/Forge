@@ -12,8 +12,13 @@ from config import cfg
 from forge.compiler import compile_query, validate_query_contract
 from forge.executor import validate_readonly_sql
 from forge.lint import lint_conventions
+from registry.relationships import (
+    RegistryRelationship,
+    is_fanout_from_existing,
+    load_relationships,
+)
 
-ASSURANCE_REVISION = "query-assurance-v1"
+ASSURANCE_REVISION = "query-assurance-v2"
 POLICY_REVISION = "convention-policy-v1"
 
 
@@ -89,6 +94,16 @@ def assure_query(
             _failed_report(gates, registry_revision, model_revision)
         ) from exc
 
+    try:
+        relationships = load_relationships(scoped_registry)
+        _validate_join_relationships(normalized, scoped_registry, relationships)
+        gates.append(GateResult("relationship_grain", "passed", registry_revision))
+    except ValueError as exc:
+        gates.append(GateResult("relationship_grain", "failed", registry_revision, (str(exc),)))
+        raise QueryAssuranceError(
+            _failed_report(gates, registry_revision, model_revision)
+        ) from exc
+
     warnings = lint_conventions(normalized, question)
     if warnings:
         gates.append(GateResult("convention_policy", "failed", POLICY_REVISION, tuple(warnings)))
@@ -139,7 +154,118 @@ def _scope_registry(registry: dict, allowed_tables: list[str] | None) -> dict:
         return registry
     tables = registry.get("tables", registry)
     allowed = set(allowed_tables)
-    return {"tables": {name: value for name, value in tables.items() if name in allowed}}
+    scoped_tables = {name: value for name, value in tables.items() if name in allowed}
+    relationships = [
+        item for item in registry.get("relationships", [])
+        if isinstance(item, dict)
+        and isinstance(item.get("from"), str)
+        and isinstance(item.get("to"), str)
+        and item["from"].split(".", 1)[0] in allowed
+        and item["to"].split(".", 1)[0] in allowed
+    ]
+    return {"tables": scoped_tables, "relationships": relationships}
+
+
+def _validate_join_relationships(
+    query: dict,
+    registry: dict,
+    relationships: tuple[RegistryRelationship, ...],
+) -> None:
+    tables = registry.get("tables", registry)
+    physical_tables = set(tables)
+    existing_tables = {query.get("scan")} if query.get("scan") in physical_tables else set()
+    aggregate_sources = _aggregate_source_tables(query)
+
+    for join in query.get("joins", []):
+        joined_table = join.get("table")
+        if joined_table not in physical_tables:
+            continue
+        if join.get("type") == "cross":
+            raise ValueError("关系校验失败：物理表不允许未经关系约束的 CROSS JOIN。")
+        pairs = _join_field_pairs(join.get("on"))
+        matched = False
+        fanout = False
+        for left, right in pairs:
+            left_table = left.split(".", 1)[0]
+            right_table = right.split(".", 1)[0]
+            if joined_table == left_table and right_table in existing_tables:
+                joined_field, existing_field = left, right
+            elif joined_table == right_table and left_table in existing_tables:
+                joined_field, existing_field = right, left
+            else:
+                continue
+            matched = True
+            relationship = _find_relationship(relationships, existing_field, joined_field)
+            if relationship is None or not relationship.trusted:
+                raise ValueError("关系校验失败：JOIN 未使用数据库声明或人工确认的关系。")
+            fanout = fanout or is_fanout_from_existing(
+                relationship,
+                existing_field=existing_field,
+                joined_field=joined_field,
+            )
+        if not matched:
+            raise ValueError("关系校验失败：JOIN 未连接当前查询作用域中的物理表。")
+        if (
+            fanout
+            and join.get("type") not in {"semi", "anti"}
+            and (aggregate_sources & existing_tables or "*" in aggregate_sources)
+        ):
+            raise ValueError("粒度校验失败：JOIN 会放大已有侧聚合度量。")
+        existing_tables.add(joined_table)
+
+    for cte in query.get("cte", []):
+        _validate_join_relationships(cte["query"], registry, relationships)
+        if cte.get("recursive_term"):
+            _validate_join_relationships(cte["recursive_term"], registry, relationships)
+    for operation in ("union", "intersect", "except"):
+        for branch in query.get(operation, []):
+            nested = branch.get("query", branch)
+            if isinstance(nested, dict):
+                _validate_join_relationships(nested, registry, relationships)
+
+
+def _join_field_pairs(on: Any) -> list[tuple[str, str]]:
+    conditions = on if isinstance(on, list) else [on]
+    pairs: list[tuple[str, str]] = []
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        left, right = condition.get("left"), condition.get("right")
+        if isinstance(left, str) and isinstance(right, str):
+            pairs.append((left, right))
+    return pairs
+
+
+def _find_relationship(
+    relationships: tuple[RegistryRelationship, ...],
+    left: str,
+    right: str,
+) -> RegistryRelationship | None:
+    edge = frozenset((left, right))
+    return next(
+        (item for item in relationships if frozenset((item.from_field, item.to_field)) == edge),
+        None,
+    )
+
+
+def _aggregate_source_tables(query: dict) -> set[str]:
+    result: set[str] = set()
+    aggregate_expressions = list(query.get("agg", []))
+    aggregate_expressions.extend(
+        item for item in query.get("window", [])
+        if isinstance(item, dict) and item.get("fn") in {"sum", "avg", "count", "min", "max"}
+    )
+    for aggregate in aggregate_expressions:
+        if not isinstance(aggregate, dict):
+            continue
+        if aggregate.get("fn") == "count_distinct":
+            continue
+        col = aggregate.get("col")
+        if col is None:
+            result.add("*")
+        elif isinstance(col, str):
+            result.update(table for table, _ in _FIELD_REF_RE.findall(col))
+    return result
 
 
 def _validate_registry_tables(query: dict, registry: dict) -> None:

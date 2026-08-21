@@ -45,6 +45,86 @@ def test_sync_creates_correct_registry_structure(tmp_path):
     assert on_disk == result
 
 
+def test_sync_imports_declared_foreign_keys_as_trusted_relationships(tmp_path):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+        "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, "
+        "FOREIGN KEY(user_id) REFERENCES users(id))",
+    ])
+
+    result = run_sync(url, tmp_path / "schema.registry.json")
+
+    assert result["relationships"] == [{
+        "id": "db:fk_orders_users_0",
+        "from": "orders.user_id",
+        "to": "users.id",
+        "cardinality": "many_to_one",
+        "status": "declared",
+        "source": "database",
+    }]
+
+
+def test_sync_does_not_trust_partial_composite_foreign_keys(tmp_path):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE parents (a INTEGER, b INTEGER, PRIMARY KEY(a, b))",
+        "CREATE TABLE children (id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, "
+        "FOREIGN KEY(a, b) REFERENCES parents(a, b))",
+    ])
+
+    result = run_sync(url, tmp_path / "schema.registry.json")
+
+    assert result["relationships"] == []
+
+
+def test_sync_preserves_confirmed_relationship_metadata(tmp_path):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE users (id INTEGER PRIMARY KEY)",
+        "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER)",
+    ])
+    path = tmp_path / "schema.registry.json"
+    path.write_text(json.dumps({
+        "tables": {},
+        "relationships": [{
+            "id": "manual:orders_user",
+            "from": "orders.user_id",
+            "to": "users.id",
+            "cardinality": "many_to_one",
+            "status": "confirmed",
+            "source": "manual",
+        }],
+    }))
+
+    result = run_sync(url, path)
+
+    assert result["relationships"][0]["status"] == "confirmed"
+    assert result["relationships"][0]["source"] == "manual"
+
+
+def test_database_declaration_supersedes_inferred_edge(tmp_path):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE users (id INTEGER PRIMARY KEY)",
+        "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, "
+        "FOREIGN KEY(user_id) REFERENCES users(id))",
+    ])
+    path = tmp_path / "schema.registry.json"
+    path.write_text(json.dumps({
+        "tables": {},
+        "relationships": [{
+            "id": "guess:orders_user",
+            "from": "orders.user_id",
+            "to": "users.id",
+            "cardinality": "many_to_one",
+            "status": "inferred",
+            "source": "naming",
+        }],
+    }))
+
+    result = run_sync(url, path)
+
+    assert result["relationships"][0]["status"] == "declared"
+    assert result["relationships"][0]["source"] == "database"
+
+
 def test_sync_only_writes_structural_layer(tmp_path):
     """sync must not touch metrics — that's metrics.registry.yaml's job."""
     url = _make_db_url(tmp_path, [

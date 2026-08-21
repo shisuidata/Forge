@@ -32,7 +32,7 @@ def query_run_env(tmp_path, monkeypatch):
             "dialect": dialect or "sqlite",
             "assurance_report": {
                 "status": "passed",
-                "assurance_revision": "query-assurance-v1",
+                "assurance_revision": "query-assurance-v2",
                 "policy_revision": "convention-policy-v1",
                 "registry_revision": "sha256:assurance-registry",
                 "model_revision": "sha256:model",
@@ -102,7 +102,7 @@ async def test_create_query_run_is_review_only_and_idempotent(
     assert first_data["sql_hash"].startswith("sha256:")
     assert first_data["assurance_report_hash"].startswith("sha256:")
     assert first_data["assurance_report"]["status"] == "passed"
-    assert first_data["assurance_revision"] == "query-assurance-v1"
+    assert first_data["assurance_revision"] == "query-assurance-v2"
     assert first_data["policy_revision"] == "convention-policy-v1"
     assert first_data["model_revision"] == "sha256:model"
     assert "rows" not in first_data

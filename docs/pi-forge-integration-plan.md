@@ -836,6 +836,7 @@ M4.1 用户配置接管与服务重启规则：
 - 第二次回归暴露的动态 Tool Schema / 服务端契约混用已修复：模型生成约束、Compiler 静态契约、Registry/ACL 和 Alias/Scope Gate 已拆分，合法聚合/窗口 alias 不再被当作物理字段拒绝。
 - 第三次真实回归 44.5s 内进入 review，但 SQL 回答了“购买用户数”而非“各城市订单总额”。定位到 Pi 的 `prepare_query` 仍调用旧 Agent `memory.build(user_id)`，把同一渠道用户的历史 EMS 注入了新 Task，造成跨 Task 意图污染。Pi Task 是唯一会话边界，prepare-only 路径现已只使用当前 Task 问题和 Registry/组织知识；旧 `process()` 才保留兼容会话记忆。
 - NAS main `79c41f6` 隔离历史后再次回归：44.5s 内正确生成“城市 + SUM(订单金额) + GROUP BY”，Deadline 修复和意图隔离均生效；但模型选择了未经 Registry 确认的 `dim_region.region_id = dim_city.province_id` 关系，因此未执行。该结果进一步确认当前模型不能激活为生产默认，下一阶段必须以显式关系图和 EA/Join-grain 门禁阻断未确认关系。
+- 已确认继续实施 Registry Relationship Gate：Canonical Schema 增加版本化 `relationships`，每条关系记录左右字段、基数、状态与来源；只有数据库声明或人工确认的关系可进入生产查询，`inferred/unconfirmed` 只用于草案展示。Assurance 对每个物理 JOIN 做精确关系匹配，并在聚合已有侧度量时拒绝 one-to-many fan-out；关系同时按检索到的表裁剪后注入模型上下文。缺少关系元数据时，含物理 JOIN 的生产查询失败关闭，单表和 CTE 内部数据流不受影响。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 

@@ -61,8 +61,31 @@ def isolated_agent(monkeypatch, tmp_path):
                     "total_amount": {}, "order_status": {}, "order_dt": {},
                 }},
                 "dim_city": {"columns": {"city_id": {}, "city_name": {}}},
-                "dim_user": {"columns": {"user_id": {}, "register_time": {}}},
-            }
+                "dim_user": {"columns": {
+                    "user_id": {}, "region_id": {}, "register_time": {},
+                }},
+                "dim_region": {"columns": {
+                    "region_id": {}, "region_name": {}, "level": {},
+                }},
+            },
+            "relationships": [
+                {
+                    "id": "order_user",
+                    "from": "dwd_order_detail.user_id",
+                    "to": "dim_user.user_id",
+                    "cardinality": "many_to_one",
+                    "status": "confirmed",
+                    "source": "fixture",
+                },
+                {
+                    "id": "user_region",
+                    "from": "dim_user.region_id",
+                    "to": "dim_region.region_id",
+                    "cardinality": "many_to_one",
+                    "status": "confirmed",
+                    "source": "fixture",
+                },
+            ],
         }),
         encoding="utf-8",
     )
@@ -142,17 +165,28 @@ def test_process_retries_unbound_table_and_self_join_before_review(isolated_agen
     }
     corrected = {
         "scan": "dwd_order_detail",
-        "joins": [{
-            "type": "inner",
-            "table": "dim_city",
-            "on": {
-                "left": "dwd_order_detail.city_id",
-                "right": "dim_city.city_id",
+        "joins": [
+            {
+                "type": "inner",
+                "table": "dim_user",
+                "on": {
+                    "left": "dwd_order_detail.user_id",
+                    "right": "dim_user.user_id",
+                },
             },
-        }],
-        "group": ["dim_city.city_name"],
+            {
+                "type": "inner",
+                "table": "dim_region",
+                "on": {
+                    "left": "dim_user.region_id",
+                    "right": "dim_region.region_id",
+                },
+            },
+        ],
+        "filter": [{"col": "dim_region.level", "op": "eq", "val": "city"}],
+        "group": ["dim_region.region_name"],
         "agg": [{"fn": "sum", "col": "dwd_order_detail.total_amount", "as": "order_total"}],
-        "select": ["dim_city.city_name", "order_total"],
+        "select": ["dim_region.region_name", "order_total"],
     }
 
     def fake_call(*args, **kwargs):
@@ -169,7 +203,7 @@ def test_process_retries_unbound_table_and_self_join_before_review(isolated_agen
     assert resp.action == "sql_review"
     assert resp.retry_count == 1
     assert len(calls) == 2
-    assert "INNER JOIN dim_city" in resp.sql
+    assert "INNER JOIN dim_region" in resp.sql
     assert "SUM(dwd_order_detail.total_amount)" in resp.sql
     assert fake_memory.get_state("u-integrity", "pending_sql") == resp.sql
 
