@@ -37,6 +37,7 @@ AgentResponse.action 值说明：
 from __future__ import annotations
 import json
 import logging
+import re
 from datetime import date
 
 import yaml
@@ -563,6 +564,25 @@ def _maybe_write_staging(user_id: str, user_text: str, forge_json: dict) -> None
 
 # ── 澄清检测 ──────────────────────────────────────────────────────────────────
 
+_GREETING_ONLY_INPUTS = {
+    "hello",
+    "hi",
+    "hey",
+    "你好",
+    "您好",
+    "嗨",
+    "在吗",
+    "早上好",
+    "下午好",
+    "晚上好",
+}
+
+
+def _is_greeting_only(question: str) -> bool:
+    normalized = re.sub(r"[\W_]+", "", question.casefold(), flags=re.UNICODE)
+    return normalized in _GREETING_ONLY_INPUTS
+
+
 def _check_clarification_needed(question: str) -> dict | None:
     """
     检查用户问题是否触发了需要澄清的歧义规则（requires_clarification=true）。
@@ -574,6 +594,12 @@ def _check_clarification_needed(question: str) -> dict | None:
         {"prompt": "澄清问题文本", "keys": ["rule_key_1", ...]}
         或 None（无需澄清时）
     """
+    if _is_greeting_only(question):
+        return {
+            "prompt": "你好，我可以帮你查询和分析数据。请告诉我想查看的指标、范围或业务问题。",
+            "keys": ["greeting_only"],
+        }
+
     try:
         disambiguations: dict = yaml.safe_load(cfg.DISAMBIGUATIONS_PATH.read_text()) or {}
     except (FileNotFoundError, OSError, yaml.YAMLError) as exc:
