@@ -452,12 +452,19 @@ async function approveSQL(btn) {
       });
     }
     const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error('服务暂时无法执行该查询');
+    }
 
-    btnGroup.innerHTML = '<span class="text-green-600 text-xs font-medium">&#10003; 已执行</span>';
+    if (data.exec_error || data.action === 'execution_failed') {
+      btnGroup.innerHTML = '<span class="text-red-600 text-xs font-medium">&#10007; 执行失败</span>';
+      addMessage('system', data.exec_error || '执行失败，请重新生成 SQL。');
+      return;
+    }
 
-    if (data.exec_error) {
-      addMessage('system', data.exec_error);
-    } else if (data.columns && data.rows && data.rows.length > 0) {
+    btnGroup.innerHTML = '<span class="text-green-600 text-xs font-medium">&#10003; 执行成功</span>';
+
+    if (data.columns && data.rows && data.rows.length > 0) {
       addResultTable(data.columns, data.rows, data.row_count);
     } else if (data.columns && data.row_count === 0) {
       addMessage('bot', '查询完成，结果为空。');
@@ -473,9 +480,8 @@ async function approveSQL(btn) {
       addChartCard(data.chart_html);
     }
   } catch (err) {
+    btnGroup.innerHTML = '<span class="text-red-600 text-xs font-medium">&#10007; 执行失败</span>';
     addMessage('system', '执行失败：' + err.message);
-    btnGroup.querySelectorAll('button').forEach(b => b.disabled = false);
-    btn.textContent = '确认执行';
   }
 }
 

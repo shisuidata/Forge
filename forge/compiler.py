@@ -89,7 +89,113 @@ def compile_query(forge: dict, dialect: str = "sqlite",
         jsonschema.validate(forge, _SCHEMA)
     except jsonschema.ValidationError as exc:
         raise ValueError(_friendly_error(exc)) from exc
+    _validate_reference_integrity(forge)
     return _compile(forge, dialect, nullable_cols)
+
+
+_QUALIFIED_COLUMN_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_]\w*)\s*\.\s*[A-Za-z_]\w*")
+_NON_REFERENCE_KEYS = {
+    "$date", "$preset", "as", "default", "dir", "explain", "fn", "hi",
+    "lo", "mode", "name", "recursive_union", "scan", "separator", "table",
+    "type", "val",
+}
+
+
+def _validate_reference_integrity(query: dict) -> None:
+    """Reject table references that are not bound by scan/join in each query scope."""
+    for cte in query.get("cte", []):
+        _validate_reference_integrity(cte["query"])
+        if cte.get("recursive_term"):
+            _validate_reference_integrity(cte["recursive_term"])
+    for operation in ("union", "intersect", "except"):
+        for branch in query.get(operation, []):
+            nested = branch.get("query", branch)
+            if isinstance(nested, dict):
+                _validate_reference_integrity(nested)
+    _validate_condition_subqueries(query)
+
+    scan = query["scan"]
+    joins = query.get("joins", [])
+    visible_tables = {scan}
+    for join in joins:
+        table = join["table"]
+        if table in visible_tables:
+            raise ValueError(
+                f"JOIN 表 '{table}' 已在当前查询作用域中；Forge DSL 不支持无别名自连接。"
+            )
+        if join.get("type") not in {"semi", "anti"}:
+            visible_tables.add(table)
+        _validate_join_condition(join, visible_tables | {table})
+
+    local_payload = {
+        key: value for key, value in query.items()
+        if key not in {"cte", "union", "intersect", "except", "joins"}
+    }
+    referenced = _collect_qualified_tables(local_payload)
+    unknown = sorted(referenced - visible_tables)
+    if unknown:
+        raise ValueError(
+            "字段引用了未加入 FROM/JOIN 的表："
+            + ", ".join(unknown)
+            + "。请先声明正确的 JOIN。"
+        )
+
+
+def _validate_join_condition(join: dict, allowed_tables: set[str]) -> None:
+    """Validate JOIN ON references and reject tautological same-column joins."""
+    on = join.get("on")
+    if not on:
+        return
+    conditions = on if isinstance(on, list) else [on]
+    joined_table = join["table"]
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        left = condition.get("left") or condition.get("col")
+        right = condition.get("right") or condition.get("col2")
+        if isinstance(left, str) and isinstance(right, str) and left == right:
+            raise ValueError("JOIN 条件不能把同一字段与自身比较。")
+        refs = _collect_qualified_tables(condition)
+        unknown = refs - allowed_tables
+        if unknown:
+            raise ValueError(
+                "JOIN 条件引用了未声明的表：" + ", ".join(sorted(unknown)) + "。"
+            )
+        if refs and joined_table not in refs:
+            raise ValueError(f"JOIN 条件必须引用待连接表 '{joined_table}'。")
+
+
+def _validate_condition_subqueries(value: Any) -> None:
+    if isinstance(value, dict):
+        subquery = value.get("subquery")
+        if isinstance(subquery, dict):
+            _validate_reference_integrity(subquery)
+        for key, child in value.items():
+            if key != "subquery":
+                _validate_condition_subqueries(child)
+    elif isinstance(value, list):
+        for child in value:
+            _validate_condition_subqueries(child)
+
+
+def _collect_qualified_tables(value: Any, key: str | None = None) -> set[str]:
+    if isinstance(value, str):
+        if key in _NON_REFERENCE_KEYS:
+            return set()
+        return set(_QUALIFIED_COLUMN_RE.findall(value))
+    if isinstance(value, list):
+        tables: set[str] = set()
+        for child in value:
+            tables.update(_collect_qualified_tables(child, key))
+        return tables
+    if isinstance(value, dict):
+        tables = set()
+        for child_key, child in value.items():
+            if child_key == "subquery":
+                continue
+            tables.update(_collect_qualified_tables(child, child_key))
+        return tables
+    return set()
 
 
 def _coerce(q: dict) -> dict:

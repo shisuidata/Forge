@@ -154,7 +154,7 @@ def execute(sql: str, max_rows: int = 50) -> str:
                 cols   = list(result.keys())
     except Exception as exc:
         logger.error("SQL execution failed: %s", exc)
-        return f"⚠ 执行失败：{exc}"
+        return _public_execution_error(exc)
 
     if not rows:
         return "查询完成，结果为空。"
@@ -215,7 +215,7 @@ def execute_with_metadata(sql: str, max_rows: int = 200) -> QueryExecutionData:
                 cols = list(result.keys())
     except Exception as exc:
         logger.error("SQL execution failed: %s", exc)
-        return QueryExecutionData(f"⚠ 执行失败：{exc}", [], [], False)
+        return QueryExecutionData(_public_execution_error(exc), [], [], False)
 
     if not rows:
         return QueryExecutionData("查询完成，结果为空。", cols, [], False)
@@ -249,6 +249,21 @@ def execute_with_data(
     """Backward-compatible tuple API used by the existing Web/Feishu path."""
     result = execute_with_metadata(sql, max_rows=max_rows)
     return result.text, result.columns, result.rows
+
+
+def _public_execution_error(exc: Exception) -> str:
+    """Return a bounded user-facing error while keeping raw details in server logs."""
+    if isinstance(exc, ValueError):
+        return f"⚠ 执行失败：{exc}"
+
+    message = str(exc).lower()
+    if any(token in message for token in ("no such column", "no such table", "undefined column")):
+        return "⚠ 执行失败：SQL 引用了不存在或未绑定的表/字段，请重新生成。"
+    if any(token in message for token in ("timeout", "timed out", "interrupted", "canceling statement")):
+        return "⚠ 执行失败：查询超时，请缩小查询范围后重试。"
+    if any(token in message for token in ("permission denied", "readonly", "read-only", "not authorized")):
+        return "⚠ 执行失败：数据库拒绝了该操作，请确认只读权限和查询范围。"
+    return "⚠ 执行失败：数据库查询失败，请检查 SQL 或联系管理员。"
 
 
 def _bounded_max_rows(requested: int) -> int:

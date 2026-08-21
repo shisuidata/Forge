@@ -759,6 +759,27 @@ M4.1 用户配置接管与服务重启规则：
 - 不在 Bot 内复制 Skill 路由和 Forge 查询逻辑。
 - 同一用户的权限在各渠道保持一致。
 
+### Phase 4.3.1：SQL 引用完整性与失败状态修复（2026-08-21 现场反馈）
+
+现场截图显示旧 `/chat` 路径把以下 SQL 提交执行：引用未加入 `FROM/JOIN` 的 `dim_city.city_name`、对 `dwd_order_detail` 做恒真自连接、且“订单总额”缺少聚合。SQLite 返回 `no such column` 后，前端仍显示绿色“已执行”。
+
+本修复优先于后续控制面建设：
+
+1. 定位生成 Artifact、Compiler/Validator 与 `/chat` 状态渲染，确认错误是模型输出、Registry 关系缺失还是编译门禁漏洞。
+2. Forge 在审核前校验所有字段引用均绑定已声明表实例；禁止无 alias 的同表自连接和恒真同字段连接；失败关闭为可理解的 SQL 准备错误，不创建可执行 QueryRun。
+3. 执行失败不得显示“已执行”；页面显示“执行失败”，用户可返回修改或重新生成，不泄露完整堆栈和内部连接信息。
+4. 增加截图对应回归测试，并确认 `/tasks` 主路径与旧 `/chat` 兼容路径行为一致。
+
+门禁：模型生成的结构化 JSON 即使通过 JSON Schema，也必须通过引用完整性和关系语义校验；Compiler 不得把未绑定表引用编译成 SQL 后交给数据库发现错误。
+
+实施结果：
+
+- Compiler 新增查询作用域引用完整性校验，递归覆盖 CTE、集合操作和条件子查询；未绑定表引用、重复无 alias 自连接、同字段恒真 JOIN、JOIN 条件引用未知表或未引用待连接表均在生成 SQL 前拒绝。
+- Agent 会把上述确定性错误反馈给模型进入受控重试；截图对应案例的回归测试确认首次错误输出不会进入审核，修正为 `dwd_order_detail → dim_city + SUM + GROUP BY` 后才生成 SQL review。
+- Executor 对数据库错误做有界分类，原始异常只进服务端日志；Web/API 不再返回 SQLAlchemy 堆栈和内部错误链接。
+- 旧 `/chat` 只有执行成功才显示绿色“执行成功”；失败显示红色“执行失败”、action=`execution_failed`，且失败数据不再恢复旧 Pipeline 分析阶段。
+- 本地验证：Python 404 passed / 25 skipped，Pi Orchestrator 50 passed；Python LSP 未配置，已用 compileall、自动测试与 scoped diff check 替代。
+
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 
 现状问题：

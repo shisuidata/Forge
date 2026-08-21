@@ -745,15 +745,20 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
             result["row_count"] = len(rows_raw)
             if text.startswith("⚠"):
                 result["exec_error"] = text
-        except Exception as exc:
-            result["exec_error"] = str(exc)
+        except Exception:
+            logger.exception("Approved SQL execution failed")
+            result["exec_error"] = "⚠ 执行失败：数据库查询失败，请检查 SQL 或联系管理员。"
 
-        # 2. 检查是否有活跃 Pipeline，有则注入数据并 resume
+        if result["exec_error"]:
+            result["action"] = "execution_failed"
+            result["text"] = "SQL 执行失败，请重新生成或修改查询。"
+
+        # 2. 仅在查询成功时恢复兼容 Pipeline，失败结果不能进入分析阶段。
         try:
             from agent.memory import memory as _mem
             from agent.pipeline import runner as _runner, QueryResult, Artifact
             run_data = _mem.get_state(req.user_id, "pipeline_run")
-            if run_data and run_data.get("status") == "pending_approval":
+            if not result["exec_error"] and run_data and run_data.get("status") == "pending_approval":
                 # 找到 generate stage artifact，注入 rows / columns
                 stages = run_data.get("stages", [])
                 for s in stages:
@@ -854,8 +859,13 @@ async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth
         result["row_count"] = len(rows_raw)
         if text.startswith("⚠"):
             result["exec_error"] = text
-    except Exception as exc:
-        result["exec_error"] = str(exc)
+    except Exception:
+        logger.exception("Raw SQL execution failed")
+        result["exec_error"] = "⚠ 执行失败：数据库查询失败，请检查 SQL 或联系管理员。"
+
+    if result["exec_error"]:
+        result["action"] = "execution_failed"
+        result["text"] = "SQL 执行失败，请重新生成或修改查询。"
 
     await audit.log(
         user_id=req.user_id,
