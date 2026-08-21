@@ -39,7 +39,8 @@ def test_assurance_returns_versioned_hash_bound_report(assurance_registry):
     )
 
     assert report.status == "passed"
-    assert report.sql_hash and len(report.sql_hash) == 64
+    assert report.sql_hash and report.sql_hash.startswith("sha256:")
+    assert len(report.sql_hash) == 71
     assert report.registry_revision and len(report.registry_revision) == 64
     assert report.model_revision == "unknown"
     assert [gate.gate for gate in report.gates] == [

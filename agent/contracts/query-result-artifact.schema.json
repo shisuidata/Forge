@@ -55,6 +55,11 @@
           "enum": ["sqlite", "postgresql", "mysql", "bigquery", "snowflake"]
         },
         "registry_version": {"type": "string", "minLength": 1},
+        "assurance_report_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "assurance_revision": {"type": "string", "minLength": 1},
+        "policy_revision": {"type": "string", "minLength": 1},
+        "model_revision": {"type": "string", "minLength": 1},
+        "assurance_registry_revision": {"type": "string", "minLength": 1},
         "execution_ms": {"type": "integer", "minimum": 0},
         "executed_at": {"type": "string", "format": "date-time"},
         "result_contract": {"type": ["object", "null"], "additionalProperties": true}

@@ -63,6 +63,9 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ? review.payload.query_run_id
       : "";
     const sqlHash = typeof review?.payload.sql_hash === "string" ? review.payload.sql_hash : "";
+    const assuranceReportHash = typeof review?.payload.assurance_report_hash === "string"
+      ? review.payload.assurance_report_hash
+      : "";
     return {
       ...common,
       kind: "query_review",
@@ -71,16 +74,21 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       fields: [
         { label: "QueryRun", value: queryRunId },
         { label: "SQL Hash", value: sqlHash },
+        { label: "Assurance Hash", value: assuranceReportHash },
       ],
       table: null,
       actions:
-        queryRunId.length > 0 && sqlHash.length > 0
+        queryRunId.length > 0 && sqlHash.length > 0 && assuranceReportHash.length > 0
           ? [
               action(
                 input.task.task_run_id,
                 "approve_query",
                 "确认执行",
-                { query_run_id: queryRunId, sql_hash: sqlHash },
+                {
+                  query_run_id: queryRunId,
+                  sql_hash: sqlHash,
+                  assurance_report_hash: assuranceReportHash,
+                },
                 "primary",
               ),
             ]

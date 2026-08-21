@@ -122,7 +122,7 @@ def assure_query(
         model_revision=model_revision,
         gates=tuple(gates),
         sql=sql,
-        sql_hash=hashlib.sha256(sql.encode("utf-8")).hexdigest(),
+        sql_hash="sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest(),
     )
 
 

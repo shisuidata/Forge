@@ -38,6 +38,7 @@ class CreateQueryRunRequest(BaseModel):
 class ApproveQueryRunRequest(BaseModel):
     approver_user_id: str
     sql_hash: str
+    assurance_report_hash: str
 
 
 class CancelQueryRunRequest(BaseModel):
@@ -80,6 +81,12 @@ def _review_payload(run: dict) -> dict:
         "sql_hash": run["sql_hash"],
         "dialect": run["dialect"],
         "registry_version": run["registry_version"],
+        "assurance_report": run["assurance_report"],
+        "assurance_report_hash": run["assurance_report_hash"],
+        "assurance_revision": run["assurance_revision"],
+        "policy_revision": run["policy_revision"],
+        "model_revision": run["model_revision"],
+        "assurance_registry_revision": run["assurance_registry_revision"],
         "review_required": run["status"] == "needs_review",
         "can_execute": False,
         "expires_at": run["expires_at"],
@@ -95,6 +102,11 @@ def _result_payload(run: dict) -> dict:
         "sql_hash": run["sql_hash"],
         "dialect": run["dialect"],
         "registry_version": run["registry_version"],
+        "assurance_report_hash": run["assurance_report_hash"],
+        "assurance_revision": run["assurance_revision"],
+        "policy_revision": run["policy_revision"],
+        "model_revision": run["model_revision"],
+        "assurance_registry_revision": run["assurance_registry_revision"],
         "columns": run["result_columns"] or [],
         "rows": run["result_rows"] or [],
         "row_count": run["row_count"],
@@ -147,6 +159,7 @@ async def approve_internal_query_run(
             query_run_id=query_run_id,
             approver_user_id=req.approver_user_id,
             sql_hash=req.sql_hash,
+            assurance_report_hash=req.assurance_report_hash,
             idempotency_key=idempotency_key,
         )
         return _result_payload(run)
