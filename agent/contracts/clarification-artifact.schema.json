@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/clarification-artifact.schema.json",
+  "title": "ClarificationArtifact",
+  "description": "Structured output of the data requirement clarification stage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_id",
+    "artifact_type",
+    "schema_version",
+    "task_run_id",
+    "producer",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+    "artifact_type": {"const": "clarification"},
+    "schema_version": {"const": 1},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "producer": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "goal",
+        "known_facts",
+        "assumptions",
+        "open_questions",
+        "dimensions",
+        "time_range",
+        "acceptance_criteria"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["needs_input", "needs_confirmation", "confirmed"]
+        },
+        "goal": {"type": "string", "minLength": 1},
+        "known_facts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "time_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["description"],
+          "properties": {
+            "description": {"type": "string", "minLength": 1},
+            "start": {"type": ["string", "null"], "format": "date-time"},
+            "end": {"type": ["string", "null"], "format": "date-time"},
+            "timezone": {"type": ["string", "null"]},
+            "granularity": {"type": ["string", "null"]}
+          }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

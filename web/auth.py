@@ -108,6 +108,21 @@ async def require_web_auth(request: Request):
     raise _LoginRedirect(request.url.path)
 
 
+async def require_pi_service_auth(request: Request):
+    """Authenticate the internal Pi control plane with a dedicated service key.
+
+    This gate is independent from AUTH_ENABLED and normal Forge API keys. An
+    empty PI_SERVICE_API_KEYS list always denies access.
+    """
+    key = request.headers.get("X-Pi-Service-Key") or ""
+    if cfg.PI_SERVICE_API_KEYS and any(
+        hmac.compare_digest(key, valid_key) for valid_key in cfg.PI_SERVICE_API_KEYS
+    ):
+        return "pi-orchestrator"
+    from fastapi import HTTPException
+    raise HTTPException(status_code=401, detail="Unauthorized: invalid Pi service key")
+
+
 async def require_api_auth(request: Request):
     """
     FastAPI dependency for /api/* routes.

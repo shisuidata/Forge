@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/metric-definition-artifact.schema.json",
+  "title": "MetricDefinitionArtifact",
+  "description": "A reviewable business metric definition produced before querying.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_id",
+    "artifact_type",
+    "schema_version",
+    "task_run_id",
+    "producer",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+    "artifact_type": {"const": "metric_definition"},
+    "schema_version": {"const": 1},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "producer": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "metric_name",
+        "numerator",
+        "denominator",
+        "grain",
+        "window",
+        "filters",
+        "boundary_conditions",
+        "open_questions"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["draft", "needs_confirmation", "confirmed", "rejected"]
+        },
+        "metric_name": {"type": "string", "minLength": 1},
+        "business_definition": {"type": ["string", "null"]},
+        "numerator": {"type": "string", "minLength": 1},
+        "denominator": {"type": "string", "minLength": 1},
+        "grain": {"type": "string", "minLength": 1},
+        "window": {"type": "string", "minLength": 1},
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "operator", "value"],
+            "properties": {
+              "field": {"type": "string", "minLength": 1},
+              "operator": {"type": "string", "minLength": 1},
+              "value": {}
+            }
+          }
+        },
+        "boundary_conditions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

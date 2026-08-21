@@ -4,6 +4,16 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ---
 
+## Pi 平台改造计划治理
+
+涉及 Pi、Forge 执行层、拾穗 DATA Skills、Web/飞书/钉钉渠道或职责迁移的任务时：
+
+1. 开始前必须阅读 `docs/platform-architecture.md` 和 `docs/pi-forge-integration-plan.md`。
+2. 用户确认新需求或方向变化后，先更新计划文档，再修改代码。
+3. 完成一个步骤后，回写计划中的当前状态、验证结果、遗留风险和下一步。
+4. Pi 是唯一主 Orchestrator；Forge 是可信执行层。不得新增双写任务状态或第二套主调度流程。
+5. 若实现与计划冲突，先暂停并澄清，不能靠临时兼容继续堆叠职责。
+
 ## 产品定位
 
 **Forge 是一个面向数据团队的 AI 查询 Agent，私有化部署，让弱模型也能生成可信 SQL。**

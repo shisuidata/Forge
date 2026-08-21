@@ -43,6 +43,9 @@ include = ["forge*", "registry*", "agent*", "web*"]
 [tool.setuptools]
 py-modules = ["config", "main"]
 
+[tool.setuptools.package-data]
+"agent.contracts" = ["*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

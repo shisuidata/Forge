@@ -20,7 +20,11 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import cfg
-from agent.feishu import dispatcher
+if cfg.FEISHU_PI_ENABLED:
+    from web.feishu_pi import build_event_handler
+    dispatcher = build_event_handler()
+else:
+    from agent.feishu import dispatcher
 from forge.readiness import readiness_payload
 from web.router import chat_router, router as admin_router
 from web.auth import _LoginRedirect

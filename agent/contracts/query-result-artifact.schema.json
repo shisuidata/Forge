@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/query-result-artifact.schema.json",
+  "title": "QueryResultArtifact",
+  "description": "A Forge-owned, auditable query result passed to downstream skills.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_id",
+    "artifact_type",
+    "schema_version",
+    "task_run_id",
+    "producer",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+    "artifact_type": {"const": "query_result"},
+    "schema_version": {"const": 1},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "producer": {"const": "forge"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_run_id",
+        "sql_hash",
+        "columns",
+        "rows",
+        "row_count",
+        "truncated",
+        "dialect",
+        "registry_version",
+        "execution_ms",
+        "executed_at"
+      ],
+      "properties": {
+        "query_run_id": {"type": "string", "pattern": "^qr_[A-Za-z0-9_-]+$"},
+        "sql_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "columns": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "rows": {
+          "type": "array",
+          "items": {"type": "array"}
+        },
+        "row_count": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "dialect": {
+          "type": "string",
+          "enum": ["sqlite", "postgresql", "mysql", "bigquery", "snowflake"]
+        },
+        "registry_version": {"type": "string", "minLength": 1},
+        "execution_ms": {"type": "integer", "minimum": 0},
+        "executed_at": {"type": "string", "format": "date-time"},
+        "result_contract": {"type": ["object", "null"], "additionalProperties": true}
+      }
+    }
+  }
+}
