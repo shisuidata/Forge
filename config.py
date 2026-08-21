@@ -61,6 +61,12 @@ class Config:
     FEISHU_APP_SECRET:         str = _env("FEISHU_APP_SECRET",         "feishu", "app_secret")
     FEISHU_VERIFICATION_TOKEN: str = _env("FEISHU_VERIFICATION_TOKEN", "feishu", "verification_token")
     FEISHU_ENCRYPT_KEY:        str = _env("FEISHU_ENCRYPT_KEY",        "feishu", "encrypt_key")
+    FEISHU_PI_ENABLED: bool = _env(
+        "FEISHU_PI_ENABLED", "feishu", "pi_enabled", default="false"
+    ).lower() == "true"
+    PI_CHANNEL_SERVICE_KEY: str = _env(
+        "PI_CHANNEL_SERVICE_KEY", "pi_orchestrator", "channel_service_key"
+    )
 
     # ── LLM ───────────────────────────────────────────────────────────────────
     # 优先读 LLM_* 通用变量，若未设置则自动 fallback 到 MINIMAX_* 变量
@@ -145,6 +151,55 @@ class Config:
     # ── Web 服务器 ─────────────────────────────────────────────────────────────
     HOST: str = _env("HOST", "server", "host", default="0.0.0.0")
     PORT: int = int(_env("PORT", "server", "port", default="8000"))
+
+    # ── Pi Orchestrator（任务控制面）────────────────────────────────────────────
+    PI_ORCHESTRATOR_ENABLED: bool = _env(
+        "PI_ORCHESTRATOR_ENABLED",
+        "pi_orchestrator",
+        "enabled",
+        default="false",
+    ).lower() == "true"
+    PI_ORCHESTRATOR_URL: str = _env(
+        "PI_ORCHESTRATOR_URL",
+        "pi_orchestrator",
+        "url",
+        default="http://127.0.0.1:4310",
+    ).rstrip("/")
+    PI_ORCHESTRATOR_TIMEOUT_SECONDS: int = int(_env(
+        "PI_ORCHESTRATOR_TIMEOUT_SECONDS",
+        "pi_orchestrator",
+        "timeout_seconds",
+        default="300",
+    ))
+    PI_SERVICE_API_KEYS: list[str] = [
+        key for key in _env(
+            "PI_SERVICE_API_KEYS",
+            "pi_orchestrator",
+            "service_api_keys",
+            default="",
+        ).split(",")
+        if key
+    ]
+
+    # ── QueryRun ──────────────────────────────────────────────────────────────
+    QUERY_RUN_DB_PATH: str = _env(
+        "QUERY_RUN_DB_PATH",
+        "query_runs",
+        "db_path",
+        default=".forge/query_runs.db",
+    )
+    QUERY_RUN_REVIEW_TTL_SECONDS: int = int(_env(
+        "QUERY_RUN_REVIEW_TTL_SECONDS",
+        "query_runs",
+        "review_ttl_seconds",
+        default="900",
+    ))
+    DATASOURCE_ID: str = _env(
+        "DATASOURCE_ID",
+        "database",
+        "datasource_id",
+        default="default",
+    )
 
     # ── 认证鉴权 ───────────────────────────────────────────────────────────────
     AUTH_ENABLED:        bool      = _env("AUTH_ENABLED", "server", "auth", "enabled", default="false").lower() == "true"

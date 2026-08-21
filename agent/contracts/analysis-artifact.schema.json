@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/analysis-artifact.schema.json",
+  "title": "AnalysisArtifact",
+  "description": "Evidence-bound output of a professional data analysis skill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_id",
+    "artifact_type",
+    "schema_version",
+    "task_run_id",
+    "producer",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+    "artifact_type": {"const": "analysis"},
+    "schema_version": {"const": 1},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "producer": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "summary",
+        "findings",
+        "hypotheses",
+        "recommendations",
+        "limitations",
+        "suggested_queries"
+      ],
+      "properties": {
+        "status": {"type": "string", "enum": ["complete", "incomplete"]},
+        "summary": {"type": "string", "minLength": 1},
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["statement", "evidence_refs", "confidence"],
+            "properties": {
+              "statement": {"type": "string", "minLength": 1},
+              "evidence_refs": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "pattern": "^qr_[A-Za-z0-9_-]+#.+$"},
+                "uniqueItems": true
+              },
+              "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+            }
+          }
+        },
+        "hypotheses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["statement", "evidence_refs", "status"],
+            "properties": {
+              "statement": {"type": "string", "minLength": 1},
+              "evidence_refs": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^qr_[A-Za-z0-9_-]+#.+$"},
+                "uniqueItems": true
+              },
+              "status": {
+                "type": "string",
+                "enum": ["supported", "plausible", "unverified", "rejected"]
+              }
+            }
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["action", "rationale", "priority"],
+            "properties": {
+              "action": {"type": "string", "minLength": 1},
+              "rationale": {"type": "string", "minLength": 1},
+              "priority": {
+                "type": "string",
+                "enum": ["immediate", "high", "medium", "low"]
+              }
+            }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "suggested_queries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["question", "reason", "priority"],
+            "properties": {
+              "question": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1},
+              "priority": {"type": "string", "enum": ["high", "medium", "low"]}
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "incomplete"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {"suggested_queries": {"minItems": 1}}
+          }
+        }
+      ]
+    }
+  }
+}

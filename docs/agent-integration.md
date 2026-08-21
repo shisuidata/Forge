@@ -59,6 +59,8 @@ POST /api/prepare-query
 
 `prepare_query` 不会创建可由 `/api/approve` 消费的 pending SQL。即使返回了 SQL，外部 Agent 也只能拿它进入自己的审核流，不能借 Forge 的 approve 接口直接执行。若未来需要执行，必须增加人工批准记录、用户身份、数据源权限、审计关联 ID 和部署级开关。
 
+审计日志中，成功的 prepare-query 记录使用 `needs_external_review` 状态，而不是内部审核流的 `pending`。只有 Forge Web/飞书内部生成、可由 `/api/approve` 消费的 SQL 才能进入 `pending`。
+
 ## 适用入口
 
 - MCP / Claude Desktop：作为只生成 SQL 的工具。
@@ -66,3 +68,30 @@ POST /api/prepare-query
 - Slack / 企业微信 / 钉钉：先走消息入口适配层，再接同一个 prepare-query 内核。
 
 这些入口未产品化前，不对外宣称“已支持”。当前交付状态以 `docs/compatibility-matrix.md` 为准。
+
+## 内部 Pi Control Plane 契约
+
+`/api/prepare-query` 的外部安全语义保持不变。Forge 另为同一私有化部署内的 Pi Orchestrator 提供内部 QueryRun API：
+
+```text
+POST /api/internal/query-runs
+GET  /api/internal/query-runs/{query_run_id}
+POST /api/internal/query-runs/{query_run_id}/approve
+POST /api/internal/query-runs/{query_run_id}/cancel
+GET  /api/internal/query-runs/{query_run_id}/result
+```
+
+这不是通用外部 Agent 执行接口。它使用独立的 `X-Pi-Service-Key`，对应 `PI_SERVICE_API_KEYS`，与普通 `AUTH_API_KEYS` 分离。
+
+批准执行必须同时满足：
+
+- QueryRun 仍处于 `needs_review`。
+- 批准人与 QueryRun 用户一致。
+- `sql_hash` 与审核 SQL 一致。
+- Registry 内容版本没有漂移。
+- 审核没有过期。
+- `EXECUTION_ENABLED=true`。
+- `DATABASE_READONLY_CONFIRMED=true`。
+- 创建和批准操作带幂等键。
+
+批准前 Forge 原子地将状态切换为 `executing`，避免重复渠道事件执行两次查询。完整结果只在 `completed` 后通过 QueryRun result 契约返回。

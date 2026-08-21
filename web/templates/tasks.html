@@ -1,0 +1,605 @@
+{% extends "base.html" %}
+{% block title %}Pi 任务预览 · Forge{% endblock %}
+{% block heading %}Pi 任务控制台{% endblock %}
+
+{% block content %}
+<style>
+  :root { --task-ink: #111827; --task-amber: #f59e0b; --task-paper: #f8f6f1; }
+  .task-grid { background-image: linear-gradient(rgba(17,24,39,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(17,24,39,.035) 1px, transparent 1px); background-size: 24px 24px; }
+  .task-step { animation: task-in .25s ease-out both; }
+  @keyframes task-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
+
+<div class="task-grid -m-6 min-h-full p-8">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-start justify-between gap-6 mb-7">
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span> INTEGRATION SPIKE
+          </span>
+          <span class="text-xs text-gray-400">Pi Control Plane → Forge Execution Plane</span>
+        </div>
+        <h2 class="text-2xl font-semibold tracking-tight text-gray-950">把任务推进过程放到台面上</h2>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Pi 负责推进 TaskRun，Forge 负责校验 SQL hash、审批身份、Registry 版本和只读执行。页面不允许编辑 SQL，确保审核内容就是实际执行内容。</p>
+      </div>
+      <div class="rounded-lg border px-3 py-2 text-xs font-medium {% if pi_enabled %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
+        {% if pi_enabled %}Pi Runtime 已启用{% else %}Pi Runtime 未启用{% endif %}
+      </div>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <section class="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div class="border-b border-gray-100 px-5 py-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-gray-400">01 / Submit</p>
+          <h3 class="mt-1 font-semibold text-gray-900">创建数据任务</h3>
+        </div>
+        <form id="task-form" class="space-y-4 p-5">
+          <div>
+            <label for="task-question" class="mb-1.5 block text-xs font-medium text-gray-600">已确认的数据问题</label>
+            <textarea id="task-question" rows="6" required
+              class="w-full resize-none rounded-xl border border-gray-200 bg-[var(--task-paper)] px-3.5 py-3 text-sm leading-6 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
+              placeholder="例如：统计本月各渠道支付 GMV，并按金额降序排列。"></textarea>
+          </div>
+          <div>
+            <label for="task-dialect" class="mb-1.5 block text-xs font-medium text-gray-600">SQL 方言</label>
+            <select id="task-dialect" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500">
+              <option value="auto">Auto</option>
+              <option value="sqlite">SQLite</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="mysql">MySQL</option>
+              <option value="bigquery">BigQuery</option>
+              <option value="snowflake">Snowflake</option>
+            </select>
+          </div>
+          <button id="task-submit" type="submit" {% if not pi_enabled %}disabled{% endif %}
+            class="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-35">
+            <span>创建 TaskRun 并生成审核预览</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <p class="text-[11px] leading-5 text-gray-400">身份由 Web 渠道传给 Pi；Forge 只返回不可执行的审核材料。</p>
+        </form>
+      </section>
+
+      <div class="space-y-6">
+        <section class="rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-gray-400">02 / Events</p>
+              <h3 class="mt-1 font-semibold text-gray-900">TaskRun 事件流</h3>
+            </div>
+            <code id="task-id" class="rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-500">尚未创建</code>
+          </div>
+          <div id="task-events" class="min-h-44 p-5">
+            <div class="flex min-h-32 items-center justify-center text-sm text-gray-400">提交任务后，这里会显示由 Pi 推进的状态变化。</div>
+          </div>
+        </section>
+
+        <section id="review-panel" class="hidden overflow-hidden rounded-2xl border border-gray-800 bg-gray-950 shadow-xl">
+          <div class="flex items-center justify-between border-b border-gray-800 px-5 py-4">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-amber-400">03 / Review Request</p>
+              <h3 class="mt-1 font-semibold text-white">Forge SQL 审核预览</h3>
+            </div>
+            <span class="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">等待人工批准</span>
+          </div>
+          <pre id="review-sql" class="max-h-96 overflow-auto px-5 py-5 font-mono text-[13px] leading-6 text-slate-200"></pre>
+          <div class="flex items-center justify-between gap-4 border-t border-gray-800 bg-gray-900/70 px-5 py-3">
+            <span id="review-meta" class="text-xs text-gray-400"></span>
+            <button id="approve-query" type="button"
+              class="rounded-lg bg-amber-400 px-4 py-2 text-xs font-semibold text-gray-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40">
+              批准并只读执行
+            </button>
+          </div>
+        </section>
+
+        <section id="result-panel" class="hidden overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+          <div class="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-emerald-600">04 / Query Result</p>
+              <h3 class="mt-1 font-semibold text-emerald-950">只读执行完成</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <span id="result-meta" class="text-xs text-emerald-700"></span>
+              <button id="analyze-task" type="button"
+                class="hidden rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-40">
+                生成归因分析
+              </button>
+            </div>
+          </div>
+          <div class="max-h-96 overflow-auto">
+            <table class="min-w-full text-xs">
+              <thead id="result-head" class="sticky top-0 bg-gray-50 text-gray-500"></thead>
+              <tbody id="result-body" class="divide-y divide-gray-100 text-gray-700"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="analysis-panel" class="hidden rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-violet-600">05 / Evidence Analysis</p>
+              <h3 class="mt-1 font-semibold text-violet-950">归因分析</h3>
+            </div>
+            <button id="render-report" type="button"
+              class="hidden rounded-lg bg-violet-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-600 disabled:opacity-40">
+              生成业务报告
+            </button>
+          </div>
+          <p id="analysis-summary" class="mt-4 text-sm leading-6 text-gray-700"></p>
+          <div id="analysis-findings" class="mt-4 space-y-3"></div>
+          <div id="analysis-limitations" class="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"></div>
+          <div id="analysis-suggestions" class="mt-4 space-y-2"></div>
+        </section>
+
+        <section id="report-panel" class="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div class="border-b border-gray-100 px-5 py-4">
+            <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-gray-500">06 / Rendered Report</p>
+            <h3 id="report-title" class="mt-1 font-semibold text-gray-950"></h3>
+          </div>
+          <pre id="report-markdown" class="max-h-[36rem] overflow-auto whitespace-pre-wrap px-5 py-5 font-sans text-sm leading-7 text-gray-700"></pre>
+        </section>
+
+        <section id="task-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const taskForm = document.getElementById('task-form');
+const submitButton = document.getElementById('task-submit');
+const eventsPanel = document.getElementById('task-events');
+const taskIdLabel = document.getElementById('task-id');
+const reviewPanel = document.getElementById('review-panel');
+const reviewSql = document.getElementById('review-sql');
+const reviewMeta = document.getElementById('review-meta');
+const approveButton = document.getElementById('approve-query');
+const resultPanel = document.getElementById('result-panel');
+const resultMeta = document.getElementById('result-meta');
+const resultHead = document.getElementById('result-head');
+const resultBody = document.getElementById('result-body');
+const analyzeButton = document.getElementById('analyze-task');
+const analysisPanel = document.getElementById('analysis-panel');
+const analysisSummary = document.getElementById('analysis-summary');
+const analysisFindings = document.getElementById('analysis-findings');
+const analysisLimitations = document.getElementById('analysis-limitations');
+const analysisSuggestions = document.getElementById('analysis-suggestions');
+const reportButton = document.getElementById('render-report');
+const reportPanel = document.getElementById('report-panel');
+const reportTitle = document.getElementById('report-title');
+const reportMarkdown = document.getElementById('report-markdown');
+const errorPanel = document.getElementById('task-error');
+let currentTaskRunId = null;
+let currentQueryTaskRunId = null;
+let currentReview = null;
+let supplementUsed = false;
+let analysisAttemptCounter = 0;
+let reportAttemptCounter = 0;
+
+function showError(message) {
+  errorPanel.textContent = message;
+  errorPanel.classList.remove('hidden');
+}
+
+function renderEvents(events) {
+  eventsPanel.replaceChildren();
+  const labels = {
+    'task.created': 'TaskRun 已创建',
+    'task.status_changed': '状态推进',
+    'query.review_requested': 'Forge 返回审核材料',
+    'query.clarification_requested': '需要补充信息',
+    'query.prepare_failed': '查询准备失败',
+    'query.approval_submitted': '人工批准已提交',
+    'query.completed': 'Forge 查询完成',
+    'artifact.created': '结构化 Artifact 已创建',
+    'analysis.completed': '证据分析完成',
+    'report.completed': '业务报告完成',
+    'analysis.supplement_created': '补查 TaskRun 已创建',
+    'analysis.supplement_consumed': '补查结果已合并',
+    'skill.execution_failed': 'Skill 执行失败',
+  };
+  events.forEach((event, index) => {
+    const row = document.createElement('div');
+    row.className = 'task-step relative flex gap-3 pb-5 last:pb-0';
+    row.style.animationDelay = `${index * 45}ms`;
+
+    const rail = document.createElement('div');
+    rail.className = 'flex w-5 flex-col items-center';
+    const dot = document.createElement('span');
+    dot.className = event.event_type.includes('failed') ? 'mt-1 h-2.5 w-2.5 rounded-full bg-red-500' : event.event_type === 'query.review_requested' ? 'mt-1 h-2.5 w-2.5 rounded-full bg-amber-500' : 'mt-1 h-2.5 w-2.5 rounded-full bg-gray-900';
+    rail.appendChild(dot);
+    if (index < events.length - 1) {
+      const line = document.createElement('span');
+      line.className = 'mt-1 w-px flex-1 bg-gray-200';
+      rail.appendChild(line);
+    }
+
+    const copy = document.createElement('div');
+    copy.className = 'min-w-0 flex-1';
+    const title = document.createElement('div');
+    title.className = 'flex items-center justify-between gap-3';
+    const name = document.createElement('p');
+    name.className = 'text-sm font-medium text-gray-800';
+    name.textContent = labels[event.event_type] || event.event_type;
+    const sequence = document.createElement('span');
+    sequence.className = 'font-mono text-[10px] text-gray-400';
+    sequence.textContent = `#${String(event.sequence).padStart(2, '0')}`;
+    title.append(name, sequence);
+    const detail = document.createElement('p');
+    detail.className = 'mt-1 truncate font-mono text-[11px] text-gray-400';
+    detail.textContent = JSON.stringify(event.payload);
+    copy.append(title, detail);
+    row.append(rail, copy);
+    eventsPanel.appendChild(row);
+  });
+}
+
+async function readJson(response) {
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
+}
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function pollTask(taskRunId, targetStatuses, artifactType = null) {
+  const deadline = Date.now() + 360000;
+  while (Date.now() < deadline) {
+    const [taskData, eventData, artifactData, attemptData] = await Promise.all([
+      readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}`)),
+      readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/events`)),
+      readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/artifacts`)),
+      readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/attempts`)),
+    ]);
+    renderEvents(eventData.events);
+    const status = taskData.task.status;
+    const failure = [...eventData.events].reverse().find((event) =>
+      ['skill.execution_failed', 'query.execution_failed', 'query.prepare_failed'].includes(event.event_type)
+    );
+    if (['failed', 'cancelled', 'expired'].includes(status)) {
+      throw new Error(failure?.payload?.error || `TaskRun ${status}`);
+    }
+    const latestAttempt = attemptData.attempts.at(-1);
+    if (latestAttempt && ['failed', 'timed_out', 'interrupted'].includes(latestAttempt.status)) {
+      throw new Error(latestAttempt.error || failure?.payload?.error || `Stage ${latestAttempt.status}`);
+    }
+    if (targetStatuses.includes(status)) {
+      const artifact = artifactType === null
+        ? null
+        : [...artifactData.artifacts].reverse().find((item) => item.artifact_type === artifactType);
+      if (artifactType === null || artifact) {
+        return {task: taskData.task, events: eventData.events, artifacts: artifactData.artifacts, artifact};
+      }
+    }
+    await sleep(750);
+  }
+  throw new Error('TaskRun polling timeout');
+}
+
+taskForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const question = document.getElementById('task-question').value.trim();
+  const dialect = document.getElementById('task-dialect').value;
+  if (!question) return;
+
+  submitButton.disabled = true;
+  errorPanel.classList.add('hidden');
+  reviewPanel.classList.add('hidden');
+  resultPanel.classList.add('hidden');
+  analysisPanel.classList.add('hidden');
+  reportPanel.classList.add('hidden');
+  analyzeButton.classList.add('hidden');
+  reportButton.classList.add('hidden');
+  currentTaskRunId = null;
+  currentQueryTaskRunId = null;
+  currentReview = null;
+  supplementUsed = false;
+  analysisAttemptCounter = 0;
+  reportAttemptCounter = 0;
+  eventsPanel.innerHTML = '<div class="flex min-h-32 items-center justify-center text-sm text-gray-400">Pi 正在创建 TaskRun…</div>';
+
+  try {
+    const created = await readJson(await fetch('/api/pi/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: question,
+        intent: 'business_root_cause_analysis',
+      }),
+    }));
+    const taskRunId = created.task.task_run_id;
+    currentTaskRunId = taskRunId;
+    currentQueryTaskRunId = taskRunId;
+    taskIdLabel.textContent = taskRunId;
+    renderEvents(created.events);
+
+    let prepared = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/prepare-query`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        question,
+        dialect,
+        idempotency_key: `${taskRunId}:query-prepare:1`,
+        run_async: true,
+      }),
+    }));
+    if (prepared.status === 'accepted') {
+      const polled = await pollTask(taskRunId, ['waiting_for_query_approval', 'needs_input']);
+      const reviewEvent = [...polled.events].reverse().find(
+        (event) => event.event_type === 'query.review_requested'
+      );
+      const clarificationEvent = [...polled.events].reverse().find(
+        (event) => event.event_type === 'query.clarification_requested'
+      );
+      prepared = {
+        events: polled.events,
+        result: reviewEvent
+          ? {status: 'needs_review', ...reviewEvent.payload}
+          : {status: 'needs_clarification', error: clarificationEvent?.payload?.prompt || '需要补充信息'},
+      };
+    }
+    renderEvents(prepared.events);
+
+    if (prepared.result.status === 'needs_review') {
+      currentReview = prepared.result;
+      reviewSql.textContent = prepared.result.sql;
+      reviewMeta.textContent = `${prepared.result.dialect} · hash ${prepared.result.sql_hash.slice(0, 18)}…`;
+      approveButton.disabled = false;
+      approveButton.textContent = '批准并只读执行';
+      reviewPanel.classList.remove('hidden');
+    } else if (prepared.result.status === 'needs_clarification') {
+      showError(prepared.result.text || '需要补充查询信息。');
+    } else {
+      showError(prepared.result.error || 'Forge 无法生成审核材料。');
+    }
+  } catch (error) {
+    showError(error.message || '任务创建失败');
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+function renderResult(result) {
+  resultHead.replaceChildren();
+  resultBody.replaceChildren();
+  const headerRow = document.createElement('tr');
+  result.columns.forEach((column) => {
+    const cell = document.createElement('th');
+    cell.className = 'px-4 py-2.5 text-left font-semibold';
+    cell.textContent = column;
+    headerRow.appendChild(cell);
+  });
+  resultHead.appendChild(headerRow);
+  result.rows.forEach((row) => {
+    const tableRow = document.createElement('tr');
+    row.forEach((value) => {
+      const cell = document.createElement('td');
+      cell.className = 'whitespace-nowrap px-4 py-2.5 font-mono';
+      cell.textContent = value === null ? 'NULL' : String(value);
+      tableRow.appendChild(cell);
+    });
+    resultBody.appendChild(tableRow);
+  });
+  resultMeta.textContent = `${result.row_count} 行 · ${result.execution_ms} ms${result.truncated ? ' · 已截断' : ''}`;
+  resultPanel.classList.remove('hidden');
+  analyzeButton.classList.remove('hidden');
+}
+
+approveButton.addEventListener('click', async () => {
+  if (!currentTaskRunId || !currentQueryTaskRunId || !currentReview) return;
+  approveButton.disabled = true;
+  approveButton.textContent = 'Forge 校验并执行中…';
+  errorPanel.classList.add('hidden');
+  try {
+    const idempotencyKey = `${currentTaskRunId}:approve:${currentReview.query_run_id}`;
+    const approvingTaskRunId = currentQueryTaskRunId;
+    let approved = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(approvingTaskRunId)}/approve-query`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        query_run_id: currentReview.query_run_id,
+        sql_hash: currentReview.sql_hash,
+        idempotency_key: idempotencyKey,
+        run_async: true,
+      }),
+    }));
+    if (approved.status === 'accepted') {
+      const targetStatus = approvingTaskRunId === currentTaskRunId ? 'ready_for_analysis' : 'completed';
+      const polled = await pollTask(approvingTaskRunId, [targetStatus], 'query_result');
+      approved = {events: polled.events, result: polled.artifact.payload};
+    }
+    renderResult(approved.result);
+    approveButton.textContent = '已批准并执行';
+    if (approvingTaskRunId === currentTaskRunId) {
+      renderEvents(approved.events);
+    } else {
+      analyzeButton.classList.add('hidden');
+      let resumed = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(currentTaskRunId)}/resume-analysis`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          child_task_run_id: approvingTaskRunId,
+          idempotency_key: `${currentTaskRunId}:resume:${approvingTaskRunId}:1`,
+          run_async: true,
+        }),
+      }));
+      if (resumed.status === 'accepted') {
+        const polled = await pollTask(
+          currentTaskRunId,
+          ['ready_for_report', 'incomplete'],
+          'analysis',
+        );
+        resumed = {events: polled.events, artifact: polled.artifact};
+      }
+      currentQueryTaskRunId = currentTaskRunId;
+      renderEvents(resumed.events);
+      renderAnalysis(resumed.artifact);
+    }
+  } catch (error) {
+    showError(error.message || '审批执行失败');
+    approveButton.disabled = false;
+    approveButton.textContent = '重新批准';
+  }
+});
+
+function renderAnalysis(artifact) {
+  const payload = artifact.payload;
+  analysisSummary.textContent = payload.summary;
+  analysisFindings.replaceChildren();
+  payload.findings.forEach((finding) => {
+    const card = document.createElement('div');
+    card.className = 'rounded-xl border border-gray-100 bg-gray-50 px-4 py-3';
+    const statement = document.createElement('p');
+    statement.className = 'text-sm font-medium text-gray-900';
+    statement.textContent = finding.statement;
+    const evidence = document.createElement('p');
+    evidence.className = 'mt-1 font-mono text-[11px] text-violet-600';
+    evidence.textContent = finding.evidence_refs.join(' · ');
+    card.append(statement, evidence);
+    analysisFindings.appendChild(card);
+  });
+  const limitations = payload.limitations.length
+    ? `限制：${payload.limitations.join('；')}`
+    : '未声明额外限制。';
+  analysisLimitations.textContent = limitations;
+  analysisSuggestions.replaceChildren();
+  if (payload.status === 'incomplete' && !supplementUsed) {
+    payload.suggested_queries.forEach((suggestion, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.suggestionIndex = String(index);
+      button.className = 'w-full rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-left transition hover:border-violet-400 disabled:opacity-40';
+      const question = document.createElement('span');
+      question.className = 'block text-sm font-medium text-violet-950';
+      question.textContent = `批准补查：${suggestion.question}`;
+      const reason = document.createElement('span');
+      reason.className = 'mt-1 block text-xs text-violet-700';
+      reason.textContent = suggestion.reason;
+      button.append(question, reason);
+      button.addEventListener('click', () => startSupplement(index, button));
+      analysisSuggestions.appendChild(button);
+    });
+  }
+  reportButton.classList.toggle('hidden', payload.status !== 'complete');
+  analysisPanel.classList.remove('hidden');
+}
+
+async function startSupplement(index, button) {
+  if (!currentTaskRunId || !currentReview) return;
+  button.disabled = true;
+  errorPanel.classList.add('hidden');
+  try {
+    const supplement = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(currentTaskRunId)}/supplements`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        suggested_query_index: index,
+        idempotency_key: `${currentTaskRunId}:supplement:${index}`,
+      }),
+    }));
+    supplementUsed = true;
+    const childTaskRunId = supplement.childTask.task_run_id;
+    let prepared = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(childTaskRunId)}/prepare-query`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        question: supplement.suggestion.question,
+        dialect: currentReview.dialect,
+        idempotency_key: `${childTaskRunId}:query-prepare:1`,
+        run_async: true,
+      }),
+    }));
+    if (prepared.status === 'accepted') {
+      const polled = await pollTask(childTaskRunId, ['waiting_for_query_approval']);
+      const reviewEvent = [...polled.events].reverse().find(
+        (event) => event.event_type === 'query.review_requested'
+      );
+      prepared = {
+        events: polled.events,
+        result: reviewEvent ? {status: 'needs_review', ...reviewEvent.payload} : {status: 'failed'},
+      };
+    }
+    if (prepared.result.status !== 'needs_review') {
+      throw new Error(prepared.result.error || '补查 SQL 无法进入审核');
+    }
+    currentQueryTaskRunId = childTaskRunId;
+    currentReview = prepared.result;
+    reviewSql.textContent = prepared.result.sql;
+    reviewMeta.textContent = `补查 · ${prepared.result.dialect} · hash ${prepared.result.sql_hash.slice(0, 18)}…`;
+    approveButton.disabled = false;
+    approveButton.textContent = '批准补查 SQL';
+    reviewPanel.classList.remove('hidden');
+    analysisSuggestions.querySelectorAll('button').forEach((item) => { item.disabled = true; });
+  } catch (error) {
+    showError(error.message || '补查任务创建失败');
+    button.disabled = false;
+  }
+}
+
+analyzeButton.addEventListener('click', async () => {
+  if (!currentTaskRunId) return;
+  analyzeButton.disabled = true;
+  analyzeButton.textContent = '分析中…';
+  errorPanel.classList.add('hidden');
+  try {
+    analysisAttemptCounter += 1;
+    let analyzed = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(currentTaskRunId)}/analyze`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        idempotency_key: `${currentTaskRunId}:analysis:${analysisAttemptCounter}`,
+        run_async: true,
+      }),
+    }));
+    if (analyzed.status === 'accepted') {
+      const polled = await pollTask(
+        currentTaskRunId,
+        ['ready_for_report', 'incomplete'],
+        'analysis',
+      );
+      analyzed = {events: polled.events, artifact: polled.artifact};
+    }
+    renderEvents(analyzed.events);
+    renderAnalysis(analyzed.artifact);
+    analyzeButton.textContent = analyzed.artifact.payload.status === 'complete' ? '分析完成' : '需要补查';
+  } catch (error) {
+    showError(error.message || '分析失败');
+    analyzeButton.disabled = false;
+    analyzeButton.textContent = '重新分析';
+  }
+});
+
+reportButton.addEventListener('click', async () => {
+  if (!currentTaskRunId) return;
+  reportButton.disabled = true;
+  reportButton.textContent = '报告生成中…';
+  errorPanel.classList.add('hidden');
+  try {
+    reportAttemptCounter += 1;
+    let reported = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(currentTaskRunId)}/render-report`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        audience: '业务负责人和产品经理',
+        idempotency_key: `${currentTaskRunId}:report:${reportAttemptCounter}`,
+        run_async: true,
+      }),
+    }));
+    if (reported.status === 'accepted') {
+      const polled = await pollTask(currentTaskRunId, ['completed'], 'rendered_output');
+      reported = {events: polled.events, artifact: polled.artifact};
+    }
+    renderEvents(reported.events);
+    reportTitle.textContent = reported.artifact.payload.title;
+    reportMarkdown.textContent = reported.artifact.payload.markdown;
+    reportPanel.classList.remove('hidden');
+    reportButton.textContent = '报告已生成';
+  } catch (error) {
+    showError(error.message || '报告生成失败');
+    reportButton.disabled = false;
+    reportButton.textContent = '重新生成报告';
+  }
+});
+</script>
+{% endblock %}

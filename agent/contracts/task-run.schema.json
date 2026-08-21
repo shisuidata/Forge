@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/task-run.schema.json",
+  "title": "TaskRun",
+  "description": "Durable orchestration state for one cross-channel data task.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_run_id",
+    "org_id",
+    "team_id",
+    "user_id",
+    "channel",
+    "intent",
+    "status",
+    "current_stage",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "org_id": {"type": "string", "minLength": 1},
+    "team_id": {"type": "string", "minLength": 1},
+    "user_id": {"type": "string", "minLength": 1},
+    "channel": {
+      "type": "string",
+      "enum": ["web", "feishu", "dingtalk", "api"]
+    },
+    "channel_conversation_id": {"type": ["string", "null"]},
+    "intent": {"type": "string", "minLength": 1},
+    "status": {
+      "type": "string",
+      "enum": [
+        "created",
+        "clarifying",
+        "ready_for_query",
+        "waiting_for_query_approval",
+        "querying",
+        "ready_for_analysis",
+        "analyzing",
+        "ready_for_report",
+        "rendering",
+        "completed",
+        "needs_input",
+        "incomplete",
+        "cancelled",
+        "failed",
+        "expired"
+      ]
+    },
+    "current_stage": {"type": ["string", "null"]},
+    "correlation_id": {"type": ["string", "null"]},
+    "parent_task_run_id": {
+      "type": ["string", "null"],
+      "pattern": "^tr_[A-Za-z0-9_-]+$"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "metadata": {"type": "object", "additionalProperties": true}
+  }
+}

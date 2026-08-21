@@ -1,0 +1,16 @@
+{
+  "feishu": {
+    "ou_example": {
+      "org_id": "org_demo",
+      "team_id": "team_data",
+      "user_id": "user_demo"
+    }
+  },
+  "dingtalk": {
+    "ding_user_example": {
+      "org_id": "org_demo",
+      "team_id": "team_data",
+      "user_id": "user_demo"
+    }
+  }
+}

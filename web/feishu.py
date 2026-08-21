@@ -58,6 +58,11 @@ from agent import agent
 from agent.memory import memory
 from forge.executor import execute_with_data as _execute_sql
 from forge.chart import generate as _generate_chart, generate_image as _generate_chart_image
+from web.pi_channel import (
+    PiChannelClient,
+    presentation_to_feishu_card,
+    task_run_id_from_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -671,6 +676,85 @@ def _react(message_id: str, emoji: str = "DONE") -> None:
         logger.warning("react error: %s", exc)
 
 
+# ── Pi 渠道路由（feature flag）───────────────────────────────────────────────
+
+_pi_channel_client: PiChannelClient | None = None
+
+
+def _get_pi_channel_client() -> PiChannelClient:
+    global _pi_channel_client
+    if _pi_channel_client is None:
+        _pi_channel_client = PiChannelClient()
+    return _pi_channel_client
+
+
+def _dispatch_pi_message(
+    open_id: str,
+    conversation_id: str,
+    message_id: str,
+    text: str,
+) -> None:
+    try:
+        client = _get_pi_channel_client()
+        accepted = client.submit_message(
+            event_id=message_id,
+            external_user_id=open_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            text=text,
+        )
+        task_run_id = task_run_id_from_response(accepted)
+        presentation = client.wait_for_presentation(task_run_id)
+        _send_card(
+            open_id,
+            presentation_to_feishu_card(
+                presentation,
+                external_user_id=open_id,
+                conversation_id=conversation_id,
+            ),
+        )
+    except Exception as exc:
+        logger.exception("Pi channel message failed for %s: %s", open_id, exc)
+        _send_info_card(open_id, "Forge 任务暂时无法处理，请稍后重试。", template="red")
+
+
+def _dispatch_pi_action(
+    open_id: str,
+    conversation_id: str,
+    message_id: str,
+    event_id: str,
+    action_type: str,
+    task_run_id: str,
+    payload: dict,
+    card_id: str = "",
+) -> None:
+    try:
+        client = _get_pi_channel_client()
+        accepted = client.submit_action(
+            event_id=event_id,
+            external_user_id=open_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            task_run_id=task_run_id,
+            action=action_type,
+            payload=payload,
+        )
+        resolved_task_run_id = task_run_id_from_response(accepted)
+        presentation = client.wait_for_presentation(resolved_task_run_id)
+        card = presentation_to_feishu_card(
+            presentation,
+            external_user_id=open_id,
+            conversation_id=conversation_id,
+        )
+        if card_id:
+            _update_card_by_id(card_id, card)
+        else:
+            _update_card(message_id, card)
+    except Exception as exc:
+        logger.exception("Pi channel action failed for %s: %s", open_id, exc)
+        _send_info_card(open_id, "操作失败，请刷新任务状态后重试。", template="red")
+
+
 # ── 消息路由 ──────────────────────────────────────────────────────────────────
 
 def _handle_approve(open_id: str, query_hint: str = "") -> None:
@@ -941,8 +1025,16 @@ def _on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
         # 立刻发表情表示已收到，不等 LLM
         _react(msg.message_id, "OK")
 
-        # 加入用户专属串行队列，保证消息顺序处理
-        _enqueue(open_id, text)
+        if cfg.FEISHU_PI_ENABLED:
+            conversation_id = getattr(msg, "chat_id", None) or open_id
+            threading.Thread(
+                target=_dispatch_pi_message,
+                args=(open_id, conversation_id, msg.message_id, text),
+                daemon=True,
+            ).start()
+        else:
+            # 旧 Forge Agent 路径仅作 feature-flag 回滚，不能与 Pi 同时处理。
+            _enqueue(open_id, text)
 
     except Exception as exc:
         logger.exception("Error handling message: %s", exc)
@@ -966,6 +1058,44 @@ def _on_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
                      action_type, open_id, message_id)
 
         card_id = action_value.get("card_id", "")
+
+        if cfg.FEISHU_PI_ENABLED and action_value.get("pi_action") is True:
+            # Pi 路径只信任飞书回调中的真实 operator，不信任卡片 value 里的 user_id。
+            open_id = data.event.operator.open_id
+            action_type = str(action_value.get("action_type") or "")
+            callback_event_id = str(
+                getattr(getattr(data, "header", None), "event_id", "")
+                or f"{message_id}:{action_type}:{open_id}"
+            )
+            task_run_id = str(action_value.get("task_run_id") or "")
+            conversation_id = str(action_value.get("conversation_id") or open_id)
+            payload = action_value.get("payload")
+            if not action_type or not task_run_id or not isinstance(payload, dict):
+                raise ValueError("无效的 Pi 渠道操作")
+            response.toast = CallBackToast()
+            response.toast.type = "info"
+            response.toast.content = "Forge 正在处理..."
+            threading.Thread(
+                target=_dispatch_pi_action,
+                args=(
+                    open_id,
+                    conversation_id,
+                    message_id,
+                    callback_event_id,
+                    action_type,
+                    task_run_id,
+                    payload,
+                    card_id,
+                ),
+                daemon=True,
+            ).start()
+            return response
+
+        if cfg.FEISHU_PI_ENABLED:
+            response.toast = CallBackToast()
+            response.toast.type = "warning"
+            response.toast.content = "旧卡片已失效，请重新发起任务"
+            return response
 
         def _update_card_state(text: str, template: str = "green") -> None:
             """根据卡片来源选择 v1 PATCH 或 v2 CardKit 更新。"""
@@ -1077,14 +1207,9 @@ def _make_done_card(text: str, template: str = "green") -> dict:
 
 # ── 启动 ───────────────────────────────────────────────────────────────────────
 
-def start_bot() -> None:
-    import time as _time
-
-    if not cfg.FEISHU_APP_ID or not cfg.FEISHU_APP_SECRET:
-        logger.error("FEISHU_APP_ID / FEISHU_APP_SECRET 未配置，飞书 Bot 不会启动。")
-        return
-
-    event_handler = (
+def build_event_handler():
+    """Build the shared HTTP/WebSocket dispatcher for the selected feature-flag path."""
+    return (
         lark.EventDispatcherHandler.builder(
             cfg.FEISHU_VERIFICATION_TOKEN,
             cfg.FEISHU_ENCRYPT_KEY,
@@ -1093,6 +1218,21 @@ def start_bot() -> None:
         .register_p2_card_action_trigger(_on_card_action)
         .build()
     )
+
+
+def start_bot() -> None:
+    import time as _time
+
+    if cfg.FEISHU_PI_ENABLED:
+        from web.feishu_pi import start_bot as start_pi_bot
+        start_pi_bot()
+        return
+
+    if not cfg.FEISHU_APP_ID or not cfg.FEISHU_APP_SECRET:
+        logger.error("FEISHU_APP_ID / FEISHU_APP_SECRET 未配置，飞书 Bot 不会启动。")
+        return
+
+    event_handler = build_event_handler()
 
     # 自动重连：ws_client.start() 在连接断开后会退出，循环重建连接
     while True:

@@ -9,6 +9,7 @@ SQL 执行器 — 连接数据库执行 SQL 并返回格式化结果。
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 import logging
 import re
 import time
@@ -181,24 +182,25 @@ def execute(sql: str, max_rows: int = 50) -> str:
     return "\n".join(lines)
 
 
-def execute_with_data(
-    sql: str, max_rows: int = 200
-) -> tuple[str, list[str], list[tuple]]:
-    """
-    执行 SQL，同时返回格式化文本和原始数据（供图表使用）。
+@dataclass(frozen=True)
+class QueryExecutionData:
+    text: str
+    columns: list[str]
+    rows: list[tuple]
+    truncated: bool
 
-    Returns:
-        (text, cols, rows)  — text 同 execute()；cols/rows 用于图表生成
-    """
+
+def execute_with_metadata(sql: str, max_rows: int = 200) -> QueryExecutionData:
+    """Execute reviewed SQL and preserve whether the deployment row cap truncated it."""
     if not cfg.EXECUTION_ENABLED:
-        return "⚠ SQL 执行已被配置禁用。", [], []
+        return QueryExecutionData("⚠ SQL 执行已被配置禁用。", [], [], False)
     if not cfg.DATABASE_URL:
-        return "⚠ 未配置数据库连接（DATABASE_URL），无法执行查询。", [], []
+        return QueryExecutionData("⚠ 未配置数据库连接（DATABASE_URL），无法执行查询。", [], [], False)
 
     try:
         from sqlalchemy import text as sa_text
     except ImportError:
-        return "⚠ 缺少依赖：请运行 pip install sqlalchemy", [], []
+        return QueryExecutionData("⚠ 缺少依赖：请运行 pip install sqlalchemy", [], [], False)
 
     try:
         validate_readonly_sql(sql)
@@ -209,20 +211,19 @@ def execute_with_data(
             _apply_statement_timeout(conn, timeout_seconds)
             with _sqlite_timeout_guard(conn, timeout_seconds):
                 result = conn.execute(sa_text(sql))
-                rows   = result.fetchmany(max_rows + 1)
-                cols   = list(result.keys())
+                rows = result.fetchmany(max_rows + 1)
+                cols = list(result.keys())
     except Exception as exc:
         logger.error("SQL execution failed: %s", exc)
-        return f"⚠ 执行失败：{exc}", [], []
+        return QueryExecutionData(f"⚠ 执行失败：{exc}", [], [], False)
 
     if not rows:
-        return "查询完成，结果为空。", cols, []
+        return QueryExecutionData("查询完成，结果为空。", cols, [], False)
 
     truncated = len(rows) > max_rows
     if truncated:
         rows = rows[:max_rows]
 
-    # 格式化文本时再限制展示行数，原始 rows 仍保留给图表/分析。
     display_limit = _bounded_display_rows()
     display_rows = rows[:display_limit]
     col_widths = [len(str(c)) for c in cols]
@@ -234,12 +235,20 @@ def execute_with_data(
         parts = [str(v if v is not None else "NULL").ljust(col_widths[i]) for i, v in enumerate(vals)]
         return "  ".join(parts)
 
-    sep   = "  ".join("-" * w for w in col_widths)
+    sep = "  ".join("-" * w for w in col_widths)
     lines = [fmt_row(cols), sep] + [fmt_row(list(r)) for r in display_rows]
     if truncated or len(rows) > display_limit:
         lines.append(f"（显示前 {len(display_rows)} 行，共 {len(rows)} 行）")
 
-    return "\n".join(lines), cols, list(rows)
+    return QueryExecutionData("\n".join(lines), cols, list(rows), truncated)
+
+
+def execute_with_data(
+    sql: str, max_rows: int = 200
+) -> tuple[str, list[str], list[tuple]]:
+    """Backward-compatible tuple API used by the existing Web/Feishu path."""
+    result = execute_with_metadata(sql, max_rows=max_rows)
+    return result.text, result.columns, result.rows
 
 
 def _bounded_max_rows(requested: int) -> int:
