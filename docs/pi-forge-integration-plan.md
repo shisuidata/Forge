@@ -823,6 +823,7 @@ M4.1 用户配置接管与服务重启规则：
 - 服务端使用完整 Registry 和用户 ACL 二次校验真实表/字段，不再只依赖模型 Tool Schema；错误诊断有界，不回显字段枚举和权限清单。
 - LLM 每次响应携带实际 snapshot 的 model revision，Assurance Report 不再事后猜测当前配置。
 - 回归覆盖：成功报告、未知字段、表 ACL、Registry 缺失、模型重试及 SQL hash；完整 Python 411 passed / 25 skipped，Pi Orchestrator 50 passed。
+- NAS 已部署 main `44930a6`。真实 `/api/prepare-query` 回归“各城市的订单总额”经历 2 次受控修正后进入 `needs_review`，四个 Gate 全部 passed，并返回 Registry revision、实际 model revision 和 SQL hash。
 - 下一批：QueryRun 持久化 Assurance Report/revisions，审批同时绑定 report hash；随后将同一 Policy/EA 门禁接入 Model Profile 激活。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
