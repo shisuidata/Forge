@@ -56,6 +56,7 @@
 | Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 进行中：飞书 gated path | ChannelEvent、独立服务鉴权、只读身份映射、SQLite 幂等入站、ChannelPresentation Renderer 已完成；`FEISHU_PI_ENABLED` 新路径已覆盖消息 → SQL 审核 → hash 绑定批准 → 结果，默认关闭；待真实飞书凭证 smoke、补充信息/取消/补查和钉钉复用 |
+| Phase 4.5 Registry Studio | 需求已确认，待设计实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
 | Phase 2 QueryRun 审批执行闭环 | 已完成，待提交 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
 | Forge 内部 QueryRun 审批 API | 已完成，待提交 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
@@ -66,6 +67,7 @@
 | 日期 | 决策 | 影响 |
 |---|---|---|
 | 2026-08-21 | 采用 Pi + Forge + 拾穗 DATA Skills + 多渠道四层架构 | Forge 从单体 Agent 演进为可信执行层 |
+| 2026-08-21 | 结构层支持表格、DDL、ER 图和 JSON 多视图 | Canonical Schema 仍是唯一真相源；各视图不得各自保存状态，编辑只修改 Registry 草案，不直接执行数据库 DDL |
 | 2026-08-21 | Pi 拥有流程调度权，Forge 拥有可信执行权与否决权 | 禁止形成双 Orchestrator |
 | 2026-08-21 | 计划文档随需求确认和实施结果持续更新 | 文档更新成为开发门禁，而非事后总结 |
 | 2026-08-21 | Pi Runtime 默认关闭内置工具，仅显式加载四个 MVP Skills | 客户运行环境不继承个人 Pi 配置，也不具备文件或 Shell 权限 |
@@ -748,6 +750,61 @@ M4.1 问候语错误生成 SQL 修复决定：
 - 三个渠道使用同一 TaskRun 状态机。
 - 不在 Bot 内复制 Skill 路由和 Forge 查询逻辑。
 - 同一用户的权限在各渠道保持一致。
+
+### Phase 4.5：Registry Studio（结构层多视图与安全编辑）
+
+目标：让结构层既能由 `forge sync` 从数据库同步，也能用数据库工程师熟悉的方式查看和维护，而不制造 JSON、DDL、ER 三套互相漂移的真相源。
+
+当前差距：
+
+- `schema.registry.json` 主要只有表名、字段名和部分 enum，缺少稳定生成 DDL/ER 所需的类型、nullable、default、主键、唯一约束、外键、索引、注释、schema/catalog 和视图信息。
+- `registry/sync.py` 当前删除消失的表/列并直接写文件，缺少 drift preview、版本、审批和回滚，不适合直接承载可视化编辑。
+
+目标 Canonical Schema：
+
+- 数据源：`datasource/catalog/schema/dialect`。
+- 表：名称、类型（table/view）、注释、业务别名、标签。
+- 字段：顺序、原始类型、规范类型、nullable、default、PK、unique、注释、enum。
+- 约束：primary key、foreign keys、unique constraints、indexes。
+- 关系：数据库声明关系与人工推断关系分开；推断关系必须标记 `inferred/unconfirmed`。
+- 元数据：schema version、registry revision、source fingerprint、synced_at、editor、change reason。
+
+同一 Canonical Schema 的投影视图：
+
+1. **表格视图**：按数据源/schema/table 浏览字段和约束，支持搜索、过滤和批量补注释。
+2. **DDL 视图**：按方言确定性渲染 `CREATE TABLE`；允许导入/编辑 DDL 形成 Registry 草案，但默认不连接数据库执行。
+3. **ER 图**：只根据外键和已确认关系生成；支持布局和关系草案，布局信息与结构元数据分离。
+4. **JSON 视图**：高级用户查看 Canonical Schema 原文，仍经过 Schema 校验和权限检查。
+
+安全编辑闭环：
+
+```text
+数据库 introspection / DDL import / 表格编辑 / ER 关系编辑
+→ RegistryDraft
+→ schema validation
+→ deterministic diff
+→ 人工审核
+→ 发布 RegistryRevision
+→ QueryRun 绑定新 revision
+```
+
+门禁：
+
+- UI 中的“编辑 DDL”不等于执行 DDL；Phase 4.5 不提供数据库 migration 执行器。
+- `forge sync` 先生成 drift proposal；删除表/列、类型收窄、nullable 收紧、PK/FK 变化均需明确审核。
+- 发布使用 optimistic revision / CAS，防止两人覆盖；保存完整前后 diff、操作者和回滚点。
+- ER 图不允许仅凭同名 `*_id` 自动晋升为正式外键；只能作为待确认建议。
+- DDL parser/generator 先支持 SQLite、PostgreSQL、MySQL 的受控子集；未知方言语法保留为 unsupported diagnostics，不静默丢失。
+- 结构层权限继续由 Forge ACL 控制；Pi 可编排“解释/审查结构变更”任务，但不是 Registry 真相源，也不直接落盘。
+
+建议实施顺序：
+
+1. 定义 `canonical-schema.schema.json`、revision/draft/diff 契约和兼容迁移器。
+2. 扩展 `forge sync` introspection，先只读生成 proposal，保持旧 registry reader 兼容。
+3. 实现确定性 DDL renderer、DDL parser 合约测试和 round-trip fixture。
+4. 实现 Web 表格视图与 revision 审批。
+5. 实现大图可缩放、可聚焦的 ER 视图及确认关系交互。
+6. 最后开放受控编辑，不把结构编辑与生产数据库 migration 混在同一阶段。
 
 ### Phase 5：扩展 Skills 与组织能力
 

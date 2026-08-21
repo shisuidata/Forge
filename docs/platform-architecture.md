@@ -122,8 +122,12 @@ Forge 是唯一可信执行层，负责：
 - 生成待审核 SQL，并确保审核内容与实际执行内容一致。
 - 查询超时、结果行数上限、敏感数据和表权限控制。
 - QueryRun、审批、执行、Audit、Feedback 与回放。
+- 结构层 Canonical Schema、版本、差异、草案审核与回滚。
+- 从同一 Canonical Schema 确定性投影表格、DDL、ER 图和 JSON 视图。
 
 Forge 返回事实型 Artifact，不承担所有业务分析和写作方法。
+
+结构层的多视图不是多真相源：数据库 introspection、DDL import、表格编辑和 ER 关系编辑都只能形成 `RegistryDraft`，经 Schema 校验、确定性 diff 和人工审核后发布为 `RegistryRevision`。DDL 编辑默认只改变 Registry 草案，不直接向数据库执行 migration。ER 中根据命名推断的关系必须保持 `inferred/unconfirmed`，不能冒充真实外键。
 
 ### 4.4 拾穗 DATA Skills
 
@@ -279,6 +283,8 @@ web session / feishu open_id / dingtalk user_id
 | 当前对话和推理上下文 | Pi Session | 可压缩、可过期，不作为组织事实 |
 | TaskRun 与 Stage 状态 | Pi Task Store | 支持暂停、恢复和渠道切换 |
 | QueryRun、SQL、审批、执行 | Forge | 可信查询审计真相源 |
+| 结构层 Canonical Schema、DDL/ER 投影、Revision/Draft | Forge Registry | Canonical Schema 是唯一真相源；DDL/ER/表格/JSON 只做确定性投影和受控草案编辑 |
+| ER 布局 | Forge Registry UI Metadata | 只保存坐标、分组和视图偏好，不改变表、字段或关系事实 |
 | 指标、歧义、字段约定 | Forge Registry | 需要版本、审核和回滚 |
 | 组织业务上下文 | Forge Registry / SMP | 确认后才能提升为正式知识 |
 | Skill 定义与测试 | 拾穗 DATA 仓库 | 独立版本管理和发布门禁 |
@@ -357,7 +363,7 @@ Skill 先生成语义结果，不直接拼装具体渠道组件：
 | `agent/knowledge.py` 文档/RSS/URL 收集流程 | Pi | Pi 调度收集与审核；Forge 接收确认后的知识候选 |
 | `agent/feishu.py` Bot 对话流程 | 渠道适配层 + Pi | Bot 只做消息与卡片，任务推进由 Pi 完成 |
 | `agent/tenant.py` 用户到团队映射 | 身份层 | 渠道完成身份解析；Forge仍独立执行 ACL 校验 |
-| `forge/retriever.py`、Registry | Forge | 保留 |
+| `forge/retriever.py`、Registry | Forge | 保留；结构层升级为版本化 Canonical Schema，表格/DDL/ER/JSON 均从它投影 |
 | `forge/compiler.py`、`forge/lint.py` | Forge | 保留 |
 | `forge/executor.py` | Forge | 保留，且仍是唯一数据库执行入口 |
 | `agent/audit.py` 查询审计 | Forge | 保留并增加 `task_run_id` 关联 |
