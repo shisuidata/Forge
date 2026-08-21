@@ -831,7 +831,8 @@ M4.1 用户配置接管与服务重启规则：
 - 真实复杂问题“各城市订单总额”在当前模型多次自修正时触发 Pi/Forge 请求 timeout。修复方向已确认并完成：建立端到端统一 Deadline Budget，单次模型调用、受控重试、Forge HTTP Client、Pi Stage timeout 与 lease 使用严格包含关系。
 - Deadline/Retry Budget：查询准备总预算默认 210s，Forge HTTP 220s，Pi Stage 240s，lease 300s；Pi 启动时强制 `Forge HTTP < Stage < lease`。每次 LLM 调用使用 `min(模型配置 timeout, 当前剩余预算 - 5s 收尾预留)`，预算不足不再启动重试。
 - OpenAI/Anthropic timeout 统一为有界 `LLMRequestTimeoutError`；`prepare_query` 返回稳定 `timed_out`，QueryRun 持久化该状态；Pi 将 Attempt 标记 `timed_out` 并恢复 `ready_for_query/query_prepare_retry`，渠道显示“查询准备超时，可重试”。
-- 当前验证：Python 417 passed / 25 skipped；Pi typecheck 通过，52 tests passed。待 NAS 复杂问题回归后，将准确率、Assurance 通过率、重试次数、P95 延迟与超时率接入 Model Profile validate/activate。
+- 当前验证：Python 417 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS 复杂问题在 45.3s 内进入 Assurance-bound review，证明 timeout 层级修复有效。
+- 该回归同时发现新的系统性 Gate 缺口：模型输出了未由 agg/window/真实 scan 字段定义的裸 `select` symbol（`repurchase_rate`），现有 Registry Gate 只检查 `table.column`，导致 SQL 在执行期才报列不存在。继续扩展 Registry/Type Gate 校验 select symbol 来源并加入回归，完成后再进入 Model Profile 门禁。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 

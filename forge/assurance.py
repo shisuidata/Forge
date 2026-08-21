@@ -75,6 +75,7 @@ def assure_query(
     try:
         jsonschema.validate(forge_json, build_tool_schema(scoped_registry))
         _validate_registry_fields(forge_json, scoped_registry)
+        _validate_select_symbols(forge_json, scoped_registry)
         gates.append(GateResult("contract_registry_acl", "passed", registry_revision))
     except jsonschema.ValidationError as exc:
         message = _bounded_schema_error(exc)
@@ -160,6 +161,59 @@ def _validate_registry_fields(query: dict, registry: dict) -> None:
     )
     if unknown:
         raise ValueError("Registry/权限校验失败：查询使用了未授权或不存在的表/字段。")
+
+
+def _validate_select_symbols(query: dict, registry: dict) -> None:
+    """Reject bare SELECT symbols that have no physical or computed source."""
+    tables = registry.get("tables", registry)
+    table_columns = {
+        table: set(info.get("columns", info) if isinstance(info, dict) else info)
+        for table, info in tables.items()
+    }
+    for cte in query.get("cte", []):
+        _validate_select_symbols(cte["query"], registry)
+        if cte.get("recursive_term"):
+            _validate_select_symbols(cte["recursive_term"], registry)
+        table_columns[cte["name"]] = _query_output_names(cte["query"])
+    for operation in ("union", "intersect", "except"):
+        for branch in query.get(operation, []):
+            nested = branch.get("query", branch)
+            if isinstance(nested, dict):
+                _validate_select_symbols(nested, registry)
+
+    computed = {
+        item.get("as") for item in query.get("agg", []) + query.get("window", [])
+        if isinstance(item, dict) and isinstance(item.get("as"), str)
+    }
+    computed.update(
+        item.get("as") for item in query.get("group", [])
+        if isinstance(item, dict) and isinstance(item.get("as"), str)
+    )
+    scan_columns = table_columns.get(query.get("scan"), set())
+    has_joins = bool(query.get("joins"))
+    unknown: list[str] = []
+    for item in query.get("select", []):
+        if not isinstance(item, str) or not re.fullmatch(r"[A-Za-z_]\w*", item):
+            continue
+        if item in computed:
+            continue
+        if not has_joins and item in scan_columns:
+            continue
+        unknown.append(item)
+    if unknown:
+        raise ValueError(
+            "Registry/类型校验失败：SELECT 使用了未定义的字段或计算别名。"
+        )
+
+
+def _query_output_names(query: dict) -> set[str]:
+    names: set[str] = set()
+    for item in query.get("select", []):
+        if isinstance(item, str):
+            names.add(item.rsplit(".", 1)[-1])
+        elif isinstance(item, dict) and isinstance(item.get("as"), str):
+            names.add(item["as"])
+    return names
 
 
 def _collect_field_refs(value: Any, key: str | None = None) -> set[str]:

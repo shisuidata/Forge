@@ -79,6 +79,37 @@ def test_assurance_fails_closed_when_registry_is_missing(tmp_path, monkeypatch):
     assert caught.value.report.model_revision == "model-r1"
 
 
+def test_assurance_rejects_undefined_bare_select_alias(assurance_registry):
+    with pytest.raises(QueryAssuranceError, match="未定义的字段或计算别名"):
+        assure_query(
+            {
+                "scan": "orders",
+                "joins": [{
+                    "type": "inner",
+                    "table": "users",
+                    "on": {"left": "orders.user_id", "right": "users.id"},
+                }],
+                "group": ["users.name"],
+                "select": ["users.name", "repurchase_rate"],
+            },
+            "各城市订单总额",
+            dialect="sqlite",
+        )
+
+
+def test_assurance_accepts_defined_aggregate_alias(assurance_registry):
+    report = assure_query(
+        {
+            "scan": "orders",
+            "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "order_total"}],
+            "select": ["order_total"],
+        },
+        "订单总额",
+        dialect="sqlite",
+    )
+    assert report.status == "passed"
+
+
 def test_assurance_enforces_table_acl_server_side(assurance_registry):
     with pytest.raises(QueryAssuranceError, match="未授权或不存在"):
         assure_query(
