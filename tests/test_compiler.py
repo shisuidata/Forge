@@ -52,6 +52,19 @@ def test_rejects_unaliased_self_join():
         })
 
 
+def test_rejects_join_that_does_not_connect_existing_scope():
+    with pytest.raises(ValueError, match="必须连接待连接表与当前查询中的已有表"):
+        compile_query({
+            "scan": "orders",
+            "joins": [{
+                "type": "inner",
+                "table": "users",
+                "on": {"left": "users.id", "right": "users.manager_id"},
+            }],
+            "select": ["orders.id"],
+        })
+
+
 def test_a1_left_join_preserves_zero_order_users():
     """
     A1: Users with no orders must appear (order_count = 0).

@@ -321,6 +321,49 @@ class TestChatAPI:
 
 # ── Execute Raw API ──────────────────────────────────────────────────────────
 
+class TestApproveExecutionFailure:
+    async def test_failed_execution_terminates_pending_legacy_pipeline(
+        self, client: AsyncClient, monkeypatch
+    ):
+        import web.router as router_mod
+        from agent.agent import AgentResponse
+        from agent.memory import memory
+
+        pipeline_state = {"status": "pending_approval", "stages": []}
+        monkeypatch.setattr(
+            router_mod,
+            "agent_approve",
+            lambda user_id: AgentResponse(
+                text="SQL 已确认", sql="SELECT missing FROM nowhere", action="approved"
+            ),
+        )
+        monkeypatch.setattr(
+            router_mod,
+            "execute_with_data",
+            lambda sql: ("⚠ 执行失败：SQL 引用了不存在的字段。", [], []),
+        )
+        monkeypatch.setattr(
+            memory,
+            "get_state",
+            lambda user_id, key: pipeline_state if key == "pipeline_run" else None,
+        )
+        monkeypatch.setattr(
+            memory,
+            "set_state",
+            lambda user_id, key, value: pipeline_state.update(value),
+        )
+
+        resp = await client.post(
+            "/api/approve",
+            json={"message": "", "user_id": "pipeline-failure"},
+        )
+
+        data = resp.json()
+        assert data["action"] == "execution_failed"
+        assert pipeline_state["status"] == "failed"
+        assert "Pipeline 已终止" in pipeline_state["error"]
+
+
 class TestExecuteRaw:
     async def test_execute_simple_sql(self, client: AsyncClient):
         """直接执行简单 SQL 应返回结果。"""
