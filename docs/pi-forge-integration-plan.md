@@ -906,7 +906,7 @@ Scope 至少支持：
 
 当前验证：Python 442 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS main `24d9bab` 已部署，Model Control SQLite 为 mode 600；现有 YAML Key 没有对应 `env:`/专用 mode 600 Secret 文件，迁移脚本因此失败关闭并阻止激活，未读取、复制或回显旧 Key，legacy fallback 仍可在 43.7s 内生成审核 SQL。
 
-QualityValidationRun 已完成基础实现：后台逐题固定候选 revision，持久化 case 结果和准确率、Assurance 通过率、平均重试、P95 延迟、超时率；在显式只读 benchmark database 上比较 generated/reference SQL 结果集。API 使用 `202 + run_id + polling`，启动时只把遗留 running 标记 interrupted，不自动重放模型或 SQL。Validation 固定 Registry/Assurance/Policy lineage，激活和回滚时再次校验；lineage 漂移必须重跑。当前验证：Python 445 passed / 25 skipped；Pi typecheck 通过，52 tests passed。待部署 NAS；由于当前候选缺少合规 `secret_ref`，不会启动真实 40 题或激活。
+QualityValidationRun 已完成基础实现：后台逐题固定候选 revision，持久化 case 结果和准确率、Assurance 通过率、平均重试、P95 延迟、超时率；在显式只读 benchmark database 上比较 generated/reference SQL 结果集。API 使用 `202 + run_id + polling`，启动时只把遗留 running 标记 interrupted，不自动重放模型或 SQL。Validation 固定 Registry/Assurance/Policy lineage，激活和回滚时再次校验；lineage 漂移必须重跑。当前验证：Python 445 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS main `33194ea` 已部署，40 cases 与显式只读 benchmark probe 正常，Model DB mode 600；当前候选缺少合规 `secret_ref`，真实 40 题未启动且激活继续失败关闭。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
