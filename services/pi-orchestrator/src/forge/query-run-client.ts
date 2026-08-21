@@ -13,6 +13,12 @@ export interface QueryRunReview {
   sql_hash: string | null;
   dialect: string;
   registry_version: string;
+  assurance_report: Record<string, unknown> | null;
+  assurance_report_hash: string | null;
+  assurance_revision: string | null;
+  policy_revision: string | null;
+  model_revision: string | null;
+  assurance_registry_revision: string | null;
   review_required: boolean;
   can_execute: false;
   expires_at: string;
@@ -26,6 +32,11 @@ export interface QueryRunResult {
   sql_hash: string;
   dialect: string;
   registry_version: string;
+  assurance_report_hash: string;
+  assurance_revision: string;
+  policy_revision: string;
+  model_revision: string;
+  assurance_registry_revision: string;
   columns: string[];
   rows: unknown[][];
   row_count: number;
@@ -87,6 +98,7 @@ export class ForgeQueryRunClient {
       queryRunId: string;
       approverUserId: string;
       sqlHash: string;
+      assuranceReportHash: string;
       idempotencyKey: string;
     },
     signal?: AbortSignal,
@@ -94,7 +106,11 @@ export class ForgeQueryRunClient {
     const body = await this.#request(
       "POST",
       `/api/internal/query-runs/${encodeURIComponent(input.queryRunId)}/approve`,
-      { approver_user_id: input.approverUserId, sql_hash: input.sqlHash },
+      {
+        approver_user_id: input.approverUserId,
+        sql_hash: input.sqlHash,
+        assurance_report_hash: input.assuranceReportHash,
+      },
       input.idempotencyKey,
       signal,
     );
@@ -188,6 +204,12 @@ export class ForgeQueryRunClient {
       if (
         typeof body.sql !== "string" ||
         typeof body.sql_hash !== "string" ||
+        typeof body.assurance_report_hash !== "string" ||
+        typeof body.assurance_revision !== "string" ||
+        typeof body.policy_revision !== "string" ||
+        typeof body.model_revision !== "string" ||
+        typeof body.assurance_registry_revision !== "string" ||
+        body.assurance_report === null ||
         body.forge_json === null
       ) {
         throw new ForgeClientError("Reviewable QueryRun is missing SQL evidence");
@@ -204,7 +226,11 @@ export class ForgeQueryRunClient {
     if (!Array.isArray(body.columns) || !Array.isArray(body.rows)) {
       throw new ForgeClientError("Completed QueryRun is missing result rows");
     }
-    if (typeof body.sql_hash !== "string" || typeof body.truncated !== "boolean") {
+    if (
+      typeof body.sql_hash !== "string" ||
+      typeof body.assurance_report_hash !== "string" ||
+      typeof body.truncated !== "boolean"
+    ) {
       throw new ForgeClientError("Completed QueryRun has invalid execution evidence");
     }
     return body as unknown as QueryRunResult;

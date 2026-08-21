@@ -22,13 +22,24 @@ def query_run_env(tmp_path, monkeypatch):
     monkeypatch.setattr(executor, "_engine", None)
 
     def fake_prepare(user_id, question, dialect=None):
+        sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3"
         return {
             "status": "needs_review",
             "question": question,
             "user_id": user_id,
             "forge_json": {"scan": "synthetic", "select": ["n"]},
-            "sql": "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3",
+            "sql": sql,
             "dialect": dialect or "sqlite",
+            "assurance_report": {
+                "status": "passed",
+                "assurance_revision": "query-assurance-v1",
+                "policy_revision": "convention-policy-v1",
+                "registry_revision": "sha256:assurance-registry",
+                "model_revision": "sha256:model",
+                "gates": [],
+                "sql": sql,
+                "sql_hash": "sha256:" + __import__("hashlib").sha256(sql.encode()).hexdigest(),
+            },
             "review_required": True,
             "can_execute": False,
             "retry_count": 0,
@@ -89,7 +100,31 @@ async def test_create_query_run_is_review_only_and_idempotent(
     assert first_data["review_required"] is True
     assert first_data["can_execute"] is False
     assert first_data["sql_hash"].startswith("sha256:")
+    assert first_data["assurance_report_hash"].startswith("sha256:")
+    assert first_data["assurance_report"]["status"] == "passed"
+    assert first_data["assurance_revision"] == "query-assurance-v1"
+    assert first_data["policy_revision"] == "convention-policy-v1"
+    assert first_data["model_revision"] == "sha256:model"
     assert "rows" not in first_data
+
+
+@pytest.mark.asyncio
+async def test_create_fails_closed_when_registry_changes_during_prepare(
+    client: AsyncClient, query_run_env, monkeypatch
+):
+    import forge.query_runs as query_runs
+
+    versions = iter(["sha256:before", "sha256:after"])
+    monkeypatch.setattr(query_runs, "current_registry_version", lambda: next(versions))
+    response = await _create(
+        client,
+        {**query_run_env, "Idempotency-Key": "create-registry-race"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert "Registry changed while preparing" in response.json()["error"]
+    assert response.json()["sql"] is None
 
 
 @pytest.mark.asyncio
@@ -109,10 +144,32 @@ async def test_approval_rejects_changed_sql_hash(client: AsyncClient, query_run_
             "X-Pi-Service-Key": "pi-service-secret",
             "Idempotency-Key": "approve-wrong-hash",
         },
-        json={"approver_user_id": "user_123", "sql_hash": "sha256:" + "0" * 64},
+        json={"approver_user_id": "user_123", "sql_hash": "sha256:" + "0" * 64,
+              "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 409
     assert "hash" in response.json()["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_approval_rejects_changed_assurance_report_hash(
+    client: AsyncClient, query_run_env
+):
+    created = (await _create(client, query_run_env)).json()
+    response = await client.post(
+        f"/api/internal/query-runs/{created['query_run_id']}/approve",
+        headers={
+            "X-Pi-Service-Key": "pi-service-secret",
+            "Idempotency-Key": "approve-wrong-assurance-hash",
+        },
+        json={
+            "approver_user_id": "user_123",
+            "sql_hash": created["sql_hash"],
+            "assurance_report_hash": "sha256:" + "0" * 64,
+        },
+    )
+    assert response.status_code == 409
+    assert "Assurance report hash" in response.json()["error"]
 
 
 @pytest.mark.asyncio
@@ -124,7 +181,8 @@ async def test_approval_rejects_a_different_user(client: AsyncClient, query_run_
             "X-Pi-Service-Key": "pi-service-secret",
             "Idempotency-Key": "approve-wrong-user",
         },
-        json={"approver_user_id": "other_user", "sql_hash": created["sql_hash"]},
+        json={"approver_user_id": "other_user", "sql_hash": created["sql_hash"],
+              "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 403
 
@@ -141,10 +199,35 @@ async def test_approval_rejects_registry_drift(client: AsyncClient, query_run_en
             "X-Pi-Service-Key": "pi-service-secret",
             "Idempotency-Key": "approve-registry-drift",
         },
-        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"]},
+        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"],
+              "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 409
     assert "Registry changed" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_approval_rejects_assurance_policy_drift(
+    client: AsyncClient, query_run_env, monkeypatch
+):
+    created = (await _create(client, query_run_env)).json()
+    import forge.assurance as assurance
+
+    monkeypatch.setattr(assurance, "POLICY_REVISION", "convention-policy-v2")
+    response = await client.post(
+        f"/api/internal/query-runs/{created['query_run_id']}/approve",
+        headers={
+            "X-Pi-Service-Key": "pi-service-secret",
+            "Idempotency-Key": "approve-policy-drift",
+        },
+        json={
+            "approver_user_id": "user_123",
+            "sql_hash": created["sql_hash"],
+            "assurance_report_hash": created["assurance_report_hash"],
+        },
+    )
+    assert response.status_code == 409
+    assert "policy revision changed" in response.json()["error"]
 
 
 @pytest.mark.asyncio
@@ -166,7 +249,8 @@ async def test_approval_rejects_expired_review(client: AsyncClient, query_run_en
             "X-Pi-Service-Key": "pi-service-secret",
             "Idempotency-Key": "approve-expired",
         },
-        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"]},
+        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"],
+              "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 409
     assert "expired" in response.json()["error"]
@@ -186,7 +270,8 @@ async def test_approval_requires_confirmed_database_readonly_account(
             "X-Pi-Service-Key": "pi-service-secret",
             "Idempotency-Key": "approve-no-readonly",
         },
-        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"]},
+        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"],
+              "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 503
     assert "read-only" in response.json()["error"]
@@ -204,6 +289,7 @@ async def test_approved_query_executes_once_and_returns_bounded_result(
     approval_body = {
         "approver_user_id": "user_123",
         "sql_hash": created["sql_hash"],
+        "assurance_report_hash": created["assurance_report_hash"],
     }
 
     first = await client.post(
@@ -252,6 +338,7 @@ async def test_cancelled_query_run_cannot_execute(client: AsyncClient, query_run
             "X-Pi-Service-Key": "pi-service-secret",
             "Idempotency-Key": "approve-cancelled",
         },
-        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"]},
+        json={"approver_user_id": "user_123", "sql_hash": created["sql_hash"],
+              "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert approval.status_code == 409

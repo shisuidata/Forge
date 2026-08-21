@@ -824,7 +824,10 @@ M4.1 用户配置接管与服务重启规则：
 - LLM 每次响应携带实际 snapshot 的 model revision，Assurance Report 不再事后猜测当前配置。
 - 回归覆盖：成功报告、未知字段、表 ACL、Registry 缺失、模型重试及 SQL hash；完整 Python 411 passed / 25 skipped，Pi Orchestrator 50 passed。
 - NAS 已部署 main `44930a6`。真实 `/api/prepare-query` 回归“各城市的订单总额”经历 2 次受控修正后进入 `needs_review`，四个 Gate 全部 passed，并返回 Registry revision、实际 model revision 和 SQL hash。
-- 下一批：QueryRun 持久化 Assurance Report/revisions，审批同时绑定 report hash；随后将同一 Policy/EA 门禁接入 Model Profile 激活。
+- QueryRun 保障绑定已实现：SQLite 采用兼容迁移新增完整 Assurance Report/hash、Assurance/Policy/Model/Registry revisions；`needs_review` 缺少报告或报告 SQL/hash 不一致时直接转 failed。
+- 审批现在同时校验 `sql_hash + assurance_report_hash + approver + expiry + Registry version + Assurance revision + Policy revision`；错误 report hash 与策略漂移均有回归测试。模型切换不改变已经生成的 SQL，因此在途 QueryRun 固定原 model revision，不与当前 active model 比较。
+- Forge 内部 QueryRun API、Pi Client、Task Event、渠道审批动作和 QueryResultArtifact 已贯通 Assurance lineage；旧卡片缺少 Assurance hash 时失败关闭。
+- 当前验证：Python 413 passed / 25 skipped；Pi typecheck 通过，50 tests passed。下一步将同一 Policy/EA 门禁接入 Model Profile validate/activate。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 

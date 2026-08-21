@@ -61,6 +61,7 @@ export interface ForgeQueryRunPort {
       queryRunId: string;
       approverUserId: string;
       sqlHash: string;
+      assuranceReportHash: string;
       idempotencyKey: string;
     },
     signal?: AbortSignal,
@@ -280,6 +281,9 @@ export class OrchestratorApplication {
     const sqlHash = actionType === "approve_query"
       ? this.#channelPayloadString(event, "sql_hash")
       : undefined;
+    const assuranceReportHash = actionType === "approve_query"
+      ? this.#channelPayloadString(event, "assurance_report_hash")
+      : undefined;
     const inputText = actionType === "provide_input"
       ? this.#channelPayloadString(event, "text")
       : undefined;
@@ -300,12 +304,18 @@ export class OrchestratorApplication {
       };
     }
 
-    if (actionType === "approve_query" && queryRunId !== undefined && sqlHash !== undefined) {
+    if (
+      actionType === "approve_query" &&
+      queryRunId !== undefined &&
+      sqlHash !== undefined &&
+      assuranceReportHash !== undefined
+    ) {
       await this.approveQuery(
         task.task_run_id,
         {
           queryRunId,
           sqlHash,
+          assuranceReportHash,
           idempotencyKey: `${event.channel}:${event.event_id}:approve`,
         },
         signal,
@@ -575,6 +585,12 @@ export class OrchestratorApplication {
           forge_json: result.forge_json,
           dialect: result.dialect,
           registry_version: result.registry_version,
+          assurance_report: result.assurance_report,
+          assurance_report_hash: result.assurance_report_hash,
+          assurance_revision: result.assurance_revision,
+          policy_revision: result.policy_revision,
+          model_revision: result.model_revision,
+          assurance_registry_revision: result.assurance_registry_revision,
           expires_at: result.expires_at,
           review_required: true,
           can_execute: false,
@@ -604,7 +620,12 @@ export class OrchestratorApplication {
 
   async approveQuery(
     taskRunId: string,
-    input: { queryRunId: string; sqlHash: string; idempotencyKey: string },
+    input: {
+      queryRunId: string;
+      sqlHash: string;
+      assuranceReportHash?: string;
+      idempotencyKey: string;
+    },
     signal?: AbortSignal,
   ): Promise<{
     task: TaskRun;
@@ -617,9 +638,13 @@ export class OrchestratorApplication {
     const review = [...this.#events.list(taskRunId)]
       .reverse()
       .find((event) => event.event_type === "query.review_requested");
+    const assuranceReportHash = review?.payload.assurance_report_hash;
     if (
       review?.payload.query_run_id !== input.queryRunId ||
-      review.payload.sql_hash !== input.sqlHash
+      review.payload.sql_hash !== input.sqlHash ||
+      typeof assuranceReportHash !== "string" ||
+      (input.assuranceReportHash !== undefined &&
+        input.assuranceReportHash !== assuranceReportHash)
     ) {
       throw new TaskStateError("Approval does not match the TaskRun review request");
     }
@@ -641,6 +666,7 @@ export class OrchestratorApplication {
         this.#events.append(taskRunId, "query.approval_submitted", {
           query_run_id: input.queryRunId,
           sql_hash: input.sqlHash,
+          assurance_report_hash: assuranceReportHash,
           approver_user_id: approvalTask.user_id,
         });
         attempt = this.#startAttempt(
@@ -666,6 +692,7 @@ export class OrchestratorApplication {
           queryRunId: input.queryRunId,
           approverUserId: executionTask.user_id,
           sqlHash: input.sqlHash,
+          assuranceReportHash,
           idempotencyKey: input.idempotencyKey,
         },
         stageExecution.signal,
@@ -712,6 +739,11 @@ export class OrchestratorApplication {
             truncated: result.truncated,
             dialect: result.dialect,
             registry_version: result.registry_version,
+            assurance_report_hash: result.assurance_report_hash,
+            assurance_revision: result.assurance_revision,
+            policy_revision: result.policy_revision,
+            model_revision: result.model_revision,
+            assurance_registry_revision: result.assurance_registry_revision,
             execution_ms: result.execution_ms,
             executed_at: result.executed_at,
           },

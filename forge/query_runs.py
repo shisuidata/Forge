@@ -34,6 +34,12 @@ CREATE TABLE IF NOT EXISTS query_runs (
     sql_hash                TEXT,
     dialect                 TEXT NOT NULL,
     registry_version        TEXT NOT NULL,
+    assurance_report        TEXT,
+    assurance_report_hash   TEXT,
+    assurance_revision      TEXT,
+    policy_revision         TEXT,
+    model_revision          TEXT,
+    assurance_registry_revision TEXT,
     create_idempotency_key  TEXT UNIQUE,
     approval_idempotency_key TEXT UNIQUE,
     approver_user_id        TEXT,
@@ -52,6 +58,10 @@ CREATE INDEX IF NOT EXISTS idx_query_runs_task ON query_runs(task_run_id);
 """
 
 
+_SCHEMA_LOCK = asyncio.Lock()
+_SCHEMA_READY_PATHS: set[str] = set()
+
+
 class QueryRunError(Exception):
     """Bounded domain error with a stable HTTP-friendly status code."""
 
@@ -67,9 +77,29 @@ def _db_path() -> str:
 
 
 async def _ensure_schema() -> None:
-    async with aiosqlite.connect(_db_path()) as db:
-        await db.executescript(_DDL)
-        await db.commit()
+    path = _db_path()
+    if path in _SCHEMA_READY_PATHS:
+        return
+    async with _SCHEMA_LOCK:
+        if path in _SCHEMA_READY_PATHS:
+            return
+        async with aiosqlite.connect(path) as db:
+            await db.executescript(_DDL)
+            cursor = await db.execute("PRAGMA table_info(query_runs)")
+            columns = {row[1] for row in await cursor.fetchall()}
+            migrations = {
+                "assurance_report": "TEXT",
+                "assurance_report_hash": "TEXT",
+                "assurance_revision": "TEXT",
+                "policy_revision": "TEXT",
+                "model_revision": "TEXT",
+                "assurance_registry_revision": "TEXT",
+            }
+            for name, sql_type in migrations.items():
+                if name not in columns:
+                    await db.execute(f"ALTER TABLE query_runs ADD COLUMN {name} {sql_type}")
+            await db.commit()
+        _SCHEMA_READY_PATHS.add(path)
 
 
 def _now() -> datetime:
@@ -78,6 +108,13 @@ def _now() -> datetime:
 
 def _sql_hash(sql: str) -> str:
     return "sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest()
+
+
+def _artifact_hash(value: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def current_registry_version() -> str:
@@ -102,7 +139,7 @@ def current_registry_version() -> str:
 
 def _decode_row(row: aiosqlite.Row) -> dict[str, Any]:
     result = dict(row)
-    for field in ("forge_json", "result_columns", "result_rows"):
+    for field in ("forge_json", "assurance_report", "result_columns", "result_rows"):
         value = result.get(field)
         result[field] = json.loads(value) if value is not None else None
     result["truncated"] = bool(result.get("truncated"))
@@ -155,7 +192,9 @@ async def create_query_run(
     if prepare_fn is None:
         from agent.agent import prepare_query as prepare_fn
 
+    registry_version_before = current_registry_version()
     prepared = await asyncio.to_thread(prepare_fn, user_id, question, dialect)
+    registry_version_after = current_registry_version()
     status_map = {
         "needs_review": "needs_review",
         "needs_clarification": "needs_clarification",
@@ -168,8 +207,29 @@ async def create_query_run(
     expires_at = now + timedelta(seconds=ttl)
     query_run_id = "qr_" + uuid.uuid4().hex
     forge_json = prepared.get("forge_json")
-    error = prepared.get("error") or (
-        prepared.get("text") if status != "needs_review" else None
+    assurance_report = prepared.get("assurance_report")
+    if status == "needs_review" and registry_version_before != registry_version_after:
+        status = "failed"
+        sql = None
+        error = "Registry changed while preparing the query; prepare it again"
+    elif status == "needs_review" and not isinstance(assurance_report, dict):
+        status = "failed"
+        sql = None
+        error = "Query assurance report is required for review"
+    elif status == "needs_review" and (
+        assurance_report.get("status") != "passed"
+        or assurance_report.get("sql") != sql
+        or assurance_report.get("sql_hash") != _sql_hash(sql or "")
+    ):
+        status = "failed"
+        sql = None
+        error = "Query assurance report does not match the prepared SQL"
+    else:
+        error = prepared.get("error") or (
+            prepared.get("text") if status != "needs_review" else None
+        )
+    assurance_report_hash = (
+        _artifact_hash(assurance_report) if isinstance(assurance_report, dict) else None
     )
 
     await _ensure_schema()
@@ -180,9 +240,11 @@ async def create_query_run(
                 INSERT INTO query_runs (
                     query_run_id, task_run_id, org_id, team_id, user_id,
                     datasource_id, question, status, forge_json, sql, sql_hash,
-                    dialect, registry_version, create_idempotency_key,
-                    expires_at, error, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    dialect, registry_version, assurance_report,
+                    assurance_report_hash, assurance_revision, policy_revision,
+                    model_revision, assurance_registry_revision,
+                    create_idempotency_key, expires_at, error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     query_run_id,
@@ -197,7 +259,18 @@ async def create_query_run(
                     sql,
                     _sql_hash(sql) if sql else None,
                     prepared.get("dialect") or dialect or "",
-                    current_registry_version(),
+                    registry_version_after,
+                    json.dumps(assurance_report, ensure_ascii=False, sort_keys=True)
+                    if isinstance(assurance_report, dict) else None,
+                    assurance_report_hash,
+                    assurance_report.get("assurance_revision")
+                    if isinstance(assurance_report, dict) else None,
+                    assurance_report.get("policy_revision")
+                    if isinstance(assurance_report, dict) else None,
+                    assurance_report.get("model_revision")
+                    if isinstance(assurance_report, dict) else None,
+                    assurance_report.get("registry_revision")
+                    if isinstance(assurance_report, dict) else None,
                     idempotency_key,
                     expires_at.isoformat(),
                     error,
@@ -222,6 +295,7 @@ async def claim_query_run_for_execution(
     query_run_id: str,
     approver_user_id: str,
     sql_hash: str,
+    assurance_report_hash: str,
     idempotency_key: str,
 ) -> tuple[str, dict[str, Any]]:
     """Atomically claim a reviewed QueryRun before executing outside the DB lock."""
@@ -241,6 +315,15 @@ async def claim_query_run_for_execution(
             raise QueryRunError("QueryRun not found", status_code=404)
         run = _decode_row(row)
 
+        if not run.get("sql_hash") or not hmac.compare_digest(run["sql_hash"], sql_hash):
+            await db.rollback()
+            raise QueryRunError("SQL hash does not match the reviewed query")
+        if not run.get("assurance_report_hash") or not hmac.compare_digest(
+            run["assurance_report_hash"], assurance_report_hash
+        ):
+            await db.rollback()
+            raise QueryRunError("Assurance report hash does not match the reviewed query")
+
         if run["status"] == "completed" and hmac.compare_digest(
             str(run.get("approval_idempotency_key") or ""), idempotency_key
         ):
@@ -252,9 +335,6 @@ async def claim_query_run_for_execution(
         if not hmac.compare_digest(run["user_id"], approver_user_id):
             await db.rollback()
             raise QueryRunError("Approver is not authorized for this QueryRun", status_code=403)
-        if not run.get("sql_hash") or not hmac.compare_digest(run["sql_hash"], sql_hash):
-            await db.rollback()
-            raise QueryRunError("SQL hash does not match the reviewed query")
         if _now() > datetime.fromisoformat(run["expires_at"]):
             await db.execute(
                 "UPDATE query_runs SET status = 'expired', updated_at = ? WHERE query_run_id = ?",
@@ -265,6 +345,13 @@ async def claim_query_run_for_execution(
         if run["registry_version"] != current_registry_version():
             await db.rollback()
             raise QueryRunError("Registry changed after review; prepare the query again")
+        from forge.assurance import ASSURANCE_REVISION, POLICY_REVISION
+        if run.get("assurance_revision") != ASSURANCE_REVISION:
+            await db.rollback()
+            raise QueryRunError("Query assurance revision changed; prepare the query again")
+        if run.get("policy_revision") != POLICY_REVISION:
+            await db.rollback()
+            raise QueryRunError("Query policy revision changed; prepare the query again")
         if not cfg.EXECUTION_ENABLED:
             await db.rollback()
             raise QueryRunError("SQL execution is disabled", status_code=503)
@@ -333,12 +420,14 @@ async def approve_and_execute_query_run(
     query_run_id: str,
     approver_user_id: str,
     sql_hash: str,
+    assurance_report_hash: str,
     idempotency_key: str,
 ) -> dict[str, Any]:
     claim_status, run = await claim_query_run_for_execution(
         query_run_id=query_run_id,
         approver_user_id=approver_user_id,
         sql_hash=sql_hash,
+        assurance_report_hash=assurance_report_hash,
         idempotency_key=idempotency_key,
     )
     if claim_status == "replay":
