@@ -902,7 +902,9 @@ Scope 至少支持：
 1. 将当前文件 revision cache 升级为持久化 ModelProfile / Revision / ActiveBinding Store。
 2. 建立 SQLite `model_profiles/model_profile_revisions/active_model_bindings/model_switch_audit`。
 
-当前实施切片（已确认开始）：先完成 Forge `forge.query_planning` scope 的持久化控制面。Revision 只保存非密配置和 `secret_ref`，支持 `env:` 与 mode 600 `file:` Secret；真实 Tool Calling smoke 和质量/性能门禁均通过后才可 CAS activate，rollback 也使用 expected binding version。`get_model_config()` 优先读取 active binding，无 active 时兼容回退现有环境/YAML；该切片完成并经过 NAS 无重启切换验证后，再把同一 Store 接入 Pi 各 Stage 和完整 40 题激活门禁。
+当前实施切片（已完成基础控制面）：Forge `forge.query_planning` scope 已具备持久化 Revision/Binding/Audit。Revision 只保存非密配置和 `secret_ref`，支持 `env:` 与严格 mode 600 `file:` Secret；真实 Tool Calling smoke 和质量/性能门禁均通过后才可 CAS activate，rollback 也使用 expected binding version。`get_model_config()` 优先读取 active binding，无 active 时兼容回退现有环境/YAML；同一查询准备的全部受控重试固定一次 Model snapshot，避免切换中途改变 QueryRun。
+
+当前验证：Python 442 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS main `24d9bab` 已部署，Model Control SQLite 为 mode 600；现有 YAML Key 没有对应 `env:`/专用 mode 600 Secret 文件，迁移脚本因此失败关闭并阻止激活，未读取、复制或回显旧 Key，legacy fallback 仍可在 43.7s 内生成审核 SQL。下一步先建设 EA/Assurance/延迟质量验证执行器；当前 `deepseek-v4-flash` 即使 Tool Calling smoke 成功也不能绕过质量门禁。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
