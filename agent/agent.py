@@ -137,7 +137,11 @@ def prepare_query(user_id: str, question: str, dialect: str | None = None) -> di
     _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
 
     for attempt in range(1 + MAX_RETRIES):
-        messages, knowledge, extra_tables = memory.build("query", user_id, question)
+        # prepare-only is Task-scoped: never inherit the legacy user's EMS/WMB.
+        # Organization knowledge is injected by llm.call from the Registry.
+        messages = [{"role": "user", "content": question}]
+        knowledge = ""
+        extra_tables: list[str] = []
         if retry_messages:
             messages = messages + retry_messages
         try:
