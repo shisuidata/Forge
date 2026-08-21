@@ -667,6 +667,17 @@ M4.1 Dev 环境部署决定（2026-06-22）：
 - 不复制本地 `.env`、`.runtime/models.json` 或数据库凭证；NAS 所需密钥只能由目标机已有环境或人工注入。
 - M4.1 通过条件：Orchestrator readiness、ChannelEvent 幂等、SQL hash 审批、只读结果、进程重启恢复；不包含尚未开放的补充信息、取消、补查和钉钉。
 
+M4.1 Dev 部署结果（2026-08-21）：
+
+- Forge feature commit `ba5ebe1` 已推送，已合并并推送 `main` merge commit `e0b104b`。
+- Ubuntu/NAS `dev` 使用独立目录 `~/services/forge-m4.1`，代码固定为 `e0b104b`；未覆盖已有服务。
+- 使用独立 user systemd services：`forge-m41-fake.service` 和 `forge-m41-pi.service`；只监听 `127.0.0.1:18000/14310`。
+- 目标机验证：Pi 50/50、Forge 383 passed / 2 skipped、TypeScript typecheck、npm audit 0 vulnerabilities。
+- 隔离 fake Forge 冒烟通过：readiness ok、消息首次 202/重复 200、同一 TaskRun、SQL review、hash 审批首次 202/重复 200、query_result。
+- Pi 进程重启后 PID 已变化，SQLite WAL 中的 TaskRun 恢复为 `ready_for_analysis`，presentation 仍为 `query_result`。
+- 缺失 Channel Key 和未知飞书身份均返回 403；目标机密钥仅生成并保存在 mode 600 配置文件，未写入仓库或日志。
+- 限制：当前 Forge 为 fake、模型目录使用不可调用的测试占位凭证，未访问真实数据库、模型或飞书；readiness 只证明目录/配置完整，不证明模型凭证有效。下一步必须先接隔离测试数据源和有效模型环境，再开启真实飞书测试应用。
+
 剩余：
 
 - 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。
