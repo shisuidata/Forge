@@ -696,6 +696,20 @@ M4.1 测试数据评估与真实执行结果（2026-08-21）：
 - 真实跨服务链路再次通过：ChannelEvent → 确定性测试模型 → Forge JSON → Compiler → SQL review → hash 审批 → SQLite 只读执行 → 6 行 query_result；重复消息和审批仍幂等。
 - 结论：large fixture 足够 M4.1 的渠道、审批、执行和持久化测试，暂不制造新数据。它是广覆盖随机合成数据，不适合作为“已知根因”准确率金标；进入归因分析/一次补查里程碑时，如需断言特定因果结论，再新增小型、版本化且有 ground truth 的 `m4-channel` fixture，不污染现有 40 题 benchmark。
 
+M4.1 内网 Web 暴露决定：
+
+- Forge Web 可从 `127.0.0.1:18001` 改为只监听 NAS 的固定内网 IP，不监听 `0.0.0.0`，不通过公网反向代理或 Cloudflare 暴露。
+- Pi Orchestrator `14310`、确定性测试模型 `18002` 和 SQLite 文件继续只允许 loopback；浏览器不能直接访问 Pi、模型或数据库。
+- 内网 Web 必须开启 Forge Web 认证，生成独立测试管理员密码并仅保存在目标机 mode 600 环境文件；不得在计划、Git、日志或回复中回显。
+- Web 设置 `PI_ORCHESTRATOR_ENABLED=true`，仅由 Forge Web 服务端代理到 `127.0.0.1:14310`。部署后验证匿名 `/tasks` 被重定向到登录页、认证后可访问，且内网之外无新增监听。
+
+M4.1 内网 Web 部署结果：
+
+- Web 只监听 `192.168.8.10:18001`，访问地址为 `http://192.168.8.10:18001/tasks`；匿名请求返回 302 登录跳转。
+- Pi `127.0.0.1:14310` 与确定性测试模型 `127.0.0.1:18002` 继续只监听 loopback，Pi readiness 返回 200。
+- Forge Web 认证和 Pi Web 代理已开启；独立随机管理员密码只保存在 NAS mode 600 `config/forge.env`，未回显或提交。
+- Pi 由 enabled user systemd unit 常驻，`Linger=yes`、`Restart=on-failure`、当前 `active`；机器重启或用户退出后仍由 systemd 管理。持久状态在 SQLite，模型 Session 只在 Stage 执行时按需创建，不是常驻对话进程。
+
 剩余：
 
 - 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。
