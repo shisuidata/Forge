@@ -600,8 +600,11 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     if system_override is not None:
         messages = _to_dicts(history)
         if model_config.provider == "anthropic":
-            return _call_anthropic(messages, system_override, tools=[], config=model_config)
-        return _call_openai(messages, system_override, tools=[], config=model_config)
+            response = _call_anthropic(messages, system_override, tools=[], config=model_config)
+        else:
+            response = _call_openai(messages, system_override, tools=[], config=model_config)
+        response["model_revision"] = model_config.revision
+        return response
     # 每次调用前实时读取 registry
     registry: dict = {}
     try:
@@ -667,8 +670,11 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
         system = system + "\n\n" + knowledge_context
     messages = _to_dicts(history)
     if model_config.provider == "anthropic":
-        return _call_anthropic(messages, system, tools, config=model_config)
-    return _call_openai(messages, system, tools, config=model_config)
+        response = _call_anthropic(messages, system, tools, config=model_config)
+    else:
+        response = _call_openai(messages, system, tools, config=model_config)
+    response["model_revision"] = model_config.revision
+    return response
 
 
 def call_with_retry(history: list[Any], compile_fn=None) -> tuple[dict, str | None]:

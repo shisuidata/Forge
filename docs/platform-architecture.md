@@ -121,8 +121,9 @@ Forge 是唯一可信执行层，负责：
 - 数据源连接与只读账号管理。
 - Schema 同步、Registry、业务上下文和 ACL。
 - 自然语言意图到 Forge JSON。
-- JSON Schema、Lint、Compiler 和方言适配。
-- 生成待审核 SQL，并确保审核内容与实际执行内容一致。
+- 统一 Query Assurance Pipeline：Contract、Registry/ACL、Scope/Type、Convention Policy、Compiler 和 SQL Safety Gate。
+- 每次准备输出版本化 `QueryAssuranceReport`；所有入口复用同一服务，不允许各自散落调用 Schema/Lint/Compiler。
+- 生成待审核 SQL，并确保 Assurance Report、审核 SQL hash 与实际执行内容一致。
 - 查询超时、结果行数上限、敏感数据和表权限控制。
 - QueryRun、审批、执行、Audit、Feedback 与回放。
 - Forge 查询规划模型的 ModelProfile 验证、热切换、revision 固定与审计。

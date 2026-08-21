@@ -783,6 +783,48 @@ M4.1 用户配置接管与服务重启规则：
 - 剩余语义风险：当前模型选择 `订单明细 → 用户 → 地址 → 城市`，若用户存在多个地址可能重复放大金额。引用完整性门禁只能保证 SQL 结构合法，不能证明业务 join 粒度正确；该问题纳入模型准确率验证与 Registry 关系约束，不在 Compiler 中猜测修复。
 - 紧急补丁复审发现并已修复两个收口项：JOIN ON 现在必须整体同时引用待连接表和至少一个既有作用域表，阻断 `joined.a = joined.b` 隐性笛卡尔积；旧 Pipeline 执行失败后持久标记 `failed`，不会被下一次成功审批错误恢复。复审无剩余阻断项；Python 407 passed / 25 skipped，Pi Orchestrator 50 passed。main `689b833` 已部署 NAS，Forge/Pi 均 active，可继续 Model Control Plane。
 
+### Phase 4.3.2：统一 Query Assurance Pipeline（系统化融合既有校验）
+
+方向确认：不能继续用单点补丁追逐模型错误。Forge 既有的动态 Tool Schema、Compiler、Convention Lint、Registry、字段约定、歧义规则、只读校验、QueryRun 审批和测试基准必须融合成一个可版本化、可审计、所有入口共用的查询保障流水线。
+
+目标流水线：
+
+```text
+模型输出 Forge JSON
+→ Contract Gate（动态 JSON Schema / Structured Output）
+→ Registry Gate（表、字段、权限、关系与 Registry revision）
+→ Scope & Type Gate（查询作用域、JOIN 连通性、聚合/窗口/CTE 类型规则）
+→ Convention Gate（业务口径、字段约定、歧义规则、粒度与危险模式）
+→ Deterministic Compile
+→ SQL Safety Gate（单条只读、方言、行数、超时、执行账户）
+→ QueryAssuranceReport
+→ 人工 hash 审批
+→ 只读执行
+→ Evidence / Audit / Feedback
+```
+
+实施要求：
+
+1. 新建 Forge 内部统一 `QueryAssuranceService`，输出结构化 `QueryAssuranceReport`，包含每个 Gate 的版本、状态、诊断、Registry revision、model revision 和最终 SQL hash。
+2. `/api/prepare-query`、Pi QueryRun、旧 `/chat` 兼容入口、飞书及后续钉钉必须调用同一服务；禁止各入口自行拼接 `lint + compile + execute`。
+3. 动态 Tool Schema 负责约束模型生成空间，但不得作为唯一验证；服务端必须再次依据实际 Registry 校验表、字段、ACL 和 Join 关系。
+4. Convention Lint 从针对题目的散落函数升级为版本化 Policy Bundle；区分 `error/warning/info`，生产 error 必须失败关闭，warning 必须进入审核界面。
+5. QueryRun 固定 assurance policy revision、Registry revision 和 model revision；审批绑定 assurance report 与 SQL hash，任一输入变化后必须重新准备和审批。
+6. 40 题 EA、危险 JOIN、NULL、窗口、CTE、方言和权限用例成为模型激活及 Policy 发布的共同回归门禁。
+7. Raw SQL 只作为管理员显式兼容能力，仍经过 SQL Safety Gate；不能伪装为 Forge JSON 已保障查询。
+
+第一批实施：抽取统一 Report/Service，接管 Agent 两条生成路径，补 Registry 引用与 ACL 服务端校验，并保持现有 retry 语义。完成后再接 QueryRun 固定 revision 和 Model Control Plane 激活门禁。
+
+第一批实施结果：
+
+- 新增 `forge/assurance.py`，统一执行 `contract_registry_acl → convention_policy → scope_type_compile → sql_safety` 四个 Gate。
+- 生成不可变 `QueryAssuranceReport`，固定 assurance/policy/Registry/model revision、逐 Gate 诊断、最终 SQL 与 SHA-256；Registry 不存在或损坏时失败关闭。
+- `prepare_query()` 与旧 `process()` 已移除散落的 `lint + compile` 组合，统一调用 Assurance Service，并保持受控模型重试；旧会话保存 `pending_assurance`。
+- 服务端使用完整 Registry 和用户 ACL 二次校验真实表/字段，不再只依赖模型 Tool Schema；错误诊断有界，不回显字段枚举和权限清单。
+- LLM 每次响应携带实际 snapshot 的 model revision，Assurance Report 不再事后猜测当前配置。
+- 回归覆盖：成功报告、未知字段、表 ACL、Registry 缺失、模型重试及 SQL hash；完整 Python 411 passed / 25 skipped，Pi Orchestrator 50 passed。
+- 下一批：QueryRun 持久化 Assurance Report/revisions，审批同时绑定 report hash；随后将同一 Policy/EA 门禁接入 Model Profile 激活。
+
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 
 现状问题：

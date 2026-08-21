@@ -37,7 +37,7 @@ class FakeMemory:
 
 
 @pytest.fixture
-def isolated_agent(monkeypatch):
+def isolated_agent(monkeypatch, tmp_path):
     import agent.agent as agent_mod
     import agent.tenant as tenant_mod
 
@@ -51,6 +51,22 @@ def isolated_agent(monkeypatch):
     monkeypatch.setattr(agent_mod.cfg, "FEEDBACK_ENABLED", False)
     monkeypatch.setattr(agent_mod.cfg, "SQL_DIALECT", "sqlite")
     monkeypatch.setattr(agent_mod.cfg, "DATABASE_URL", "")
+    registry_path = tmp_path / "schema.registry.json"
+    registry_path.write_text(
+        __import__("json").dumps({
+            "tables": {
+                "orders": {"columns": {"id": {}, "created_at": {}}},
+                "dwd_order_detail": {"columns": {
+                    "order_id": {}, "user_id": {}, "city_id": {},
+                    "total_amount": {}, "order_status": {}, "order_dt": {},
+                }},
+                "dim_city": {"columns": {"city_id": {}, "city_name": {}}},
+                "dim_user": {"columns": {"user_id": {}, "register_time": {}}},
+            }
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(agent_mod.cfg, "REGISTRY_PATH", registry_path)
     return agent_mod, fake_memory
 
 
