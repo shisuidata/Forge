@@ -8,13 +8,10 @@ from pathlib import Path
 import re
 from typing import Any
 
-import jsonschema
-
 from config import cfg
-from forge.compiler import compile_query
+from forge.compiler import compile_query, validate_query_contract
 from forge.executor import validate_readonly_sql
 from forge.lint import lint_conventions
-from forge.schema_builder import build_tool_schema
 
 ASSURANCE_REVISION = "query-assurance-v1"
 POLICY_REVISION = "convention-policy-v1"
@@ -73,23 +70,26 @@ def assure_query(
     scoped_registry = _scope_registry(registry, allowed_tables)
 
     try:
-        jsonschema.validate(forge_json, build_tool_schema(scoped_registry))
-        _validate_registry_fields(forge_json, scoped_registry)
-        _validate_select_symbols(forge_json, scoped_registry)
-        gates.append(GateResult("contract_registry_acl", "passed", registry_revision))
-    except jsonschema.ValidationError as exc:
-        message = _bounded_schema_error(exc)
-        gates.append(GateResult("contract_registry_acl", "failed", registry_revision, (message,)))
-        raise QueryAssuranceError(
-            _failed_report(gates, registry_revision, model_revision)
-        ) from exc
+        normalized = validate_query_contract(forge_json)
+        gates.append(GateResult("contract_scope_type", "passed", ASSURANCE_REVISION))
     except ValueError as exc:
-        gates.append(GateResult("contract_registry_acl", "failed", registry_revision, (str(exc),)))
+        gates.append(GateResult("contract_scope_type", "failed", ASSURANCE_REVISION, (str(exc),)))
         raise QueryAssuranceError(
             _failed_report(gates, registry_revision, model_revision)
         ) from exc
 
-    warnings = lint_conventions(forge_json, question)
+    try:
+        _validate_registry_tables(normalized, scoped_registry)
+        _validate_registry_fields(normalized, scoped_registry)
+        _validate_select_symbols(normalized, scoped_registry)
+        gates.append(GateResult("registry_acl_alias", "passed", registry_revision))
+    except ValueError as exc:
+        gates.append(GateResult("registry_acl_alias", "failed", registry_revision, (str(exc),)))
+        raise QueryAssuranceError(
+            _failed_report(gates, registry_revision, model_revision)
+        ) from exc
+
+    warnings = lint_conventions(normalized, question)
     if warnings:
         gates.append(GateResult("convention_policy", "failed", POLICY_REVISION, tuple(warnings)))
         raise QueryAssuranceError(
@@ -98,7 +98,7 @@ def assure_query(
     gates.append(GateResult("convention_policy", "passed", POLICY_REVISION))
 
     try:
-        sql = compile_query(forge_json, dialect=dialect)
+        sql = compile_query(normalized, dialect=dialect)
     except Exception as exc:
         gates.append(GateResult("scope_type_compile", "failed", ASSURANCE_REVISION, (str(exc),)))
         raise QueryAssuranceError(
@@ -140,6 +140,28 @@ def _scope_registry(registry: dict, allowed_tables: list[str] | None) -> dict:
     tables = registry.get("tables", registry)
     allowed = set(allowed_tables)
     return {"tables": {name: value for name, value in tables.items() if name in allowed}}
+
+
+def _validate_registry_tables(query: dict, registry: dict) -> None:
+    tables = registry.get("tables", registry)
+    cte_names = {item.get("name") for item in query.get("cte", [])}
+    physical_refs = {query.get("scan")}
+    physical_refs.update(join.get("table") for join in query.get("joins", []))
+    unknown = sorted(
+        str(table) for table in physical_refs
+        if table not in tables and table not in cte_names
+    )
+    if unknown:
+        raise ValueError("Registry/权限校验失败：查询使用了未授权或不存在的表。")
+    for cte in query.get("cte", []):
+        _validate_registry_tables(cte["query"], registry)
+        if cte.get("recursive_term"):
+            _validate_registry_tables(cte["recursive_term"], registry)
+    for operation in ("union", "intersect", "except"):
+        for branch in query.get(operation, []):
+            nested = branch.get("query", branch)
+            if isinstance(nested, dict):
+                _validate_registry_tables(nested, registry)
 
 
 _FIELD_REF_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_]\w*)\.([A-Za-z_]\w*)")
@@ -232,13 +254,6 @@ def _collect_field_refs(value: Any, key: str | None = None) -> set[str]:
             refs.update(_collect_field_refs(child, child_key))
         return refs
     return set()
-
-
-def _bounded_schema_error(exc: jsonschema.ValidationError) -> str:
-    path = " > ".join(str(part) for part in exc.absolute_path) or "根节点"
-    if exc.validator == "enum":
-        return f"Registry/权限校验失败：{path} 使用了未授权或不存在的表/字段。"
-    return f"Forge JSON 契约校验失败：{path} 不符合查询契约。"
 
 
 def _failed_report(

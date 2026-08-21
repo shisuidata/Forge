@@ -84,13 +84,19 @@ def compile_query(forge: dict, dialect: str = "sqlite",
         raise ValueError(
             f"不支持的方言：'{dialect}'。合法值：{_SUPPORTED_DIALECTS}"
         )
-    forge = _coerce(forge)
+    forge = validate_query_contract(forge)
+    return _compile(forge, dialect, nullable_cols)
+
+
+def validate_query_contract(forge: dict) -> dict:
+    """Normalize and validate the model-independent Forge DSL contract."""
+    normalized = _coerce(forge)
     try:
-        jsonschema.validate(forge, _SCHEMA)
+        jsonschema.validate(normalized, _SCHEMA)
     except jsonschema.ValidationError as exc:
         raise ValueError(_friendly_error(exc)) from exc
-    _validate_reference_integrity(forge)
-    return _compile(forge, dialect, nullable_cols)
+    _validate_reference_integrity(normalized)
+    return normalized
 
 
 _QUALIFIED_COLUMN_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_]\w*)\s*\.\s*[A-Za-z_]\w*")
