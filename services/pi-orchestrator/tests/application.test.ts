@@ -143,6 +143,40 @@ test("Pi application owns TaskRun progression and emits a review event", async (
 });
 
 
+test("Forge prepare timeout restores a retryable task state", async () => {
+  const { application, attempts } = createApplication(response({
+    status: "timed_out",
+    sql: null,
+    sql_hash: null,
+    forge_json: null,
+    assurance_report: null,
+    assurance_report_hash: null,
+    assurance_revision: null,
+    policy_revision: null,
+    model_revision: null,
+    assurance_registry_revision: null,
+    review_required: false,
+    error: "查询准备超时，请稍后重试或缩小问题范围。",
+  }));
+  const created = application.createTask({
+    org_id: "org_demo",
+    team_id: "team_growth",
+    user_id: "trusted-user",
+    channel: "web",
+    intent: "query_prepare",
+    message: "复杂查询",
+  });
+
+  const prepared = await application.prepareQuery(created.task.task_run_id, {
+    question: "复杂查询",
+  });
+
+  assert.equal(prepared.task.status, "ready_for_query");
+  assert.equal(prepared.task.current_stage, "query_prepare_retry");
+  assert.equal(prepared.events.at(-2)?.event_type, "query.prepare_timed_out");
+  assert.equal(attempts.list(created.task.task_run_id)[0]?.status, "timed_out");
+});
+
 test("structured clarification Artifact controls TaskRun progression", async () => {
   const attempts = new InMemoryStageAttemptStore();
   const withSkills = new OrchestratorApplication({
@@ -209,7 +243,8 @@ test("Stage timeout records a timed-out Attempt and restores retry status", asyn
   const attempts = new InMemoryStageAttemptStore();
   const app = new OrchestratorApplication({
     config: loadConfig({
-      PI_STAGE_TIMEOUT_MS: "1",
+      FORGE_REQUEST_TIMEOUT_MS: "1",
+      PI_STAGE_TIMEOUT_MS: "10",
       PI_STAGE_LEASE_MS: "100",
     }),
     attempts,
@@ -220,7 +255,7 @@ test("Stage timeout records a timed-out Attempt and restores retry status", asyn
     skillExecutor: {
       ...unusedAnalysisSkills,
       async clarify() {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 30));
         return {
           status: "needs_input",
           goal: "分析转化下降",

@@ -128,6 +128,38 @@ async def test_create_fails_closed_when_registry_changes_during_prepare(
 
 
 @pytest.mark.asyncio
+async def test_create_persists_bounded_prepare_timeout(
+    client: AsyncClient, query_run_env, monkeypatch
+):
+    import agent.agent as agent_mod
+
+    monkeypatch.setattr(
+        agent_mod,
+        "prepare_query",
+        lambda user_id, question, dialect=None: {
+            "status": "timed_out",
+            "question": question,
+            "user_id": user_id,
+            "forge_json": None,
+            "sql": None,
+            "dialect": dialect or "sqlite",
+            "assurance_report": None,
+            "text": "",
+            "error": "查询准备超时，请稍后重试或缩小问题范围。",
+        },
+    )
+    response = await _create(
+        client,
+        {**query_run_env, "Idempotency-Key": "create-timeout"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "timed_out"
+    assert "查询准备超时" in response.json()["error"]
+    assert response.json()["review_required"] is False
+
+
+@pytest.mark.asyncio
 async def test_create_query_run_requires_idempotency_key(client: AsyncClient, query_run_env):
     headers = {"X-Pi-Service-Key": "pi-service-secret"}
     response = await _create(client, headers)

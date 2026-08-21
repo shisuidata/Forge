@@ -24,6 +24,20 @@ test("Stage lease must outlive the Stage timeout", () => {
   );
 });
 
+test("Forge HTTP timeout must finish before the Stage timeout", () => {
+  assert.throws(
+    () =>
+      loadConfig({
+        FORGE_REQUEST_TIMEOUT_MS: "240000",
+        PI_STAGE_TIMEOUT_MS: "240000",
+      }),
+    /must be less/,
+  );
+  const config = loadConfig({});
+  assert.equal(config.forgeTimeoutMs, 220_000);
+  assert.ok(config.forgeTimeoutMs < config.stageTimeoutMs);
+});
+
 test("state database defaults under the dedicated agent directory", async () => {
   const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-agent-"));
   const config = loadConfig({ PI_ORCHESTRATOR_AGENT_DIR: agentDir });

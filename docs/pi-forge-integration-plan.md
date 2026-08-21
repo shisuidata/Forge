@@ -828,8 +828,10 @@ M4.1 用户配置接管与服务重启规则：
 - 审批现在同时校验 `sql_hash + assurance_report_hash + approver + expiry + Registry version + Assurance revision + Policy revision`；错误 report hash 与策略漂移均有回归测试。模型切换不改变已经生成的 SQL，因此在途 QueryRun 固定原 model revision，不与当前 active model 比较。
 - Forge 内部 QueryRun API、Pi Client、Task Event、渠道审批动作和 QueryResultArtifact 已贯通 Assurance lineage；旧卡片缺少 Assurance hash 时失败关闭。
 - 当前验证：Python 414 passed / 25 skipped；Pi typecheck 通过，50 tests passed。main `81656a1` 已部署 NAS，SQLite 兼容迁移成功；真实 ChannelEvent → review action 已携带 Assurance hash，审批 202 后进入 `query_result`。
-- 真实复杂问题“各城市订单总额”在当前模型多次自修正时触发 Pi/Forge 请求 timeout，说明下一步 Model Profile 门禁还必须验证延迟与重试预算，不能只看准确率；简单订单查询完整闭环通过。
-- 下一步将同一 Policy/EA 门禁接入 Model Profile validate/activate。
+- 真实复杂问题“各城市订单总额”在当前模型多次自修正时触发 Pi/Forge 请求 timeout。修复方向已确认并完成：建立端到端统一 Deadline Budget，单次模型调用、受控重试、Forge HTTP Client、Pi Stage timeout 与 lease 使用严格包含关系。
+- Deadline/Retry Budget：查询准备总预算默认 210s，Forge HTTP 220s，Pi Stage 240s，lease 300s；Pi 启动时强制 `Forge HTTP < Stage < lease`。每次 LLM 调用使用 `min(模型配置 timeout, 当前剩余预算 - 5s 收尾预留)`，预算不足不再启动重试。
+- OpenAI/Anthropic timeout 统一为有界 `LLMRequestTimeoutError`；`prepare_query` 返回稳定 `timed_out`，QueryRun 持久化该状态；Pi 将 Attempt 标记 `timed_out` 并恢复 `ready_for_query/query_prepare_retry`，渠道显示“查询准备超时，可重试”。
+- 当前验证：Python 417 passed / 25 skipped；Pi typecheck 通过，52 tests passed。待 NAS 复杂问题回归后，将准确率、Assurance 通过率、重试次数、P95 延迟与超时率接入 Model Profile validate/activate。
 
 ### Phase 4.4：Model Control Plane（无需重启的模型切换）
 

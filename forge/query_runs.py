@@ -198,6 +198,7 @@ async def create_query_run(
     status_map = {
         "needs_review": "needs_review",
         "needs_clarification": "needs_clarification",
+        "timed_out": "timed_out",
         "error": "failed",
     }
     status = status_map.get(prepared.get("status"), "failed")
