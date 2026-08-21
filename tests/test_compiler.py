@@ -20,6 +20,38 @@ def sql(q: dict) -> str:
 
 # ── A. JOIN traps ─────────────────────────────────────────────────────────────
 
+def test_rejects_unbound_table_reference_before_sql_execution():
+    with pytest.raises(ValueError, match="未加入 FROM/JOIN.*dim_city"):
+        compile_query({
+            "scan": "dwd_order_detail",
+            "joins": [{
+                "type": "inner",
+                "table": "fact_order",
+                "on": {
+                    "left": "dwd_order_detail.order_id",
+                    "right": "fact_order.order_id",
+                },
+            }],
+            "select": ["dim_city.city_name", "dwd_order_detail.total_amount"],
+        })
+
+
+def test_rejects_unaliased_self_join():
+    with pytest.raises(ValueError, match="不支持无别名自连接"):
+        compile_query({
+            "scan": "dwd_order_detail",
+            "joins": [{
+                "type": "inner",
+                "table": "dwd_order_detail",
+                "on": {
+                    "left": "dwd_order_detail.order_id",
+                    "right": "dwd_order_detail.order_id",
+                },
+            }],
+            "select": ["dwd_order_detail.order_id"],
+        })
+
+
 def test_a1_left_join_preserves_zero_order_users():
     """
     A1: Users with no orders must appear (order_count = 0).

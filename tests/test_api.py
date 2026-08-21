@@ -343,6 +343,9 @@ class TestExecuteRaw:
         assert resp.status_code == 200
         data = resp.json()
         assert data["exec_error"] is not None
+        assert data["action"] == "execution_failed"
+        assert "OperationalError" not in data["exec_error"]
+        assert "sqlalche.me" not in data["exec_error"]
 
     async def test_execute_select_from_sqlite_master(self, client: AsyncClient):
         """对数据库执行 SQLite 系统查询。"""
@@ -757,6 +760,8 @@ class TestAdminPages:
         resp = await client.get("/chat")
         assert resp.status_code == 200
         assert "Forge" in resp.text
+        assert "执行成功" in resp.text
+        assert "执行失败" in resp.text
 
 
 # ── Dashboard 数据 ───────────────────────────────────────────────────────────

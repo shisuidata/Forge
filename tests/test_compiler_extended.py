@@ -284,15 +284,15 @@ def test_join_multi_condition():
             "type": "inner",
             "table": "budgets",
             "on": [
-                {"col": "orders.dept_id", "op": "eq", "val": 1},
-                {"col": "orders.year",    "op": "eq", "val": 2024},
+                {"col": "orders.dept_id", "op": "eq", "col2": "budgets.dept_id"},
+                {"col": "orders.year", "op": "eq", "col2": "budgets.year"},
             ],
         }],
         "select": ["orders.id"],
     })
     assert "INNER JOIN budgets ON" in result
-    assert "orders.dept_id = 1" in result
-    assert "orders.year = 2024" in result
+    assert "orders.dept_id = budgets.dept_id" in result
+    assert "orders.year = budgets.year" in result
     assert " AND " in result
 
 

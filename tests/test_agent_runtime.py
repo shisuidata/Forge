@@ -88,6 +88,55 @@ def test_process_retries_once_when_convention_lint_fails(isolated_agent, monkeyp
     assert fake_memory.get_state("u1", "pending_sql") == resp.sql
 
 
+def test_process_retries_unbound_table_and_self_join_before_review(isolated_agent, monkeypatch):
+    agent_mod, fake_memory = isolated_agent
+    calls = []
+    invalid = {
+        "scan": "dwd_order_detail",
+        "joins": [{
+            "type": "inner",
+            "table": "dwd_order_detail",
+            "on": {
+                "left": "dwd_order_detail.order_id",
+                "right": "dwd_order_detail.order_id",
+            },
+        }],
+        "select": ["dim_city.city_name", "dwd_order_detail.total_amount"],
+    }
+    corrected = {
+        "scan": "dwd_order_detail",
+        "joins": [{
+            "type": "inner",
+            "table": "dim_city",
+            "on": {
+                "left": "dwd_order_detail.city_id",
+                "right": "dim_city.city_id",
+            },
+        }],
+        "group": ["dim_city.city_name"],
+        "agg": [{"fn": "sum", "col": "dwd_order_detail.total_amount", "as": "order_total"}],
+        "select": ["dim_city.city_name", "order_total"],
+    }
+
+    def fake_call(*args, **kwargs):
+        calls.append(kwargs)
+        return {
+            "tool": "generate_forge_query",
+            "input": invalid if len(calls) == 1 else corrected,
+        }
+
+    monkeypatch.setattr(agent_mod.llm, "call", fake_call)
+
+    resp = agent_mod.process("u-integrity", "各城市的订单总额是多少？")
+
+    assert resp.action == "sql_review"
+    assert resp.retry_count == 1
+    assert len(calls) == 2
+    assert "INNER JOIN dim_city" in resp.sql
+    assert "SUM(dwd_order_detail.total_amount)" in resp.sql
+    assert fake_memory.get_state("u-integrity", "pending_sql") == resp.sql
+
+
 def test_process_lints_every_retry_before_sql_review(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
     calls = []
