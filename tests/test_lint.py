@@ -1244,6 +1244,41 @@ def test_lint_rejects_internal_rank_alias_when_rank_not_requested_in_output():
     assert any("内部字段" in warning and "rn" in warning for warning in warnings)
 
 
+def test_lint_allows_rank_output_when_question_explicitly_requests_it():
+    query = {
+        "scan": "orders",
+        "window": [
+            {
+                "fn": "rank",
+                "partition": ["orders.user_id"],
+                "order": [{"col": "orders.total_amount", "dir": "desc"}],
+                "as": "amount_rank",
+            }
+        ],
+        "select": ["orders.user_id", "orders.total_amount", "amount_rank"],
+    }
+
+    for question in (
+        "每笔订单金额排名，显示用户ID、金额和排名",
+        "各品类前3商品，显示品类名、商品名、销量及排名",
+    ):
+        warnings = lint_conventions(query, question)
+        assert not any("内部字段" in warning for warning in warnings)
+
+
+def test_lint_does_not_hide_unfiltered_rank_output():
+    warnings = lint_conventions(
+        {
+            "scan": "orders",
+            "window": [{"fn": "rank", "as": "amount_rank"}],
+            "select": ["orders.id", "amount_rank"],
+        },
+        "每笔订单金额排名",
+    )
+
+    assert not any("内部字段" in warning for warning in warnings)
+
+
 def test_lint_category_topn_share_rejects_denominator_grouped_by_category_id():
     warnings = lint_conventions(
         {
@@ -1510,6 +1545,35 @@ def test_lint_percentage_display_rejects_percent_not_decimal_ratio():
     )
 
     assert any("0~1 小数" in warning and "不要乘以 100" in warning for warning in warnings)
+
+
+def test_lint_ratio_hides_unrequested_window_denominator():
+    warnings = lint_conventions(
+        {
+            "scan": "monthly_channel",
+            "window": [
+                {
+                    "fn": "sum",
+                    "col": "monthly_channel.order_count",
+                    "partition": ["monthly_channel.month"],
+                    "as": "month_total",
+                }
+            ],
+            "select": [
+                "monthly_channel.channel_name",
+                "monthly_channel.month",
+                "monthly_channel.order_count",
+                "month_total",
+                {
+                    "expr": "ROUND(monthly_channel.order_count * 1.0 / month_total, 4)",
+                    "as": "pct",
+                },
+            ],
+        },
+        "每个渠道按月统计订单数，以及当月订单数在所有渠道当月总订单数中的占比",
+    )
+
+    assert any("month_total" in warning and "中间汇总" in warning for warning in warnings)
 
 
 def test_lint_percentage_display_accepts_decimal_ratio():
