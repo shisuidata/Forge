@@ -426,6 +426,10 @@ def build_tool_schema(registry: dict) -> dict:
                 "minimum": 0,
                 "description": "Rows to skip (for pagination).",
             },
+            "distinct": {
+                "type": "boolean",
+                "description": "Use true only when the requested final output must remove duplicate rows.",
+            },
             "explain": {
                 "type": "string",
                 "description": "Your intent description. Not compiled. Helps error recovery.",

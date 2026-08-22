@@ -1318,6 +1318,44 @@ def test_lint_rate_threshold_uses_unrounded_ratio():
     assert any("阈值" in warning and "ROUND" in warning for warning in warnings)
 
 
+def test_lint_brand_sales_summary_has_stable_column_order():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "select": ["dim_brand.brand_name", "total_sales", "order_count"],
+            "sort": [{"col": "total_sales", "dir": "desc"}],
+        },
+        "统计各品牌已完成订单的总销售额和订单数，按销售额降序排列",
+    )
+
+    assert any("order_count" in warning and "列顺序" in warning for warning in warnings)
+
+
+def test_lint_channel_gmv_summary_sorts_by_gmv():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "select": ["dim_channel.channel_type", "order_count", "total_gmv", "avg_order_value"],
+            "sort": [{"col": "order_count", "dir": "desc"}],
+        },
+        "各渠道类型的订单数、总GMV和平均客单价（已完成订单）",
+    )
+
+    assert any("total_gmv DESC" in warning for warning in warnings)
+
+
+def test_lint_time_bounded_event_listing_defaults_to_newest_first():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "select": ["dwd_order_detail.order_id", "dwd_order_detail.pay_amount"],
+        },
+        "2025年11月1日以来，列出已完成订单和实付金额",
+    )
+
+    assert any("事件时间 DESC" in warning for warning in warnings)
+
+
 def test_lint_category_topn_share_rejects_denominator_grouped_by_category_id():
     warnings = lint_conventions(
         {

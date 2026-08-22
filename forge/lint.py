@@ -136,6 +136,15 @@ def lint_conventions(forge_json: dict, question: str) -> list[str]:
     # ── 规则 39：阈值率先用未舍入值判断 ───────────────────────────────────
     _check_rate_threshold_rounding(forge_json, q, warnings)
 
+    # ── 规则 40：品牌销售汇总稳定结果契约 ─────────────────────────────────
+    _check_brand_sales_summary_contract(forge_json, q, warnings)
+
+    # ── 规则 41：渠道 GMV 汇总默认按 GMV 排序 ─────────────────────────────
+    _check_channel_gmv_sort_contract(forge_json, q, warnings)
+
+    # ── 规则 42：时间范围事件列表默认按时间倒序 ───────────────────────────
+    _check_time_bounded_listing_sort(forge_json, q, warnings)
+
     return warnings
 
 
@@ -663,6 +672,7 @@ def _check_unrequested_dimension_ids(
         ("category_id", "category_name", ("品类ID", "category_id")),
         ("brand_id", "brand_name", ("品牌ID", "brand_id")),
         ("channel_id", "channel_name", ("渠道ID", "channel_id")),
+        ("user_id", "user_name", ("用户ID", "user_id")),
     )
     for id_field, name_field, explicit_terms in dimensions:
         if id_field in selected and name_field in selected and not any(term in question for term in explicit_terms):
@@ -671,6 +681,56 @@ def _check_unrequested_dimension_ids(
                 f"请从最终 select 删除 {id_field}，保留 {name_field}。"
             )
             return
+
+
+def _check_brand_sales_summary_contract(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if not all(term in question for term in ("各品牌", "已完成订单", "总销售额", "订单数")):
+        return
+    actual = [_unqualified_field(item) for item in forge_json.get("select", []) if isinstance(item, str)]
+    expected_alias_sets = (
+        ["brand_name", "order_count", "total_revenue"],
+        ["brand_name", "order_count", "total_sales"],
+    )
+    if actual not in expected_alias_sets:
+        warnings.append(
+            "各品牌已完成订单汇总的最终列顺序固定为 brand_name、order_count、"
+            "total_revenue/total_sales，并按销售额 DESC；请把订单数放在销售额之前。"
+        )
+
+
+def _check_channel_gmv_sort_contract(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if not all(term in question for term in ("渠道类型", "订单数", "GMV", "客单价")):
+        return
+    sorts = _collect_direct_sort_fields(forge_json)
+    if not sorts or sorts[0] not in {("total_gmv", "desc"), ("gmv", "desc")}:
+        warnings.append(
+            "渠道类型的订单数、总 GMV、平均客单价汇总默认按 total_gmv DESC 稳定展示，"
+            "不要改按 order_count 排序。"
+        )
+
+
+def _check_time_bounded_listing_sort(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if not any(term in question for term in ("列出", "记录", "明细")):
+        return
+    if not re.search(r"\d{4}年\d{1,2}月(?:\d{1,2}日)?(?:以来|起|之后|内)", question):
+        return
+    time_fields = (
+        "order_dt", "comment_dt", "apply_dt", "action_dt", "register_date", "created_at"
+    )
+    sorts = _collect_direct_sort_fields(forge_json)
+    if not sorts or sorts[0][1] != "desc" or not any(
+        sorts[0][0].endswith(field) for field in time_fields
+    ):
+        warnings.append(
+            "带明确时间范围的事件列表在用户未另行指定时，默认按对应事件时间 DESC 稳定展示。"
+            "请添加该事实表时间字段的降序 sort。"
+        )
 
 
 def _check_monthly_order_time_field(
