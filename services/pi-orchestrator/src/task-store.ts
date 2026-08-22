@@ -60,9 +60,18 @@ const TERMINAL_STATUSES = new Set<TaskStatus>([
 
 export class TaskStateError extends Error {}
 
+export interface TaskListOptions {
+  orgId: string;
+  teamId: string;
+  channel?: TaskChannel;
+  status?: TaskStatus;
+  limit: number;
+}
+
 export interface TaskStore {
   create(input: CreateTaskInput): TaskRun;
   get(taskRunId: string): TaskRun | undefined;
+  list(options: TaskListOptions): TaskRun[];
   transition(options: {
     taskRunId: string;
     expectedStatus: TaskStatus;
@@ -110,6 +119,22 @@ export class InMemoryTaskStore implements TaskStore {
   get(taskRunId: string): TaskRun | undefined {
     const task = this.#tasks.get(taskRunId);
     return task === undefined ? undefined : structuredClone(task);
+  }
+
+  list(options: TaskListOptions): TaskRun[] {
+    return [...this.#tasks.values()]
+      .filter((task) =>
+        task.org_id === options.orgId &&
+        task.team_id === options.teamId &&
+        (options.channel === undefined || task.channel === options.channel) &&
+        (options.status === undefined || task.status === options.status)
+      )
+      .sort((left, right) =>
+        right.updated_at.localeCompare(left.updated_at) ||
+        right.task_run_id.localeCompare(left.task_run_id)
+      )
+      .slice(0, options.limit)
+      .map((task) => structuredClone(task));
   }
 
   transition(options: {

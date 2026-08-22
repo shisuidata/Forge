@@ -16,10 +16,16 @@ import {
 } from "./skills.js";
 import { SkillPolicyConflictError } from "./skill-policy.js";
 import { SqliteOrchestratorState } from "./sqlite-store.js";
-import { TaskStateError, type TaskChannel } from "./task-store.js";
+import {
+  TASK_STATUSES,
+  TaskStateError,
+  type TaskChannel,
+  type TaskStatus,
+} from "./task-store.js";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const CHANNELS = new Set<TaskChannel>(["web", "feishu", "dingtalk", "api"]);
+const TASK_STATUS_SET = new Set<string>(TASK_STATUSES);
 const DIALECTS = new Set<string>(FORGE_DIALECTS);
 const AUTHORIZED_SKILLS = new Set<string>(AUTHORIZED_SKILL_NAMES);
 const ADVISORY_SKILLS = new Set<string>(ADVISORY_SKILL_NAMES);
@@ -294,6 +300,32 @@ export function createOrchestratorServer(
           sendJson(response, 200, { policy });
           return;
         }
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/tasks") {
+        const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
+        const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
+        const channelValue = url.searchParams.get("channel");
+        if (channelValue !== null && !CHANNELS.has(channelValue as TaskChannel)) {
+          throw new RequestError(`unsupported channel: ${channelValue}`);
+        }
+        const statusValue = url.searchParams.get("status");
+        if (statusValue !== null && !TASK_STATUS_SET.has(statusValue)) {
+          throw new RequestError(`unsupported status: ${statusValue}`);
+        }
+        const limitValue = Number(url.searchParams.get("limit") ?? "50");
+        if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 100) {
+          throw new RequestError("limit must be an integer from 1 to 100");
+        }
+        const tasks = application.listTasks({
+          orgId,
+          teamId,
+          limit: limitValue,
+          ...(channelValue === null ? {} : { channel: channelValue as TaskChannel }),
+          ...(statusValue === null ? {} : { status: statusValue as TaskStatus }),
+        });
+        sendJson(response, 200, { tasks });
+        return;
       }
 
       if (request.method === "POST" && url.pathname === "/v1/tasks") {

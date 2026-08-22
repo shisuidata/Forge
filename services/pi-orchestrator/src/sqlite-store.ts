@@ -31,6 +31,7 @@ import {
   TASK_STATUSES,
   TaskStateError,
   type CreateTaskInput,
+  type TaskListOptions,
   type TaskRun,
   type TaskStatus,
   type TaskStore,
@@ -126,6 +127,34 @@ class SqliteTaskStore implements TaskStore {
       throw new Error(`Corrupt TaskRun ${taskRunId}: identity or status mismatch`);
     }
     return structuredClone(task);
+  }
+
+  list(options: TaskListOptions): TaskRun[] {
+    const predicates = [
+      "json_extract(data_json, '$.org_id') = ?",
+      "json_extract(data_json, '$.team_id') = ?",
+    ];
+    const values: Array<string | number> = [options.orgId, options.teamId];
+    if (options.channel !== undefined) {
+      predicates.push("json_extract(data_json, '$.channel') = ?");
+      values.push(options.channel);
+    }
+    if (options.status !== undefined) {
+      predicates.push("status = ?");
+      values.push(options.status);
+    }
+    values.push(options.limit);
+    const rows = this.database.prepare(
+      `SELECT data_json FROM task_runs
+       WHERE ${predicates.join(" AND ")}
+       ORDER BY updated_at DESC, task_run_id DESC
+       LIMIT ?`,
+    ).all(...values) as Array<{ data_json: string }>;
+    return rows.map((row) => {
+      const task = parseJson<TaskRun>(row.data_json, "TaskRun list row");
+      if (!TASK_STATUS_SET.has(task.status)) throw new Error("Corrupt TaskRun list row: invalid status");
+      return structuredClone(task);
+    });
   }
 
   transition(options: {

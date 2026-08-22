@@ -193,6 +193,12 @@ class Config:
         "timeout_seconds",
         default="300",
     ))
+    PI_WEB_ADMIN_TASK_SCOPES: str = _env(
+        "PI_WEB_ADMIN_TASK_SCOPES",
+        "pi_orchestrator",
+        "web_admin_task_scopes",
+        default="org_default:team_default",
+    )
     PI_SERVICE_API_KEYS: list[str] = [
         key for key in _env(
             "PI_SERVICE_API_KEYS",

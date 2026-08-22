@@ -308,6 +308,94 @@ async def task_workspace_page(request: Request, _auth=Depends(require_web_auth))
     )
 
 
+def _web_admin_task_scopes() -> list[tuple[str, str]]:
+    scopes: list[tuple[str, str]] = []
+    for raw_scope in cfg.PI_WEB_ADMIN_TASK_SCOPES.split(","):
+        org_id, separator, team_id = raw_scope.strip().partition(":")
+        if (
+            separator
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", org_id)
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", team_id)
+        ):
+            scopes.append((org_id, team_id))
+    return scopes
+
+
+def _web_admin_can_observe(task: dict) -> bool:
+    return (task.get("org_id"), task.get("team_id")) in set(_web_admin_task_scopes())
+
+
+async def _pi_scoped_task_get(task_run_id: str, suffix: str = "") -> tuple[int, dict]:
+    task_status, task_data = await _pi_request("GET", f"/v1/tasks/{task_run_id}")
+    task = task_data.get("task") if isinstance(task_data, dict) else None
+    if task_status != 200 or not isinstance(task, dict):
+        return task_status, task_data
+    if not _web_admin_can_observe(task):
+        return 404, {"status": "not_found"}
+    if not suffix:
+        return task_status, task_data
+    return await _pi_request("GET", f"/v1/tasks/{task_run_id}/{suffix}")
+
+
+@chat_router.get("/api/pi/tasks", response_class=JSONResponse)
+async def api_pi_list_tasks(
+    channel: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    _auth=Depends(require_api_auth),
+):
+    """List the authenticated admin team's cross-channel TaskRuns."""
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    allowed_channels = {"web", "feishu", "dingtalk", "api"}
+    allowed_statuses = {
+        "created", "clarifying", "ready_for_query", "waiting_for_query_approval",
+        "waiting_for_action_approval", "querying", "ready_for_analysis", "analyzing",
+        "ready_for_report", "rendering", "completed", "needs_input", "incomplete",
+        "cancelled", "failed", "expired",
+    }
+    if channel is not None and channel not in allowed_channels:
+        return JSONResponse({"status": "invalid_request", "error": "Invalid channel"}, status_code=400)
+    if status is not None and status not in allowed_statuses:
+        return JSONResponse({"status": "invalid_request", "error": "Invalid status"}, status_code=400)
+    if limit < 1 or limit > 100:
+        return JSONResponse({"status": "invalid_request", "error": "Invalid limit"}, status_code=400)
+    scopes = _web_admin_task_scopes()
+    if not scopes:
+        return JSONResponse(
+            {"status": "misconfigured", "error": "No valid Web admin task scope"},
+            status_code=503,
+        )
+    try:
+        tasks_by_id: dict[str, dict] = {}
+        for org_id, team_id in scopes:
+            query = {
+                "org_id": org_id,
+                "team_id": team_id,
+                "limit": str(limit),
+                **({} if channel is None else {"channel": channel}),
+                **({} if status is None else {"status": status}),
+            }
+            upstream_status, data = await _pi_request("GET", f"/v1/tasks?{urlencode(query)}")
+            if upstream_status != 200:
+                return JSONResponse(data, status_code=upstream_status)
+            for task in data.get("tasks", []):
+                if isinstance(task, dict) and isinstance(task.get("task_run_id"), str):
+                    tasks_by_id[task["task_run_id"]] = task
+        tasks = sorted(
+            tasks_by_id.values(),
+            key=lambda task: (str(task.get("updated_at", "")), str(task.get("task_run_id", ""))),
+            reverse=True,
+        )[:limit]
+        return JSONResponse({"tasks": tasks})
+    except httpx.HTTPError as exc:
+        logger.warning("Pi task list failed: %s", exc)
+        return JSONResponse(
+            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
+            status_code=502,
+        )
+
+
 @chat_router.post("/api/pi/tasks", response_class=JSONResponse)
 async def api_pi_create_task(req: PiTaskCreateRequest, _auth=Depends(require_api_auth)):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
@@ -439,8 +527,8 @@ async def api_pi_task(
             status_code=400,
         )
     try:
-        status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}")
-        return JSONResponse(data, status_code=status)
+        upstream_status, data = await _pi_scoped_task_get(task_run_id)
+        return JSONResponse(data, status_code=upstream_status)
     except httpx.HTTPError as exc:
         logger.warning("Pi task fetch failed: %s", exc)
         return JSONResponse(
@@ -465,8 +553,8 @@ async def api_pi_task_attempts(
             status_code=400,
         )
     try:
-        status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}/attempts")
-        return JSONResponse(data, status_code=status)
+        upstream_status, data = await _pi_scoped_task_get(task_run_id, "attempts")
+        return JSONResponse(data, status_code=upstream_status)
     except httpx.HTTPError as exc:
         logger.warning("Pi task attempts fetch failed: %s", exc)
         return JSONResponse(
@@ -491,10 +579,8 @@ async def api_pi_task_artifacts(
             status_code=400,
         )
     try:
-        status, data = await _pi_request(
-            "GET", f"/v1/tasks/{task_run_id}/artifacts"
-        )
-        return JSONResponse(data, status_code=status)
+        upstream_status, data = await _pi_scoped_task_get(task_run_id, "artifacts")
+        return JSONResponse(data, status_code=upstream_status)
     except httpx.HTTPError as exc:
         logger.warning("Pi artifact fetch failed: %s", exc)
         return JSONResponse(
@@ -693,11 +779,14 @@ async def api_pi_task_events(
             status_code=400,
         )
     try:
-        status, data = await _pi_request(
+        task_status, task_data = await _pi_scoped_task_get(task_run_id)
+        if task_status != 200:
+            return JSONResponse(task_data, status_code=task_status)
+        upstream_status, data = await _pi_request(
             "GET",
             f"/v1/tasks/{task_run_id}/events?after={max(after, 0)}",
         )
-        return JSONResponse(data, status_code=status)
+        return JSONResponse(data, status_code=upstream_status)
     except httpx.HTTPError as exc:
         logger.warning("Pi task events failed: %s", exc)
         return JSONResponse(

@@ -29,6 +29,30 @@
       </div>
     </div>
 
+    <section class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="task-live-dot" class="h-2 w-2 rounded-full bg-emerald-500"></span>
+            <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-gray-400">Cross-channel Task Inbox</p>
+          </div>
+          <h3 class="mt-1 font-semibold text-gray-900">实时任务监控</h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="inbox-channel" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
+            <option value="">全部渠道</option><option value="feishu">飞书</option><option value="web">Web</option><option value="dingtalk">钉钉</option><option value="api">API</option>
+          </select>
+          <select id="inbox-status" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
+            <option value="">全部状态</option><option value="analyzing">分析中</option><option value="querying">查询中</option><option value="rendering">报告生成中</option><option value="waiting_for_query_approval">等待 SQL 审批</option><option value="waiting_for_action_approval">等待操作确认</option><option value="needs_input">等待补充</option><option value="completed">已完成</option><option value="failed">失败</option>
+          </select>
+          <span id="inbox-count" class="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] text-gray-500">0 个任务</span>
+        </div>
+      </div>
+      <div id="task-inbox" class="max-h-72 divide-y divide-gray-100 overflow-auto">
+        <div class="px-5 py-8 text-center text-sm text-gray-400">正在加载跨渠道任务…</div>
+      </div>
+    </section>
+
     <div class="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
       <section class="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div class="border-b border-gray-100 px-5 py-4">
@@ -88,7 +112,16 @@
             <code id="task-id" class="rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-500">尚未创建</code>
           </div>
           <div id="task-events" class="min-h-44 p-5">
-            <div class="flex min-h-32 items-center justify-center text-sm text-gray-400">提交任务后，这里会显示由 Pi 推进的状态变化。</div>
+            <div class="flex min-h-32 items-center justify-center text-sm text-gray-400">选择任务后，这里会实时显示由 Pi 推进的状态变化。</div>
+          </div>
+          <div class="border-t border-gray-100 bg-gray-50/70 px-5 py-4">
+            <div class="mb-3 flex items-center justify-between">
+              <p class="text-[11px] font-semibold uppercase tracking-[.16em] text-gray-400">Stage Attempts</p>
+              <span id="attempt-count" class="text-[11px] text-gray-400">0 次执行</span>
+            </div>
+            <div id="task-attempts" class="space-y-2">
+              <p class="text-xs text-gray-400">暂无阶段执行记录。</p>
+            </div>
           </div>
         </section>
 
@@ -193,6 +226,13 @@ taskMode.addEventListener('change', () => {
     ? '创建 TaskRun 并运行专业 Skill'
     : '创建 TaskRun 并生成审核预览';
 });
+const taskInbox = document.getElementById('task-inbox');
+const inboxChannel = document.getElementById('inbox-channel');
+const inboxStatus = document.getElementById('inbox-status');
+const inboxCount = document.getElementById('inbox-count');
+const taskLiveDot = document.getElementById('task-live-dot');
+const attemptsPanel = document.getElementById('task-attempts');
+const attemptCount = document.getElementById('attempt-count');
 const eventsPanel = document.getElementById('task-events');
 const taskIdLabel = document.getElementById('task-id');
 const reviewPanel = document.getElementById('review-panel');
@@ -224,11 +264,63 @@ let currentReview = null;
 let supplementUsed = false;
 let analysisAttemptCounter = 0;
 let reportAttemptCounter = 0;
+let selectedTaskChannel = null;
+let inboxRefreshRunning = false;
+let detailRefreshRunning = false;
 const renderedEventKeys = new Set();
 
 function showError(message) {
   errorPanel.textContent = message;
   errorPanel.classList.remove('hidden');
+}
+
+function safeLogPayload(payload) {
+  const blocked = /(secret|token|api.?key|password|prompt|reasoning|chain.?of.?thought|traceback|error)/i;
+  const clean = (value, depth = 0) => {
+    if (depth > 3) return '[已截断]';
+    if (Array.isArray(value)) return value.slice(0, 20).map((item) => clean(item, depth + 1));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value)
+        .filter(([key]) => !blocked.test(key))
+        .slice(0, 30)
+        .map(([key, item]) => [key, clean(item, depth + 1)]));
+    }
+    if (typeof value === 'string' && value.length > 500) return `${value.slice(0, 500)}…`;
+    return value;
+  };
+  return clean(payload);
+}
+
+function renderAttempts(attempts) {
+  attemptCount.textContent = `${attempts.length} 次执行`;
+  attemptsPanel.replaceChildren();
+  if (attempts.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'text-xs text-gray-400';
+    empty.textContent = '暂无阶段执行记录。';
+    attemptsPanel.appendChild(empty);
+    return;
+  }
+  attempts.slice().reverse().forEach((attempt) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2';
+    const left = document.createElement('div');
+    left.className = 'min-w-0';
+    const stage = document.createElement('p');
+    stage.className = 'truncate font-mono text-[11px] font-medium text-gray-700';
+    stage.textContent = attempt.stage;
+    const timing = document.createElement('p');
+    timing.className = 'mt-0.5 text-[10px] text-gray-400';
+    const start = Date.parse(attempt.started_at);
+    const end = attempt.finished_at ? Date.parse(attempt.finished_at) : Date.now();
+    timing.textContent = `${new Date(attempt.started_at).toLocaleString('zh-CN')} · ${Math.max(0, end - start)} ms`;
+    left.append(stage, timing);
+    const state = document.createElement('span');
+    state.className = `shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${attempt.status === 'succeeded' ? 'bg-emerald-50 text-emerald-700' : attempt.status === 'running' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`;
+    state.textContent = attempt.status;
+    row.append(left, state);
+    attemptsPanel.appendChild(row);
+  });
 }
 
 function renderEvents(events) {
@@ -293,7 +385,7 @@ function renderEvents(events) {
     title.append(name, sequence);
     const detail = document.createElement('p');
     detail.className = 'mt-1 truncate font-mono text-[11px] text-gray-400';
-    detail.textContent = JSON.stringify(event.payload);
+    detail.textContent = JSON.stringify(safeLogPayload(event.payload));
     copy.append(title, detail);
     row.append(rail, copy);
     eventsPanel.appendChild(row);
@@ -308,6 +400,169 @@ async function readJson(response) {
 }
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const taskStatusLabels = {
+  created: '已创建', clarifying: '澄清中', ready_for_query: '待查询',
+  waiting_for_query_approval: '等待 SQL 审批', waiting_for_action_approval: '等待操作确认',
+  querying: '查询中', ready_for_analysis: '待分析', analyzing: '分析中',
+  ready_for_report: '待报告', rendering: '报告生成中', completed: '已完成',
+  needs_input: '等待补充', incomplete: '未完成', cancelled: '已取消', failed: '失败', expired: '已过期',
+};
+const channelLabels = {feishu: '飞书', web: 'Web', dingtalk: '钉钉', api: 'API'};
+
+function resetTaskDetail() {
+  renderedEventKeys.clear();
+  eventsPanel.replaceChildren();
+  reviewPanel.classList.add('hidden');
+  resultPanel.classList.add('hidden');
+  analysisPanel.classList.add('hidden');
+  reportPanel.classList.add('hidden');
+  advisoryPanel.classList.add('hidden');
+  errorPanel.classList.add('hidden');
+  currentReview = null;
+  currentQueryTaskRunId = currentTaskRunId;
+  renderAttempts([]);
+}
+
+function renderTaskArtifacts(task, events, artifacts) {
+  const reviewEvent = [...events].reverse().find((event) => event.event_type === 'query.review_requested');
+  if (reviewEvent && task.status === 'waiting_for_query_approval') {
+    currentReview = reviewEvent.payload;
+    reviewSql.textContent = reviewEvent.payload.sql || '';
+    reviewMeta.textContent = `${reviewEvent.payload.dialect || 'SQL'} · ${task.channel === 'web' ? '可在 Web 审批' : '请回原渠道审批'}`;
+    approveButton.classList.toggle('hidden', task.channel !== 'web');
+    approveButton.disabled = false;
+    reviewPanel.classList.remove('hidden');
+  }
+  const latest = (type) => [...artifacts].reverse().find((item) => item.artifact_type === type);
+  const queryResult = latest('query_result');
+  if (queryResult) renderResult(queryResult.payload);
+  const analysis = latest('analysis');
+  if (analysis) renderAnalysis(analysis);
+  const report = latest('rendered_output');
+  if (report) {
+    reportTitle.textContent = report.payload.title || '业务报告';
+    reportMarkdown.textContent = report.payload.markdown || '';
+    reportPanel.classList.remove('hidden');
+  }
+  const advisory = latest('advisory');
+  if (advisory) {
+    advisoryTitle.textContent = advisory.payload.title || 'Advisory';
+    advisoryContent.textContent = JSON.stringify(advisory.payload, null, 2);
+    advisoryPanel.classList.remove('hidden');
+  }
+  if (task.channel !== 'web') {
+    approveButton.classList.add('hidden');
+    analyzeButton.classList.add('hidden');
+    reportButton.classList.add('hidden');
+  }
+}
+
+async function refreshSelectedTask() {
+  if (!currentTaskRunId || detailRefreshRunning) return;
+  const requestedTaskRunId = currentTaskRunId;
+  detailRefreshRunning = true;
+  try {
+    const encoded = encodeURIComponent(requestedTaskRunId);
+    const [taskData, eventData, artifactData, attemptData] = await Promise.all([
+      readJson(await fetch(`/api/pi/tasks/${encoded}`)),
+      readJson(await fetch(`/api/pi/tasks/${encoded}/events`)),
+      readJson(await fetch(`/api/pi/tasks/${encoded}/artifacts`)),
+      readJson(await fetch(`/api/pi/tasks/${encoded}/attempts`)),
+    ]);
+    if (currentTaskRunId !== requestedTaskRunId) return;
+    selectedTaskChannel = taskData.task.channel;
+    taskIdLabel.textContent = `${taskData.task.task_run_id} · ${channelLabels[taskData.task.channel] || taskData.task.channel} · ${taskStatusLabels[taskData.task.status] || taskData.task.status}`;
+    renderEvents(eventData.events);
+    renderAttempts(attemptData.attempts);
+    renderTaskArtifacts(taskData.task, eventData.events, artifactData.artifacts);
+    taskLiveDot.className = 'h-2 w-2 rounded-full bg-emerald-500';
+  } catch (error) {
+    taskLiveDot.className = 'h-2 w-2 rounded-full bg-red-500';
+    showError(error.message || '任务日志刷新失败');
+  } finally {
+    detailRefreshRunning = false;
+  }
+}
+
+async function selectTask(taskRunId) {
+  if (currentTaskRunId !== taskRunId) {
+    currentTaskRunId = taskRunId;
+    resetTaskDetail();
+    const url = new URL(window.location.href);
+    url.searchParams.set('task', taskRunId);
+    history.replaceState(null, '', url);
+  }
+  await refreshSelectedTask();
+  document.querySelectorAll('[data-task-row]').forEach((row) => {
+    row.classList.toggle('bg-amber-50', row.dataset.taskRow === taskRunId);
+  });
+}
+
+function renderTaskInbox(tasks) {
+  inboxCount.textContent = `${tasks.length} 个任务`;
+  taskInbox.replaceChildren();
+  if (tasks.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'px-5 py-8 text-center text-sm text-gray-400';
+    empty.textContent = '当前筛选条件下没有任务。';
+    taskInbox.appendChild(empty);
+    return;
+  }
+  tasks.forEach((task) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.dataset.taskRow = task.task_run_id;
+    row.className = `grid w-full grid-cols-[5rem_minmax(0,1fr)_9rem] items-center gap-4 px-5 py-3 text-left transition hover:bg-gray-50 ${task.task_run_id === currentTaskRunId ? 'bg-amber-50' : ''}`;
+    const channel = document.createElement('span');
+    channel.className = 'rounded-full bg-gray-100 px-2 py-1 text-center text-[11px] font-medium text-gray-600';
+    channel.textContent = channelLabels[task.channel] || task.channel;
+    const body = document.createElement('span');
+    body.className = 'min-w-0';
+    const message = document.createElement('span');
+    message.className = 'block truncate text-sm font-medium text-gray-900';
+    message.textContent = task.metadata?.original_message || task.intent;
+    const meta = document.createElement('span');
+    meta.className = 'mt-0.5 block truncate font-mono text-[10px] text-gray-400';
+    meta.textContent = `${task.task_run_id} · ${task.current_stage || '等待调度'}`;
+    body.append(message, meta);
+    const state = document.createElement('span');
+    state.className = 'text-right';
+    const status = document.createElement('span');
+    status.className = `block text-xs font-medium ${['failed', 'expired'].includes(task.status) ? 'text-red-600' : ['completed'].includes(task.status) ? 'text-emerald-600' : 'text-blue-600'}`;
+    status.textContent = taskStatusLabels[task.status] || task.status;
+    const time = document.createElement('span');
+    time.className = 'mt-0.5 block text-[10px] text-gray-400';
+    time.textContent = new Date(task.updated_at).toLocaleString('zh-CN');
+    state.append(status, time);
+    row.append(channel, body, state);
+    row.addEventListener('click', () => selectTask(task.task_run_id));
+    taskInbox.appendChild(row);
+  });
+}
+
+async function refreshTaskInbox() {
+  if (inboxRefreshRunning) return;
+  inboxRefreshRunning = true;
+  try {
+    const params = new URLSearchParams({limit: '50'});
+    if (inboxChannel.value) params.set('channel', inboxChannel.value);
+    if (inboxStatus.value) params.set('status', inboxStatus.value);
+    const data = await readJson(await fetch(`/api/pi/tasks?${params}`));
+    renderTaskInbox(data.tasks);
+    const requested = new URL(window.location.href).searchParams.get('task');
+    if (!currentTaskRunId && data.tasks.length > 0) {
+      const initial = data.tasks.some((task) => task.task_run_id === requested) ? requested : data.tasks[0].task_run_id;
+      await selectTask(initial);
+    }
+    taskLiveDot.className = 'h-2 w-2 rounded-full bg-emerald-500';
+  } catch (error) {
+    taskLiveDot.className = 'h-2 w-2 rounded-full bg-red-500';
+    inboxCount.textContent = '刷新失败';
+  } finally {
+    inboxRefreshRunning = false;
+  }
+}
 
 async function pollTask(taskRunId, targetStatuses, artifactType = null) {
   const deadline = Date.now() + 360000;
@@ -385,8 +640,10 @@ taskForm.addEventListener('submit', async (event) => {
     const taskRunId = created.task.task_run_id;
     currentTaskRunId = taskRunId;
     currentQueryTaskRunId = taskRunId;
+    selectedTaskChannel = 'web';
     taskIdLabel.textContent = taskRunId;
     renderEvents(created.events);
+    void refreshTaskInbox();
 
     if (mode === 'advisory') {
       const accepted = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/run-skill`, {
@@ -526,7 +783,7 @@ function renderResult(result) {
   resultMeta.textContent = `${result.row_count} 行 · ${result.execution_ms} ms${result.truncated ? ' · 已截断' : ''}`;
   renderResultChart(result);
   resultPanel.classList.remove('hidden');
-  analyzeButton.classList.remove('hidden');
+  if (selectedTaskChannel === 'web') analyzeButton.classList.remove('hidden');
 }
 
 approveButton.addEventListener('click', async () => {
@@ -647,7 +904,7 @@ function renderAnalysis(artifact) {
       analysisSuggestions.appendChild(button);
     });
   }
-  reportButton.classList.toggle('hidden', payload.status !== 'complete');
+  reportButton.classList.toggle('hidden', payload.status !== 'complete' || selectedTaskChannel !== 'web');
   analysisPanel.classList.remove('hidden');
 }
 
@@ -769,5 +1026,16 @@ reportButton.addEventListener('click', async () => {
     reportButton.textContent = '重新生成报告';
   }
 });
+
+[inboxChannel, inboxStatus].forEach((filter) => filter.addEventListener('change', () => {
+  void refreshTaskInbox();
+}));
+void refreshTaskInbox();
+setInterval(() => {
+  if (document.visibilityState !== 'hidden') void refreshTaskInbox();
+}, 2000);
+setInterval(() => {
+  if (document.visibilityState !== 'hidden') void refreshSelectedTask();
+}, 1200);
 </script>
 {% endblock %}

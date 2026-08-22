@@ -15,6 +15,52 @@ async def test_task_workspace_renders_hash_bound_queryrun_approval(client: Async
     assert "专业 Advisory Skill" in response.text
     assert 'value="funnel-analysis"' in response.text
     assert "sql-editor" not in response.text
+    assert "实时任务监控" in response.text
+    assert 'id="task-inbox"' in response.text
+    assert 'id="task-attempts"' in response.text
+
+
+@pytest.mark.asyncio
+async def test_web_task_list_uses_server_owned_scope_and_cross_channel_filters(
+    client: AsyncClient, monkeypatch
+):
+    from config import cfg
+    import web.router as router_mod
+
+    calls = []
+
+    async def fake_pi_request(method, path, payload=None):
+        calls.append((method, path, payload))
+        return 200, {"tasks": [{"task_run_id": "tr_feishu_001", "channel": "feishu"}]}
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    response = await client.get("/api/pi/tasks?channel=feishu&limit=20")
+
+    assert response.status_code == 200
+    assert response.json()["tasks"][0]["channel"] == "feishu"
+    assert calls == [(
+        "GET",
+        "/v1/tasks?org_id=org_default&team_id=team_default&limit=20&channel=feishu",
+        None,
+    )]
+
+
+@pytest.mark.asyncio
+async def test_web_task_detail_fails_closed_outside_admin_scope(client: AsyncClient, monkeypatch):
+    from config import cfg
+    import web.router as router_mod
+
+    async def fake_pi_request(method, path, payload=None):
+        return 200, {"task": {
+            "task_run_id": "tr_other_001", "org_id": "org_other", "team_id": "team_other",
+        }}
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    response = await client.get("/api/pi/tasks/tr_other_001/events")
+    assert response.status_code == 404
+    assert response.json() == {"status": "not_found"}
 
 
 @pytest.mark.asyncio
@@ -24,7 +70,8 @@ async def test_task_event_stream_is_incremental_and_uses_poll_backoff(client: As
     source = response.text
     assert "const renderedEventKeys = new Set()" in source
     assert "if (additions.length === 0) return" in source
-    assert source.count("eventsPanel.replaceChildren();") == 1
+    # One clear for the first render and one only when the operator switches TaskRun.
+    assert source.count("eventsPanel.replaceChildren();") == 2
     assert "Math.min(2000, Math.round(pollDelay * 1.5))" in source
     assert "prefers-reduced-motion: reduce" in source
     assert 'id="result-chart"' in source
@@ -32,6 +79,10 @@ async def test_task_event_stream_is_incremental_and_uses_poll_backoff(client: As
     assert "采用推荐补查并继续分析" in source
     assert "批准补查 SQL 并继续分析" in source
     assert "await runAnalysis();" in source
+    assert "refreshTaskInbox()" in source
+    assert "refreshSelectedTask()" in source
+    assert "safeLogPayload(event.payload)" in source
+    assert "task.metadata?.original_message" in source
 
 
 @pytest.mark.asyncio
@@ -188,7 +239,10 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
             else "rendered_output"
         )
         return 200, {
-            "task": {"task_run_id": "tr_web_001", "status": "ready_for_report"},
+            "task": {
+                "task_run_id": "tr_web_001", "status": "ready_for_report",
+                "org_id": "org_default", "team_id": "team_default",
+            },
             "artifact": {"artifact_type": artifact_type, "payload": {}},
             "events": [],
         }
@@ -260,6 +314,7 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
                 "idempotency_key": "resume-web-001",
             },
         ),
+        ("GET", "/v1/tasks/tr_web_001", None),
         ("GET", "/v1/tasks/tr_web_001", None),
         ("GET", "/v1/tasks/tr_web_001/attempts", None),
     ]
