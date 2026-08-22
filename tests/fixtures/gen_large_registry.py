@@ -2552,26 +2552,17 @@ DWD_TABLES: dict[str, dict] = {
 }
 
 
-CONFIRMED_RELATIONSHIPS = [
-    {"id": "order_user", "from": "dwd_order_detail.user_id", "to": "dim_user.user_id",
-     "cardinality": "many_to_one", "status": "confirmed", "source": "fixture"},
-    {"id": "user_region", "from": "dim_user.region_id", "to": "dim_region.region_id",
-     "cardinality": "many_to_one", "status": "confirmed", "source": "fixture"},
-    {"id": "city_province", "from": "dim_city.province_id", "to": "dim_province.province_id",
-     "cardinality": "many_to_one", "status": "confirmed", "source": "fixture"},
-    {"id": "order_warehouse", "from": "dwd_order_detail.warehouse_id", "to": "dim_warehouse.warehouse_id",
-     "cardinality": "many_to_one", "status": "confirmed", "source": "fixture"},
-    {"id": "warehouse_city", "from": "dim_warehouse.city_id", "to": "dim_city.city_id",
-     "cardinality": "many_to_one", "status": "confirmed", "source": "fixture"},
-]
+def _confirmed_relationships() -> list[dict]:
+    path = Path(__file__).parents[1] / "datasets" / "large" / "relationships.reference.json"
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def build_registry(dim: dict, dwd: dict) -> dict:
-    """合并 DIM、DWD 和已确认关系，生成 schema.registry.json。"""
+    """合并 DIM、DWD 和 reference SQL 已确认关系。"""
     tables = {}
     tables.update(dim)
     tables.update(dwd)
-    return {"tables": tables, "relationships": CONFIRMED_RELATIONSHIPS}
+    return {"tables": tables, "relationships": _confirmed_relationships()}
 
 
 if __name__ == "__main__":

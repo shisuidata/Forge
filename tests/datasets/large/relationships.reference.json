@@ -1,0 +1,19 @@
+[
+  {"id":"order_user","from":"dwd_order_detail.user_id","to":"dim_user.user_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"user_region","from":"dim_user.region_id","to":"dim_region.region_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"city_province","from":"dim_city.province_id","to":"dim_province.province_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"order_warehouse","from":"dwd_order_detail.warehouse_id","to":"dim_warehouse.warehouse_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"warehouse_city","from":"dim_warehouse.city_id","to":"dim_city.city_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"item_product","from":"dwd_order_item_detail.product_id","to":"dim_product.product_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"product_brand","from":"dim_product.brand_id","to":"dim_brand.brand_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"product_category","from":"dim_product.category_id","to":"dim_category.category_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"order_channel","from":"dwd_order_detail.channel_id","to":"dim_channel.channel_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"comment_product","from":"dwd_comment_detail.product_id","to":"dim_product.product_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"comment_user","from":"dwd_comment_detail.user_id","to":"dim_user.user_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"cart_user","from":"dwd_cart_detail.user_id","to":"dim_user.user_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"item_user","from":"dwd_order_item_detail.user_id","to":"dim_user.user_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"refund_user","from":"dwd_refund_detail.user_id","to":"dim_user.user_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"user_vip_level","from":"dim_user.vip_level_id","to":"dim_vip_level.vip_level_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"item_order","from":"dwd_order_item_detail.order_id","to":"dwd_order_detail.order_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"},
+  {"id":"refund_order","from":"dwd_refund_detail.order_id","to":"dwd_order_detail.order_id","cardinality":"many_to_one","status":"confirmed","source":"benchmark_reference"}
+]
