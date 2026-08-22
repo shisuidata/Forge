@@ -1015,8 +1015,10 @@ Phase 4.5 实施结果：
 - Pi Orchestrator：TypeScript typecheck 通过，`62/62` tests passed（含 Tool omission 的一次有界纠正、最终失败关闭，以及 mode-600 单变量 Secret Ref 的隔离/脱敏测试）。
 - Model Gate：`mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.338s、timeout 0%，满足 80%/90%/≤1/≤180s/≤5% 门槛并已 CAS 激活。
 - Web：Playwright 模式切换与 Advisory 完整轮询展示 E2E 通过，浏览器 `pageerror=[]`。
+- NAS 真实 Pi 模型 smoke：mode-600 `forge.env#LLM_API_KEY` 通过非复制 Secret Ref 映射给隔离 Pi Runtime；`sql-reviewer` TaskRun `tr_8588908b97134e268fcc5f2803f4ee2c` 生成 `AdvisoryArtifact/complete`，Clarification TaskRun `tr_0b82902545434201a07191632c07364e` 生成 `needs_input`，两个 StageAttempt 均 `succeeded` 且固定相同 model revision。
 - QueryRun 崩溃恢复：process owner + execution lease 已完成；启动仅回收过期 lease 并标记失败，未过期其他 worker 不受影响，SQL 从不自动重放。
 - 非阻断遗留：Node 当前仍打印 `node:sqlite ExperimentalWarning`；FastAPI `on_event` 与飞书 SDK 存在上游 deprecation warning。均不改变状态、安全或验收结果，后续依赖升级时迁移。
+- NAS 部署：main `a05cf5e`，Forge/Pi services active，Pi readiness 200，20 个固定 production Skills 和 5 个 Artifact Tools 可见。
 - 自动化范围外只剩人工外部验收：真实飞书/钉钉应用凭证的消息收发、真实业务用户对 16 个扩展 Skill 的主观方法质量，以及管理员在正式 UI/网络环境中的 Registry Studio 操作体验。
 
 ## 8. 测试策略
