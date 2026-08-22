@@ -8,7 +8,7 @@
   .task-grid { background-image: linear-gradient(rgba(17,24,39,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(17,24,39,.035) 1px, transparent 1px); background-size: 24px 24px; }
   .task-step { animation: task-in .25s ease-out both; }
   @keyframes task-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .task-step { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .task-step { animation: none; } .task-result-bar { transition: none; } }
 </style>
 
 <div class="task-grid -m-6 min-h-full p-8">
@@ -124,6 +124,13 @@
               </button>
             </div>
           </div>
+          <div id="result-chart-panel" class="hidden border-b border-emerald-100 bg-emerald-50/40 px-5 py-5">
+            <div class="flex items-center justify-between gap-4">
+              <h4 id="result-chart-title" class="text-sm font-semibold text-emerald-950"></h4>
+              <span id="result-chart-caption" class="text-[11px] text-emerald-700"></span>
+            </div>
+            <div id="result-chart" class="mt-4 space-y-2.5" role="img" aria-label="查询结果图表预览"></div>
+          </div>
           <div class="max-h-96 overflow-auto">
             <table class="min-w-full text-xs">
               <thead id="result-head" class="sticky top-0 bg-gray-50 text-gray-500"></thead>
@@ -196,6 +203,10 @@ const resultPanel = document.getElementById('result-panel');
 const resultMeta = document.getElementById('result-meta');
 const resultHead = document.getElementById('result-head');
 const resultBody = document.getElementById('result-body');
+const resultChartPanel = document.getElementById('result-chart-panel');
+const resultChartTitle = document.getElementById('result-chart-title');
+const resultChartCaption = document.getElementById('result-chart-caption');
+const resultChart = document.getElementById('result-chart');
 const analyzeButton = document.getElementById('analyze-task');
 const analysisPanel = document.getElementById('analysis-panel');
 const analysisSummary = document.getElementById('analysis-summary');
@@ -443,6 +454,54 @@ taskForm.addEventListener('submit', async (event) => {
   }
 });
 
+function renderResultChart(result) {
+  resultChart.replaceChildren();
+  resultChartPanel.classList.add('hidden');
+  if (!Array.isArray(result.columns) || result.columns.length < 2 || !Array.isArray(result.rows)) return;
+
+  const numericColumns = result.columns.map((_, columnIndex) => {
+    const populated = result.rows.filter((row) => row[columnIndex] !== null && row[columnIndex] !== '');
+    const numeric = populated.filter((row) => Number.isFinite(Number(row[columnIndex])));
+    return populated.length > 0 && numeric.length / populated.length >= 0.8;
+  });
+  const measureIndex = numericColumns.lastIndexOf(true);
+  const categoryIndex = result.columns.findIndex((_, index) => index !== measureIndex);
+  if (measureIndex < 0 || categoryIndex < 0) return;
+
+  const chartablePoints = result.rows
+    .filter((row) => row[measureIndex] !== null && row[measureIndex] !== '')
+    .map((row) => ({label: String(row[categoryIndex] ?? 'NULL'), value: Number(row[measureIndex])}))
+    .filter((point) => Number.isFinite(point.value));
+  if (chartablePoints.some((point) => point.value < 0)) return;
+  const points = chartablePoints.slice(0, 12);
+  const maximum = Math.max(0, ...points.map((point) => point.value));
+  if (points.length === 0 || maximum === 0) return;
+
+  const formatter = new Intl.NumberFormat('zh-CN', {maximumFractionDigits: 2});
+  points.forEach((point) => {
+    const row = document.createElement('div');
+    row.className = 'grid grid-cols-[minmax(5rem,9rem)_minmax(0,1fr)_auto] items-center gap-3';
+    const label = document.createElement('span');
+    label.className = 'truncate text-xs text-gray-600';
+    label.title = point.label;
+    label.textContent = point.label;
+    const track = document.createElement('div');
+    track.className = 'h-2.5 overflow-hidden rounded-full bg-emerald-100';
+    const bar = document.createElement('div');
+    bar.className = 'task-result-bar h-full rounded-full bg-emerald-600 transition-[width] duration-500';
+    bar.style.width = `${Math.max(1, point.value / maximum * 100)}%`;
+    track.appendChild(bar);
+    const value = document.createElement('span');
+    value.className = 'font-mono text-[11px] tabular-nums text-emerald-900';
+    value.textContent = formatter.format(point.value);
+    row.append(label, track, value);
+    resultChart.appendChild(row);
+  });
+  resultChartTitle.textContent = `${result.columns[measureIndex]} · 按 ${result.columns[categoryIndex]}`;
+  resultChartCaption.textContent = `按结果顺序展示前 ${points.length} 行`;
+  resultChartPanel.classList.remove('hidden');
+}
+
 function renderResult(result) {
   resultHead.replaceChildren();
   resultBody.replaceChildren();
@@ -465,6 +524,7 @@ function renderResult(result) {
     resultBody.appendChild(tableRow);
   });
   resultMeta.textContent = `${result.row_count} 行 · ${result.execution_ms} ms${result.truncated ? ' · 已截断' : ''}`;
+  renderResultChart(result);
   resultPanel.classList.remove('hidden');
   analyzeButton.classList.remove('hidden');
 }
@@ -496,6 +556,7 @@ approveButton.addEventListener('click', async () => {
     approveButton.textContent = '已批准并执行';
     if (approvingTaskRunId === currentTaskRunId) {
       renderEvents(approved.events);
+      await runAnalysis();
     } else {
       analyzeButton.classList.add('hidden');
       let resumed = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(currentTaskRunId)}/resume-analysis`, {
@@ -547,15 +608,37 @@ function renderAnalysis(artifact) {
     : '未声明额外限制。';
   analysisLimitations.textContent = limitations;
   analysisSuggestions.replaceChildren();
-  if (payload.status === 'incomplete' && !supplementUsed) {
-    payload.suggested_queries.forEach((suggestion, index) => {
+  if (payload.status === 'incomplete' && !supplementUsed && payload.suggested_queries.length > 0) {
+    const primarySuggestion = payload.suggested_queries[0];
+    const primaryButton = document.createElement('button');
+    primaryButton.type = 'button';
+    primaryButton.dataset.suggestionIndex = '0';
+    primaryButton.className = 'w-full rounded-xl bg-violet-700 px-4 py-3 text-left text-white shadow-sm transition hover:bg-violet-600 disabled:opacity-40';
+    const primaryLabel = document.createElement('span');
+    primaryLabel.className = 'block text-sm font-semibold';
+    primaryLabel.textContent = '采用推荐补查并继续分析 →';
+    const primaryQuestion = document.createElement('span');
+    primaryQuestion.className = 'mt-1 block text-xs leading-5 text-violet-100';
+    primaryQuestion.textContent = primarySuggestion.question;
+    primaryButton.append(primaryLabel, primaryQuestion);
+    primaryButton.addEventListener('click', () => startSupplement(0, primaryButton));
+    analysisSuggestions.appendChild(primaryButton);
+
+    if (payload.suggested_queries.length > 1) {
+      const alternativeLabel = document.createElement('p');
+      alternativeLabel.className = 'pt-2 text-[11px] font-semibold uppercase tracking-[.16em] text-gray-400';
+      alternativeLabel.textContent = '其他补查方向';
+      analysisSuggestions.appendChild(alternativeLabel);
+    }
+    payload.suggested_queries.slice(1).forEach((suggestion, offset) => {
+      const index = offset + 1;
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.suggestionIndex = String(index);
       button.className = 'w-full rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-left transition hover:border-violet-400 disabled:opacity-40';
       const question = document.createElement('span');
       question.className = 'block text-sm font-medium text-violet-950';
-      question.textContent = `批准补查：${suggestion.question}`;
+      question.textContent = `选择此补查：${suggestion.question}`;
       const reason = document.createElement('span');
       reason.className = 'mt-1 block text-xs text-violet-700';
       reason.textContent = suggestion.reason;
@@ -611,7 +694,7 @@ async function startSupplement(index, button) {
     reviewSql.textContent = prepared.result.sql;
     reviewMeta.textContent = `补查 · ${prepared.result.dialect} · hash ${prepared.result.sql_hash.slice(0, 18)}…`;
     approveButton.disabled = false;
-    approveButton.textContent = '批准补查 SQL';
+    approveButton.textContent = '批准补查 SQL 并继续分析';
     reviewPanel.classList.remove('hidden');
     analysisSuggestions.querySelectorAll('button').forEach((item) => { item.disabled = true; });
   } catch (error) {
@@ -620,7 +703,7 @@ async function startSupplement(index, button) {
   }
 }
 
-analyzeButton.addEventListener('click', async () => {
+async function runAnalysis() {
   if (!currentTaskRunId) return;
   analyzeButton.disabled = true;
   analyzeButton.textContent = '分析中…';
@@ -651,7 +734,9 @@ analyzeButton.addEventListener('click', async () => {
     analyzeButton.disabled = false;
     analyzeButton.textContent = '重新分析';
   }
-});
+}
+
+analyzeButton.addEventListener('click', runAnalysis);
 
 reportButton.addEventListener('click', async () => {
   if (!currentTaskRunId) return;
