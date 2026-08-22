@@ -1019,7 +1019,7 @@ Phase 4.5 实施结果：
 - QueryRun 崩溃恢复：process owner + execution lease 已完成；启动仅回收过期 lease 并标记失败，未过期其他 worker 不受影响，SQL 从不自动重放。
 - 非阻断遗留：Node 当前仍打印 `node:sqlite ExperimentalWarning`；FastAPI `on_event` 与飞书 SDK 存在上游 deprecation warning。均不改变状态、安全或验收结果，后续依赖升级时迁移。
 - NAS 部署：main `a05cf5e`，Forge/Pi services active，Pi readiness 200，20 个固定 production Skills 和 5 个 Artifact Tools 可见。
-- 人工 Web 验收反馈（2026-08-22，处理中）：任务页 AI 输出显示 `[无回复]`；需要定位 Artifact/Renderer/polling 展示链路并完成 NAS 回归。
+- 人工 Web 验收反馈（2026-08-22，已修复）：访问记录确认用户进入已退役 `/chat`，随后 `/api/chat` 返回 410，而旧页面把无 `text` 的 410 响应误显示为“无回复”。根路径、登录默认路径、导航和 `/chat` 书签现统一进入 `/tasks`；旧 `/api/chat` 继续失败关闭；Clarification 提示改为展示后端真实原因。NAS `8f7a31e` 已验证 `/ → /tasks`、`/chat → login → /tasks`，Forge health 200。
 - 自动化范围外只剩人工外部验收：真实飞书/钉钉应用凭证的消息收发、真实业务用户对 16 个扩展 Skill 的主观方法质量，以及管理员在正式 UI/网络环境中的 Registry Studio 操作体验。
 
 ## 8. 测试策略
