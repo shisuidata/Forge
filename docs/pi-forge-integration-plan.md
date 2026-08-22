@@ -55,7 +55,7 @@
 | Phase 3 分析与报告闭环 | 已完成，待提交 | 唯一一次补查闭环完成：用户选择 suggested_query → 幂等 child TaskRun → Forge 审批执行 → 父任务合并两个 QueryResult 重新分析；Coding Plan 多 QueryResult 冒烟和 Web 三服务 E2E 通过；34 TS tests、Forge full suite 383 passed |
 | Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
-| Phase 4 飞书与钉钉渠道 | 进行中：飞书 gated path | ChannelEvent、独立服务鉴权、只读身份映射、SQLite 幂等入站、ChannelPresentation Renderer 已完成；`FEISHU_PI_ENABLED` 新路径已覆盖消息 → SQL 审核 → hash 绑定批准 → 结果，默认关闭；待真实飞书凭证 smoke、补充信息/取消/补查和钉钉复用 |
+| Phase 4 飞书与钉钉渠道 | 自动化实现完成，待人工外部 smoke | ChannelEvent、独立鉴权、身份映射、SQLite 幂等入站和 Renderer 已完成；飞书支持表单补充信息、hash 审批、取消、分析、补查 child lineage 和报告；钉钉薄 Adapter 复用同一 ChannelEvent/Presentation，不复制状态机。54 个 Orchestrator tests 与 Python Adapter tests 通过；真实飞书/钉钉应用凭证收发留给人工验收。 |
 | Phase 4.4 Model Control Plane | 已完成并通过激活门禁 | Profile/Revision/ActiveBinding/审计、Secret Ref、Provider smoke、持久化 40 题质量验证、CAS 激活/回滚和在途 snapshot 固定均已完成。DeepSeek V4 Flash deterministic revision `sha256:0de19c…` 在 Run `mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.34s、timeout 0%，已 CAS 激活为 binding v1。 |
 | Phase 4.5 Registry Studio | 待实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
@@ -729,11 +729,14 @@ M4.1 用户配置接管与服务重启规则：
 - 数据库继续使用项目 `large` fixture 的独立只读副本；如环境变量已配置则不重复覆盖。Web 设置与 systemd `EnvironmentFile` 冲突时必须明确唯一生效来源，避免页面显示“已保存”但进程仍使用旧值。
 - 重启顺序为测试模型/真实外部模型依赖 → Forge API → Pi Orchestrator；重启后验证 Forge database/readonly/llm readiness、Pi readiness、`hello` 不生成 SQL和标准查询审核链路。
 
-剩余：
+Phase 4 自动化实施结果：
 
-- 使用真实飞书测试应用完成消息、卡片 operator、更新卡片 smoke。
-- 完成 `provide_input`、`cancel_task`、`request_supplement` 的 child Task lineage 与卡片交互后再开放这些按钮。
-- 飞书稳定后新增钉钉 SDK Adapter；只允许复用 ChannelEvent/Presentation，不复制业务状态机。
+- `provide_input` 使用飞书 form submit 将文本作为 ChannelEvent action 回传；空文本失败关闭。
+- `cancel_task` 验证渠道/会话/任务所有者，审核态先取消 Forge QueryRun，再 CAS 转为 cancelled；重复事件返回同一结果。
+- `request_supplement` 只接受最新 AnalysisArtifact 的 suggestion index，创建唯一 child TaskRun 并立即进入完整 QueryRun 准备/审批链；重复 action 返回记录的 child，而不是误回父任务。
+- ChannelEvent action 只在业务操作成功后 complete，失败持久化 failed，不再把失败 action 误记成已完成。
+- 钉钉薄 Adapter 与 ActionCard renderer 已新增，复用 `PiChannelClient(channel='dingtalk')` 和同一 Pi API；按钮只返回 Pi callback，不包含可绕过 Pi 的执行 URL。
+- 自动验证：Pi Orchestrator 54 passed；飞书表单、钉钉 channel/presentation contract 和 Web 代理 Python tests 15 passed。剩余仅为用户人工验收阶段使用真实飞书/钉钉测试应用验证外部 SDK 收发、operator ID 和卡片更新。
 
 第一批实施契约：
 

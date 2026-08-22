@@ -196,12 +196,18 @@ def _on_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
         task_run_id = str(value.get("task_run_id") or "")
         conversation_id = str(value.get("conversation_id") or open_id)
         payload = value.get("payload")
+        if action_type == "provide_input" and isinstance(payload, dict):
+            form_value = getattr(data.event.action, "form_value", None) or {}
+            if isinstance(form_value, dict):
+                payload = {**payload, "text": str(form_value.get("text") or "").strip()}
         callback_event_id = str(
             getattr(getattr(data, "header", None), "event_id", "")
             or f"{message_id}:{action_type}:{open_id}"
         )
         if not action_type or not task_run_id or not isinstance(payload, dict):
             raise ValueError("无效的 Pi 渠道操作")
+        if action_type == "provide_input" and not payload.get("text"):
+            raise ValueError("补充信息不能为空")
         response.toast = CallBackToast()
         response.toast.type = "info"
         response.toast.content = "Forge 正在处理..."

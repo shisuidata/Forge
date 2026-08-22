@@ -66,6 +66,10 @@ export interface ForgeQueryRunPort {
     },
     signal?: AbortSignal,
   ): Promise<QueryRunResult>;
+  cancelQueryRun?(
+    input: { queryRunId: string; userId: string },
+    signal?: AbortSignal,
+  ): Promise<QueryRunReview>;
 }
 
 export class OrchestratorApplication {
@@ -272,7 +276,14 @@ export class OrchestratorApplication {
       throw new TaskStateError("Channel action identity does not own this TaskRun");
     }
     const actionType = event.payload.action;
-    if (!["approve_query", "analyze", "render_report", "provide_input"].includes(String(actionType))) {
+    if (![
+      "approve_query",
+      "analyze",
+      "render_report",
+      "provide_input",
+      "cancel_task",
+      "request_supplement",
+    ].includes(String(actionType))) {
       throw new TaskStateError(`Unsupported channel action: ${String(actionType)}`);
     }
     const queryRunId = actionType === "approve_query"
@@ -287,24 +298,35 @@ export class OrchestratorApplication {
     const inputText = actionType === "provide_input"
       ? this.#channelPayloadString(event, "text")
       : undefined;
+    const suggestedQueryIndex = actionType === "request_supplement"
+      ? event.payload.suggested_query_index
+      : undefined;
+    if (
+      actionType === "request_supplement" &&
+      (!Number.isInteger(suggestedQueryIndex) || Number(suggestedQueryIndex) < 0)
+    ) {
+      throw new TaskStateError("suggested_query_index must be a non-negative integer");
+    }
 
     const claim = this.#transactions.run(() => {
       const claimed = this.#channelEvents?.claim(event);
       if (claimed === undefined) throw new TaskStateError("ChannelEvent Store is not configured");
-      if (claimed.created) {
-        this.#channelEvents?.complete(event.channel, event.event_id, task.task_run_id);
-      }
       return claimed;
     });
     if (!claim.created) {
+      const recordedTask = claim.record.task_run_id === null
+        ? task
+        : this.#tasks.get(claim.record.task_run_id) ?? task;
       return {
-        task,
-        presentation: this.getChannelPresentation(task.task_run_id),
+        task: recordedTask,
+        presentation: this.getChannelPresentation(recordedTask.task_run_id),
         duplicate: true,
       };
     }
 
-    if (
+    try {
+      let responseTask = task;
+      if (
       actionType === "approve_query" &&
       queryRunId !== undefined &&
       sqlHash !== undefined &&
@@ -347,16 +369,91 @@ export class OrchestratorApplication {
         },
         signal,
       );
+    } else if (actionType === "cancel_task") {
+      responseTask = await this.cancelTask(
+        task.task_run_id,
+        `${event.channel}:${event.event_id}:cancel`,
+        signal,
+      );
+    } else if (actionType === "request_supplement" && typeof suggestedQueryIndex === "number") {
+      const supplement = this.createSupplementTask(task.task_run_id, {
+        suggestedQueryIndex,
+        idempotencyKey: `${event.channel}:${event.event_id}:supplement`,
+      });
+      await this.prepareQuery(
+        supplement.childTask.task_run_id,
+        {
+          question: String(supplement.suggestion.question),
+          idempotencyKey: `${event.channel}:${event.event_id}:supplement:prepare`,
+        },
+        signal,
+      );
+      responseTask = this.#tasks.get(supplement.childTask.task_run_id) ?? supplement.childTask;
     } else {
       throw new TaskStateError(`Unsupported channel action: ${String(actionType)}`);
     }
-    const updated = this.#tasks.get(task.task_run_id);
+    const updated = responseTask.task_run_id === task.task_run_id
+      ? this.#tasks.get(task.task_run_id)
+      : responseTask;
     if (updated === undefined) throw new TaskStateError(`TaskRun not found: ${task.task_run_id}`);
-    return {
-      task: updated,
-      presentation: this.getChannelPresentation(updated.task_run_id),
-      duplicate: false,
-    };
+    this.#channelEvents.complete(event.channel, event.event_id, updated.task_run_id);
+      return {
+        task: updated,
+        presentation: this.getChannelPresentation(updated.task_run_id),
+        duplicate: false,
+      };
+    } catch (error) {
+      this.#channelEvents.fail(
+        event.channel,
+        event.event_id,
+        error instanceof Error ? error.message : "Channel action failed",
+      );
+      throw error;
+    }
+  }
+
+  async cancelTask(
+    taskRunId: string,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<TaskRun> {
+    const task = this.#tasks.get(taskRunId);
+    if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    if (task.status === "cancelled") return task;
+    if (["completed", "failed", "expired"].includes(task.status)) {
+      throw new TaskStateError(`Terminal TaskRun cannot be cancelled: ${task.status}`);
+    }
+    if (task.status === "waiting_for_query_approval") {
+      const review = [...this.#events.list(taskRunId)]
+        .reverse()
+        .find((event) => event.event_type === "query.review_requested");
+      const queryRunId = review?.payload.query_run_id;
+      if (typeof queryRunId !== "string" || this.#forge.cancelQueryRun === undefined) {
+        throw new TaskStateError("Reviewable QueryRun cannot be cancelled safely");
+      }
+      await this.#forge.cancelQueryRun(
+        { queryRunId, userId: task.user_id },
+        signal,
+      );
+    }
+    return this.#transactions.run(() => {
+      const current = this.#tasks.get(taskRunId);
+      if (current === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+      if (current.status === "cancelled") return current;
+      const cancelled = this.#tasks.transition({
+        taskRunId,
+        expectedStatus: current.status,
+        status: "cancelled",
+        currentStage: null,
+      });
+      this.#events.append(taskRunId, "task.status_changed", {
+        from: current.status,
+        to: "cancelled",
+        reason: "user_cancelled",
+        idempotency_key: idempotencyKey,
+      });
+      return cancelled;
+    });
   }
 
   async clarifyRequirement(
