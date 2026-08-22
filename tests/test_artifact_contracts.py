@@ -131,6 +131,26 @@ def valid_instances() -> dict[str, dict]:
                 "suggested_queries": [],
             },
         ),
+        "advisory_artifact": _envelope(
+            "advisory",
+            "funnel-analysis",
+            {
+                "status": "complete",
+                "skill_name": "funnel-analysis",
+                "title": "漏斗分析建议",
+                "summary": "当前输入不足以形成数据结论。",
+                "findings": [],
+                "recommendations": [{
+                    "action": "确认漏斗步骤",
+                    "rationale": "步骤口径尚未提供",
+                    "priority": "high",
+                }],
+                "assumptions": [],
+                "limitations": ["未提供 QueryResult"],
+                "open_questions": [],
+                "deliverables": [{"name": "检查表", "content": "确认步骤与观察窗口。"}],
+            },
+        ),
         "rendered_output_artifact": _envelope(
             "rendered_output",
             "data-analysis-report-writer",
@@ -170,6 +190,7 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "metric_definition_artifact",
         "query_result_artifact",
         "analysis_artifact",
+        "advisory_artifact",
         "rendered_output_artifact",
     )
     for name in contract_names():

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  validateAdvisoryPayload,
   validateAnalysisPayload,
   validateClarificationPayload,
   validateMetricDefinitionPayload,
@@ -13,6 +14,7 @@ export type ArtifactType =
   | "metric_definition"
   | "query_result"
   | "analysis"
+  | "advisory"
   | "rendered_output";
 
 export interface Artifact<TPayload extends Record<string, unknown> = Record<string, unknown>> {
@@ -48,6 +50,7 @@ export function validateArtifactInput<TPayload extends Record<string, unknown>>(
     metric_definition: validateMetricDefinitionPayload,
     query_result: validateQueryResultPayload,
     analysis: validateAnalysisPayload,
+    advisory: validateAdvisoryPayload,
     rendered_output: validateRenderedOutputPayload,
   };
   const validationError = validators[input.artifactType](input.payload);

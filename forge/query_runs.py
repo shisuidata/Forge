@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS query_runs (
     truncated               INTEGER NOT NULL DEFAULT 0,
     execution_ms            INTEGER,
     error                   TEXT,
+    execution_owner         TEXT,
+    execution_lease_expires_at TEXT,
     created_at              TEXT NOT NULL,
     updated_at              TEXT NOT NULL
 );
@@ -60,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_query_runs_task ON query_runs(task_run_id);
 
 _SCHEMA_LOCK = asyncio.Lock()
 _SCHEMA_READY_PATHS: set[str] = set()
+_PROCESS_OWNER = f"forge-{uuid.uuid4().hex}"
 
 
 class QueryRunError(Exception):
@@ -94,6 +97,8 @@ async def _ensure_schema() -> None:
                 "policy_revision": "TEXT",
                 "model_revision": "TEXT",
                 "assurance_registry_revision": "TEXT",
+                "execution_owner": "TEXT",
+                "execution_lease_expires_at": "TEXT",
             }
             for name, sql_type in migrations.items():
                 if name not in columns:
@@ -360,16 +365,24 @@ async def claim_query_run_for_execution(
             await db.rollback()
             raise QueryRunError("Database read-only account is not confirmed", status_code=503)
 
-        now = _now().isoformat()
+        now_dt = _now()
+        now = now_dt.isoformat()
+        lease_expires_at = (
+            now_dt + timedelta(seconds=max(int(cfg.EXECUTION_TIMEOUT_SECONDS), 1) + 10)
+        ).isoformat()
         try:
             await db.execute(
                 """
                 UPDATE query_runs
                 SET status = 'executing', approval_idempotency_key = ?,
-                    approver_user_id = ?, approved_at = ?, updated_at = ?
+                    approver_user_id = ?, approved_at = ?, updated_at = ?,
+                    execution_owner = ?, execution_lease_expires_at = ?
                 WHERE query_run_id = ?
                 """,
-                (idempotency_key, approver_user_id, now, now, query_run_id),
+                (
+                    idempotency_key, approver_user_id, now, now,
+                    _PROCESS_OWNER, lease_expires_at, query_run_id,
+                ),
             )
             await db.commit()
         except aiosqlite.IntegrityError as exc:
@@ -393,12 +406,13 @@ async def complete_query_run(
     await _ensure_schema()
     now = _now().isoformat()
     async with aiosqlite.connect(_db_path()) as db:
-        await db.execute(
+        cursor = await db.execute(
             """
             UPDATE query_runs
             SET status = 'completed', result_columns = ?, result_rows = ?,
-                row_count = ?, truncated = ?, execution_ms = ?, updated_at = ?
-            WHERE query_run_id = ? AND status = 'executing'
+                row_count = ?, truncated = ?, execution_ms = ?, updated_at = ?,
+                execution_owner = NULL, execution_lease_expires_at = NULL
+            WHERE query_run_id = ? AND status = 'executing' AND execution_owner = ?
             """,
             (
                 json.dumps(columns, ensure_ascii=False),
@@ -408,9 +422,12 @@ async def complete_query_run(
                 execution_ms,
                 now,
                 query_run_id,
+                _PROCESS_OWNER,
             ),
         )
         await db.commit()
+        if cursor.rowcount != 1:
+            raise QueryRunError("QueryRun execution ownership expired; result was not persisted")
     run = await get_query_run(query_run_id)
     assert run is not None
     return run
@@ -462,12 +479,34 @@ async def fail_query_run(query_run_id: str, error: str) -> None:
     async with aiosqlite.connect(_db_path()) as db:
         await db.execute(
             """
-            UPDATE query_runs SET status = 'failed', error = ?, updated_at = ?
-            WHERE query_run_id = ? AND status = 'executing'
+            UPDATE query_runs SET status = 'failed', error = ?, updated_at = ?,
+                execution_owner = NULL, execution_lease_expires_at = NULL
+            WHERE query_run_id = ? AND status = 'executing' AND execution_owner = ?
             """,
-            (error, _now().isoformat(), query_run_id),
+            (error, _now().isoformat(), query_run_id, _PROCESS_OWNER),
         )
         await db.commit()
+
+
+async def reconcile_expired_query_run_executions() -> int:
+    """Fail only expired execution leases; never replay SQL after restart."""
+    await _ensure_schema()
+    now = _now().isoformat()
+    async with aiosqlite.connect(_db_path()) as db:
+        cursor = await db.execute(
+            """
+            UPDATE query_runs
+            SET status = 'failed',
+                error = 'execution_interrupted_or_lease_expired',
+                updated_at = ?, execution_owner = NULL,
+                execution_lease_expires_at = NULL
+            WHERE status = 'executing'
+              AND (execution_lease_expires_at IS NULL OR execution_lease_expires_at <= ?)
+            """,
+            (now, now),
+        )
+        await db.commit()
+        return cursor.rowcount
 
 
 async def cancel_query_run(query_run_id: str, user_id: str) -> dict[str, Any]:

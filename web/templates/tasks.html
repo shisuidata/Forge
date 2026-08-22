@@ -36,12 +36,28 @@
         </div>
         <form id="task-form" class="space-y-4 p-5">
           <div>
+            <label for="task-mode" class="mb-1.5 block text-xs font-medium text-gray-600">任务模式</label>
+            <select id="task-mode" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500">
+              <option value="query">可信查询与分析</option>
+              <option value="advisory">专业 Advisory Skill</option>
+            </select>
+          </div>
+          <div id="task-skill-field" class="hidden">
+            <label for="task-skill" class="mb-1.5 block text-xs font-medium text-gray-600">专业 Skill</label>
+            <select id="task-skill" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500">
+              <option value="exploratory-data-analysis">探索性数据分析</option><option value="funnel-analysis">漏斗分析</option><option value="retention-cohort-analysis">留存 Cohort</option><option value="ab-test-analysis">A/B 实验分析</option>
+              <option value="sql-reviewer">SQL Review</option><option value="data-quality-rule-generator">数据质量规则</option><option value="table-design-advisor">表设计建议</option><option value="data-lineage-impact-analyzer">血缘影响分析</option>
+              <option value="dashboard-reviewer">看板审查</option><option value="data-presentation-architect">PPT 架构</option><option value="daily-report-writer">日报</option><option value="weekly-monthly-report-writer">周报月报</option><option value="data-doc-writer">数据文档</option><option value="data-incident-postmortem-writer">事故复盘</option>
+              <option value="data-tool-integration-planner">工具集成规划</option><option value="market-research-analyst">市场调研</option><option value="feature-engineering-advisor">特征工程</option><option value="model-evaluation-reviewer">模型评估</option><option value="stream-pipeline-designer">实时管道设计</option>
+            </select>
+          </div>
+          <div>
             <label for="task-question" class="mb-1.5 block text-xs font-medium text-gray-600">已确认的数据问题</label>
             <textarea id="task-question" rows="6" required
               class="w-full resize-none rounded-xl border border-gray-200 bg-[var(--task-paper)] px-3.5 py-3 text-sm leading-6 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
               placeholder="例如：统计本月各渠道支付 GMV，并按金额降序排列。"></textarea>
           </div>
-          <div>
+          <div id="task-dialect-field">
             <label for="task-dialect" class="mb-1.5 block text-xs font-medium text-gray-600">SQL 方言</label>
             <select id="task-dialect" class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500">
               <option value="auto">Auto</option>
@@ -140,6 +156,11 @@
           <pre id="report-markdown" class="max-h-[36rem] overflow-auto whitespace-pre-wrap px-5 py-5 font-sans text-sm leading-7 text-gray-700"></pre>
         </section>
 
+        <section id="advisory-panel" class="hidden overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
+          <div class="border-b border-blue-100 bg-blue-50 px-5 py-4"><p class="text-[11px] font-semibold uppercase tracking-[.18em] text-blue-600">Advisory Artifact</p><h3 id="advisory-title" class="mt-1 font-semibold text-blue-950"></h3></div>
+          <pre id="advisory-content" class="max-h-[36rem] overflow-auto whitespace-pre-wrap px-5 py-5 text-sm leading-6 text-gray-700"></pre>
+        </section>
+
         <section id="task-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></section>
       </div>
     </div>
@@ -149,6 +170,21 @@
 <script>
 const taskForm = document.getElementById('task-form');
 const submitButton = document.getElementById('task-submit');
+const taskMode = document.getElementById('task-mode');
+const taskSkillField = document.getElementById('task-skill-field');
+const taskSkill = document.getElementById('task-skill');
+const taskDialectField = document.getElementById('task-dialect-field');
+const advisoryPanel = document.getElementById('advisory-panel');
+const advisoryTitle = document.getElementById('advisory-title');
+const advisoryContent = document.getElementById('advisory-content');
+taskMode.addEventListener('change', () => {
+  const advisory = taskMode.value === 'advisory';
+  taskSkillField.classList.toggle('hidden', !advisory);
+  taskDialectField.classList.toggle('hidden', advisory);
+  submitButton.querySelector('span').textContent = advisory
+    ? '创建 TaskRun 并运行专业 Skill'
+    : '创建 TaskRun 并生成审核预览';
+});
 const eventsPanel = document.getElementById('task-events');
 const taskIdLabel = document.getElementById('task-id');
 const reviewPanel = document.getElementById('review-panel');
@@ -255,7 +291,7 @@ async function pollTask(taskRunId, targetStatuses, artifactType = null) {
     renderEvents(eventData.events);
     const status = taskData.task.status;
     const failure = [...eventData.events].reverse().find((event) =>
-      ['skill.execution_failed', 'query.execution_failed', 'query.prepare_failed'].includes(event.event_type)
+      ['skill.execution_failed', 'skill.failed', 'query.execution_failed', 'query.prepare_failed'].includes(event.event_type)
     );
     if (['failed', 'cancelled', 'expired'].includes(status)) {
       throw new Error(failure?.payload?.error || `TaskRun ${status}`);
@@ -281,6 +317,7 @@ taskForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const question = document.getElementById('task-question').value.trim();
   const dialect = document.getElementById('task-dialect').value;
+  const mode = taskMode.value;
   if (!question) return;
 
   submitButton.disabled = true;
@@ -289,6 +326,7 @@ taskForm.addEventListener('submit', async (event) => {
   resultPanel.classList.add('hidden');
   analysisPanel.classList.add('hidden');
   reportPanel.classList.add('hidden');
+  advisoryPanel.classList.add('hidden');
   analyzeButton.classList.add('hidden');
   reportButton.classList.add('hidden');
   currentTaskRunId = null;
@@ -305,7 +343,7 @@ taskForm.addEventListener('submit', async (event) => {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         message: question,
-        intent: 'business_root_cause_analysis',
+        intent: mode === 'advisory' ? taskSkill.value : 'business_root_cause_analysis',
       }),
     }));
     const taskRunId = created.task.task_run_id;
@@ -313,6 +351,26 @@ taskForm.addEventListener('submit', async (event) => {
     currentQueryTaskRunId = taskRunId;
     taskIdLabel.textContent = taskRunId;
     renderEvents(created.events);
+
+    if (mode === 'advisory') {
+      const accepted = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/run-skill`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          skill_name: taskSkill.value,
+          prompt: question,
+          idempotency_key: `${taskRunId}:advisory:1`,
+        }),
+      }));
+      const completed = accepted.status === 'accepted'
+        ? await pollTask(taskRunId, ['completed', 'incomplete'], 'advisory')
+        : {artifact: accepted.artifact, events: accepted.events || created.events};
+      renderEvents(completed.events);
+      advisoryTitle.textContent = completed.artifact.payload.title;
+      advisoryContent.textContent = JSON.stringify(completed.artifact.payload, null, 2);
+      advisoryPanel.classList.remove('hidden');
+      return;
+    }
 
     let prepared = await readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}/prepare-query`, {
       method: 'POST',

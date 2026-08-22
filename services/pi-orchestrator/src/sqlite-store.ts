@@ -15,6 +15,12 @@ import {
   type CreateArtifactInput,
   validateArtifactInput,
 } from "./artifacts.js";
+import { AUTHORIZED_SKILL_NAMES, type AuthorizedSkillName } from "./skills.js";
+import {
+  SkillPolicyConflictError,
+  type SkillPolicyStore,
+  type TeamSkillPolicy,
+} from "./skill-policy.js";
 import {
   type StageAttempt,
   type StageAttemptStatus,
@@ -54,6 +60,14 @@ function parseJson<T>(raw: unknown, label: string): T {
 
 function changed(result: StatementResultingChanges): number {
   return Number(result.changes);
+}
+
+function normalizeStageAttempt(attempt: StageAttempt): StageAttempt {
+  return {
+    ...attempt,
+    model_revision: attempt.model_revision ?? null,
+    skill_policy_version: attempt.skill_policy_version ?? 0,
+  };
 }
 
 class SqliteTaskStore implements TaskStore {
@@ -361,6 +375,8 @@ class SqliteStageAttemptStore implements StageAttemptStore {
         updated_at: now.toISOString(),
         finished_at: null,
         error: null,
+        model_revision: input.modelRevision ?? null,
+        skill_policy_version: input.skillPolicyVersion ?? 0,
       };
       this.database
         .prepare(
@@ -400,7 +416,7 @@ class SqliteStageAttemptStore implements StageAttemptStore {
       .get(attemptId) as { data_json: string } | undefined;
     return row === undefined
       ? undefined
-      : structuredClone(parseJson<StageAttempt>(row.data_json, `StageAttempt ${attemptId}`));
+      : structuredClone(normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, `StageAttempt ${attemptId}`)));
   }
 
   findByIdempotencyKey(taskRunId: string, idempotencyKey: string): StageAttempt | undefined {
@@ -411,7 +427,7 @@ class SqliteStageAttemptStore implements StageAttemptStore {
       .get(taskRunId, idempotencyKey) as { data_json: string } | undefined;
     return row === undefined
       ? undefined
-      : structuredClone(parseJson<StageAttempt>(row.data_json, "StageAttempt"));
+      : structuredClone(normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, "StageAttempt")));
   }
 
   list(taskRunId: string): StageAttempt[] {
@@ -420,7 +436,9 @@ class SqliteStageAttemptStore implements StageAttemptStore {
         "SELECT data_json FROM stage_attempts WHERE task_run_id = ? ORDER BY attempt_number ASC",
       )
       .all(taskRunId) as Array<{ data_json: string }>;
-    return rows.map((row) => structuredClone(parseJson<StageAttempt>(row.data_json, "StageAttempt")));
+    return rows.map((row) =>
+      structuredClone(normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, "StageAttempt"))),
+    );
   }
 
   finish(
@@ -508,12 +526,85 @@ class SqliteArtifactStore implements ArtifactStore {
   }
 }
 
+class SqliteSkillPolicyStore implements SkillPolicyStore {
+  constructor(
+    private readonly database: DatabaseSync,
+    private readonly defaults: readonly AuthorizedSkillName[],
+  ) {}
+
+  get(orgId: string, teamId: string): TeamSkillPolicy | undefined {
+    const row = this.database.prepare(
+      "SELECT data_json FROM team_skill_policies WHERE org_id = ? AND team_id = ?",
+    ).get(orgId, teamId) as { data_json: string } | undefined;
+    return row === undefined ? undefined : parseJson<TeamSkillPolicy>(row.data_json, "TeamSkillPolicy");
+  }
+
+  isEnabled(orgId: string, teamId: string, skillName: AuthorizedSkillName): boolean {
+    return (this.get(orgId, teamId)?.enabled_skills ?? this.defaults).includes(skillName);
+  }
+
+  configure(input: {
+    orgId: string;
+    teamId: string;
+    enabledSkills: AuthorizedSkillName[];
+    expectedVersion: number;
+    actor: string;
+  }): TeamSkillPolicy {
+    const current = this.get(input.orgId, input.teamId);
+    const version = current?.version ?? 0;
+    if (version !== input.expectedVersion) {
+      throw new SkillPolicyConflictError(
+        `Skill policy version mismatch: expected ${input.expectedVersion}, current ${version}`,
+      );
+    }
+    const policy: TeamSkillPolicy = {
+      org_id: input.orgId,
+      team_id: input.teamId,
+      enabled_skills: [...new Set(input.enabledSkills)].sort(),
+      version: version + 1,
+      updated_at: new Date().toISOString(),
+      updated_by: input.actor,
+    };
+    const ownsTransaction = !this.database.isTransaction;
+    if (ownsTransaction) this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = this.database.prepare(
+        `INSERT INTO team_skill_policies (org_id, team_id, version, data_json)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(org_id, team_id) DO UPDATE SET version = excluded.version, data_json = excluded.data_json
+         WHERE team_skill_policies.version = ?`,
+      ).run(input.orgId, input.teamId, policy.version, JSON.stringify(policy), version);
+      if (changed(result) !== 1) throw new SkillPolicyConflictError("Concurrent Skill policy update");
+      this.database.prepare(
+        `INSERT INTO team_skill_policy_audit
+         (audit_id, org_id, team_id, version, actor, created_at, data_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        `spa_${randomUUID().replaceAll("-", "")}`,
+        input.orgId,
+        input.teamId,
+        policy.version,
+        input.actor,
+        policy.updated_at,
+        JSON.stringify(policy),
+      );
+      if (ownsTransaction) this.database.exec("COMMIT");
+      return structuredClone(policy);
+    } catch (error) {
+      if (ownsTransaction && this.database.isTransaction) this.database.exec("ROLLBACK");
+      if (error instanceof SkillPolicyConflictError) throw error;
+      throw new SkillPolicyConflictError("Concurrent Skill policy update", { cause: error });
+    }
+  }
+}
+
 export class SqliteOrchestratorState {
   readonly tasks: TaskStore;
   readonly events: TaskEventStore;
   readonly artifacts: ArtifactStore;
   readonly attempts: StageAttemptStore;
   readonly channelEvents: ChannelEventStore;
+  readonly skillPolicies: SkillPolicyStore;
   readonly transactions: { run<T>(operation: () => T): T };
   readonly #database: DatabaseSync;
 
@@ -526,7 +617,7 @@ export class SqliteOrchestratorState {
     const version = this.#database.prepare("PRAGMA user_version").get() as {
       user_version: number | bigint;
     };
-    if (Number(version.user_version) > 3) {
+    if (Number(version.user_version) > 4) {
       this.#database.close();
       throw new Error(`Unsupported Pi state schema version: ${String(version.user_version)}`);
     }
@@ -593,13 +684,32 @@ export class SqliteOrchestratorState {
         PRIMARY KEY(channel, event_id)
       ) STRICT;
       CREATE INDEX IF NOT EXISTS idx_channel_events_task ON channel_events(task_run_id);
-      PRAGMA user_version = 3;
+      CREATE TABLE IF NOT EXISTS team_skill_policies (
+        org_id TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        data_json TEXT NOT NULL,
+        PRIMARY KEY(org_id, team_id)
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS team_skill_policy_audit (
+        audit_id TEXT PRIMARY KEY,
+        org_id TEXT NOT NULL,
+        team_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        actor TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        data_json TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX IF NOT EXISTS idx_skill_policy_audit_scope
+        ON team_skill_policy_audit(org_id, team_id, version);
+      PRAGMA user_version = 4;
     `);
     this.tasks = new SqliteTaskStore(this.#database);
     this.events = new SqliteTaskEventStore(this.#database);
     this.artifacts = new SqliteArtifactStore(this.#database);
     this.attempts = new SqliteStageAttemptStore(this.#database);
     this.channelEvents = new SqliteChannelEventStore(this.#database);
+    this.skillPolicies = new SqliteSkillPolicyStore(this.#database, AUTHORIZED_SKILL_NAMES);
     this.transactions = {
       run: <T>(operation: () => T): T => {
         if (this.#database.isTransaction) return operation();
@@ -627,7 +737,7 @@ export class SqliteOrchestratorState {
         .all(now.toISOString()) as Array<{ data_json: string }>;
       const interrupted: StageAttempt[] = [];
       for (const row of rows) {
-        const attempt = parseJson<StageAttempt>(row.data_json, "StageAttempt");
+        const attempt = normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, "StageAttempt"));
         const finishedAt = now.toISOString();
         const updatedAttempt: StageAttempt = {
           ...attempt,

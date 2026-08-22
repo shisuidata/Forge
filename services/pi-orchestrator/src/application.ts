@@ -6,7 +6,7 @@ import {
   type Artifact,
   type ArtifactStore,
 } from "./artifacts.js";
-import type { OrchestratorConfig } from "./config.js";
+import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
 import type { ForgeDialect } from "./forge/client.js";
 import {
   ForgeQueryRunClient,
@@ -19,9 +19,16 @@ import {
 } from "./skill-executor.js";
 import type { StageAttempt, StageAttemptStore } from "./stage-attempts.js";
 import type {
+  AdvisoryPayload,
   AnalysisPayload,
   QueryResultPayload,
 } from "./structured-artifact-tools.js";
+import {
+  AUTHORIZED_SKILL_NAMES,
+  type AdvisorySkillName,
+  type AuthorizedSkillName,
+} from "./skills.js";
+import { InMemorySkillPolicyStore, type SkillPolicyStore, type TeamSkillPolicy } from "./skill-policy.js";
 import {
   InMemoryTaskStore,
   TaskStateError,
@@ -83,6 +90,8 @@ export class OrchestratorApplication {
   readonly #stageTimeoutMs: number;
   readonly #stageLeaseMs: number;
   readonly #channelEvents: ChannelEventStore | undefined;
+  readonly #config: OrchestratorConfig;
+  readonly #skillPolicies: SkillPolicyStore;
 
   constructor(options: {
     config: OrchestratorConfig;
@@ -92,6 +101,7 @@ export class OrchestratorApplication {
     transactions?: StateTransactionPort;
     attempts?: StageAttemptStore;
     channelEvents?: ChannelEventStore;
+    skillPolicies?: SkillPolicyStore;
     forgeClient?: ForgeQueryRunPort;
     skillExecutor?: StructuredSkillExecutionPort;
   }) {
@@ -103,6 +113,8 @@ export class OrchestratorApplication {
     this.#stageTimeoutMs = options.config.stageTimeoutMs;
     this.#stageLeaseMs = options.config.stageLeaseMs;
     this.#channelEvents = options.channelEvents;
+    this.#config = options.config;
+    this.#skillPolicies = options.skillPolicies ?? new InMemorySkillPolicyStore(AUTHORIZED_SKILL_NAMES);
     this.#skills =
       options.skillExecutor ?? new PiStructuredSkillExecutor({ config: options.config });
     this.#forge =
@@ -160,6 +172,132 @@ export class OrchestratorApplication {
 
   getArtifacts(taskRunId: string): Artifact[] {
     return this.#artifacts.list(taskRunId);
+  }
+
+  getTeamSkillPolicy(orgId: string, teamId: string): TeamSkillPolicy | undefined {
+    return this.#skillPolicies.get(orgId, teamId);
+  }
+
+  configureTeamSkills(input: {
+    orgId: string;
+    teamId: string;
+    enabledSkills: AuthorizedSkillName[];
+    expectedVersion: number;
+    actor: string;
+  }): TeamSkillPolicy {
+    return this.#skillPolicies.configure(input);
+  }
+
+  async runAdvisory(
+    taskRunId: string,
+    input: { skillName: AdvisorySkillName; prompt: string; idempotencyKey?: string },
+    signal?: AbortSignal,
+  ): Promise<{ task: TaskRun; artifact: Artifact<AdvisoryPayload> }> {
+    const task = this.#tasks.get(taskRunId);
+    if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    if (input.prompt.trim().length === 0) throw new TaskStateError("prompt must not be empty");
+    if (this.#skills.advise === undefined) {
+      throw new TaskStateError("Advisory Skill runtime is unavailable");
+    }
+    if (!this.#skillPolicies.isEnabled(task.org_id, task.team_id, input.skillName)) {
+      throw new TaskStateError(`Skill is disabled for this team: ${input.skillName}`);
+    }
+    const attemptRound = (this.#attempts?.list(taskRunId) ?? []).filter(
+      (attempt) => attempt.stage === `skill:${input.skillName}`,
+    ).length + 1;
+    const idempotencyKey = input.idempotencyKey ?? `${taskRunId}:skill:${input.skillName}:${attemptRound}`;
+    const existingAttempt = this.#attempts?.findByIdempotencyKey(taskRunId, idempotencyKey);
+    if (existingAttempt?.status === "succeeded") {
+      const completedEvent = this.#events.list(taskRunId).find(
+        (event) =>
+          event.event_type === "skill.completed" &&
+          event.payload.idempotency_key === idempotencyKey,
+      );
+      const artifactId = completedEvent?.payload.artifact_id;
+      const artifact = this.#artifacts.list(taskRunId).find(
+        (candidate) => candidate.artifact_id === artifactId && candidate.artifact_type === "advisory",
+      ) as Artifact<AdvisoryPayload> | undefined;
+      const current = this.#tasks.get(taskRunId);
+      if (artifact !== undefined && current !== undefined) return { task: current, artifact };
+      throw new TaskStateError("Idempotent AdvisoryArtifact is missing");
+    }
+    if (existingAttempt !== undefined) {
+      throw new TaskStateError(
+        `Advisory attempt already exists with status ${existingAttempt.status}; retry with a new idempotency key`,
+      );
+    }
+    if (
+      task.status !== "created" &&
+      task.status !== "ready_for_analysis" &&
+      task.status !== "incomplete"
+    ) {
+      throw new TaskStateError(
+        `Advisory requires created, ready_for_analysis, or incomplete, got ${task.status}`,
+      );
+    }
+    const retryStatus = task.status;
+    let attempt: StageAttempt | undefined;
+    const running = this.#transactions.run(() => {
+      const next = this.#transition(task, "analyzing", `skill:${input.skillName}`);
+      attempt = this.#startAttempt(
+        next,
+        `skill:${input.skillName}`,
+        retryStatus,
+        idempotencyKey,
+      );
+      this.#events.append(taskRunId, "skill.started", { skill_name: input.skillName });
+      return next;
+    });
+    const stageExecution = this.#stageSignal(signal);
+    try {
+      const queryResults = this.#artifacts.list(taskRunId).filter(
+        (artifact): artifact is Artifact<QueryResultPayload> => artifact.artifact_type === "query_result",
+      );
+      const payload = await this.#skills.advise(running, input.skillName, {
+        prompt: input.prompt,
+        queryResults,
+      }, stageExecution.signal, attempt?.model_revision);
+      if (stageExecution.timedOut()) throw new Error("Advisory Skill Stage timed out");
+      return this.#transactions.run(() => {
+        const artifact = this.#artifacts.create({
+        artifactType: "advisory",
+        taskRunId,
+        producer: `pi-skill:${input.skillName}`,
+        payload,
+      });
+        const completed = this.#transition(
+          running,
+          payload.status === "complete" ? "completed" : "incomplete",
+          "skill_complete",
+        );
+        this.#finishAttempt(attempt, "succeeded");
+        this.#events.append(taskRunId, "skill.completed", {
+          skill_name: input.skillName,
+          artifact_id: artifact.artifact_id,
+          attempt_id: attempt?.attempt_id ?? null,
+          idempotency_key: idempotencyKey,
+          status: payload.status,
+        });
+        return { task: completed, artifact };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown Skill error";
+      this.#transactions.run(() => {
+        if (stageExecution.timedOut()) {
+          this.#finishAttempt(attempt, "timed_out", message);
+          this.#transition(running, retryStatus, `skill:${input.skillName}:retry`);
+        } else {
+          this.#finishAttempt(attempt, "failed", message);
+          this.#transition(running, "failed", `skill:${input.skillName}`);
+        }
+        this.#events.append(taskRunId, "skill.failed", {
+          skill_name: input.skillName,
+          timed_out: stageExecution.timedOut(),
+          error: message,
+        });
+      });
+      throw new TaskStateError(`Advisory Skill failed for ${taskRunId}`, { cause: error });
+    }
   }
 
   getStageAttempts(taskRunId: string): StageAttempt[] {
@@ -463,6 +601,7 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     const initialTask = this.#tasks.get(taskRunId);
     if (initialTask === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    this.#assertSkillEnabled(initialTask, "data-requirement-clarifier");
     if (initialTask.status !== "created" && initialTask.status !== "needs_input") {
       throw new TaskStateError(`TaskRun cannot clarify from status: ${initialTask.status}`);
     }
@@ -483,7 +622,9 @@ export class OrchestratorApplication {
     });
     const stageExecution = this.#stageSignal(signal);
     try {
-      const payload = await this.#skills.clarify(task, input.message, stageExecution.signal);
+      const payload = await this.#skills.clarify(
+        task, input.message, stageExecution.signal, attempt?.model_revision,
+      );
       if (stageExecution.timedOut()) throw new Error("Clarification Stage timed out");
       return this.#transactions.run(() => {
         const artifact = this.#artifacts.create({
@@ -535,6 +676,7 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     const initialTask = this.#tasks.get(taskRunId);
     if (initialTask === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    this.#assertSkillEnabled(initialTask, "metric-definition-reviewer");
     if (
       initialTask.status !== "created" &&
       initialTask.status !== "needs_input" &&
@@ -559,7 +701,9 @@ export class OrchestratorApplication {
     });
     const stageExecution = this.#stageSignal(signal);
     try {
-      const payload = await this.#skills.reviewMetric(task, input.message, stageExecution.signal);
+      const payload = await this.#skills.reviewMetric(
+        task, input.message, stageExecution.signal, attempt?.model_revision,
+      );
       if (stageExecution.timedOut()) throw new Error("Metric review Stage timed out");
       return this.#transactions.run(() => {
         const artifact = this.#artifacts.create({
@@ -993,6 +1137,7 @@ export class OrchestratorApplication {
       }
       return { task: parent, artifact, events: this.#events.list(taskRunId) };
     }
+    this.#assertSkillEnabled(parent, "business-root-cause-analysis");
     if (parent.status !== "incomplete") {
       throw new TaskStateError(`TaskRun cannot resume analysis from status: ${parent.status}`);
     }
@@ -1050,6 +1195,7 @@ export class OrchestratorApplication {
         stageTask,
         { question, queryResults, priorAnalysis },
         stageExecution.signal,
+        attempt?.model_revision,
       );
       if (stageExecution.timedOut()) throw new Error("Supplemental Analysis Stage timed out");
       const allowedEvidenceRefs = new Set(
@@ -1127,6 +1273,7 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     let task = this.#tasks.get(taskRunId);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    this.#assertSkillEnabled(task, "business-root-cause-analysis");
     if (task.status !== "ready_for_analysis") {
       throw new TaskStateError(`TaskRun cannot analyze from status: ${task.status}`);
     }
@@ -1158,6 +1305,7 @@ export class OrchestratorApplication {
         stageTask,
         { question, queryResults: [queryResult] },
         stageExecution.signal,
+        attempt?.model_revision,
       );
       if (stageExecution.timedOut()) throw new Error("Analysis Stage timed out");
       const allowedEvidenceRefs = new Set(
@@ -1227,6 +1375,7 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     let task = this.#tasks.get(taskRunId);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    this.#assertSkillEnabled(task, "data-analysis-report-writer");
     if (task.status !== "ready_for_report") {
       throw new TaskStateError(`TaskRun cannot render a report from status: ${task.status}`);
     }
@@ -1257,6 +1406,7 @@ export class OrchestratorApplication {
         stageTask,
         { audience: input.audience, analysis },
         stageExecution.signal,
+        attempt?.model_revision,
       );
       if (stageExecution.timedOut()) throw new Error("Report Stage timed out");
       const analysisStatements = new Set(
@@ -1332,6 +1482,12 @@ export class OrchestratorApplication {
     return value;
   }
 
+  #assertSkillEnabled(task: TaskRun, skillName: AuthorizedSkillName): void {
+    if (!this.#skillPolicies.isEnabled(task.org_id, task.team_id, skillName)) {
+      throw new TaskStateError(`Skill is disabled for this team: ${skillName}`);
+    }
+  }
+
   #startAttempt(
     task: TaskRun,
     stage: string,
@@ -1339,6 +1495,14 @@ export class OrchestratorApplication {
     idempotencyKey: string,
   ): StageAttempt | undefined {
     if (this.#attempts === undefined) return undefined;
+    const modelRevision = computePiModelRevision({
+      agentDir: this.#config.agentDir,
+      provider: this.#config.piModelProvider,
+      modelId: this.#config.piModelId,
+    });
+    if (modelRevision?.startsWith("unresolved:") === true) {
+      throw new TaskStateError("Pi model catalog is unavailable; Stage revision cannot be fixed");
+    }
     const attempt = this.#attempts.start({
       taskRunId: task.task_run_id,
       stage,
@@ -1346,6 +1510,8 @@ export class OrchestratorApplication {
       runningStatus: task.status,
       retryStatus,
       leaseMs: this.#stageLeaseMs,
+      modelRevision,
+      skillPolicyVersion: this.#skillPolicies.get(task.org_id, task.team_id)?.version ?? 0,
     });
     this.#events.append(task.task_run_id, "stage.attempt_started", {
       attempt_id: attempt.attempt_id,

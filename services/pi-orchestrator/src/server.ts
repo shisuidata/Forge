@@ -8,15 +8,25 @@ import { ChannelIdentityError, ChannelIdentityResolver } from "./channels/identi
 import { loadConfig, type OrchestratorConfig } from "./config.js";
 import { FORGE_DIALECTS, type ForgeDialect } from "./forge/client.js";
 import { inspectRuntime } from "./runtime.js";
+import {
+  ADVISORY_SKILL_NAMES,
+  AUTHORIZED_SKILL_NAMES,
+  type AdvisorySkillName,
+  type AuthorizedSkillName,
+} from "./skills.js";
+import { SkillPolicyConflictError } from "./skill-policy.js";
 import { SqliteOrchestratorState } from "./sqlite-store.js";
 import { TaskStateError, type TaskChannel } from "./task-store.js";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const CHANNELS = new Set<TaskChannel>(["web", "feishu", "dingtalk", "api"]);
 const DIALECTS = new Set<string>(FORGE_DIALECTS);
+const AUTHORIZED_SKILLS = new Set<string>(AUTHORIZED_SKILL_NAMES);
+const ADVISORY_SKILLS = new Set<string>(ADVISORY_SKILL_NAMES);
 
 class RequestError extends Error {}
 class ChannelAuthenticationError extends Error {}
+class AdminAuthenticationError extends Error {}
 
 function secureEquals(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -35,6 +45,20 @@ function requireChannelAuthentication(
     !configuredKeys.some((candidate) => secureEquals(candidate, key))
   ) {
     throw new ChannelAuthenticationError("Invalid channel service credential");
+  }
+}
+
+function requireAdminAuthentication(
+  request: IncomingMessage,
+  configuredKeys: string[],
+): void {
+  const key = request.headers["x-admin-service-key"];
+  if (
+    configuredKeys.length === 0 ||
+    typeof key !== "string" ||
+    !configuredKeys.some((candidate) => secureEquals(candidate, key))
+  ) {
+    throw new AdminAuthenticationError("Invalid admin service credential");
   }
 }
 
@@ -102,6 +126,19 @@ async function maybeRunAsync<T>(options: {
   return undefined;
 }
 
+function requireScopeId(encodedValue: string, field: string): string {
+  let value: string;
+  try {
+    value = decodeURIComponent(encodedValue);
+  } catch {
+    throw new RequestError(`${field} is not valid URL encoding`);
+  }
+  if (!/^[A-Za-z0-9_.-]{1,128}$/.test(value)) {
+    throw new RequestError(`${field} contains unsupported characters`);
+  }
+  return value;
+}
+
 function requireString(body: Record<string, unknown>, field: string): string {
   const value = body[field];
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -132,6 +169,7 @@ export function createOrchestratorServer(
       artifacts: state.artifacts,
       attempts: state.attempts,
       channelEvents: state.channelEvents,
+      skillPolicies: state.skillPolicies,
       transactions: state.transactions,
     });
   }
@@ -199,6 +237,42 @@ export function createOrchestratorServer(
         });
         if (result !== undefined) sendJson(response, 200, result);
         return;
+      }
+
+      const skillPolicyMatch = url.pathname.match(
+        /^\/v1\/orgs\/([^/]+)\/teams\/([^/]+)\/skill-policy$/,
+      );
+      if (skillPolicyMatch?.[1] !== undefined && skillPolicyMatch[2] !== undefined) {
+        requireAdminAuthentication(request, config.adminServiceKeys);
+        const orgId = requireScopeId(skillPolicyMatch[1], "org_id");
+        const teamId = requireScopeId(skillPolicyMatch[2], "team_id");
+        if (request.method === "GET") {
+          sendJson(response, 200, {
+            policy: application.getTeamSkillPolicy(orgId, teamId),
+            defaults: AUTHORIZED_SKILL_NAMES,
+          });
+          return;
+        }
+        if (request.method === "PUT") {
+          const body = await readJson(request);
+          if (!Array.isArray(body.enabled_skills) || body.enabled_skills.some(
+            (name) => typeof name !== "string" || !AUTHORIZED_SKILLS.has(name),
+          )) {
+            throw new RequestError("enabled_skills must contain only authorized Skill names");
+          }
+          if (!Number.isInteger(body.expected_version) || Number(body.expected_version) < 0) {
+            throw new RequestError("expected_version must be a non-negative integer");
+          }
+          const policy = application.configureTeamSkills({
+            orgId,
+            teamId,
+            enabledSkills: body.enabled_skills as AuthorizedSkillName[],
+            expectedVersion: Number(body.expected_version),
+            actor: requireString(body, "actor"),
+          });
+          sendJson(response, 200, { policy });
+          return;
+        }
       }
 
       if (request.method === "POST" && url.pathname === "/v1/tasks") {
@@ -376,6 +450,31 @@ export function createOrchestratorServer(
         return;
       }
 
+      const advisoryMatch = url.pathname.match(
+        /^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/run-skill$/,
+      );
+      if (request.method === "POST" && advisoryMatch?.[1] !== undefined) {
+        const body = await readJson(request);
+        const skillName = requireString(body, "skill_name");
+        if (!ADVISORY_SKILLS.has(skillName)) {
+          throw new RequestError("skill_name is not an authorized Advisory Skill");
+        }
+        const operation = application.runAdvisory(advisoryMatch[1], {
+          skillName: skillName as AdvisorySkillName,
+          prompt: requireString(body, "prompt"),
+          idempotencyKey: requireString(body, "idempotency_key"),
+        });
+        const result = await maybeRunAsync({
+          response,
+          application,
+          taskRunId: advisoryMatch[1],
+          respondAsync: true,
+          operation,
+        });
+        if (result !== undefined) sendJson(response, 200, result);
+        return;
+      }
+
       const analyzeMatch = url.pathname.match(
         /^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/analyze$/,
       );
@@ -481,9 +580,12 @@ export function createOrchestratorServer(
         sendJson(response, 400, { status: "invalid_request", error: error.message });
       } else if (
         error instanceof ChannelAuthenticationError ||
+        error instanceof AdminAuthenticationError ||
         error instanceof ChannelIdentityError
       ) {
         sendJson(response, 403, { status: "forbidden", error: error.message });
+      } else if (error instanceof SkillPolicyConflictError) {
+        sendJson(response, 409, { status: "conflict", error: error.message });
       } else if (error instanceof TaskStateError) {
         const statusCode = error.message.includes("not found") ? 404 : 409;
         sendJson(response, statusCode, { status: "task_error", error: error.message });

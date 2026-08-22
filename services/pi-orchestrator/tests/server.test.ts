@@ -8,6 +8,7 @@ import test from "node:test";
 import { OrchestratorApplication } from "../src/application.js";
 import { loadConfig } from "../src/config.js";
 import { createOrchestratorServer } from "../src/server.js";
+import { InMemoryStageAttemptStore } from "../src/stage-attempts.js";
 
 const SQL_HASH = `sha256:${"a".repeat(64)}`;
 
@@ -42,7 +43,7 @@ test("health endpoints expose the restricted runtime capabilities", async (conte
   assert.equal(readiness.status, "degraded");
   assert.equal(readiness.capabilities.builtinToolsEnabled, false);
   assert.equal(readiness.capabilities.modelExecutionConfigured, false);
-  assert.equal(readiness.capabilities.skills.length, 4);
+  assert.equal(readiness.capabilities.skills.length, 23);
 });
 
 
@@ -156,6 +157,103 @@ test("async Stage returns 202 and completes through Task polling", async (contex
   const completedResponse = await fetch(`${baseUrl}/v1/tasks/${created.task.task_run_id}`);
   const completed = (await completedResponse.json()) as { task: { status: string } };
   assert.equal(completed.task.status, "needs_input");
+});
+
+test("expanded Skill API persists a bounded Artifact and obeys team policy CAS", async (context) => {
+  const config = loadConfig({ PI_ADMIN_SERVICE_KEYS: "admin-secret" });
+  const application = new OrchestratorApplication({
+    config,
+    attempts: new InMemoryStageAttemptStore(),
+    forgeClient: {
+      async createQueryRun() { throw new Error("not used"); },
+      async approveQueryRun() { throw new Error("not used"); },
+    },
+    skillExecutor: {
+      async clarify() { throw new Error("not used"); },
+      async reviewMetric() { throw new Error("not used"); },
+      async analyze() { throw new Error("not used"); },
+      async writeReport() { throw new Error("not used"); },
+      async advise(_task, skillName) {
+        return {
+          status: "complete", skill_name: skillName, title: "漏斗建议",
+          summary: "输入不足，先补充范围。", findings: [], recommendations: [],
+          assumptions: [], limitations: ["无查询证据"], open_questions: [],
+          deliverables: [{ name: "检查表", content: "确认步骤口径。" }],
+        };
+      },
+    },
+  });
+  const first = application.createTask({
+    org_id: "org_skill", team_id: "team_skill", user_id: "user_skill",
+    channel: "api", intent: "advisory", message: "分析漏斗",
+  });
+  const server = createOrchestratorServer(config, application);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => server.close());
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const coreBypass = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/run-skill`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      skill_name: "data-requirement-clarifier", prompt: "绕过核心状态机", idempotency_key: "core-bypass",
+    }),
+  });
+  assert.equal(coreBypass.status, 400);
+  assert.equal(application.getTask(first.task.task_run_id)?.status, "created");
+  const run = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/run-skill`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      skill_name: "funnel-analysis", prompt: "分析漏斗", idempotency_key: "skill-run-001",
+    }),
+  });
+  assert.equal(run.status, 202);
+  for (let index = 0; index < 20; index += 1) {
+    if (application.getTask(first.task.task_run_id)?.status === "completed") break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(application.getTask(first.task.task_run_id)?.status, "completed");
+  assert.equal(application.getStageAttempts(first.task.task_run_id)[0]?.skill_policy_version, 0);
+  const artifacts = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/artifacts`);
+  const artifactBody = await artifacts.json() as { artifacts: Array<{ artifact_type: string }> };
+  assert.equal(artifactBody.artifacts.at(-1)?.artifact_type, "advisory");
+  const replay = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/run-skill`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      skill_name: "funnel-analysis", prompt: "分析漏斗", idempotency_key: "skill-run-001",
+    }),
+  });
+  assert.ok([200, 202].includes(replay.status));
+  assert.equal(application.getArtifacts(first.task.task_run_id).filter(
+    (artifact) => artifact.artifact_type === "advisory",
+  ).length, 1);
+
+  const unauthorizedPolicy = await fetch(
+    `${baseUrl}/v1/orgs/org_skill/teams/team_skill/skill-policy`,
+  );
+  assert.equal(unauthorizedPolicy.status, 403);
+  const policy = await fetch(`${baseUrl}/v1/orgs/org_skill/teams/team_skill/skill-policy`, {
+    method: "PUT", headers: {
+      "content-type": "application/json", "x-admin-service-key": "admin-secret",
+    },
+    body: JSON.stringify({ enabled_skills: [], expected_version: 0, actor: "admin" }),
+  });
+  assert.equal(policy.status, 200);
+  const second = application.createTask({
+    org_id: "org_skill", team_id: "team_skill", user_id: "user_skill",
+    channel: "api", intent: "advisory", message: "再次分析漏斗",
+  });
+  const coreDenied = await fetch(`${baseUrl}/v1/tasks/${second.task.task_run_id}/clarify`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ message: "补充需求", idempotency_key: "clarify-disabled" }),
+  });
+  assert.equal(coreDenied.status, 409);
+  const denied = await fetch(`${baseUrl}/v1/tasks/${second.task.task_run_id}/run-skill`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      skill_name: "funnel-analysis", prompt: "分析漏斗", idempotency_key: "skill-run-002",
+    }),
+  });
+  assert.equal(denied.status, 409);
 });
 
 test("Task API exposes validated Skill Artifacts instead of model text", async (context) => {

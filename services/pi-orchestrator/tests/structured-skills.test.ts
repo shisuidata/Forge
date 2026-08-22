@@ -6,9 +6,11 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { PiStructuredSkillExecutor } from "../src/skill-executor.js";
 import {
   ArtifactSubmissionError,
+  createAdvisorySubmissionTool,
   createClarificationSubmissionTool,
 } from "../src/structured-artifact-tools.js";
 import { loadConfig } from "../src/config.js";
+import { ADVISORY_SKILL_NAMES, EVIDENCE_REQUIRED_SKILL_NAMES } from "../src/skills.js";
 import { InMemoryTaskStore } from "../src/task-store.js";
 
 const validMetric = {
@@ -81,9 +83,10 @@ test("clarification Artifact Tool rejects invalid dates and extra fields", async
 test("Pi Skill executor captures the terminating structured tool result", async () => {
   const executor = new PiStructuredSkillExecutor({
     config: loadConfig({}),
-    sessionFactory: async ({ skillName, tool }) => ({
+    sessionFactory: async ({ skillName, tool, expectedModelRevision }) => ({
       async prompt(prompt) {
         assert.equal(skillName, "data-requirement-clarifier");
+        assert.equal(expectedModelRevision, `sha256:${"c".repeat(64)}`);
         assert.match(prompt, /用户输入/);
         await invoke(tool, validClarification);
       },
@@ -92,7 +95,12 @@ test("Pi Skill executor captures the terminating structured tool result", async 
     }),
   });
 
-  assert.deepEqual(await executor.clarify(task(), "最近转化为什么下降"), validClarification);
+  assert.deepEqual(
+    await executor.clarify(
+      task(), "最近转化为什么下降", undefined, `sha256:${"c".repeat(64)}`,
+    ),
+    validClarification,
+  );
 });
 
 test("Pi Skill executor runs metric review through its dedicated Artifact Tool", async () => {
@@ -112,6 +120,75 @@ test("Pi Skill executor runs metric review through its dedicated Artifact Tool",
   assert.deepEqual(await executor.reviewMetric(task(), "审查首购转化率"), validMetric);
 });
 
+
+test("every expanded Skill has a fixed AdvisoryArtifact contract evaluation", async () => {
+  const expanded = ADVISORY_SKILL_NAMES;
+  assert.equal(expanded.length, 19);
+  for (const skillName of expanded) {
+    const executor = new PiStructuredSkillExecutor({
+      config: loadConfig({}),
+      sessionFactory: async ({ skillName: isolatedName, tool }) => ({
+        async prompt() {
+          assert.equal(isolatedName, skillName);
+          assert.equal(tool.name, "submit_advisory_artifact");
+          const requiresEvidence = EVIDENCE_REQUIRED_SKILL_NAMES.includes(
+            skillName as (typeof EVIDENCE_REQUIRED_SKILL_NAMES)[number],
+          );
+          await invoke(tool, {
+            status: requiresEvidence ? "incomplete" : "complete",
+            skill_name: skillName,
+            title: `${skillName} 交付`,
+            summary: "基于用户已知输入给出有界建议。",
+            findings: [],
+            recommendations: [{ action: "人工复核", rationale: "输入可能不完整", priority: "medium" }],
+            assumptions: ["仅使用当前输入"],
+            limitations: ["未提供 QueryResult"],
+            open_questions: requiresEvidence ? ["请提供已审批 QueryResult。"] : [],
+            deliverables: [{ name: "建议清单", content: "先确认范围，再执行后续动作。" }],
+          });
+        },
+        async abort() {},
+        dispose() {},
+      }),
+    });
+    const result = await executor.advise(task(), skillName, { prompt: "请给出建议" });
+    assert.equal(result.skill_name, skillName);
+  }
+});
+
+test("complete data analysis AdvisoryArtifact requires evidence on every finding", async () => {
+  const submission = createAdvisorySubmissionTool({
+    skillName: "funnel-analysis", allowedEvidenceRefs: new Set(), requiresQueryEvidence: true,
+  });
+  await assert.rejects(() => invoke(submission.tool, {
+    status: "complete", skill_name: "funnel-analysis", title: "漏斗", summary: "已完成",
+    findings: [{ statement: "转化下降", evidence_refs: [], confidence: "low" }],
+    recommendations: [], assumptions: [], limitations: [], open_questions: [], deliverables: [],
+  }), /every finding/);
+});
+
+test("expanded Skill rejects fabricated QueryResult evidence", async () => {
+  const executor = new PiStructuredSkillExecutor({
+    config: loadConfig({}),
+    sessionFactory: async ({ tool }) => ({
+      async prompt() {
+        await invoke(tool, {
+          status: "complete",
+          skill_name: "funnel-analysis",
+          title: "漏斗分析",
+          summary: "存在下降。",
+          findings: [{ statement: "下降 10%", evidence_refs: ["qr_fake#row:1"], confidence: "high" }],
+          recommendations: [], assumptions: [], limitations: [], open_questions: [], deliverables: [],
+        });
+      },
+      async abort() {}, dispose() {},
+    }),
+  });
+  await assert.rejects(
+    () => executor.advise(task(), "funnel-analysis", { prompt: "分析漏斗" }),
+    /outside supplied QueryResults/,
+  );
+});
 
 test("analysis and report Skills preserve QueryRun evidence lineage", async () => {
   let analysisArtifactId = "";

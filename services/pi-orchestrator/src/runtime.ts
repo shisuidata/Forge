@@ -33,6 +33,7 @@ export const RUNTIME_CAPABILITIES: RuntimeCapabilities = {
     "submit_clarification_artifact",
     "submit_metric_definition_artifact",
     "submit_analysis_artifact",
+    "submit_advisory_artifact",
     "submit_rendered_output_artifact",
   ],
   skills: MVP_SKILL_NAMES,

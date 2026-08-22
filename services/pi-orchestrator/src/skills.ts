@@ -7,14 +7,53 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 
-export const MVP_SKILL_NAMES = [
+export const AUTHORIZED_SKILL_NAMES = [
   "data-requirement-clarifier",
   "metric-definition-reviewer",
   "business-root-cause-analysis",
   "data-analysis-report-writer",
+  "exploratory-data-analysis",
+  "funnel-analysis",
+  "retention-cohort-analysis",
+  "ab-test-analysis",
+  "sql-reviewer",
+  "data-quality-rule-generator",
+  "table-design-advisor",
+  "data-lineage-impact-analyzer",
+  "dashboard-reviewer",
+  "data-presentation-architect",
+  "daily-report-writer",
+  "weekly-monthly-report-writer",
+  "data-doc-writer",
+  "data-incident-postmortem-writer",
+  "data-tool-integration-planner",
+  "market-research-analyst",
+  "feature-engineering-advisor",
+  "model-evaluation-reviewer",
+  "stream-pipeline-designer",
 ] as const;
 
-export type MvpSkillName = (typeof MVP_SKILL_NAMES)[number];
+export type AuthorizedSkillName = (typeof AUTHORIZED_SKILL_NAMES)[number];
+
+export type AdvisorySkillName = Exclude<
+  AuthorizedSkillName,
+  | "data-requirement-clarifier"
+  | "metric-definition-reviewer"
+  | "business-root-cause-analysis"
+  | "data-analysis-report-writer"
+>;
+export const CORE_WORKFLOW_SKILL_NAMES = AUTHORIZED_SKILL_NAMES.slice(0, 4) as readonly AuthorizedSkillName[];
+export const ADVISORY_SKILL_NAMES = AUTHORIZED_SKILL_NAMES.slice(4) as readonly AdvisorySkillName[];
+
+export const EVIDENCE_REQUIRED_SKILL_NAMES = [
+  "exploratory-data-analysis",
+  "funnel-analysis",
+  "retention-cohort-analysis",
+  "ab-test-analysis",
+] as const satisfies readonly AuthorizedSkillName[];
+
+export const MVP_SKILL_NAMES = AUTHORIZED_SKILL_NAMES;
+export type MvpSkillName = AuthorizedSkillName;
 
 export interface SkillRuntimeResources {
   loader: DefaultResourceLoader;
@@ -26,8 +65,8 @@ export async function loadMvpSkillResources(options: {
   agentDir: string;
   skillsRoot: string;
 }): Promise<SkillRuntimeResources> {
-  const allowedNames = new Set<string>(MVP_SKILL_NAMES);
-  const skillPaths = MVP_SKILL_NAMES.map((name) =>
+  const allowedNames = new Set<string>(AUTHORIZED_SKILL_NAMES);
+  const skillPaths = AUTHORIZED_SKILL_NAMES.map((name) =>
     join(options.skillsRoot, "skills", name),
   );
 
@@ -72,7 +111,7 @@ export async function loadMvpSkillResources(options: {
   }
 
   const loadedNames = new Set(result.skills.map((skill) => skill.name));
-  const missing = MVP_SKILL_NAMES.filter((name) => !loadedNames.has(name));
+  const missing = AUTHORIZED_SKILL_NAMES.filter((name) => !loadedNames.has(name));
   const unexpected = result.skills
     .map((skill) => skill.name)
     .filter((name) => !allowedNames.has(name));

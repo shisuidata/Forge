@@ -44,7 +44,7 @@ test("state database defaults under the dedicated agent directory", async () => 
   assert.equal(config.stateDbPath, join(agentDir, "state/orchestrator.sqlite3"));
 });
 
-test("runtime loads only the four explicitly authorized MVP skills", async () => {
+test("runtime loads the 23 explicitly authorized production Skills", async () => {
   const config = loadConfig({});
   const resources = await loadMvpSkillResources({
     cwd: config.skillsRoot,
@@ -92,12 +92,37 @@ test("runtime capabilities state that built-in tools are disabled", async () => 
     "submit_clarification_artifact",
     "submit_metric_definition_artifact",
     "submit_analysis_artifact",
+    "submit_advisory_artifact",
     "submit_rendered_output_artifact",
   ]);
   assert.equal(capabilities.modelExecutionConfigured, false);
   assert.deepEqual([...capabilities.skills].sort(), [...MVP_SKILL_NAMES].sort());
 });
 
+
+test("Pi model catalog produces an immutable non-secret Stage revision", async () => {
+  const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-model-revision-"));
+  await writeFile(join(agentDir, "models.json"), JSON.stringify({ providers: { demo: { models: [{ id: "m1" }] } } }));
+  const first = loadConfig({
+    PI_ORCHESTRATOR_AGENT_DIR: agentDir,
+    PI_MODEL_PROVIDER: "demo",
+    PI_MODEL_ID: "m1",
+  });
+  const second = loadConfig({
+    PI_ORCHESTRATOR_AGENT_DIR: agentDir,
+    PI_MODEL_PROVIDER: "demo",
+    PI_MODEL_ID: "m1",
+  });
+  assert.match(first.piModelRevision ?? "", /^sha256:[a-f0-9]{64}$/);
+  assert.equal(first.piModelRevision, second.piModelRevision);
+  await writeFile(join(agentDir, "models.json"), JSON.stringify({ providers: { demo: { models: [{ id: "m1", maxTokens: 2 }] } } }));
+  const changed = loadConfig({
+    PI_ORCHESTRATOR_AGENT_DIR: agentDir,
+    PI_MODEL_PROVIDER: "demo",
+    PI_MODEL_ID: "m1",
+  });
+  assert.notEqual(changed.piModelRevision, first.piModelRevision);
+});
 
 test("runtime reports unavailable until the dedicated model catalog is ready", async () => {
   const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-agent-"));
