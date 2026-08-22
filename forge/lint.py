@@ -724,6 +724,8 @@ def _check_time_bounded_listing_sort(
 ) -> None:
     if not any(term in question for term in ("列出", "记录", "明细")):
         return
+    if re.search(r"按.{0,12}(?:降序|升序|排序)", question):
+        return
     if not re.search(r"\d{4}年\d{1,2}月(?:\d{1,2}日)?(?:以来|起|之后|内)", question):
         return
     time_fields = (

@@ -1386,6 +1386,19 @@ def test_lint_high_value_spend_requires_completed_orders():
     assert any("已完成订单" in warning for warning in warnings)
 
 
+def test_lint_time_listing_respects_explicit_primary_sort():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_comment_detail",
+            "select": ["dwd_comment_detail.comment_id", "dwd_comment_detail.rating"],
+            "sort": [{"col": "dwd_comment_detail.rating", "dir": "desc"}],
+        },
+        "2025年12月以来的好评记录，按评分降序",
+    )
+
+    assert not any("事件时间 DESC" in warning for warning in warnings)
+
+
 def test_lint_category_topn_share_rejects_denominator_grouped_by_category_id():
     warnings = lint_conventions(
         {
