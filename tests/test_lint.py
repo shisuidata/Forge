@@ -260,6 +260,7 @@ def test_lint_all_bad_reviews_without_images_accepts_distinct_product_name():
             ],
             "distinct": True,
             "select": ["dim_product.product_name"],
+            "sort": [{"col": "dim_product.product_name", "dir": "asc"}],
         },
         "找出有差评记录但所有差评均无图片的商品，显示商品名称",
     )
@@ -1354,6 +1355,35 @@ def test_lint_time_bounded_event_listing_defaults_to_newest_first():
     )
 
     assert any("事件时间 DESC" in warning for warning in warnings)
+
+
+def test_lint_good_vs_bad_reviews_requires_conditional_aggregates_and_having():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_comment_detail",
+            "agg": [
+                {"fn": "count", "col": "dwd_comment_detail.comment_id", "as": "good_review_count"},
+                {"fn": "count", "col": "dwd_comment_detail.comment_id", "as": "bad_review_count"},
+            ],
+            "select": ["dim_product.product_name", "good_review_count", "bad_review_count"],
+        },
+        "找出好评数多于差评数的商品，显示商品名、好评数和差评数",
+    )
+
+    assert any("条件聚合" in warning and "col2" in warning for warning in warnings)
+
+
+def test_lint_high_value_spend_requires_completed_orders():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "agg": [{"fn": "sum", "col": "dwd_order_detail.total_amount", "as": "total_spent"}],
+            "select": ["dim_user.user_name", "total_spent"],
+        },
+        "找出累计消费超过5000元的高价值用户",
+    )
+
+    assert any("已完成订单" in warning for warning in warnings)
 
 
 def test_lint_category_topn_share_rejects_denominator_grouped_by_category_id():
