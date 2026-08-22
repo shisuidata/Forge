@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 # 编译失败后最多重试次数（不含首次尝试）
 # 设为 2：首次失败 → 第 1 次重试 → 第 2 次重试 → 放弃
-MAX_RETRIES = 2
+MAX_RETRIES = 3
 _ALLOWED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 _PREPARE_TIMEOUT_MESSAGE = "查询准备超时，请稍后重试或缩小问题范围。"
 
