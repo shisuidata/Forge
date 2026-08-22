@@ -379,6 +379,29 @@ def test_prepare_query_retries_bounded_tool_contract_violations(isolated_agent, 
     assert calls == 3
 
 
+def test_prepare_query_allows_one_final_recovery_within_retry_budget(isolated_agent, monkeypatch):
+    agent_mod, _ = isolated_agent
+    calls = 0
+
+    def call(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls < 4:
+            raise agent_mod.llm.LLMCompatibilityError("invalid tool payload")
+        return {
+            "tool": "generate_forge_query",
+            "input": {"scan": "orders", "select": ["orders.id"]},
+        }
+
+    monkeypatch.setattr(agent_mod.llm, "call", call)
+
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+
+    assert result["status"] == "needs_review"
+    assert result["retry_count"] == 3
+    assert calls == 4
+
+
 def test_prepare_query_keeps_short_data_question_valid(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
     monkeypatch.setattr(
