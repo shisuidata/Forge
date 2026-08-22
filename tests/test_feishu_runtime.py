@@ -126,6 +126,9 @@ async def test_feishu_settings_masks_all_channel_secrets(client, monkeypatch):
     assert "app-secret-value" not in response.text
     assert "verification-secret-value" not in response.text
     assert "encrypt-secret-value" not in response.text
+    assert "分阶段模型绑定" in response.text
+    assert "query_generation" in response.text
+    assert "SQL 核心强门禁" in response.text
 
 
 @pytest.mark.asyncio

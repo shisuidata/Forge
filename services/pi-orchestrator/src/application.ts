@@ -11,6 +11,7 @@ import {
   type PlanStepStatus,
 } from "./planning.js";
 import { buildChartPayload, bundleHash, type TechnicalReportPayload } from "./report-artifacts.js";
+import { attemptModelStage, resolveStageModelBinding } from "./model-bindings.js";
 import {
   InMemoryArtifactStore,
   type Artifact,
@@ -1871,7 +1872,8 @@ export class OrchestratorApplication {
     idempotencyKey: string,
   ): StageAttempt | undefined {
     if (this.#attempts === undefined) return undefined;
-    const modelRevision = computePiModelRevision({
+    const stageBinding = resolveStageModelBinding(this.#config, attemptModelStage(stage));
+    const modelRevision = stageBinding?.revisionId ?? computePiModelRevision({
       agentDir: this.#config.agentDir,
       provider: this.#config.piModelProvider,
       modelId: this.#config.piModelId,

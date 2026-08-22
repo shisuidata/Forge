@@ -592,6 +592,14 @@ def validate_model_snapshot(config: ModelConfigSnapshot) -> dict[str, Any]:
         "structured_output": True,
         "provider": config.provider,
         "model": config.model,
+        "capability_gate": {
+            "passed": True,
+            "protocol": True,
+            "tool_calling": True,
+            "structured_output": True,
+            "artifact_contract": True,
+            "content_safety": True,
+        },
         "quality_gate": {
             "passed": False,
             "status": "not_run",
@@ -634,7 +642,8 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
          knowledge_context: str = "",
          allowed_tables: list[str] | None = None,
          timeout_seconds: float | None = None,
-         config_snapshot: ModelConfigSnapshot | None = None) -> dict:
+         config_snapshot: ModelConfigSnapshot | None = None,
+         model_stage: str = "query_generation") -> dict:
     """
     LLM 统一调用入口。
 
@@ -650,7 +659,7 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
         {"tool": None, "text": str}   — LLM 直接文字回复
     """
     # Orchestrators may pin one immutable snapshot across all retries.
-    model_config = config_snapshot or get_model_config()
+    model_config = config_snapshot or get_model_config(model_stage)
     if timeout_seconds is not None:
         model_config = replace(
             model_config,

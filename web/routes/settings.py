@@ -32,10 +32,14 @@ from agent.model_quality import (
     current_quality_lineage,
     run_quality_validation,
 )
-from agent.model_control import (    MODEL_SCOPE_QUERY_PLANNING,
+from agent.model_control import (
+    MODEL_SCOPE_QUERY_PLANNING,
+    MODEL_STAGE_SCOPES,
+    SQL_CRITICAL_MODEL_STAGES,
     ModelBindingConflictError,
     ModelControlError,
     ModelControlStore,
+    model_scope_for_stage,
 )
 from agent.llm import (
     LLMCompatibilityError,
@@ -66,10 +70,12 @@ class ModelRevisionCreateRequest(BaseModel):
 class ModelActivationRequest(BaseModel):
     revision_id: str
     expected_version: int
+    stage: str = "query_generation"
 
 
 class ModelRollbackRequest(BaseModel):
     expected_version: int
+    stage: str = "query_generation"
 
 
 class ModelQualityValidationRequest(BaseModel):
@@ -152,13 +158,16 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
     y = _load_forge_yaml()
     control_path = model_control_db_path()
     try:
+        control_store = ModelControlStore(control_path)
         control_active = (
-            ModelControlStore(control_path).get_active(MODEL_SCOPE_QUERY_PLANNING)
+            control_store.get_active(MODEL_SCOPE_QUERY_PLANNING)
             if control_path.exists() else None
         )
+        control_bindings = control_store.list_active() if control_path.exists() else {}
     except Exception as exc:
         logger.warning("Model Control Plane status unavailable: %s", type(exc).__name__)
         control_active = None
+        control_bindings = {}
     try:
         active_model = get_model_config()
         model_status = {
@@ -187,6 +196,17 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
                 "binding_version": control_active.binding_version,
                 "validation_report": control_active.validation_report,
             },
+            "model_stage_bindings": {
+                stage: {
+                    "scope": MODEL_STAGE_SCOPES[stage],
+                    "gate_class": "SQL 核心强门禁" if stage in SQL_CRITICAL_MODEL_STAGES else "Stage 能力门禁",
+                    "revision_id": binding.revision_id if binding else None,
+                    "profile_id": binding.profile_id if binding else None,
+                    "binding_version": binding.binding_version if binding else 0,
+                }
+                for stage in MODEL_STAGE_SCOPES
+                for binding in [control_bindings.get(stage)]
+            },
             "llm_env_override": any(
                 os.getenv(name)
                 for name in ("LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL")
@@ -208,6 +228,7 @@ async def model_control_status():
     store = ModelControlStore(model_control_db_path())
     try:
         active = store.get_active(MODEL_SCOPE_QUERY_PLANNING)
+        active_by_stage = store.list_active()
         audit = store.list_audit(MODEL_SCOPE_QUERY_PLANNING)
     except Exception as exc:
         logger.warning("Model Control Plane status unavailable: %s", type(exc).__name__)
@@ -220,6 +241,18 @@ async def model_control_status():
             "binding_version": active.binding_version,
             "validation_report": active.validation_report,
         },
+        "bindings": {
+            stage: {
+                "scope": binding.scope,
+                "revision_id": binding.revision_id,
+                "profile_id": binding.profile_id,
+                "binding_version": binding.binding_version,
+                "gate_class": "sql_critical" if stage in SQL_CRITICAL_MODEL_STAGES else "capability",
+                "validation_report": binding.validation_report,
+            }
+            for stage, binding in active_by_stage.items()
+        },
+        "available_stages": MODEL_STAGE_SCOPES,
         "audit": audit,
     }
 
@@ -328,37 +361,48 @@ async def get_model_quality_validation(run_id: str):
 async def activate_model_profile(payload: ModelActivationRequest):
     store = ModelControlStore(model_control_db_path())
     try:
+        scope = model_scope_for_stage(payload.stage)
         version = store.activate(
             payload.revision_id,
             expected_version=payload.expected_version,
             actor="admin:web",
             current_lineage=current_quality_lineage(),
+            scope=scope,
         )
-    except ModelBindingConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ModelControlError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    reset_model_config_cache()
-    return {"scope": MODEL_SCOPE_QUERY_PLANNING, "revision_id": payload.revision_id, "binding_version": version}
-
-
-@router.post("/settings/model-bindings/rollback")
-async def rollback_model_profile(payload: ModelRollbackRequest):
-    store = ModelControlStore(model_control_db_path())
-    try:
-        version = store.rollback(
-            expected_version=payload.expected_version,
-            actor="admin:web",
-            current_lineage=current_quality_lineage(),
-        )
-        active = store.get_active(MODEL_SCOPE_QUERY_PLANNING)
     except ModelBindingConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ModelControlError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     reset_model_config_cache()
     return {
-        "scope": MODEL_SCOPE_QUERY_PLANNING,
+        "stage": payload.stage,
+        "scope": scope,
+        "gate_class": "sql_critical" if payload.stage in SQL_CRITICAL_MODEL_STAGES else "capability",
+        "revision_id": payload.revision_id,
+        "binding_version": version,
+    }
+
+
+@router.post("/settings/model-bindings/rollback")
+async def rollback_model_profile(payload: ModelRollbackRequest):
+    store = ModelControlStore(model_control_db_path())
+    try:
+        scope = model_scope_for_stage(payload.stage)
+        version = store.rollback(
+            expected_version=payload.expected_version,
+            actor="admin:web",
+            current_lineage=current_quality_lineage(),
+            scope=scope,
+        )
+        active = store.get_active(scope)
+    except ModelBindingConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ModelControlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    reset_model_config_cache()
+    return {
+        "stage": payload.stage,
+        "scope": scope,
         "revision_id": active.revision_id if active else None,
         "binding_version": version,
     }

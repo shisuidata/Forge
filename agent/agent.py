@@ -149,6 +149,8 @@ def _prepare_query(
 
     retry_messages: list[dict] = []
     deadline = _prepare_deadline()
+    externally_pinned_model = model_snapshot is not None
+    model_revision_chain: list[str] = []
     if model_snapshot is None:
         try:
             model_snapshot = llm.get_model_config()
@@ -170,13 +172,19 @@ def _prepare_query(
         if retry_messages:
             messages = messages + retry_messages
         try:
+            attempt_model = (
+                model_snapshot
+                if externally_pinned_model or attempt == 0
+                else llm.get_model_config("query_repair")
+            )
             result = llm.call(
                 messages,
                 knowledge_context=knowledge,
                 extra_tables=extra_tables,
                 allowed_tables=_allowed_tables,
                 timeout_seconds=_remaining_call_budget(deadline),
-                config_snapshot=model_snapshot,
+                config_snapshot=attempt_model,
+                model_stage="query_generation" if attempt == 0 else "query_repair",
             )
         except llm.LLMRequestTimeoutError:
             payload["status"] = "timed_out"
@@ -218,6 +226,10 @@ def _prepare_query(
             payload["text"] = result.get("text", "")
             payload["retry_count"] = attempt
             return payload
+
+        revision_used = str(result.get("model_revision") or attempt_model.revision)
+        if not model_revision_chain or model_revision_chain[-1] != revision_used:
+            model_revision_chain.append(revision_used)
 
         if result["tool"] != "generate_forge_query":
             payload["error"] = f"prepare_query 只支持数据查询工具，当前工具：{result['tool']}"
@@ -262,7 +274,10 @@ def _prepare_query(
                 )
                 continue
             payload["error"] = f"查询生成失败（保障校验已重试 {MAX_RETRIES} 次）：{exc}"
-            payload["assurance_report"] = exc.report.to_dict()
+            payload["assurance_report"] = {
+                **exc.report.to_dict(),
+                "model_revision_chain": model_revision_chain,
+            }
             payload["retry_count"] = attempt
             return payload
 
@@ -274,7 +289,10 @@ def _prepare_query(
                 "retry_count": attempt,
                 "text": "",
                 "error": "",
-                "assurance_report": assurance.to_dict(),
+                "assurance_report": {
+                    **assurance.to_dict(),
+                    "model_revision_chain": model_revision_chain,
+                },
             }
         )
         return payload
@@ -368,11 +386,13 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         if retry_messages:
             messages = messages + retry_messages
         try:
+            attempt_model = model_snapshot if attempt == 0 else llm.get_model_config("query_repair")
             result = llm.call(
                 messages, knowledge_context=knowledge,
                 extra_tables=extra_tables, allowed_tables=_allowed_tables,
                 timeout_seconds=_remaining_call_budget(deadline),
-                config_snapshot=model_snapshot,
+                config_snapshot=attempt_model,
+                model_stage="query_generation" if attempt == 0 else "query_repair",
             )
         except llm.LLMRequestTimeoutError:
             err = _PREPARE_TIMEOUT_MESSAGE

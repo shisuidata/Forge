@@ -32,6 +32,7 @@ export interface OrchestratorConfig {
   piModelProvider: string | undefined;
   piModelId: string | undefined;
   piModelRevision: string | null;
+  modelControlDbPath: string | undefined;
 }
 
 function applyModelSecretReference(env: NodeJS.ProcessEnv): void {
@@ -174,5 +175,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
     piModelProvider,
     piModelId,
     piModelRevision,
+    modelControlDbPath: env.PI_MODEL_CONTROL_DB_PATH
+      ? resolve(env.PI_MODEL_CONTROL_DB_PATH)
+      : env.MODEL_CONTROL_DB_PATH ? resolve(env.MODEL_CONTROL_DB_PATH) : undefined,
   };
 }
