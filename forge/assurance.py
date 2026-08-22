@@ -19,7 +19,7 @@ from registry.relationships import (
 )
 
 ASSURANCE_REVISION = "query-assurance-v6"
-POLICY_REVISION = "convention-policy-v6"
+POLICY_REVISION = "convention-policy-v7"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 
 
