@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -145,6 +147,58 @@ async def _validate_feishu_credentials(app_id: str, app_secret: str) -> tuple[bo
     if response.status_code != 200 or payload.get("code") != 0:
         return False, str(payload.get("msg") or "飞书应用凭证无效")[:200]
     return True, ""
+
+
+def _sync_pi_model_catalog(revision: dict[str, Any]) -> None:
+    """Project one validated Pi-stage revision into the non-secret Pi model catalog."""
+    if not cfg.PI_MODEL_CATALOG_PATH:
+        raise ModelControlError("PI_MODEL_CATALOG_PATH 未配置，Pi Stage Binding 无法生效。")
+    path = Path(cfg.PI_MODEL_CATALOG_PATH).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        body = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"providers": {}}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ModelControlError("Pi models catalog 不可读。") from exc
+    config = revision["config"]
+    capabilities = config.get("capabilities", {})
+    provider_id = str(capabilities.get("pi_provider_id") or config["provider"])
+    api = "openai-completions" if config["protocol"] == "openai_chat" else "anthropic-messages"
+    providers = body.setdefault("providers", {})
+    provider = providers.setdefault(provider_id, {
+        "baseUrl": config.get("base_url", ""),
+        "api": api,
+        "apiKey": "$LLM_API_KEY",
+        "authHeader": True,
+        "models": [],
+    })
+    if provider.get("baseUrl") != config.get("base_url", "") or provider.get("api") != api:
+        raise ModelControlError("Pi provider ID 已绑定到不同协议或 Base URL。")
+    models = provider.setdefault("models", [])
+    model_entry = {
+        "id": config["model"], "name": config["model"], "reasoning": False,
+        "input": ["text"],
+        "contextWindow": int(capabilities.get("context_window", 128000)),
+        "maxTokens": int(config.get("max_output_tokens", 8192)),
+        "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+        "compat": {"supportsDeveloperRole": False, "supportsReasoningEffort": False,
+                   "supportsStrictMode": True},
+    }
+    models[:] = [item for item in models if item.get("id") != config["model"]]
+    models.append(model_entry)
+    encoded = json.dumps(body, ensure_ascii=False, indent=2) + "\n"
+    fd, tmp_name = tempfile.mkstemp(prefix=".models.", dir=path.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp_name, path)
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
 
 
 def _mask_db_url(url: str) -> str:
@@ -362,6 +416,11 @@ async def activate_model_profile(payload: ModelActivationRequest):
     store = ModelControlStore(model_control_db_path())
     try:
         scope = model_scope_for_stage(payload.stage)
+        revision = store.get_revision(payload.revision_id)
+        if revision is None:
+            raise ModelControlError("Model Profile Revision 不存在。")
+        if scope.startswith("pi."):
+            _sync_pi_model_catalog(revision)
         version = store.activate(
             payload.revision_id,
             expected_version=payload.expected_version,
