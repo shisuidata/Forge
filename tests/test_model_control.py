@@ -51,6 +51,26 @@ def _validated_revision(store: ModelControlStore, model: str) -> str:
     return revision
 
 
+def test_pi_stage_catalog_projection_contains_no_secret(tmp_path, monkeypatch):
+    from config import cfg
+    from web.routes.settings import _sync_pi_model_catalog
+
+    path = tmp_path / "models.json"
+    monkeypatch.setattr(cfg, "PI_MODEL_CATALOG_PATH", str(path))
+    _sync_pi_model_catalog({
+        "config": {
+            **_config("analysis-model"),
+            "capabilities": {"pi_provider_id": "analysis-provider", "context_window": 64000},
+        }
+    })
+    text = path.read_text()
+    assert "analysis-provider" in text
+    assert "analysis-model" in text
+    assert "$LLM_API_KEY" in text
+    assert "actual-secret" not in text
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
 def test_revision_store_never_persists_secret_value(tmp_path):
     path = tmp_path / "models.db"
     store = ModelControlStore(path)

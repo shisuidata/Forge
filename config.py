@@ -219,6 +219,9 @@ class Config:
     REPORT_PUBLIC_BASE_URL: str = _env(
         "REPORT_PUBLIC_BASE_URL", "reports", "public_base_url", default=""
     )
+    PI_MODEL_CATALOG_PATH: str = _env(
+        "PI_MODEL_CATALOG_PATH", "pi_orchestrator", "model_catalog_path", default=""
+    )
 
     QUERY_RUN_REVIEW_TTL_SECONDS: int = int(_env(
         "QUERY_RUN_REVIEW_TTL_SECONDS",
