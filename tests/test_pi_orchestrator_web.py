@@ -18,6 +18,18 @@ async def test_task_workspace_renders_hash_bound_queryrun_approval(client: Async
 
 
 @pytest.mark.asyncio
+async def test_task_event_stream_is_incremental_and_uses_poll_backoff(client: AsyncClient):
+    response = await client.get("/tasks")
+    assert response.status_code == 200
+    source = response.text
+    assert "const renderedEventKeys = new Set()" in source
+    assert "if (additions.length === 0) return" in source
+    assert source.count("eventsPanel.replaceChildren();") == 1
+    assert "Math.min(2000, Math.round(pollDelay * 1.5))" in source
+    assert "prefers-reduced-motion: reduce" in source
+
+
+@pytest.mark.asyncio
 async def test_pi_task_proxy_fails_closed_when_disabled(client: AsyncClient, monkeypatch):
     from config import cfg
 

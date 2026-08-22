@@ -8,6 +8,7 @@
   .task-grid { background-image: linear-gradient(rgba(17,24,39,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(17,24,39,.035) 1px, transparent 1px); background-size: 24px 24px; }
   .task-step { animation: task-in .25s ease-out both; }
   @keyframes task-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .task-step { animation: none; } }
 </style>
 
 <div class="task-grid -m-6 min-h-full p-8">
@@ -212,6 +213,7 @@ let currentReview = null;
 let supplementUsed = false;
 let analysisAttemptCounter = 0;
 let reportAttemptCounter = 0;
+const renderedEventKeys = new Set();
 
 function showError(message) {
   errorPanel.textContent = message;
@@ -219,7 +221,6 @@ function showError(message) {
 }
 
 function renderEvents(events) {
-  eventsPanel.replaceChildren();
   const labels = {
     'task.created': 'TaskRun 已创建',
     'task.status_changed': '状态推进',
@@ -235,21 +236,38 @@ function renderEvents(events) {
     'analysis.supplement_consumed': '补查结果已合并',
     'skill.execution_failed': 'Skill 执行失败',
   };
-  events.forEach((event, index) => {
+  const seenKeys = new Set(renderedEventKeys);
+  const additions = events.filter((event) => {
+    const key = event.event_id || `${event.task_run_id || currentTaskRunId}:${event.sequence}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+  if (additions.length === 0) return;
+  if (renderedEventKeys.size === 0) eventsPanel.replaceChildren();
+
+  additions.forEach((event, additionIndex) => {
+    const previousRow = eventsPanel.lastElementChild;
+    const previousRail = previousRow?.querySelector('[data-event-rail]');
+    if (previousRail && !previousRail.querySelector('[data-event-line]')) {
+      const line = document.createElement('span');
+      line.dataset.eventLine = 'true';
+      line.className = 'mt-1 w-px flex-1 bg-gray-200';
+      previousRail.appendChild(line);
+    }
+
+    const key = event.event_id || `${event.task_run_id || currentTaskRunId}:${event.sequence}`;
     const row = document.createElement('div');
+    row.dataset.eventKey = key;
     row.className = 'task-step relative flex gap-3 pb-5 last:pb-0';
-    row.style.animationDelay = `${index * 45}ms`;
+    row.style.animationDelay = `${additionIndex * 45}ms`;
 
     const rail = document.createElement('div');
+    rail.dataset.eventRail = 'true';
     rail.className = 'flex w-5 flex-col items-center';
     const dot = document.createElement('span');
     dot.className = event.event_type.includes('failed') ? 'mt-1 h-2.5 w-2.5 rounded-full bg-red-500' : event.event_type === 'query.review_requested' ? 'mt-1 h-2.5 w-2.5 rounded-full bg-amber-500' : 'mt-1 h-2.5 w-2.5 rounded-full bg-gray-900';
     rail.appendChild(dot);
-    if (index < events.length - 1) {
-      const line = document.createElement('span');
-      line.className = 'mt-1 w-px flex-1 bg-gray-200';
-      rail.appendChild(line);
-    }
 
     const copy = document.createElement('div');
     copy.className = 'min-w-0 flex-1';
@@ -268,6 +286,7 @@ function renderEvents(events) {
     copy.append(title, detail);
     row.append(rail, copy);
     eventsPanel.appendChild(row);
+    renderedEventKeys.add(key);
   });
 }
 
@@ -281,6 +300,8 @@ const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mil
 
 async function pollTask(taskRunId, targetStatuses, artifactType = null) {
   const deadline = Date.now() + 360000;
+  let previousEventCount = -1;
+  let pollDelay = 600;
   while (Date.now() < deadline) {
     const [taskData, eventData, artifactData, attemptData] = await Promise.all([
       readJson(await fetch(`/api/pi/tasks/${encodeURIComponent(taskRunId)}`)),
@@ -308,7 +329,10 @@ async function pollTask(taskRunId, targetStatuses, artifactType = null) {
         return {task: taskData.task, events: eventData.events, artifacts: artifactData.artifacts, artifact};
       }
     }
-    await sleep(750);
+    const eventCount = eventData.events.length;
+    pollDelay = eventCount > previousEventCount ? 600 : Math.min(2000, Math.round(pollDelay * 1.5));
+    previousEventCount = eventCount;
+    await sleep(pollDelay);
   }
   throw new Error('TaskRun polling timeout');
 }
@@ -332,6 +356,7 @@ taskForm.addEventListener('submit', async (event) => {
   currentTaskRunId = null;
   currentQueryTaskRunId = null;
   currentReview = null;
+  renderedEventKeys.clear();
   supplementUsed = false;
   analysisAttemptCounter = 0;
   reportAttemptCounter = 0;
