@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +26,31 @@ export interface OrchestratorConfig {
   piModelProvider: string | undefined;
   piModelId: string | undefined;
   piModelRevision: string | null;
+}
+
+function applyModelSecretReference(env: NodeJS.ProcessEnv): void {
+  const reference = env.PI_MODEL_SECRET_REF;
+  if (reference === undefined || reference.length === 0) return;
+  const match = /^file-env:(.+)#([A-Z][A-Z0-9_]*)$/.exec(reference);
+  if (match?.[1] === undefined || match[2] === undefined) {
+    throw new Error("PI_MODEL_SECRET_REF must use file-env:/absolute/path#VARIABLE");
+  }
+  const path = resolve(match[1]);
+  const mode = statSync(path).mode & 0o777;
+  if (mode !== 0o600) {
+    throw new Error("PI model Secret file must have mode 600");
+  }
+  const keyName = match[2];
+  const line = readFileSync(path, "utf8").split(/\r?\n/).find(
+    (candidate) => candidate.startsWith(`${keyName}=`),
+  );
+  if (line === undefined) throw new Error("PI model Secret variable is missing");
+  let value = line.slice(keyName.length + 1).trim();
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1);
+  }
+  if (value.length === 0) throw new Error("PI model Secret variable is empty");
+  env.ARK_API_KEY = value;
 }
 
 function parsePort(raw: string | undefined): number {
@@ -64,6 +89,7 @@ export function computePiModelRevision(options: {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorConfig {
+  applyModelSecretReference(env);
   const piModelProvider = env.PI_MODEL_PROVIDER || undefined;
   const piModelId = env.PI_MODEL_ID || undefined;
   if ((piModelProvider === undefined) !== (piModelId === undefined)) {
