@@ -1543,6 +1543,17 @@ export class OrchestratorApplication {
     if (analysis === undefined) {
       throw new TaskStateError(`AnalysisArtifact not found for ${taskRunId}`);
     }
+    const queryResultForMethod = this.#artifacts.latest(taskRunId, "query_result") as
+      | Artifact<QueryResultPayload>
+      | undefined;
+    const methodSummary = analysis.payload.method_summary ?? {
+      objective: typeof task.metadata.original_message === "string"
+        ? task.metadata.original_message
+        : "解释当前查询结果",
+      dimensions: queryResultForMethod?.payload.columns.slice(0, 3) ?? [],
+      comparison_baseline: "当前已审批查询结果内部对比",
+      approach_steps: ["核验结果字段与范围", "比较主要维度", "提炼证据绑定结论"],
+    };
     let attempt: StageAttempt | undefined;
     let stageTask: TaskRun = task;
     stageTask = this.#transactions.run(() => {
@@ -1628,10 +1639,10 @@ export class OrchestratorApplication {
             model_revision: queryResult.payload.model_revision,
             assurance_registry_revision: queryResult.payload.assurance_registry_revision,
           }).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
-          decision_log: analysis.payload.method_summary.approach_steps.map((step) => ({
+          decision_log: methodSummary.approach_steps.map((step) => ({
             stage: "analysis",
             decision: step,
-            rationale: analysis.payload.method_summary.comparison_baseline,
+            rationale: methodSummary.comparison_baseline,
             evidence_refs: analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
           })),
           source_artifact_ids: [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id],
@@ -1690,7 +1701,7 @@ export class OrchestratorApplication {
         bundle_hash: assembled.reportBundlePayload.bundle_hash,
         title: payload.title,
         business_report: payload,
-        analysis: analysis.payload,
+        analysis: { ...analysis.payload, method_summary: methodSummary },
         query_result: assembled.queryResult.payload,
         charts: assembled.charts.map((chart) => chart.payload),
         technical_report: assembled.technicalPayload,
