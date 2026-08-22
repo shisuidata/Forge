@@ -914,7 +914,7 @@ QualityValidationRun 已完成基础实现：后台逐题固定候选 revision�
 
 下一候选使用同一 Coding Plan 的 `ark-code-latest`（Pi Stage 已验证 readiness=ready）；无副作用 Tool Calling/Structured Output smoke 通过（1.80s），但 40 题 Run `mvr_aae21f3ebb32464693fd5465ed1d7600` 已完成并失败关闭：Accuracy 15%（6/40）、Assurance 35%、平均重试 0.65、P95 205.29s、timeout 10%。仅平均重试、Tool Calling、Structured Output 达标；Activation Gate 已阻断，ActiveBinding 仍为空。该结果低于 `deepseek-v4-flash`，不继续激活或切换生产流量。
 
-benchmark Registry 修复已完成：新增 `relationships.reference.json` 作为 40 题关系真相源，17 条关系全部为 `source=benchmark_reference/status=confirmed/many_to_one`；`schema.registry.json` 与 fixture generator 统一投影该文件。自动测试解析所有 `reference_sql` 的物理 `JOIN ... ON`，验证每条关系均被可信边覆盖、端点存在且 Canonical Projection 无漂移。当前验证：Python 447 passed / 25 skipped；Pi typecheck 通过，52 tests passed。下一步部署关系 revision，并用同一模型、同一阈值重跑，区分 Registry 误拒绝与真实模型语义错误。
+benchmark Registry 修复已完成：新增 `relationships.reference.json` 作为 40 题关系真相源，17 条关系全部为 `source=benchmark_reference/status=confirmed/many_to_one`；`schema.registry.json` 与 fixture generator 统一投影该文件。自动测试解析所有 `reference_sql` 的物理 `JOIN ... ON`，验证每条关系均被可信边覆盖、端点存在且 Canonical Projection 无漂移。当前验证：Python 447 passed / 25 skipped；Pi typecheck 通过，52 tests passed。NAS main `6745797` 已部署，运行 Registry 更新为 17 条关系且保持 mode 400；DeepSeek 同阈值重跑 `mvr_9c63ceafabca41749de2e630176712ed` 已启动，当前 running。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
