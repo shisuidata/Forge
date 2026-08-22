@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -36,6 +36,22 @@ test("Forge HTTP timeout must finish before the Stage timeout", () => {
   const config = loadConfig({});
   assert.equal(config.forgeTimeoutMs, 220_000);
   assert.ok(config.forgeTimeoutMs < config.stageTimeoutMs);
+});
+
+test("Pi model Secret reference reads one variable from a mode-600 file without persisting it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-secret-"));
+  const secretPath = join(directory, "forge.env");
+  await writeFile(secretPath, "LLM_API_KEY=secret-for-test\nDATABASE_PASSWORD=must-not-load\n");
+  await chmod(secretPath, 0o600);
+  const env: NodeJS.ProcessEnv = {
+    PI_MODEL_SECRET_REF: `file-env:${secretPath}#LLM_API_KEY`,
+  };
+  const config = loadConfig(env);
+  assert.equal(env.ARK_API_KEY, "secret-for-test");
+  assert.doesNotMatch(JSON.stringify(config), /secret-for-test|must-not-load/);
+
+  await chmod(secretPath, 0o644);
+  assert.throws(() => loadConfig(env), /mode 600/);
 });
 
 test("state database defaults under the dedicated agent directory", async () => {

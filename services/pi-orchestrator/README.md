@@ -74,7 +74,8 @@ POST /v1/tasks/{task_run_id}/render-report
 | `FORGE_PI_SERVICE_KEY` | 空 | 内部 QueryRun API 专用服务密钥；必须匹配 Forge `PI_SERVICE_API_KEYS` |
 | `FORGE_REQUEST_TIMEOUT_MS` | `220000` | Forge 请求超时 |
 | `PI_MODEL_PROVIDER` | 空 | 专用 Pi Runtime 的模型 Provider；必须和 `PI_MODEL_ID` 同时配置 |
-| `PI_MODEL_ID` | 空 | 专用 Pi Runtime 的模型 ID；模型和凭证只从 `PI_ORCHESTRATOR_AGENT_DIR` 加载 |
+| `PI_MODEL_ID` | 空 | 专用 Pi Runtime 的模型 ID；模型目录只从 `PI_ORCHESTRATOR_AGENT_DIR` 加载 |
+| `PI_MODEL_SECRET_REF` | 空 | 可选 `file-env:/absolute/mode600.env#VARIABLE`；只读取指定变量并映射为 Runtime 的 `ARK_API_KEY`，不复制、不响应、不持久化其他变量 |
 
 火山方舟 Coding Plan 本地配置：
 
