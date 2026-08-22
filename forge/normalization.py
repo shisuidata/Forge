@@ -3,9 +3,40 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
+import json
 
 _RATIO_ALIAS_TOKENS = ("pct", "ratio", "rate", "share", "占比", "比例")
 _DIMENSION_SUFFIXES = ("_id", "_name", "month", "date", "_dt")
+
+
+def bind_unambiguous_single_cte_scan(query: dict[str, Any]) -> dict[str, Any]:
+    """Bind a main query to its sole CTE when every derived reference uses it.
+
+    Weak models sometimes build the correct aggregate CTE and reference its
+    outputs in window/select, but accidentally leave a duplicated physical scan
+    and joins at the main level. Rebinding is safe only with one CTE, explicit
+    qualified references to it, and no main-level filter/group/aggregate.
+    """
+    result = deepcopy(query)
+    ctes = result.get("cte", [])
+    if len(ctes) != 1 or not isinstance(ctes[0], dict) or not ctes[0].get("name"):
+        return result
+    cte_name = str(ctes[0]["name"])
+    if result.get("scan") == cte_name:
+        return result
+    if any(result.get(key) for key in ("filter", "group", "agg")):
+        return result
+    main_projection = {
+        key: result.get(key)
+        for key in ("select", "window", "qualify", "sort")
+        if result.get(key)
+    }
+    serialized = json.dumps(main_projection, ensure_ascii=False)
+    if f"{cte_name}." not in serialized:
+        return result
+    result["scan"] = cte_name
+    result.pop("joins", None)
+    return result
 
 
 def complete_unambiguous_ratio_alias(query: dict[str, Any], question: str) -> dict[str, Any]:
