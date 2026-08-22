@@ -145,6 +145,12 @@ def lint_conventions(forge_json: dict, question: str) -> list[str]:
     # ── 规则 42：时间范围事件列表默认按时间倒序 ───────────────────────────
     _check_time_bounded_listing_sort(forge_json, q, warnings)
 
+    # ── 规则 43：好评数大于差评数使用条件聚合 ─────────────────────────────
+    _check_good_vs_bad_review_counts(forge_json, q, warnings)
+
+    # ── 规则 44：高价值累计消费默认使用已完成订单 ─────────────────────────
+    _check_high_value_completed_spend(forge_json, q, warnings)
+
     return warnings
 
 
@@ -733,6 +739,52 @@ def _check_time_bounded_listing_sort(
         )
 
 
+def _check_good_vs_bad_review_counts(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if not all(term in question for term in ("好评数", "差评数", "多于")):
+        return
+    aliases = {
+        str(agg.get("as", "")): str(agg.get("col", "")).lower()
+        for agg in forge_json.get("agg", [])
+        if isinstance(agg, dict)
+    }
+    good_expr = aliases.get("good_review_count", "")
+    bad_expr = aliases.get("bad_review_count", "")
+    has_conditional_counts = (
+        "case" in good_expr and "好评" in good_expr
+        and "case" in bad_expr and "差评" in bad_expr
+    )
+    having_compares_aliases = any(
+        isinstance(item, dict)
+        and item.get("col") == "good_review_count"
+        and item.get("op") == "gt"
+        and item.get("col2") == "bad_review_count"
+        for item in forge_json.get("having", [])
+    )
+    expected = ["product_name", "good_review_count", "bad_review_count"]
+    actual = [_unqualified_field(item) for item in forge_json.get("select", []) if isinstance(item, str)]
+    if not has_conditional_counts or not having_compares_aliases or actual != expected:
+        warnings.append(
+            "好评数多于差评数必须使用两个条件聚合："
+            "SUM(CASE WHEN comment_type='好评' THEN 1 ELSE 0 END) AS good_review_count "
+            "和对应差评聚合，并用 having 的 col/col2 比较 good_review_count > bad_review_count。"
+            "最终只输出 product_name、good_review_count、bad_review_count。"
+        )
+
+
+def _check_high_value_completed_spend(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if "累计消费" not in question or "高价值用户" not in question:
+        return
+    if not _has_order_status_filter(forge_json):
+        warnings.append(
+            "高价值用户的累计消费默认统计已完成订单。"
+            "请添加 dwd_order_detail.order_status = '已完成'，再按用户 SUM(total_amount)。"
+        )
+
+
 def _check_monthly_order_time_field(
     forge_json: dict, question: str, warnings: list[str]
 ) -> None:
@@ -856,6 +908,11 @@ def _check_all_bad_reviews_without_images(forge_json: dict, question: str, warni
                 "dim_product 中可能存在多个 product_id 对应同一 product_name，"
                 "请设置 distinct: true，或最终 GROUP BY dim_product.product_name。"
             )
+        sorts = _collect_direct_sort_fields(forge_json)
+        if not sorts or not (sorts[0][0].endswith("product_name") and sorts[0][1] == "asc"):
+            warnings.append(
+                "仅展示去重商品名称的反存在结果，默认按 product_name ASC 稳定排序。"
+            )
 
 
 def _check_vip_level_grain(forge_json: dict, question: str, warnings: list[str]) -> None:
@@ -939,6 +996,13 @@ def _check_brand_diamond_avg_item_contract(forge_json: dict, question: str, warn
             "统计各品牌钻石会员平均商品实付单价时，应同时输出订单样本量 "
             "COUNT(DISTINCT dwd_order_detail.order_id) AS order_count，"
             "便于审核均价结果的分母规模。"
+        )
+    ordered = [_unqualified_field(field) for field in selects]
+    expected = ["brand_name", "level_name", "avg_item_price", "order_count"]
+    if ordered != expected:
+        warnings.append(
+            "各品牌钻石会员均价的最终列顺序固定为 brand_name、level_name、"
+            "avg_item_price、order_count；内部 GROUP BY 字段不要改变展示顺序。"
         )
 
 
