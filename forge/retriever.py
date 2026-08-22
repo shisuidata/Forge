@@ -40,6 +40,8 @@ from typing import Callable
 
 import numpy as np
 
+from registry.relationships import load_relationships
+
 
 class SchemaRetriever:
     """
@@ -124,6 +126,21 @@ class SchemaRetriever:
         tables_info = self.registry.get("tables", self.registry)
         table_set = set(self.tables)
         fks: dict[str, set[str]] = {t: set() for t in self.tables}
+
+        # Canonical confirmed/database relationships are the primary graph.
+        try:
+            for relationship in load_relationships(self.registry):
+                if not relationship.trusted:
+                    continue
+                left = relationship.from_field.split(".", 1)[0]
+                right = relationship.to_field.split(".", 1)[0]
+                if left in fks and right in fks:
+                    fks[left].add(right)
+                    fks[right].add(left)
+        except ValueError:
+            # Assurance will fail closed on malformed metadata. Retrieval can
+            # still provide bounded keyword candidates for diagnosis.
+            pass
 
         for table, info in tables_info.items():
             if not isinstance(info, dict):
@@ -548,18 +565,20 @@ class SchemaRetriever:
         """
         seen: set[str] = set(tables)
         frontier = list(tables)
+        expanded: list[str] = []
 
         for _ in range(depth):
             next_frontier: list[str] = []
             for table in frontier:
-                for ref in self._fks.get(table, set()):
+                for ref in sorted(self._fks.get(table, set())):
                     if ref not in seen:
                         seen.add(ref)
                         next_frontier.append(ref)
+                        expanded.append(ref)
             frontier = next_frontier
 
-        # 保持原始顺序，扩展表追加在后
-        return list(tables) + [t for t in seen if t not in set(tables)]
+        # 保持初始相关度顺序，关系扩展按稳定 BFS 顺序追加。
+        return list(tables) + expanded
 
     def _build_idf(self) -> None:
         """预计算语料 IDF 权重（BM25-lite 使用）。"""

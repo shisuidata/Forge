@@ -94,7 +94,10 @@ class Config:
     )
 
     # ── Embedding ─────────────────────────────────────────────────────────────
-    EMBED_API_KEY:   str = _env("EMBED_API_KEY",   "embedding", "api_key")   or _env("LLM_API_KEY", "llm", "api_key")
+    # Embedding credentials must be explicit. Reusing an unrelated LLM key with
+    # the default embedding endpoint makes retriever initialization fail and
+    # silently expands the prompt to the full Registry.
+    EMBED_API_KEY:   str = _env("EMBED_API_KEY", "embedding", "api_key")
     EMBED_BASE_URL:  str = _env("EMBED_BASE_URL",  "embedding", "base_url",  default="https://api.siliconflow.cn/v1")
     EMBED_MODEL:     str = _env("EMBED_MODEL",     "embedding", "model",     default="BAAI/bge-m3")
     RETRIEVAL_TOP_K: int = int(_env("RETRIEVAL_TOP_K", "embedding", "top_k", default="5"))

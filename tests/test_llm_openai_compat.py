@@ -68,6 +68,7 @@ def test_openai_compatible_call_uses_configured_base_url_and_tools(monkeypatch):
     assert captured["url"] == "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer test-key"
     assert captured["json"]["model"] == "doubao-seed-2-1-pro-260628"
+    assert captured["json"]["max_tokens"] == 8192
     assert captured["json"]["tools"][0]["type"] == "function"
     assert captured["json"]["tools"][0]["function"]["parameters"]["required"] == ["scan"]
     assert captured["timeout"] == 90

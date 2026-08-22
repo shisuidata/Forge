@@ -109,7 +109,11 @@ def _get_retriever() -> tuple[SchemaRetriever | None, object | None]:
 
 # ── 注册表上下文格式化 ────────────────────────────────────────────────────────
 
-def _registry_context(question: str | None = None) -> str:
+def _registry_context(
+    question: str | None = None,
+    *,
+    selected_tables: list[str] | None = None,
+) -> str:
     """
     读取结构层和语义层注册表，格式化为便于 LLM 理解的纯文本。
 
@@ -136,52 +140,26 @@ def _registry_context(question: str | None = None) -> str:
         格式化后的注册表上下文字符串；若文件不存在则返回提示信息。
     """
     lines: list[str] = []
+    q_lower = (question or "").lower()
+    visible_tables: set[str] = set()
 
     # ── 结构层：表名和字段名（向量检索精简 or 全量）────────────────────────────
     try:
         schema = json.loads(cfg.REGISTRY_PATH.read_text())
-
-        # 当有问题文本时，用检索器只取相关表；否则全量展示
         retriever, q_embed_fn = _get_retriever()
-        if question and retriever:
-            top_k = getattr(cfg, "RETRIEVAL_TOP_K", 5)
-            try:
-                selected_tables = retriever.retrieve(question, q_embed_fn, top_k=top_k)
-            except (ValueError, OSError, TypeError) as exc:
-                logger.warning("Schema retrieval failed, using all tables: %s", exc)
-                selected_tables = list((schema.get("tables", schema)).keys())
-            lines.append(f"表结构（与问题相关的 {len(selected_tables)} 张表）：")
-            tables_info = schema.get("tables", schema)
-            for table in selected_tables:
-                info = tables_info.get(table, {})
-                cols = info.get("columns", info) if isinstance(info, dict) else info
-                if isinstance(cols, dict):
-                    col_parts = []
-                    for col_name, meta in cols.items():
-                        if isinstance(meta, dict) and meta.get("enum"):
-                            col_parts.append(f"{col_name}[{'/'.join(str(v) for v in meta['enum'])}]")
-                        else:
-                            col_parts.append(col_name)
-                    lines.append(f"  {table}: {', '.join(col_parts)}")
-                else:
-                    lines.append(f"  {table}: {', '.join(cols)}")
-        else:
-            # 全量模式（无问题文本 / 检索器不可用）
-            tables = schema.get("tables", schema)
-            lines.append("表结构：")
-            for table, info in tables.items():
-                cols = info.get("columns", info) if isinstance(info, dict) else info
-                if isinstance(cols, dict):
-                    col_parts = []
-                    for col_name, meta in cols.items():
-                        if isinstance(meta, dict) and meta.get("enum"):
-                            col_parts.append(f"{col_name}[{'/'.join(str(v) for v in meta['enum'])}]")
-                        else:
-                            col_parts.append(col_name)
-                    lines.append(f"  {table}: {', '.join(col_parts)}")
-                else:
-                    lines.append(f"  {table}: {', '.join(cols)}")
-            selected_tables = list(tables)
+        if selected_tables is None:
+            if question and retriever:
+                top_k = getattr(cfg, "RETRIEVAL_TOP_K", 5)
+                try:
+                    selected_tables = retriever.retrieve(question, q_embed_fn, top_k=top_k)
+                except (ValueError, OSError, TypeError) as exc:
+                    logger.warning("Schema retrieval failed, using BM25 fallback: %s", exc)
+                    selected_tables = retriever.retrieve(question, None, top_k=top_k)
+            else:
+                selected_tables = list(schema.get("tables", schema))
+        formatter = retriever or SchemaRetriever(schema)
+        lines.append(f"表结构（当前查询上下文 {len(selected_tables)} 张表）：")
+        lines.append(formatter.get_schema_ddl(selected_tables))
 
         visible_tables = set(selected_tables)
         visible_relationships = [
@@ -261,7 +239,6 @@ def _registry_context(question: str | None = None) -> str:
             cfg.DISAMBIGUATIONS_PATH.read_text()
         ) or {}
         matched_dis: list[str] = []
-        q_lower = (question or "").lower()
         for key, rule in disambiguations.items():
             triggers = rule.get("triggers", [])
             if any(str(t).lower() in q_lower for t in triggers):
@@ -278,10 +255,18 @@ def _registry_context(question: str | None = None) -> str:
         matched_conv: list[str] = []
         for key, rule in conventions.items():
             applies_to = rule.get("applies_to", [])
-            # 当问题中出现字段名（去掉 table. 前缀后的列名）或表名时注入
-            col_names = {a.split(".")[-1] for a in applies_to} | {a.split(".")[0] for a in applies_to}
-            if any(c.lower() in q_lower for c in col_names if len(c) >= 3):
-                matched_conv.append(f"  【{rule.get('label', key)}】{rule.get('convention', '').strip()}")
+            applies_tables = {
+                str(item).split(".", 1)[0]
+                for item in applies_to
+                if isinstance(item, str) and "." in item
+            }
+            # Convention is organization-authored semantic policy. Inject it
+            # whenever its physical tables are in the exact RAG context; do not
+            # depend on Chinese questions containing English column names.
+            if applies_tables & visible_tables:
+                matched_conv.append(
+                    f"  【{rule.get('label', key)}】{rule.get('convention', '').strip()}"
+                )
         if matched_conv:
             lines.append("\n字段使用约定（根据问题自动匹配）：")
             lines.extend(matched_conv)
@@ -439,7 +424,7 @@ def _call_anthropic(
         kwargs["base_url"] = config.base_url
     request: dict[str, Any] = {
         "model": config.model,
-        "max_tokens": 2048,
+        "max_tokens": config.max_output_tokens,
         "system": system,
         "tools": tools,
         "messages": messages,
@@ -494,6 +479,7 @@ def _call_openai(
     payload: dict = {
         "model": config.model,
         "messages": [{"role": "system", "content": system}] + messages,
+        "max_tokens": config.max_output_tokens,
     }
     tool_choice_mode = config.tool_choice
     if tool_choice_mode not in {"auto", "required", "named"}:
@@ -701,6 +687,12 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
             break
 
     # 用检索到的相关表构建 tool schema（避免全量 200 张表撑爆 context window）
+    all_tables = list(registry.get("tables", {}).keys())
+    selected_tables = (
+        [table for table in all_tables if table in set(allowed_tables)]
+        if allowed_tables is not None else all_tables
+    )
+    retrieval_mode = "full_registry"
     filtered_registry = registry
     retriever, q_embed_fn = _get_retriever()
     if current_question and retriever:
@@ -710,13 +702,16 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
                 current_question, q_embed_fn, top_k=top_k,
                 allowed_tables=allowed_tables,
             )
+            retrieval_mode = "vector" if q_embed_fn is not None else "bm25"
         except (ValueError, OSError, TypeError) as exc:
-            logger.warning("Schema retrieval failed, using all tables: %s", exc)
-            all_tables = list(registry.get("tables", {}).keys())
-            selected_tables = (
-                [t for t in all_tables if t in set(allowed_tables)]
-                if allowed_tables is not None else all_tables
+            logger.warning("Schema vector retrieval failed, using BM25 fallback: %s", exc)
+            selected_tables = retriever.retrieve(
+                current_question,
+                None,
+                top_k=top_k,
+                allowed_tables=allowed_tables,
             )
+            retrieval_mode = "bm25_fallback"
         # 错误驱动二次召回：追加缺失表（去重，保持顺序；extra_tables 也受权限约束）
         if extra_tables:
             seen = set(selected_tables)
@@ -730,11 +725,15 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     elif allowed_tables is not None:
         # 无检索器但有权限限制：直接过滤 registry
         tables_info = registry.get("tables", {})
-        allowed_set = set(allowed_tables)
-        filtered_registry = {"tables": {t: tables_info[t] for t in allowed_set if t in tables_info}}
+        filtered_registry = {
+            "tables": {table: tables_info[table] for table in selected_tables if table in tables_info}
+        }
 
     tools = _build_tools(filtered_registry)
-    system = build_system(_registry_context(question=current_question), question=current_question)
+    system = build_system(
+        _registry_context(question=current_question, selected_tables=selected_tables),
+        question=current_question,
+    )
     # 数据权限提示：当有白名单限制时，告知 LLM 哪些表被排除
     if allowed_tables is not None:
         all_table_names = set(registry.get("tables", {}).keys())
@@ -753,6 +752,11 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
     else:
         response = _call_openai(messages, system, tools, config=model_config)
     response["model_revision"] = model_config.revision
+    response["retrieval_trace"] = {
+        "mode": retrieval_mode,
+        "selected_tables": selected_tables,
+        "tool_schema_table_count": len(filtered_registry.get("tables", {})),
+    }
     return response
 
 

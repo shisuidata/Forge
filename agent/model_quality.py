@@ -218,6 +218,7 @@ def run_quality_validation(
                 "latency_ms": latency_ms,
                 "timed_out": timed_out,
                 "error_code": error_code,
+                "retrieval_trace": prepared.get("retrieval_trace"),
             }
             results.append(result)
             store.record_quality_validation_case(run_id, str(case["id"]), result)
