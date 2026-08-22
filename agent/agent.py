@@ -207,6 +207,9 @@ def _prepare_query(
             return payload
 
         forge_json = result["input"]
+        # Keep the bounded last candidate for internal quality diagnostics even
+        # when deterministic Assurance rejects it after all retries.
+        payload["forge_json"] = forge_json
         try:
             assurance = assure_query(
                 forge_json,

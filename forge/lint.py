@@ -124,6 +124,9 @@ def lint_conventions(forge_json: dict, question: str) -> list[str]:
     # ── 规则 35：品牌评分偏差结果列契约 ────────────────────────────────────
     _check_brand_rating_deviation_contract(forge_json, q, warnings)
 
+    # ── 规则 36：占比分母窗口只用于计算，不自动暴露 ────────────────────────
+    _check_ratio_denominator_output(forge_json, q, warnings)
+
     return warnings
 
 
@@ -642,6 +645,36 @@ def _check_percentage_display(forge_json: dict, question: str, warnings: list[st
             return
 
 
+def _check_ratio_denominator_output(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    """A denominator helper is not an output unless the user explicitly asks to display it."""
+    if not any(word in question for word in ("占比", "比例")):
+        return
+    if re.search(r"(?:显示|输出|列出).{0,12}(?:总数|总额|合计|分母)", question):
+        return
+    selected = {
+        _unqualified_field(item)
+        for item in forge_json.get("select", [])
+        if isinstance(item, str)
+    }
+    ratio_exprs = [
+        str(item.get("expr", ""))
+        for item in forge_json.get("select", [])
+        if isinstance(item, dict) and "/" in str(item.get("expr", ""))
+    ]
+    for window in forge_json.get("window", []):
+        if not isinstance(window, dict) or window.get("fn") not in {"sum", "count"}:
+            continue
+        alias = str(window.get("as", ""))
+        if alias and alias in selected and any(re.search(rf"\b{re.escape(alias)}\b", expr) for expr in ratio_exprs):
+            warnings.append(
+                f"窗口别名 {alias} 是占比分母的中间汇总，用户未要求展示分母。"
+                f"请从最终 select 删除 {alias}，仅保留维度、分子指标和占比。"
+            )
+            return
+
+
 def _check_all_bad_reviews_without_images(forge_json: dict, question: str, warnings: list[str]) -> None:
     """“有差评且所有差评均无图片”应表达为 EXISTS + NOT EXISTS/anti。"""
     if not ("差评" in question and "无图片" in question and "所有" in question):
@@ -1058,16 +1091,23 @@ def _check_derived_metric_having(forge_json: dict, question: str, warnings: list
 
 def _check_internal_rank_output(forge_json: dict, question: str, warnings: list[str]) -> None:
     """TopN 排名别名默认只用于 qualify，除非用户明确要求展示名次。"""
-    explicitly_requests_rank = any(
-        phrase in question for phrase in ("显示排名", "显示名次", "输出排名", "输出名次", "排名列", "名次列")
+    explicitly_requests_rank = bool(
+        re.search(r"(?:显示|输出|列出).{0,20}(?:排名|名次)|(?:及|和)(?:排名|名次)|(?:排名|名次)列", question)
     )
     if explicitly_requests_rank:
         return
     for query in _iter_queries(forge_json):
+        qualified_aliases = {
+            str(condition.get("col", "")).rpartition(".")[2]
+            for condition in query.get("qualify", [])
+            if isinstance(condition, dict)
+        }
         rank_aliases = {
             str(window.get("as", ""))
             for window in query.get("window", [])
-            if isinstance(window, dict) and str(window.get("fn", "")).lower() in _RANKING_FNS
+            if isinstance(window, dict)
+            and str(window.get("fn", "")).lower() in _RANKING_FNS
+            and str(window.get("as", "")) in qualified_aliases
         }
         if not rank_aliases:
             continue
