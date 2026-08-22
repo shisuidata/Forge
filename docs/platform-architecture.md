@@ -342,6 +342,12 @@ Skill 先生成语义结果，不直接拼装具体渠道组件：
 
 渠道能力不一致时允许降级，但不能改变事实、审批对象和查询状态。
 
+### 10.1 飞书即配即用与一次性身份引导
+
+个人部署的飞书设置页采用“保存即启动”：服务端验证 App 凭证后写入 mode-600 配置，受管 WebSocket Runtime 热重载，无需重启 Forge API。Forge Adapter 与 Pi 的 Channel Service Key 由部署层预连，设置页不得显示或返回密钥。
+
+未知渠道身份仍默认失败关闭。个人部署可由管理员显式开启一次性首用户绑定：仅当飞书 Identity Map 中不存在任何用户、事件已通过 Adapter Service Key 鉴权且事件是 `p2p` 私聊 message 时，Pi 才能将首个 `open_id` 原子绑定到预设 org/team/user；绑定完成后 bootstrap 永久关闭，后续未知用户继续拒绝。该机制不能扩展为 wildcard 身份，也不能绕过 SQL 审批或 Forge Assurance。
+
 ## 11. 可观测性
 
 每次任务应能按 `task_run_id` 查看：

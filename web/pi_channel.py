@@ -42,6 +42,7 @@ class PiChannelClient:
         conversation_id: str,
         message_id: str,
         text: str,
+        chat_type: str | None = None,
     ) -> dict[str, Any]:
         return self._submit({
             "event_id": event_id,
@@ -51,7 +52,10 @@ class PiChannelClient:
             "conversation_id": conversation_id,
             "message_id": message_id,
             "task_run_id": None,
-            "payload": {"text": text},
+            "payload": {
+                "text": text,
+                **({"chat_type": chat_type} if chat_type else {}),
+            },
         })
 
     def submit_action(

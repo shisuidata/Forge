@@ -106,12 +106,14 @@ def test_pi_channel_client_sends_dedicated_service_key(monkeypatch):
         conversation_id="oc_demo",
         message_id="om_demo",
         text="查询订单",
+        chat_type="p2p",
     )
     assert task_run_id_from_response(result) == "tr_demo"
     assert request.call_args.kwargs["headers"] == {
         "X-Channel-Service-Key": "channel-secret"
     }
     assert request.call_args.kwargs["json"]["channel"] == "feishu"
+    assert request.call_args.kwargs["json"]["payload"]["chat_type"] == "p2p"
 
 
 def test_pi_channel_client_requires_channel_service_key():

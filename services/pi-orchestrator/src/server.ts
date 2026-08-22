@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { pathToFileURL } from "node:url";
 
 import { OrchestratorApplication } from "./application.js";
-import { parseChannelEvent } from "./channels/contracts.js";
+import { parseChannelEvent, type ChannelIdentity } from "./channels/contracts.js";
 import { ChannelIdentityError, ChannelIdentityResolver } from "./channels/identity.js";
 import { loadConfig, type OrchestratorConfig } from "./config.js";
 import { FORGE_DIALECTS, type ForgeDialect } from "./forge/client.js";
@@ -196,8 +196,11 @@ export function createOrchestratorServer(
             capabilities: {
               ...capabilities,
               channelIngressConfigured:
-                config.channelServiceKeys.length > 0 && channelIdentities.size > 0,
+                config.channelServiceKeys.length > 0 &&
+                (channelIdentities.size > 0 || config.channelAutoBindFirstFeishu),
               authorizedChannelIdentities: channelIdentities.size,
+              feishuAutoBindingPending:
+                config.channelAutoBindFirstFeishu && channelIdentities.feishuIdentityCount === 0,
             },
           });
         } catch (error) {
@@ -219,7 +222,25 @@ export function createOrchestratorServer(
             error instanceof Error ? error.message : "Invalid ChannelEvent",
           );
         }
-        const identity = channelIdentities.resolve(event.channel, event.external_user_id);
+        let identity: ChannelIdentity;
+        try {
+          identity = channelIdentities.resolve(event.channel, event.external_user_id);
+        } catch (error) {
+          if (
+            error instanceof ChannelIdentityError &&
+            config.channelAutoBindFirstFeishu &&
+            event.channel === "feishu" &&
+            event.event_type === "message" &&
+            event.payload.chat_type === "p2p"
+          ) {
+            identity = channelIdentities.bindFirstFeishu(
+              event.external_user_id,
+              config.channelBootstrapIdentity,
+            );
+          } else {
+            throw error;
+          }
+        }
         const operation =
           event.event_type === "message"
             ? application.ingestChannelMessage(event, identity)

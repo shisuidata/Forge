@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -118,6 +118,22 @@ test("identity resolver fails closed for unknown channel users", async () => {
     user_id: "user_demo",
   });
   assert.throws(() => resolver.resolve("feishu", "ou_unknown"), ChannelIdentityError);
+});
+
+test("one-time Feishu bootstrap atomically binds only the first user", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-bootstrap-"));
+  const path = join(directory, "identities.json");
+  await writeFile(path, JSON.stringify({ feishu: {}, dingtalk: {} }));
+  await chmod(path, 0o600);
+  const resolver = new ChannelIdentityResolver(path);
+  const identity = { org_id: "org_default", team_id: "team_default", user_id: "feishu_owner" };
+
+  assert.deepEqual(resolver.bindFirstFeishu("ou_first", identity), identity);
+  assert.deepEqual(resolver.resolve("feishu", "ou_first"), identity);
+  assert.throws(() => resolver.bindFirstFeishu("ou_second", identity), ChannelIdentityError);
+  assert.equal((await stat(path)).mode & 0o777, 0o600);
+  assert.doesNotMatch(await readFile(path, "utf8"), /ou_second/);
+  assert.deepEqual(new ChannelIdentityResolver(path).resolve("feishu", "ou_first"), identity);
 });
 
 test("channel cancel action is owned, persisted, and idempotent", async () => {
@@ -340,6 +356,42 @@ test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", 
     presentation: { kind: string };
   };
   assert.equal(resultRendered.presentation.kind, "query_result");
+});
+
+test("channel endpoint bootstraps only the first authenticated Feishu private message", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-bootstrap-server-"));
+  const identityPath = join(directory, "identities.json");
+  await writeFile(identityPath, JSON.stringify({ feishu: {}, dingtalk: {} }));
+  await chmod(identityPath, 0o600);
+  const config = loadConfig({
+    PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3"),
+    PI_CHANNEL_IDENTITY_MAP: identityPath,
+    PI_CHANNEL_SERVICE_KEYS: "channel-secret",
+    PI_CHANNEL_AUTO_BIND_FIRST_FEISHU: "true",
+  });
+  const server = createOrchestratorServer(config);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => server.close());
+  const address = server.address() as AddressInfo;
+  const url = `http://127.0.0.1:${address.port}/v1/channel-events`;
+  const headers = { "content-type": "application/json", "x-channel-service-key": "channel-secret" };
+  const payload = {
+    event_id: "evt_bootstrap_001", channel: "feishu", event_type: "message",
+    external_user_id: "ou_first", conversation_id: "oc_first", message_id: "om_first",
+    task_run_id: null, payload: { text: "查询订单", chat_type: "p2p" },
+  };
+
+  const first = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
+  assert.equal(first.status, 202);
+  assert.match(await readFile(identityPath, "utf8"), /ou_first/);
+
+  const second = await fetch(url, {
+    method: "POST", headers, body: JSON.stringify({
+      ...payload, event_id: "evt_bootstrap_002", external_user_id: "ou_second",
+      payload: { text: "查询订单", chat_type: "group" },
+    }),
+  });
+  assert.equal(second.status, 403);
 });
 
 test("channel endpoint rejects missing service credential before identity lookup", async (context) => {

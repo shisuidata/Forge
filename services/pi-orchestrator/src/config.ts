@@ -15,6 +15,12 @@ export interface OrchestratorConfig {
   stateDbPath: string;
   channelIdentityMapPath: string;
   channelServiceKeys: string[];
+  channelAutoBindFirstFeishu: boolean;
+  channelBootstrapIdentity: {
+    org_id: string;
+    team_id: string;
+    user_id: string;
+  };
   adminServiceKeys: string[];
   forgeBaseUrl: string;
   forgeApiKey: string | undefined;
@@ -60,6 +66,13 @@ function parsePort(raw: string | undefined): number {
     throw new Error(`Invalid PI_ORCHESTRATOR_PORT: ${raw}`);
   }
   return port;
+}
+
+function parseBoolean(raw: string | undefined, fallback = false): boolean {
+  if (raw === undefined) return fallback;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new Error(`Invalid boolean value: ${raw}`);
 }
 
 function parsePositiveInteger(raw: string | undefined, fallback: number, name: string): number {
@@ -137,6 +150,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
       .split(",")
       .map((key) => key.trim())
       .filter((key) => key.length > 0),
+    channelAutoBindFirstFeishu: parseBoolean(env.PI_CHANNEL_AUTO_BIND_FIRST_FEISHU),
+    channelBootstrapIdentity: {
+      org_id: env.PI_CHANNEL_BOOTSTRAP_ORG_ID ?? "org_default",
+      team_id: env.PI_CHANNEL_BOOTSTRAP_TEAM_ID ?? "team_default",
+      user_id: env.PI_CHANNEL_BOOTSTRAP_USER_ID ?? "feishu_owner",
+    },
     adminServiceKeys: (env.PI_ADMIN_SERVICE_KEYS ?? "")
       .split(",")
       .map((key) => key.trim())

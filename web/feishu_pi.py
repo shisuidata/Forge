@@ -103,6 +103,7 @@ def _process_message(
     conversation_id: str,
     message_id: str,
     text: str,
+    chat_type: str,
 ) -> None:
     try:
         accepted = _get_pi_client().submit_message(
@@ -111,6 +112,7 @@ def _process_message(
             conversation_id=conversation_id,
             message_id=message_id,
             text=text,
+            chat_type=chat_type,
         )
         task_run_id = task_run_id_from_response(accepted)
         presentation = _get_pi_client().wait_for_presentation(task_run_id)
@@ -172,9 +174,10 @@ def _on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
         if not text or not open_id:
             return
         conversation_id = getattr(message, "chat_id", None) or open_id
+        chat_type = str(getattr(message, "chat_type", None) or "")
         threading.Thread(
             target=_process_message,
-            args=(open_id, conversation_id, message.message_id, text),
+            args=(open_id, conversation_id, message.message_id, text, chat_type),
             daemon=True,
         ).start()
     except Exception as exc:
