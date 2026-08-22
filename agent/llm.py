@@ -90,7 +90,7 @@ def _get_retriever() -> tuple[SchemaRetriever | None, object | None]:
             logger.debug("Metrics registry not available for retriever: %s", exc)
         r = SchemaRetriever(registry, cache_path=cache_path, metrics_registry=metrics_registry)
 
-        embed_key  = getattr(cfg, "EMBED_API_KEY",  None) or getattr(cfg, "LLM_API_KEY", None)
+        embed_key = getattr(cfg, "EMBED_API_KEY", None)
         embed_url  = getattr(cfg, "EMBED_BASE_URL", None) or "https://api.minimaxi.com/v1"
         embed_model = getattr(cfg, "EMBED_MODEL",   None) or "embo-01"
 
