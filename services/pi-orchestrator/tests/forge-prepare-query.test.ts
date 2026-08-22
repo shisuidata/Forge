@@ -128,7 +128,9 @@ test("Forge context client validates bounded evidence and forwards Pi identity",
     response: {
       status: "ok", question: "销售额口径", bounded: true,
       evidence: [{ evidence_ref: evidenceRef, source_type: "metric", title: "销售额",
-        content: "默认使用订单支付金额", score: 9 }],
+        content: "默认使用订单支付金额", score: 9, verification_level: "verified",
+        scope: "organization", source_revision: `sha256:${"c".repeat(64)}`,
+        updated_at: null, expires_at: null }],
       evidence_count: 1, context_revision: `sha256:${"b".repeat(64)}`,
     },
   });
@@ -143,6 +145,19 @@ test("Forge context client validates bounded evidence and forwards Pi identity",
   assert.equal(result.evidence[0]?.evidence_ref, evidenceRef);
   assert.equal(mock.received().piServiceKey, "pi-service-secret");
   assert.equal(mock.received().body?.user_id, "trusted-user");
+});
+
+test("Forge memory client forwards only authenticated controlled writes", async (context) => {
+  const mock = await startMockForge(context, {
+    response: { status: "confirmed", scope: "user", category: "session_summary", key: "task_demo" },
+  });
+  const client = new ForgeQueryRunClient({ baseUrl: mock.baseUrl, serviceKey: "pi-service-secret", timeoutMs: 2_000 });
+  const result = await client.writeMemory({
+    org_id: "org", team_id: "team", user_id: "user", operation: "upsert",
+    category: "session_summary", key: "task_demo", value: { summary: "done" },
+  });
+  assert.equal(result.scope, "user");
+  assert.equal(mock.received().piServiceKey, "pi-service-secret");
 });
 
 test("Forge report client accepts only bounded publication metadata", async (context) => {

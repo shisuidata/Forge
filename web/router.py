@@ -57,6 +57,7 @@ from registry.staging_sync import promote_staged
 from web.routes.query_runs import router as query_runs_router
 from web.routes.context import router as context_router
 from web.routes.reports import router as reports_router
+from web.routes.memory import router as memory_router
 from web.routes.settings import router as settings_router
 from web.routes.registry_studio import router as registry_studio_router
 from web.auth import (
@@ -74,6 +75,7 @@ chat_router = APIRouter()
 chat_router.include_router(query_runs_router)
 chat_router.include_router(context_router)
 chat_router.include_router(reports_router)
+chat_router.include_router(memory_router)
 # Admin 路由 — 挂载在 /admin 前缀下（全部路由需要 Web 登录验证）
 router = APIRouter(dependencies=[Depends(require_web_auth)])
 router.include_router(settings_router)

@@ -5,6 +5,7 @@ export const TASK_STATUSES = [
   "clarifying",
   "ready_for_query",
   "waiting_for_query_approval",
+  "waiting_for_action_approval",
   "querying",
   "ready_for_analysis",
   "analyzing",

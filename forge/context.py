@@ -29,8 +29,8 @@ def _bounded_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)[:_MAX_CONTENT]
 
 
-def _registry_documents() -> list[dict[str, str]]:
-    documents: list[dict[str, str]] = []
+def _registry_documents() -> list[dict[str, Any]]:
+    documents: list[dict[str, Any]] = []
     schema = _load(cfg.REGISTRY_PATH)
     tables = schema.get("tables", {}) if isinstance(schema, dict) else {}
     if isinstance(tables, dict):
@@ -47,7 +47,8 @@ def _registry_documents() -> list[dict[str, str]]:
                 f"表 {table_name}\n描述: {table.get('description', '')}\n字段:\n"
                 + "\n".join(column_text)
             )[:_MAX_CONTENT]
-            documents.append({"source_type": "schema", "title": table_name, "content": content})
+            documents.append({"source_type": "schema", "title": table_name, "content": content,
+                              "verification_level": "verified", "scope": "organization", "priority": 4})
 
     for source_type, path in (
         ("metric", cfg.METRICS_PATH),
@@ -67,14 +68,17 @@ def _registry_documents() -> list[dict[str, str]]:
                 "source_type": source_type,
                 "title": title,
                 "content": _bounded_json(value),
+                "verification_level": "verified", "scope": "organization", "priority": 4,
             })
     return documents[:_MAX_DOCUMENTS]
 
 
-def _memory_documents(user_id: str, team_id: str) -> list[dict[str, str]]:
+def _memory_documents(user_id: str, team_id: str) -> list[dict[str, Any]]:
     try:
-        from agent.memory import memory
-        items = memory.smp.query(user_id=user_id, team_id=team_id, limit=50)
+        from agent.memory.smp import SemanticMemoryPool
+        items = SemanticMemoryPool().query(
+            user_id=user_id, team_id=team_id, limit=50, include_shadowed=True
+        )
     except Exception:
         return []
     documents = []
@@ -83,6 +87,12 @@ def _memory_documents(user_id: str, team_id: str) -> list[dict[str, str]]:
             "source_type": "semantic_memory",
             "title": f"{item.get('category', '')}:{item.get('key', '')}",
             "content": _bounded_json(item.get("value")),
+            "verification_level": "contextual" if item.get("category") == "session_summary" else "verified",
+            "scope": item.get("scope", "user"),
+            "source_revision": item.get("source_revision") or "",
+            "updated_at": item.get("updated_at"),
+            "expires_at": item.get("expires_at"),
+            "priority": {"user": 3, "team": 2, "org": 1}.get(item.get("scope"), 1),
         })
     return documents
 
@@ -95,7 +105,7 @@ def _tokens(text: str) -> set[str]:
     return {token for token in tokens if token}
 
 
-def _score(question: str, document: dict[str, str]) -> int:
+def _score(question: str, document: dict[str, Any]) -> int:
     query_tokens = _tokens(question)
     if not query_tokens:
         return 0
@@ -121,8 +131,13 @@ def search_context(
     ranked = sorted(
         ((score, index, document) for index, document in enumerate(documents)
          if (score := _score(question, document)) > 0),
-        key=lambda item: (-item[0], item[1]),
+        key=lambda item: (-item[0], -int(item[2].get("priority", 0)), item[1]),
     )[:bounded_limit]
+    conflicting_titles = {
+        document["title"]
+        for _, _, document in ranked
+        if len({candidate[2]["content"] for candidate in ranked if candidate[2]["title"] == document["title"]}) > 1
+    }
     evidence = []
     for score, _, document in ranked:
         digest = hashlib.sha256(
@@ -134,6 +149,11 @@ def search_context(
             "title": document["title"][:200],
             "content": document["content"][:_MAX_CONTENT],
             "score": score,
+            "verification_level": "conflicted" if document["title"] in conflicting_titles else document.get("verification_level", "unknown"),
+            "scope": document.get("scope", "organization"),
+            "source_revision": document.get("source_revision") or f"sha256:{digest}",
+            "updated_at": document.get("updated_at"),
+            "expires_at": document.get("expires_at"),
         })
     revision = hashlib.sha256(
         "\n".join(item["evidence_ref"] for item in evidence).encode()

@@ -31,6 +31,11 @@ export interface ContextEvidence {
   title: string;
   content: string;
   score: number;
+  verification_level: "verified" | "contextual" | "inferred" | "conflicted" | "unknown";
+  scope: "user" | "team" | "org" | "organization";
+  source_revision: string;
+  updated_at: string | null;
+  expires_at: string | null;
 }
 
 export interface ContextSearchResult {
@@ -171,6 +176,15 @@ export class ForgeQueryRunClient {
     return this.#validateContext(body);
   }
 
+  async writeMemory(
+    input: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    return asRecord(await this.#request(
+      "POST", "/api/internal/memory/entries", input, undefined, signal,
+    ));
+  }
+
   async createReport(
     input: Record<string, unknown>,
     idempotencyKey: string,
@@ -283,7 +297,13 @@ export class ForgeQueryRunClient {
         typeof item.evidence_ref !== "string" || !/^ctx_[a-f0-9]{24}$/.test(item.evidence_ref) ||
         typeof item.source_type !== "string" || !allowedTypes.has(item.source_type) ||
         typeof item.title !== "string" || typeof item.content !== "string" ||
-        item.content.length > 1_200 || typeof item.score !== "number"
+        item.content.length > 1_200 || typeof item.score !== "number" ||
+        typeof item.verification_level !== "string" ||
+        !new Set(["verified", "contextual", "inferred", "conflicted", "unknown"]).has(item.verification_level) ||
+        typeof item.scope !== "string" || !new Set(["user", "team", "org", "organization"]).has(item.scope) ||
+        typeof item.source_revision !== "string" ||
+        (item.updated_at !== null && typeof item.updated_at !== "string") ||
+        (item.expires_at !== null && typeof item.expires_at !== "string")
       ) {
         throw new ForgeClientError("Forge Context API returned invalid evidence");
       }

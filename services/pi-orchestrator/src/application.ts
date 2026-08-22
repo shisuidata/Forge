@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { ChannelEventStore } from "./channels/event-store.js";
 import type { ChannelEventInput, ChannelIdentity, ChannelPresentation } from "./channels/contracts.js";
 import { renderChannelPresentation } from "./channels/renderer.js";
@@ -97,6 +99,9 @@ export interface ForgeQueryRunPort {
     signal?: AbortSignal,
   ): Promise<ReportPublication>;
   getReport?(reportId: string, signal?: AbortSignal): Promise<ReportPublication>;
+  writeMemory?(
+    input: Record<string, unknown>, signal?: AbortSignal,
+  ): Promise<Record<string, unknown>>;
 }
 
 export class OrchestratorApplication {
@@ -446,21 +451,46 @@ export class OrchestratorApplication {
     }
 
     if (route.kind === "action") {
-      this.#advanceExecutionPlan(claimed.task.task_run_id, {
-        [route.action === "memory" ? "memory_proposal" : "registry_draft"]: "running",
+      if (route.action !== "memory") {
+        this.#advanceExecutionPlan(claimed.task.task_run_id, { registry_draft: "running" });
+        const completed = this.#completeChannelResponse(
+          claimed.task,
+          "需要确认 Registry 变更",
+          "请提供指标或业务规则的完整定义。我会先生成 Registry Draft 和差异，确认后才会发布。",
+        );
+        return { task: completed, presentation: this.getChannelPresentation(completed.task_run_id), duplicate: false };
+      }
+      const forgetting = /(?:忘记|删除.*记忆|清除.*记忆)/i.test(text);
+      const memoryValue = text
+        .replace(/^(?:请)?(?:记住|记下来|以后都用|忘记|删除.*?记忆|清除.*?记忆)\s*/i, "")
+        .trim();
+      if (memoryValue.length === 0) {
+        const waiting = this.#transactions.run(() => {
+          this.#events.append(claimed.task!.task_run_id, "query.clarification_requested", {
+            prompt: "请说明希望记住或删除的具体内容。",
+          });
+          return this.#transition(claimed.task!, "needs_input", "memory_clarification");
+        });
+        return { task: waiting, presentation: this.getChannelPresentation(waiting.task_run_id), duplicate: false };
+      }
+      const category = /(?:默认|偏好|习惯)/.test(memoryValue) ? "user_profile" : "confirmed_fact";
+      const memoryKey = `channel_${createHash("sha256").update(memoryValue).digest("hex").slice(0, 24)}`;
+      const expiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1_000).toISOString();
+      const waiting = this.#transactions.run(() => {
+        this.#events.append(claimed.task!.task_run_id, "memory.proposed", {
+          operation: forgetting ? "delete" : "upsert",
+          scope: "user",
+          category,
+          key: memoryKey,
+          value: memoryValue.slice(0, 2_000),
+          expires_at: expiresAt,
+        });
+        this.#advanceExecutionPlan(claimed.task!.task_run_id, {
+          memory_proposal: "completed", approval: "waiting_approval",
+        });
+        return this.#transition(claimed.task!, "waiting_for_action_approval", "memory_approval");
       });
-      const completed = this.#completeChannelResponse(
-        claimed.task,
-        "需要确认变更内容",
-        route.action === "memory"
-          ? "请明确要记住或删除的内容，以及它属于个人、团队还是组织范围。我会先生成待审核变更，不会直接写入长期记忆。"
-          : "请提供指标或业务规则的完整定义。我会先生成 Registry Draft 和差异，确认后才会发布。",
-      );
-      return {
-        task: completed,
-        presentation: this.getChannelPresentation(completed.task_run_id),
-        duplicate: false,
-      };
+      return { task: waiting, presentation: this.getChannelPresentation(waiting.task_run_id), duplicate: false };
     }
 
     if (route.kind === "knowledge") {
@@ -498,6 +528,12 @@ export class OrchestratorApplication {
         idempotencyKey: `${event.channel}:${event.event_id}:knowledge`,
       }, signal);
       this.#advanceExecutionPlan(claimed.task.task_run_id, { report: "completed" });
+      await this.#persistSessionSummary(
+        advised.task,
+        String(advised.artifact.payload.summary ?? "知识回答已完成").slice(0, 1_000),
+        advised.artifact.artifact_id,
+        signal,
+      );
       return {
         task: advised.task,
         presentation: this.getChannelPresentation(advised.task.task_run_id),
@@ -554,6 +590,7 @@ export class OrchestratorApplication {
       "provide_input",
       "cancel_task",
       "request_supplement",
+      "confirm_memory",
     ].includes(String(actionType))) {
       throw new TaskStateError(`Unsupported channel action: ${String(actionType)}`);
     }
@@ -614,9 +651,15 @@ export class OrchestratorApplication {
         signal,
       );
     } else if (actionType === "analyze") {
-      await this.analyzeTask(
+      const analyzed = await this.analyzeTask(
         task.task_run_id,
         { idempotencyKey: `${event.channel}:${event.event_id}:analysis` },
+        signal,
+      );
+      await this.#persistSessionSummary(
+        analyzed.task,
+        String(analyzed.artifact.payload.summary ?? "分析已完成"),
+        analyzed.artifact.artifact_id,
         signal,
       );
     } else if (actionType === "render_report") {
@@ -639,6 +682,39 @@ export class OrchestratorApplication {
           idempotencyKey: `${event.channel}:${event.event_id}:clarify`,
         },
         signal,
+      );
+    } else if (actionType === "confirm_memory") {
+      if (task.status !== "waiting_for_action_approval" || this.#forge.writeMemory === undefined) {
+        throw new TaskStateError("Memory proposal is not ready for confirmation");
+      }
+      const proposal = [...this.#events.list(task.task_run_id)].reverse()
+        .find((candidate) => candidate.event_type === "memory.proposed");
+      if (proposal === undefined) throw new TaskStateError("Memory proposal not found");
+      await this.#forge.writeMemory({
+        org_id: task.org_id,
+        team_id: task.team_id,
+        user_id: task.user_id,
+        operation: proposal.payload.operation,
+        category: proposal.payload.category,
+        key: proposal.payload.key,
+        value: proposal.payload.value,
+        source_session: task.task_run_id,
+        source_revision: proposal.event_id,
+        confidence: 1,
+        expires_at: proposal.payload.expires_at,
+      }, signal);
+      this.#events.append(task.task_run_id, "memory.confirmed", {
+        operation: proposal.payload.operation,
+        scope: "user",
+        category: proposal.payload.category,
+      });
+      this.#advanceExecutionPlan(task.task_run_id, { approval: "completed" });
+      responseTask = this.#completeChannelResponse(
+        task,
+        "个人记忆已更新",
+        proposal.payload.operation === "delete"
+          ? "已删除匹配的个人记忆（如果存在）。"
+          : "已保存为有期限的个人记忆。它不会自动成为团队或组织事实。",
       );
     } else if (actionType === "cancel_task") {
       responseTask = await this.cancelTask(
@@ -1712,7 +1788,7 @@ export class OrchestratorApplication {
         publication = await this.#forge.getReport(publication.report_id, stageExecution.signal);
       }
       if (publication.status !== "published") throw new Error("Report publication failed");
-      return this.#transactions.run(() => {
+      const completedReport = this.#transactions.run(() => {
         const publicationArtifact = this.#artifacts.create({
           artifactType: "publication",
           taskRunId,
@@ -1745,6 +1821,13 @@ export class OrchestratorApplication {
         this.#finishAttempt(attempt, "succeeded");
         return { task: finalizedTask, artifact: assembled.artifact, events: this.#events.list(taskRunId) };
       });
+      await this.#persistSessionSummary(
+        completedReport.task,
+        String(payload.executive_summary ?? payload.title),
+        assembled.artifact.artifact_id,
+        signal,
+      );
+      return completedReport;
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
       this.#transactions.run(() => {
@@ -1842,6 +1925,47 @@ export class OrchestratorApplication {
       signal: parent === undefined ? timeoutSignal : AbortSignal.any([parent, timeoutSignal]),
       timedOut: () => timeoutSignal.aborted,
     };
+  }
+
+  async #persistSessionSummary(
+    task: TaskRun,
+    summary: string,
+    sourceRevision: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (this.#forge.writeMemory === undefined || summary.trim().length === 0) return;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString();
+    try {
+      await this.#forge.writeMemory({
+        org_id: task.org_id,
+        team_id: task.team_id,
+        user_id: task.user_id,
+        operation: "upsert",
+        category: "session_summary",
+        key: `task_${task.task_run_id.slice(3)}`,
+        value: {
+          question: typeof task.metadata.original_message === "string"
+            ? task.metadata.original_message.slice(0, 1_000)
+            : task.intent,
+          summary: summary.slice(0, 1_000),
+          intent: task.intent,
+        },
+        source_session: task.task_run_id,
+        source_revision: sourceRevision,
+        confidence: 1,
+        expires_at: expiresAt,
+      }, signal);
+      this.#events.append(task.task_run_id, "memory.persisted", {
+        category: "session_summary",
+        scope: "user",
+        expires_at: expiresAt,
+      });
+    } catch {
+      this.#events.append(task.task_run_id, "memory.persist_failed", {
+        category: "session_summary",
+        retryable: true,
+      });
+    }
   }
 
   #advanceExecutionPlan(

@@ -158,6 +158,11 @@ test("channel knowledge answer is bound to Forge context evidence without a Quer
     title: "revenue · 销售额",
     content: "销售额使用 orders.total_amount",
     score: 9,
+    verification_level: "verified" as const,
+    scope: "organization" as const,
+    source_revision: `sha256:${"c".repeat(64)}`,
+    updated_at: null,
+    expires_at: null,
   }];
   const application = new OrchestratorApplication({
     config,
@@ -236,6 +241,42 @@ test("channel renderer hides reasoning, internal lineage, raw errors, and stage 
     } as unknown as Artifact],
   });
   assert.equal(report.markdown, "业务结论正常。");
+});
+
+test("personal memory requires an explicit channel approval and never escalates scope", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-memory-"));
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3") });
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  const memoryWrites: Array<Record<string, unknown>> = [];
+  const application = new OrchestratorApplication({
+    config, tasks: state.tasks, events: state.events, artifacts: state.artifacts,
+    attempts: state.attempts, channelEvents: state.channelEvents, transactions: state.transactions,
+    forgeClient: {
+      async createQueryRun() { throw new Error("not used"); },
+      async approveQueryRun() { throw new Error("not used"); },
+      async writeMemory(input) { memoryWrites.push(input); return { status: "confirmed" }; },
+    },
+  });
+  const identity = { org_id: "org_demo", team_id: "team_demo", user_id: "user_demo" };
+  const proposed = await application.ingestChannelMessage({
+    event_id: "evt_memory", channel: "feishu", event_type: "message", external_user_id: "ou_demo",
+    conversation_id: "oc_demo", message_id: "om_memory", task_run_id: null,
+    payload: { text: "记住我默认看自然月", chat_type: "p2p" },
+  }, identity);
+  assert.equal(proposed.task.status, "waiting_for_action_approval");
+  assert.deepEqual(proposed.presentation.actions.map((item) => item.type), ["confirm_memory", "cancel_task"]);
+  assert.equal(memoryWrites.length, 0);
+
+  const confirmed = await application.ingestChannelAction({
+    event_id: "evt_memory_confirm", channel: "feishu", event_type: "action", external_user_id: "ou_demo",
+    conversation_id: "oc_demo", message_id: "om_memory", task_run_id: proposed.task.task_run_id,
+    payload: { action: "confirm_memory" },
+  }, identity);
+  assert.equal(confirmed.task.status, "completed");
+  assert.equal(memoryWrites[0]?.scope, undefined);
+  assert.equal(memoryWrites[0]?.user_id, "user_demo");
+  assert.equal(memoryWrites[0]?.operation, "upsert");
+  state.close();
 });
 
 test("identity resolver fails closed for unknown channel users", async () => {

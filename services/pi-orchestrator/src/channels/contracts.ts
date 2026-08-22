@@ -12,6 +12,7 @@ export const CHANNEL_ACTION_TYPES = [
   "request_supplement",
   "analyze",
   "render_report",
+  "confirm_memory",
 ] as const;
 export type ChannelActionType = (typeof CHANNEL_ACTION_TYPES)[number];
 

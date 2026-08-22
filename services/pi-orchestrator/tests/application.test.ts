@@ -401,6 +401,7 @@ test("confirmed metric Artifact is required before query readiness", async () =>
 
 test("QueryResult flows through evidence-bound analysis and report Artifacts", async () => {
   let analysisArtifactId = "";
+  const memoryWrites: Array<Record<string, unknown>> = [];
   const app = new OrchestratorApplication({
     config: loadConfig({}),
     forgeClient: {
@@ -441,6 +442,7 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
         };
       },
       async getReport() { throw new Error("published synchronously"); },
+      async writeMemory(input) { memoryWrites.push(input); return { status: "confirmed" }; },
     },
     skillExecutor: {
       async clarify() {
@@ -533,6 +535,9 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
     (reported.artifact.payload.source_artifact_ids as string[])[0],
     analysisArtifactId,
   );
+  assert.equal(memoryWrites.length, 1);
+  assert.equal(memoryWrites[0]?.category, "session_summary");
+  assert.equal(memoryWrites[0]?.user_id, "trusted-user");
   assert.deepEqual(
     app.getArtifacts(created.task.task_run_id).map((artifact) => artifact.artifact_type),
     ["query_result", "chart", "analysis", "rendered_output", "technical_report", "report_bundle", "publication"],
