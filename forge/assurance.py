@@ -18,7 +18,7 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v5"
+ASSURANCE_REVISION = "query-assurance-v6"
 POLICY_REVISION = "convention-policy-v6"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 
@@ -305,7 +305,11 @@ def _validate_join_relationships(
             matched = True
             relationship = _find_relationship(relationships, existing_field, joined_field)
             if relationship is None or not relationship.trusted:
-                raise ValueError("关系校验失败：JOIN 未使用数据库声明或人工确认的关系。")
+                raise ValueError(
+                    "关系校验失败：JOIN 未使用数据库声明或人工确认的关系。"
+                    "两张事件事实表不要直接互连；应分别通过 Registry 中共同的可信维表连接，"
+                    "例如用户事件分别连接 dim_user.user_id。"
+                )
             fanout = fanout or is_fanout_from_existing(
                 relationship,
                 existing_field=existing_field,
@@ -459,6 +463,9 @@ def _validate_select_symbols(query: dict, registry: dict) -> None:
     if unknown:
         raise ValueError(
             "Registry/类型校验失败：SELECT 使用了未定义的字段或计算别名。"
+            "若该字段是占比/比率结果，必须在 select 中使用 "
+            "{\"expr\":\"ROUND(分子 * 1.0 / 分母, 4)\",\"as\":\"结果别名\"} "
+            "显式定义，不能只引用裸别名。"
         )
 
 

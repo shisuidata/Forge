@@ -105,7 +105,7 @@ def test_assurance_fails_closed_when_registry_is_missing(tmp_path, monkeypatch):
 
 
 def test_assurance_rejects_undefined_bare_select_alias(assurance_registry):
-    with pytest.raises(QueryAssuranceError, match="未定义的字段或计算别名"):
+    with pytest.raises(QueryAssuranceError, match="未定义的字段或计算别名") as caught:
         assure_query(
             {
                 "scan": "orders",
@@ -120,6 +120,8 @@ def test_assurance_rejects_undefined_bare_select_alias(assurance_registry):
             "各城市订单总额",
             dialect="sqlite",
         )
+
+    assert '"expr"' in str(caught.value)
 
 
 def test_assurance_accepts_defined_aggregate_alias(assurance_registry):
@@ -156,6 +158,7 @@ def test_assurance_rejects_join_without_confirmed_relationship(assurance_registr
             dialect="sqlite",
         )
     assert caught.value.report.gates[-1].gate == "relationship_grain"
+    assert "共同的可信维表" in str(caught.value)
 
 
 def test_assurance_rejects_aggregate_fanout_from_existing_side(assurance_registry):
