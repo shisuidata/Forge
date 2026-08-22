@@ -1012,7 +1012,7 @@ Phase 4.5 实施结果：
 最终自动化验收（2026-08-21）：
 
 - Python 全量：`500 passed, 25 skipped`；跳过项为可选外部 benchmark/integration，不影响当前本地与 NAS 验收边界。
-- Pi Orchestrator：TypeScript typecheck 通过，`60/60` tests passed。
+- Pi Orchestrator：TypeScript typecheck 通过，`61/61` tests passed（含 Tool omission 的一次有界纠正与最终失败关闭）。
 - Model Gate：`mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.338s、timeout 0%，满足 80%/90%/≤1/≤180s/≤5% 门槛并已 CAS 激活。
 - Web：Playwright 模式切换与 Advisory 完整轮询展示 E2E 通过，浏览器 `pageerror=[]`。
 - QueryRun 崩溃恢复：process owner + execution lease 已完成；启动仅回收过期 lease 并标记失败，未过期其他 worker 不受影响，SQL 从不自动重放。

@@ -155,6 +155,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       message,
       skillName: "data-requirement-clarifier",
       tool: submission.tool,
+      isSubmitted: () => submission.getSubmitted() !== undefined,
       ...(signal === undefined ? {} : { signal }),
       ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
@@ -179,6 +180,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       message,
       skillName: "metric-definition-reviewer",
       tool: submission.tool,
+      isSubmitted: () => submission.getSubmitted() !== undefined,
       ...(signal === undefined ? {} : { signal }),
       ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
@@ -228,6 +230,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       }),
       skillName: "business-root-cause-analysis",
       tool: submission.tool,
+      isSubmitted: () => submission.getSubmitted() !== undefined,
       ...(signal === undefined ? {} : { signal }),
       ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
@@ -278,6 +281,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       task,
       skillName,
       tool: submission.tool,
+      isSubmitted: () => submission.getSubmitted() !== undefined,
       message: JSON.stringify({
         request: input.prompt,
         query_results: queryResults,
@@ -323,6 +327,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       }),
       skillName: "data-analysis-report-writer",
       tool: submission.tool,
+      isSubmitted: () => submission.getSubmitted() !== undefined,
       ...(signal === undefined ? {} : { signal }),
       ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
@@ -352,6 +357,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     message: string;
     skillName: MvpSkillName;
     tool: ToolDefinition;
+    isSubmitted: () => boolean;
     signal?: AbortSignal;
     expectedModelRevision?: string | null;
   }): Promise<void> {
@@ -384,11 +390,16 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
           `TaskRun: ${options.task.task_run_id}`,
           `Organization: ${options.task.org_id}`,
           `Team: ${options.task.team_id}`,
-          "请严格执行已授权 Skill，并通过唯一的 submit_* 工具提交最终 Artifact。",
+          `必须调用唯一的 ${options.tool.name} 工具提交最终 Artifact；禁止只输出自由文本。`,
           "用户输入：",
           options.message,
         ].join("\n"),
       );
+      if (!options.isSubmitted() && !isAborted(options.signal)) {
+        await session.prompt(
+          `上一次没有提交 Artifact。现在必须调用 ${options.tool.name}；不要解释，不要输出自由文本。`,
+        );
+      }
     } finally {
       options.signal?.removeEventListener("abort", abort);
       session.dispose();

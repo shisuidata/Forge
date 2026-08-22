@@ -331,11 +331,28 @@ test("analysis rejects evidence references from another QueryRun", async () => {
 });
 
 
+test("Pi Skill executor performs one bounded Artifact correction", async () => {
+  let prompts = 0;
+  const executor = new PiStructuredSkillExecutor({
+    config: loadConfig({}),
+    sessionFactory: async ({ tool }) => ({
+      async prompt() {
+        prompts += 1;
+        if (prompts === 2) await invoke(tool, validClarification);
+      },
+      async abort() {}, dispose() {},
+    }),
+  });
+  assert.deepEqual(await executor.clarify(task(), "最近转化为什么下降"), validClarification);
+  assert.equal(prompts, 2);
+});
+
 test("Pi Skill executor fails closed when the model omits the Artifact Tool", async () => {
+  let prompts = 0;
   const executor = new PiStructuredSkillExecutor({
     config: loadConfig({}),
     sessionFactory: async () => ({
-      async prompt() {},
+      async prompt() { prompts += 1; },
       async abort() {},
       dispose() {},
     }),
@@ -345,6 +362,7 @@ test("Pi Skill executor fails closed when the model omits the Artifact Tool", as
     () => executor.clarify(task(), "最近转化为什么下降"),
     /ended without submitting an Artifact/,
   );
+  assert.equal(prompts, 2);
 });
 
 test("Pi Skill executor never falls back to global model configuration", async () => {
