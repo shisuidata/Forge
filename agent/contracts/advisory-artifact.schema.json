@@ -91,7 +91,7 @@
                 "uniqueItems": true,
                 "items": {
                   "type": "string",
-                  "pattern": "^qr_[A-Za-z0-9_-]+#.+$"
+                  "pattern": "^(?:qr_[A-Za-z0-9_-]+#.+|ctx_[a-f0-9]{24})$"
                 }
               },
               "confidence": {

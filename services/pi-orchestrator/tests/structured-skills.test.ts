@@ -186,8 +186,32 @@ test("expanded Skill rejects fabricated QueryResult evidence", async () => {
   });
   await assert.rejects(
     () => executor.advise(task(), "funnel-analysis", { prompt: "分析漏斗" }),
-    /outside supplied QueryResults/,
+    /outside supplied evidence/,
   );
+});
+
+test("knowledge Advisory accepts only supplied Context evidence", async () => {
+  const evidenceRef = `ctx_${"a".repeat(24)}`;
+  const executor = new PiStructuredSkillExecutor({
+    config: loadConfig({}),
+    sessionFactory: async ({ tool }) => ({
+      async prompt(prompt) {
+        assert.match(prompt, new RegExp(evidenceRef));
+        await invoke(tool, {
+          status: "complete", skill_name: "data-doc-writer", title: "指标口径",
+          summary: "销售额使用订单支付金额。",
+          findings: [{ statement: "使用 orders.total_amount", evidence_refs: [evidenceRef], confidence: "high" }],
+          recommendations: [], assumptions: [], limitations: [], open_questions: [], deliverables: [],
+        });
+      },
+      async abort() {}, dispose() {},
+    }),
+  });
+  const result = await executor.advise(task(), "data-doc-writer", {
+    prompt: "销售额是什么",
+    contextEvidence: [{ evidence_ref: evidenceRef, source_type: "metric", title: "销售额", content: "订单支付金额" }],
+  });
+  assert.deepEqual(result.findings[0]?.evidence_refs, [evidenceRef]);
 });
 
 test("analysis and report Skills preserve QueryRun evidence lineage", async () => {

@@ -8,6 +8,7 @@ import test from "node:test";
 import { OrchestratorApplication } from "../src/application.js";
 import type { Artifact } from "../src/artifacts.js";
 import { ChannelIdentityError, ChannelIdentityResolver } from "../src/channels/identity.js";
+import { routeChannelMessage } from "../src/channels/intent.js";
 import { renderChannelPresentation } from "../src/channels/renderer.js";
 import { loadConfig } from "../src/config.js";
 import { createOrchestratorServer } from "../src/server.js";
@@ -101,6 +102,104 @@ test("channel renderer exposes clarification, cancellation, and supplement actio
   assert.equal(incomplete.actions[0]?.type, "request_supplement");
   assert.deepEqual(incomplete.actions[0]?.payload, { suggested_query_index: 0 });
   assert.equal(incomplete.actions.at(-1)?.type, "cancel_task");
+});
+
+test("channel intent routes greetings away from Forge and preserves data requests", () => {
+  assert.equal(routeChannelMessage("你好").kind, "conversation");
+  assert.equal(routeChannelMessage("销售额的口径是什么").kind, "knowledge");
+  assert.equal(routeChannelMessage("统计本月各渠道销售额").kind, "query");
+  assert.equal(routeChannelMessage("你好，帮我查询订单数").kind, "query");
+});
+
+test("channel greeting completes without calling Forge or a model", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-greeting-"));
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3") });
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  let forgeCalls = 0;
+  const application = new OrchestratorApplication({
+    config,
+    tasks: state.tasks,
+    events: state.events,
+    artifacts: state.artifacts,
+    attempts: state.attempts,
+    channelEvents: state.channelEvents,
+    transactions: state.transactions,
+    forgeClient: {
+      async createQueryRun() { forgeCalls += 1; throw new Error("must not query"); },
+      async approveQueryRun() { throw new Error("must not execute"); },
+    },
+  });
+  const result = await application.ingestChannelMessage({
+    event_id: "evt_greeting", channel: "feishu", event_type: "message",
+    external_user_id: "ou_allowed", conversation_id: "oc_demo", message_id: "om_greeting",
+    task_run_id: null, payload: { text: "你好", chat_type: "p2p" },
+  }, { org_id: "org_demo", team_id: "team_demo", user_id: "user_demo" });
+
+  assert.equal(result.task.status, "completed");
+  assert.equal(result.task.intent, "channel_conversation");
+  assert.equal(result.presentation.kind, "report");
+  assert.match(result.presentation.markdown, /查询、统计和分析业务数据/);
+  assert.equal(forgeCalls, 0);
+  state.close();
+});
+
+test("channel knowledge answer is bound to Forge context evidence without a QueryRun", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-knowledge-"));
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3") });
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  let queryCalls = 0;
+  let suppliedEvidence: unknown;
+  const contextEvidence = [{
+    evidence_ref: `ctx_${"a".repeat(24)}`,
+    source_type: "metric" as const,
+    title: "revenue · 销售额",
+    content: "销售额使用 orders.total_amount",
+    score: 9,
+  }];
+  const application = new OrchestratorApplication({
+    config,
+    tasks: state.tasks,
+    events: state.events,
+    artifacts: state.artifacts,
+    attempts: state.attempts,
+    channelEvents: state.channelEvents,
+    transactions: state.transactions,
+    forgeClient: {
+      async searchContext() {
+        return { status: "ok", question: "销售额口径", evidence: contextEvidence,
+          evidence_count: 1, context_revision: `sha256:${"b".repeat(64)}`, bounded: true };
+      },
+      async createQueryRun() { queryCalls += 1; throw new Error("must not query"); },
+      async approveQueryRun() { throw new Error("must not execute"); },
+    },
+    skillExecutor: {
+      async clarify() { throw new Error("not used"); },
+      async reviewMetric() { throw new Error("not used"); },
+      async analyze() { throw new Error("not used"); },
+      async writeReport() { throw new Error("not used"); },
+      async advise(_task, skillName, input) {
+        suppliedEvidence = input.contextEvidence;
+        return {
+          status: "complete", skill_name: skillName, title: "销售额口径", summary: "销售额取订单支付金额。",
+          findings: [{ statement: "默认使用 orders.total_amount。", evidence_refs: [contextEvidence[0]!.evidence_ref], confidence: "high" }],
+          recommendations: [], assumptions: [], limitations: [], open_questions: [], deliverables: [],
+        };
+      },
+    },
+  });
+  const result = await application.ingestChannelMessage({
+    event_id: "evt_knowledge", channel: "feishu", event_type: "message",
+    external_user_id: "ou_allowed", conversation_id: "oc_demo", message_id: "om_knowledge",
+    task_run_id: null, payload: { text: "销售额的口径是什么", chat_type: "p2p" },
+  }, { org_id: "org_demo", team_id: "team_demo", user_id: "user_demo" });
+
+  assert.equal(result.task.status, "completed");
+  assert.equal(result.task.intent, "knowledge_answer");
+  assert.equal(result.presentation.kind, "report");
+  assert.match(result.presentation.markdown, /ctx_/);
+  assert.deepEqual(suppliedEvidence, contextEvidence);
+  assert.equal(queryCalls, 0);
+  state.close();
 });
 
 test("identity resolver fails closed for unknown channel users", async () => {

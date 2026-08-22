@@ -25,6 +25,23 @@ export interface QueryRunReview {
   error: string;
 }
 
+export interface ContextEvidence {
+  evidence_ref: string;
+  source_type: "schema" | "metric" | "disambiguation" | "convention" | "business_context" | "semantic_memory";
+  title: string;
+  content: string;
+  score: number;
+}
+
+export interface ContextSearchResult {
+  status: "ok";
+  question: string;
+  evidence: ContextEvidence[];
+  evidence_count: number;
+  context_revision: string;
+  bounded: true;
+}
+
 export interface QueryRunResult {
   query_run_id: string;
   task_run_id: string;
@@ -117,6 +134,26 @@ export class ForgeQueryRunClient {
     return this.#validateResult(body);
   }
 
+  async searchContext(
+    input: { orgId: string; teamId: string; userId: string; question: string; limit?: number },
+    signal?: AbortSignal,
+  ): Promise<ContextSearchResult> {
+    const body = await this.#request(
+      "POST",
+      "/api/internal/context/search",
+      {
+        org_id: input.orgId,
+        team_id: input.teamId,
+        user_id: input.userId,
+        question: input.question,
+        limit: input.limit ?? 8,
+      },
+      undefined,
+      signal,
+    );
+    return this.#validateContext(body);
+  }
+
   async cancelQueryRun(
     input: { queryRunId: string; userId: string },
     signal?: AbortSignal,
@@ -177,6 +214,34 @@ export class ForgeQueryRunClient {
       );
     }
     return body;
+  }
+
+  #validateContext(value: unknown): ContextSearchResult {
+    const body = asRecord(value);
+    if (
+      body.status !== "ok" || body.bounded !== true || !Array.isArray(body.evidence) ||
+      body.evidence.length > 12 || typeof body.context_revision !== "string"
+    ) {
+      throw new ForgeClientError("Forge Context API returned an invalid bounded response");
+    }
+    const allowedTypes = new Set([
+      "schema", "metric", "disambiguation", "convention", "business_context", "semantic_memory",
+    ]);
+    for (const raw of body.evidence) {
+      const item = asRecord(raw);
+      if (
+        typeof item.evidence_ref !== "string" || !/^ctx_[a-f0-9]{24}$/.test(item.evidence_ref) ||
+        typeof item.source_type !== "string" || !allowedTypes.has(item.source_type) ||
+        typeof item.title !== "string" || typeof item.content !== "string" ||
+        item.content.length > 1_200 || typeof item.score !== "number"
+      ) {
+        throw new ForgeClientError("Forge Context API returned invalid evidence");
+      }
+    }
+    if (body.evidence_count !== body.evidence.length || typeof body.question !== "string") {
+      throw new ForgeClientError("Forge Context API evidence count mismatch");
+    }
+    return body as unknown as ContextSearchResult;
   }
 
   #validateReview(value: unknown): QueryRunReview {

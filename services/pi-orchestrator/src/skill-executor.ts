@@ -98,6 +98,12 @@ export interface ReportSkillInput {
 export interface AdvisorySkillInput {
   prompt: string;
   queryResults?: Artifact<QueryResultPayload>[];
+  contextEvidence?: Array<{
+    evidence_ref: string;
+    source_type: string;
+    title: string;
+    content: string;
+  }>;
 }
 
 export interface StructuredSkillExecutionPort {
@@ -267,9 +273,11 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       row_count: artifact.payload.row_count,
       truncated: artifact.payload.truncated,
     }));
-    const allowedEvidenceRefs = new Set(
-      queryResults.flatMap((result) => result.rows.map((row) => row.evidence_ref)),
-    );
+    const contextEvidence = input.contextEvidence ?? [];
+    const allowedEvidenceRefs = new Set([
+      ...queryResults.flatMap((result) => result.rows.map((row) => row.evidence_ref)),
+      ...contextEvidence.map((item) => item.evidence_ref),
+    ]);
     const submission = createAdvisorySubmissionTool({
       skillName,
       allowedEvidenceRefs,
@@ -285,7 +293,8 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       message: JSON.stringify({
         request: input.prompt,
         query_results: queryResults,
-        evidence_rule: "任何基于数据的 finding 必须引用给定 evidence_ref；没有证据时只可写 assumption、limitation 或 open_question。",
+        context_evidence: contextEvidence,
+        evidence_rule: "任何事实 finding 必须引用给定 evidence_ref；不得引用输入以外的来源。没有证据时只可写 assumption、limitation 或 open_question。",
       }),
       ...(signal === undefined ? {} : { signal }),
       ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),

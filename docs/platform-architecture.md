@@ -348,6 +348,8 @@ Skill 先生成语义结果，不直接拼装具体渠道组件：
 
 未知渠道身份仍默认失败关闭。个人部署可由管理员显式开启一次性首用户绑定：仅当飞书 Identity Map 中不存在任何用户、事件已通过 Adapter Service Key 鉴权且事件是 `p2p` 私聊 message 时，Pi 才能将首个 `open_id` 原子绑定到预设 org/team/user；绑定完成后 bootstrap 永久关闭，后续未知用户继续拒绝。该机制不能扩展为 wildcard 身份，也不能绕过 SQL 审批或 Forge Assurance。
 
+渠道 ingress 不把每条消息都解释为查询任务，也不把“不需要 SQL”解释为拒绝。Pi 将消息路由为 `query / knowledge / conversation / forbidden`：明确取数进入 QueryRun；指标口径、Schema、语义规则和组织知识问题通过 Forge 的受控只读 Context API 获取有界 evidence，由 Pi 生成证据绑定回答；问候和正常对话直接响应；仅明确超出产品能力、身份未授权或权限策略命中时拒绝。渠道不得自行读取 Registry、Knowledge 或生成 SQL，任何查询仍由 Forge 独立 Assurance 和审批。
+
 ## 11. 可观测性
 
 每次任务应能按 `task_run_id` 查看：
