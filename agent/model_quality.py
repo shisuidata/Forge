@@ -12,6 +12,7 @@ from typing import Any, Callable
 from sqlalchemy import create_engine, text
 
 from agent.agent import _prepare_query
+from agent.llm import RUNTIME_CONTEXT_REVISION
 from config import cfg
 from agent.model_config import get_revision_model_config
 from agent.model_control import ModelControlError, ModelControlStore
@@ -40,6 +41,7 @@ def current_quality_lineage() -> dict[str, str]:
         "registry_revision": registry_revision,
         "assurance_revision": ASSURANCE_REVISION,
         "policy_revision": POLICY_REVISION,
+        "runtime_context_revision": RUNTIME_CONTEXT_REVISION,
     }
 
 
