@@ -164,15 +164,23 @@ def _sync_pi_model_catalog(revision: dict[str, Any]) -> None:
     provider_id = str(capabilities.get("pi_provider_id") or config["provider"])
     api = "openai-completions" if config["protocol"] == "openai_chat" else "anthropic-messages"
     providers = body.setdefault("providers", {})
+    reusable_key_ref = next((
+        candidate.get("apiKey")
+        for candidate in providers.values()
+        if candidate.get("baseUrl") == config.get("base_url", "")
+        and isinstance(candidate.get("apiKey"), str)
+    ), "$LLM_API_KEY")
     provider = providers.setdefault(provider_id, {
         "baseUrl": config.get("base_url", ""),
         "api": api,
-        "apiKey": "$LLM_API_KEY",
+        "apiKey": reusable_key_ref,
         "authHeader": True,
         "models": [],
     })
     if provider.get("baseUrl") != config.get("base_url", "") or provider.get("api") != api:
         raise ModelControlError("Pi provider ID 已绑定到不同协议或 Base URL。")
+    if provider.get("apiKey") == "$LLM_API_KEY" and reusable_key_ref != "$LLM_API_KEY":
+        provider["apiKey"] = reusable_key_ref
     models = provider.setdefault("models", [])
     model_entry = {
         "id": config["model"], "name": config["model"], "reasoning": False,
