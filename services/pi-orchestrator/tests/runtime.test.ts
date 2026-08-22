@@ -44,7 +44,7 @@ test("state database defaults under the dedicated agent directory", async () => 
   assert.equal(config.stateDbPath, join(agentDir, "state/orchestrator.sqlite3"));
 });
 
-test("runtime loads the 23 explicitly authorized production Skills", async () => {
+test("runtime loads the 20 versioned production Skills", async () => {
   const config = loadConfig({});
   const resources = await loadMvpSkillResources({
     cwd: config.skillsRoot,

@@ -43,7 +43,7 @@ test("health endpoints expose the restricted runtime capabilities", async (conte
   assert.equal(readiness.status, "degraded");
   assert.equal(readiness.capabilities.builtinToolsEnabled, false);
   assert.equal(readiness.capabilities.modelExecutionConfigured, false);
-  assert.equal(readiness.capabilities.skills.length, 23);
+  assert.equal(readiness.capabilities.skills.length, 20);
 });
 
 

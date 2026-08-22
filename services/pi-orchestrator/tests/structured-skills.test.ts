@@ -123,7 +123,7 @@ test("Pi Skill executor runs metric review through its dedicated Artifact Tool",
 
 test("every expanded Skill has a fixed AdvisoryArtifact contract evaluation", async () => {
   const expanded = ADVISORY_SKILL_NAMES;
-  assert.equal(expanded.length, 19);
+  assert.equal(expanded.length, 16);
   for (const skillName of expanded) {
     const executor = new PiStructuredSkillExecutor({
       config: loadConfig({}),
