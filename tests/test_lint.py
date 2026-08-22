@@ -1386,6 +1386,20 @@ def test_lint_high_value_spend_requires_completed_orders():
     assert any("已完成订单" in warning for warning in warnings)
 
 
+def test_lint_time_listing_rule_does_not_misclassify_aggregated_record_counts():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_refund_detail",
+            "group": ["dwd_refund_detail.user_id"],
+            "agg": [{"fn": "count", "col": "dwd_refund_detail.refund_id", "as": "refund_count"}],
+            "select": ["dwd_refund_detail.user_id", "refund_count"],
+        },
+        "2025年11月以来有退款记录的用户，显示退款次数",
+    )
+
+    assert not any("事件时间 DESC" in warning for warning in warnings)
+
+
 def test_lint_time_listing_respects_explicit_primary_sort():
     warnings = lint_conventions(
         {
