@@ -918,7 +918,9 @@ benchmark Registry 修复已完成：新增 `relationships.reference.json` 作�
 
 生产 Runtime 注入/RAG 审计已定位根因：`EMBED_API_KEY` 错误回退到 Coding Plan `LLM_API_KEY`，再调用默认 SiliconFlow embedding endpoint，首次索引构建失败后 `_get_retriever()` 整体返回 None，实际每题向 System Prompt 与 Tool Schema 注入全部 200 表，RAG 并未正常工作。同时 Runtime 结构上下文遗漏表/字段 description，Convention 依赖中文问题命中英文列名而大量漏注入，OpenAI-compatible 路径未显式设置历史 Method AI 使用的 8192 output tokens。
 
-修复方案已实施待部署：Embedding Key 改为必须显式配置；无 Embedding 时保留 Retriever 并确定性降级 BM25，而不是全 Registry；关系扩展改用 Canonical confirmed graph 和稳定 BFS；System Prompt/Tool Schema 共享同一 selected tables；结构层恢复表/字段描述；Convention 按实际召回表注入；每次结果保存 retrieval trace；输出上限固定在 Model Revision（默认 8192）。离线 40 题验证 BM25+关系扩展对 reference 物理表召回覆盖 40/40，单题上下文 20–32 表而非 200 表。当前关系补全重跑基于旧 Runtime，应停止并在新 revision 上重跑。
+修复方案已部署：Embedding Key 改为必须显式配置；无 Embedding 时保留 Retriever 并确定性降级 BM25，而不是全 Registry；关系扩展改用 Canonical confirmed graph 和稳定 BFS；System Prompt/Tool Schema 共享同一 selected tables；结构层恢复表/字段描述；Convention 按实际召回表注入；每次结果保存 retrieval trace；输出上限固定在 Model Revision（默认 8192）。NAS 实测 BM25 单题召回 21 表，结构描述、字段描述、指标、关系、Convention 均存在；离线 40 题 reference 物理表召回覆盖 40/40，单题上下文 20–32 表而非 200 表。
+
+Runtime Context v2 Run `mvr_e1ba9b05bf064fe39bcca37635428c64` 已完成：Accuracy 45%（18/40，原 20%）、Assurance 85%（原 45%）、平均重试 0.625、P95 28.12s（原 130.81s）、timeout 0%。RAG/上下文修复显著有效但仍未达 80%/90% 门槛，Activation 继续阻断。剩余差距集中在窗口聚合 0/5、TopN 1/5、多表聚合 2/5、时序导航 2/5；下一步迁移历史 Method AI 的 semantic enrichment 与 result contracts，不能回退 Assurance。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
