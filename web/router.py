@@ -217,6 +217,12 @@ class PiSkillStageRequest(BaseModel):
     run_async: bool = False
 
 
+class PiAdvisorySkillRequest(BaseModel):
+    skill_name: str
+    prompt: str
+    idempotency_key: str
+
+
 class PiAnalyzeRequest(BaseModel):
     question: Optional[str] = None
     idempotency_key: Optional[str] = None
@@ -542,6 +548,35 @@ async def api_pi_resume_analysis(
         return JSONResponse(data, status_code=status)
     except httpx.HTTPError as exc:
         logger.warning("Pi supplemental analysis failed: %s", exc)
+        return JSONResponse(
+            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
+            status_code=502,
+        )
+
+
+@chat_router.post(
+    "/api/pi/tasks/{task_run_id}/run-skill",
+    response_class=JSONResponse,
+)
+async def api_pi_run_skill(
+    task_run_id: str,
+    req: PiAdvisorySkillRequest,
+    _auth=Depends(require_api_auth),
+):
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Invalid task_run_id"},
+            status_code=400,
+        )
+    try:
+        status, data = await _pi_request(
+            "POST", f"/v1/tasks/{task_run_id}/run-skill", req.model_dump(exclude_none=True)
+        )
+        return JSONResponse(data, status_code=status)
+    except httpx.HTTPError as exc:
+        logger.warning("Pi advisory Skill failed: %s", exc)
         return JSONResponse(
             {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
             status_code=502,

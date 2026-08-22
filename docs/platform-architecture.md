@@ -152,7 +152,7 @@ Skill 输出必须区分：
 - 待确认问题。
 - 建议动作。
 
-需要数据库证据的 Skill 必须通过 Pi 调用 Forge，不允许自己访问数据源。
+需要数据库证据的 Skill 必须通过 Pi 调用 Forge，不允许自己访问数据源。生产 Runtime 对 23 个 Skill 使用显式 allowlist，每个 Stage 只注入一个 Skill；四个核心流程使用专用 Artifact，其余 Skill 使用有界 `AdvisoryArtifact`。组织管理员通过独立凭证和版本化 Team Policy 控制可用 Skill，普通任务不能修改 Policy。
 
 ## 5. 任务与 Artifact 模型
 
@@ -205,6 +205,7 @@ needs_input / incomplete / cancelled / failed / expired
 | `ReviewRequestArtifact` | Forge | 渠道、用户 | 审批对象、SQL hash、过期时间 |
 | `QueryResultArtifact` | Forge | 分析 Skill | 列、行、口径、执行元数据 |
 | `AnalysisArtifact` | 分析 Skill | 报告/图表 Skill | 证据、洞察、假设、建议、缺口 |
+| `AdvisoryArtifact` | 扩展专业 Skill | Pi、用户、渠道 | 有界发现、证据引用、建议、假设、限制、待确认问题和交付物 |
 | `ChartArtifact` | 可视化能力 | 渠道、报告 Skill | 图表规格、数据引用、标注 |
 | `RenderedOutputArtifact` | 输出 Skill | 渠道 | Markdown、Web、飞书或钉钉表示 |
 

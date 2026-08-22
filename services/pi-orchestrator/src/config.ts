@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +15,7 @@ export interface OrchestratorConfig {
   stateDbPath: string;
   channelIdentityMapPath: string;
   channelServiceKeys: string[];
+  adminServiceKeys: string[];
   forgeBaseUrl: string;
   forgeApiKey: string | undefined;
   forgePiServiceKey: string | undefined;
@@ -22,6 +25,7 @@ export interface OrchestratorConfig {
   reconciliationIntervalMs: number;
   piModelProvider: string | undefined;
   piModelId: string | undefined;
+  piModelRevision: string | null;
 }
 
 function parsePort(raw: string | undefined): number {
@@ -40,6 +44,23 @@ function parsePositiveInteger(raw: string | undefined, fallback: number, name: s
     throw new Error(`Invalid ${name}: ${raw}`);
   }
   return value;
+}
+
+export function computePiModelRevision(options: {
+  agentDir: string;
+  provider: string | undefined;
+  modelId: string | undefined;
+}): string | null {
+  if (options.provider === undefined || options.modelId === undefined) return null;
+  const modelsPath = resolve(options.agentDir, "models.json");
+  try {
+    const catalog = readFileSync(modelsPath);
+    return `sha256:${createHash("sha256")
+      .update(options.provider).update("\0").update(options.modelId).update("\0").update(catalog)
+      .digest("hex")}`;
+  } catch {
+    return `unresolved:${options.provider}/${options.modelId}`;
+  }
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorConfig {
@@ -70,6 +91,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
   if (forgeTimeoutMs >= stageTimeoutMs) {
     throw new Error("FORGE_REQUEST_TIMEOUT_MS must be less than PI_STAGE_TIMEOUT_MS");
   }
+  const piModelRevision = computePiModelRevision({
+    agentDir,
+    provider: piModelProvider,
+    modelId: piModelId,
+  });
   return {
     host: env.PI_ORCHESTRATOR_HOST ?? "127.0.0.1",
     port: parsePort(env.PI_ORCHESTRATOR_PORT),
@@ -82,6 +108,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
       env.PI_CHANNEL_IDENTITY_MAP ?? resolve(agentDir, "channel-identities.json"),
     ),
     channelServiceKeys: (env.PI_CHANNEL_SERVICE_KEYS ?? "")
+      .split(",")
+      .map((key) => key.trim())
+      .filter((key) => key.length > 0),
+    adminServiceKeys: (env.PI_ADMIN_SERVICE_KEYS ?? "")
       .split(",")
       .map((key) => key.trim())
       .filter((key) => key.length > 0),
@@ -98,5 +128,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
     ),
     piModelProvider,
     piModelId,
+    piModelRevision,
   };
 }

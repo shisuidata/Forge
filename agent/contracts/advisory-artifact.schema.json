@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/advisory-artifact.schema.json",
+  "title": "AdvisoryArtifact",
+  "description": "Bounded output of an explicitly authorized professional Skill.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_id",
+    "artifact_type",
+    "schema_version",
+    "task_run_id",
+    "producer",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^ar_[A-Za-z0-9_-]+$"
+    },
+    "artifact_type": {
+      "const": "advisory"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "task_run_id": {
+      "type": "string",
+      "pattern": "^tr_[A-Za-z0-9_-]+$"
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "skill_name",
+        "title",
+        "summary",
+        "findings",
+        "recommendations",
+        "assumptions",
+        "limitations",
+        "open_questions",
+        "deliverables"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "complete",
+            "incomplete"
+          ]
+        },
+        "skill_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "evidence_refs",
+              "confidence"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence_refs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^qr_[A-Za-z0-9_-]+#.+$"
+                }
+              },
+              "confidence": {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              }
+            }
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "action",
+              "rationale",
+              "priority"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priority": {
+                "enum": [
+                  "immediate",
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              }
+            }
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "content"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -7,7 +7,7 @@
 - Pi Orchestrator 拥有流程调度权。
 - Forge Python 服务拥有查询规划、编译、审批验证和数据库执行权。
 - 本服务不持有数据库凭证，不启用 Pi 内置 `bash/read/write/edit` 工具。
-- 当前仅授权四个 MVP Skills 和 `forge_prepare_query`；个人全局 Skills、Extensions 和 AGENTS.md 不加载。
+- 当前显式授权拾穗 DATA 的 23 个生产 Skills 和 `forge_prepare_query`；个人全局 Skills、Extensions 和 AGENTS.md 不加载。每个 Stage 仍只注入一个 Skill。
 - `forge_prepare_query` 只能返回待审核 SQL，不能批准或执行。
 
 详细设计见：
@@ -65,13 +65,14 @@ POST /v1/tasks/{task_run_id}/render-report
 | `PI_ORCHESTRATOR_STATE_DB` | `<agentDir>/state/orchestrator.sqlite3` | Task/Event/Artifact/StageAttempt/ChannelEvent SQLite 真相源；生产环境挂载持久卷 |
 | `PI_CHANNEL_IDENTITY_MAP` | `<agentDir>/channel-identities.json` | 飞书/钉钉外部用户到组织身份的只读映射；修改后重启加载 |
 | `PI_CHANNEL_SERVICE_KEYS` | 空 | Channel Adapter 调用 `/v1/channel-events` 的服务端密钥列表 |
+| `PI_ADMIN_SERVICE_KEYS` | 空 | 组织管理员配置 Team Skill Policy 的服务端密钥列表；未配置时管理 API 失败关闭 |
 | `PI_STAGE_TIMEOUT_MS` | `240000` | 单个模型或 Forge Stage 的执行超时 |
 | `PI_STAGE_LEASE_MS` | `300000` | StageAttempt lease；必须大于 Stage timeout |
 | `PI_RECONCILIATION_INTERVAL_MS` | `30000` | 回收过期 StageAttempt 的扫描间隔 |
 | `FORGE_BASE_URL` | `http://127.0.0.1:8000` | Forge 可信执行层地址 |
 | `FORGE_API_KEY` | 空 | 仅旧 `/api/prepare-query` 使用的普通 Forge API Key |
 | `FORGE_PI_SERVICE_KEY` | 空 | 内部 QueryRun API 专用服务密钥；必须匹配 Forge `PI_SERVICE_API_KEYS` |
-| `FORGE_REQUEST_TIMEOUT_MS` | `130000` | Forge 请求超时 |
+| `FORGE_REQUEST_TIMEOUT_MS` | `220000` | Forge 请求超时 |
 | `PI_MODEL_PROVIDER` | 空 | 专用 Pi Runtime 的模型 Provider；必须和 `PI_MODEL_ID` 同时配置 |
 | `PI_MODEL_ID` | 空 | 专用 Pi Runtime 的模型 ID；模型和凭证只从 `PI_ORCHESTRATOR_AGENT_DIR` 加载 |
 
@@ -88,9 +89,9 @@ node --env-file=../../.env --import tsx src/server.ts
 
 模板只引用 `$ARK_API_KEY`，不保存或回显 Key。生产环境应由服务编排器单独注入该变量，不要挂载包含其他业务凭证的完整 `.env`。`/health/readiness` 只有在专用模型可用时返回 `status: ok`，否则返回 `degraded`。
 
-当前服务提供健康检查、Runtime 能力检查、SQLite Task/Event/Artifact/StageAttempt/ChannelEvent Store 和 Task API；内存 Store 仅用于单元测试和显式注入。正式状态库启用 WAL、foreign keys 和 5 秒 busy timeout，当前 schema version 为 3；遇到更高版本会拒绝启动，禁止用旧服务降级打开新数据库。备份应使用 SQLite 在线备份能力，或停服后复制数据库文件；不要只复制运行中的主文件而遗漏 WAL。等待审批、`incomplete`、`ready_for_analysis` 和 `ready_for_report` 等安全暂停状态可跨进程恢复。Analysis、Report 和 QueryRun approval 已绑定持久化 Attempt/Lease；过期 lease 只恢复到可重试状态并写审计事件，不自动重放模型或 SQL。
+当前服务提供健康检查、Runtime 能力检查、SQLite Task/Event/Artifact/StageAttempt/ChannelEvent Store 和 Task API；内存 Store 仅用于单元测试和显式注入。正式状态库启用 WAL、foreign keys 和 5 秒 busy timeout，当前 schema version 为 4；遇到更高版本会拒绝启动，禁止用旧服务降级打开新数据库。备份应使用 SQLite 在线备份能力，或停服后复制数据库文件；不要只复制运行中的主文件而遗漏 WAL。等待审批、`incomplete`、`ready_for_analysis` 和 `ready_for_report` 等安全暂停状态可跨进程恢复。Analysis、Report、Advisory Skill 和 QueryRun approval 已绑定持久化 Attempt/Lease；过期 lease 只恢复到可重试状态并写审计事件，不自动重放模型或 SQL。
 
-四个 MVP Skills 都使用隔离 Pi Session，并且只能通过终止型 Structured Output Tool 提交 Artifact。分析发现必须引用实际 QueryRun 行，报告只能复用 AnalysisArtifact finding 和证据；Markdown 由服务端确定性渲染。Pi 只负责调度批准动作；QueryRun、审批记录和查询结果由 Forge 持久化。
+23 个生产 Skills 都使用隔离 Pi Session，并且只能通过终止型 Structured Output Tool 提交 Artifact。四个核心流程 Skill 使用专用 Artifact；其余 19 个 Skill 使用有界 `AdvisoryArtifact`。漏斗、留存、EDA 和 A/B 若要标记 complete，必须引用实际 QueryRun 行；其他数据结论也不得引用输入范围外的 evidence。团队可通过带 Admin Service Key 的版本化 CAS Policy 启停 Skill，变更持久化审计。Pi 模型目录生成非密 `model_revision` 并固定到新 StageAttempt，在途 Attempt 不随目录变更漂移。报告只能复用 AnalysisArtifact finding 和证据，Markdown 由服务端确定性渲染。Pi 只负责调度批准动作；QueryRun、审批记录和查询结果由 Forge 持久化。
 
 Forge Web 可在设置 `PI_ORCHESTRATOR_ENABLED=true` 后访问 `/tasks`，审核 hash 绑定的 SQL 并查看只读执行结果。
 

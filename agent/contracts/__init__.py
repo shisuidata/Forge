@@ -20,6 +20,7 @@ _CONTRACT_FILES = {
     "metric_definition_artifact": "metric-definition-artifact.schema.json",
     "query_result_artifact": "query-result-artifact.schema.json",
     "analysis_artifact": "analysis-artifact.schema.json",
+    "advisory_artifact": "advisory-artifact.schema.json",
     "rendered_output_artifact": "rendered-output-artifact.schema.json",
 }
 

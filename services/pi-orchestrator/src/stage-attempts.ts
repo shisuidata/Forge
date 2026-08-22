@@ -26,6 +26,8 @@ export interface StageAttempt {
   updated_at: string;
   finished_at: string | null;
   error: string | null;
+  model_revision: string | null;
+  skill_policy_version: number;
 }
 
 export interface StartStageAttemptInput {
@@ -35,6 +37,8 @@ export interface StartStageAttemptInput {
   runningStatus: TaskStatus;
   retryStatus: TaskStatus;
   leaseMs: number;
+  modelRevision?: string | null;
+  skillPolicyVersion?: number;
 }
 
 export interface StageAttemptStore {
@@ -76,6 +80,8 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
       updated_at: now.toISOString(),
       finished_at: null,
       error: null,
+      model_revision: input.modelRevision ?? null,
+      skill_policy_version: input.skillPolicyVersion ?? 0,
     };
     attempts.push(attempt);
     this.#attempts.set(input.taskRunId, attempts);

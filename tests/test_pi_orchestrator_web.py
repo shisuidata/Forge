@@ -11,6 +11,9 @@ async def test_task_workspace_renders_hash_bound_queryrun_approval(client: Async
     assert response.status_code == 200
     assert "Pi 任务控制台" in response.text
     assert "批准并只读执行" in response.text
+    assert 'id="task-mode"' in response.text
+    assert "专业 Advisory Skill" in response.text
+    assert 'value="funnel-analysis"' in response.text
     assert "sql-editor" not in response.text
 
 
@@ -162,7 +165,11 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
 
     async def fake_pi_request(method, path, payload=None):
         calls.append((method, path, payload))
-        artifact_type = "analysis" if path.endswith("/analyze") else "rendered_output"
+        artifact_type = (
+            "analysis" if path.endswith("/analyze")
+            else "advisory" if path.endswith("/run-skill")
+            else "rendered_output"
+        )
         return 200, {
             "task": {"task_run_id": "tr_web_001", "status": "ready_for_report"},
             "artifact": {"artifact_type": artifact_type, "payload": {}},
@@ -174,6 +181,14 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
     analyzed = await client.post(
         "/api/pi/tasks/tr_web_001/analyze",
         json={"question": "分析下降集中点", "run_async": True},
+    )
+    advisory = await client.post(
+        "/api/pi/tasks/tr_web_001/run-skill",
+        json={
+            "skill_name": "sql-reviewer",
+            "prompt": "审查这段 SQL",
+            "idempotency_key": "skill-web-001",
+        },
     )
     reported = await client.post(
         "/api/pi/tasks/tr_web_001/render-report",
@@ -193,6 +208,7 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
     task = await client.get("/api/pi/tasks/tr_web_001")
     attempts = await client.get("/api/pi/tasks/tr_web_001/attempts")
     assert analyzed.status_code == 200
+    assert advisory.status_code == 200
     assert reported.status_code == 200
     assert supplemented.status_code == 200
     assert task.status_code == 200
@@ -203,6 +219,15 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
             "POST",
             "/v1/tasks/tr_web_001/analyze",
             {"question": "分析下降集中点", "async": True},
+        ),
+        (
+            "POST",
+            "/v1/tasks/tr_web_001/run-skill",
+            {
+                "skill_name": "sql-reviewer",
+                "prompt": "审查这段 SQL",
+                "idempotency_key": "skill-web-001",
+            },
         ),
         ("POST", "/v1/tasks/tr_web_001/render-report", {"audience": "业务负责人"}),
         (

@@ -238,6 +238,7 @@ test("expired StageAttempt is reconciled once without replaying the Stage", asyn
     runningStatus: running.status,
     retryStatus: "ready_for_analysis",
     leaseMs: 1,
+    modelRevision: `sha256:${"b".repeat(64)}`,
   });
   await new Promise((resolve) => setTimeout(resolve, 5));
 
@@ -246,6 +247,7 @@ test("expired StageAttempt is reconciled once without replaying the Stage", asyn
   assert.equal(recovered.length, 1);
   assert.equal(recovered[0]?.attempt_id, attempt.attempt_id);
   assert.equal(second.attempts.get(attempt.attempt_id)?.status, "interrupted");
+  assert.equal(second.attempts.get(attempt.attempt_id)?.model_revision, `sha256:${"b".repeat(64)}`);
   assert.equal(second.tasks.get(task.task_run_id)?.status, "ready_for_analysis");
   assert.equal(
     second.events.list(task.task_run_id).at(-1)?.event_type,
@@ -327,6 +329,27 @@ test("active lease and one-running-attempt constraint fail closed", async () => 
   assert.equal(state.attempts.finish(attempt.attempt_id, "succeeded").status, "succeeded");
   assert.equal(state.attempts.list(task.task_run_id).length, 1);
   state.close();
+});
+
+test("SQLite team Skill policy persists, audits through versioned CAS, and controls enablement", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-policy-"));
+  const path = join(directory, "state.sqlite3");
+  const first = new SqliteOrchestratorState(path);
+  const policy = first.skillPolicies.configure({
+    orgId: "org_demo", teamId: "team_demo",
+    enabledSkills: ["funnel-analysis"], expectedVersion: 0, actor: "admin_1",
+  });
+  assert.equal(policy.version, 1);
+  assert.equal(first.skillPolicies.isEnabled("org_demo", "team_demo", "funnel-analysis"), true);
+  assert.equal(first.skillPolicies.isEnabled("org_demo", "team_demo", "sql-reviewer"), false);
+  assert.throws(() => first.skillPolicies.configure({
+    orgId: "org_demo", teamId: "team_demo", enabledSkills: [], expectedVersion: 0, actor: "admin_2",
+  }), /version mismatch/);
+  first.close();
+
+  const reopened = new SqliteOrchestratorState(path);
+  assert.deepEqual(reopened.skillPolicies.get("org_demo", "team_demo")?.enabled_skills, ["funnel-analysis"]);
+  reopened.close();
 });
 
 test("SQLite Artifact Store retains schema and producer validation", async () => {

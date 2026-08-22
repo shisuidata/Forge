@@ -58,6 +58,17 @@ async def _startup_checks():
     except Exception as exc:
         logger.warning("Model validation reconciliation unavailable: %s", type(exc).__name__)
 
+    try:
+        from forge.query_runs import reconcile_expired_query_run_executions
+        interrupted_queries = await reconcile_expired_query_run_executions()
+        if interrupted_queries:
+            logger.warning(
+                "Marked %s expired QueryRun execution(s) failed without replay",
+                interrupted_queries,
+            )
+    except Exception as exc:
+        logger.warning("QueryRun execution reconciliation unavailable: %s", type(exc).__name__)
+
     # ── #9 默认密码安全警告 ──
     if cfg.AUTH_ENABLED and cfg.AUTH_ADMIN_PASSWORD in ("123456", ""):
         logger.warning(

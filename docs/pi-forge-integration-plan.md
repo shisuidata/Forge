@@ -1,6 +1,6 @@
 # Pi × Forge × 拾穗 DATA 集成计划
 
-> 状态：实施中 · Last updated: 2026-08-21
+> 状态：自动化实施与验收完成，待人工测试 · Last updated: 2026-08-21
 >
 > 本文是本次平台改造的**计划真相源**。总体架构见 [`platform-architecture.md`](platform-architecture.md)，现有外部 Agent 安全边界见 [`agent-integration.md`](agent-integration.md)。
 
@@ -43,24 +43,25 @@
 
 | 工作项 | 状态 | 验证/说明 |
 |---|---|---|
-| 平台四层架构与职责迁移矩阵 | 已完成，待提交 | `platform-architecture.md` |
-| TaskRun 与四类核心 Artifact Schema | 已完成，待提交 | `tests/test_artifact_contracts.py`，10 个契约测试 + 文档测试共 11 passed |
-| 拾穗 DATA Pi Package | 已完成，待提交 | 23 Skills，Pi discovery 0 diagnostics，npm 门禁通过 |
-| 首批四个 Skill 的 Runtime 白名单 | 已完成，待提交 | 精确加载 4 Skills；全局 Skills、Extensions、Context 均禁用 |
-| 受限 Pi Orchestrator Service 骨架 | 已完成，待提交 | Runtime、Task/Event Store、Task API、能力清单、健康检查；TypeScript typecheck + 16 tests passed |
-| `forge_prepare_query` Tool | 已完成，待提交 | 只接现有 `/api/prepare-query`；用户身份由 TaskContext 注入；拒绝任何可执行标记或结果集；Forge 端身份绑定留到 Phase 2 |
-| Phase 1 Integration Spike | 已完成，待提交 | Web → Pi TaskRun/Event → Forge prepare-query → 不可执行 SQL 预览已跑通 |
-| Web Task Event、审批与结果展示 | 已完成，待提交 | Web 仅代理 Pi Task API；审核时不可编辑 SQL；批准后展示 8 步事件与有界结果；管理员身份由服务端固定映射；Playwright 三服务 E2E 通过 |
+| 平台四层架构与职责迁移矩阵 | 已完成 | `platform-architecture.md` |
+| TaskRun 与四类核心 Artifact Schema | 已完成 | `tests/test_artifact_contracts.py`，10 个契约测试 + 文档测试共 11 passed |
+| 拾穗 DATA Pi Package | 已完成 | 23 Skills，Pi discovery 0 diagnostics，npm 门禁通过 |
+| 生产 Skill Runtime 白名单 | 已完成 | 显式加载 23 Skills、每 Stage 仅注入 1 个；全局 Skills、Extensions、Context 均禁用；四个核心 Skill 使用专用 Artifact，其余 19 个使用 AdvisoryArtifact |
+| 受限 Pi Orchestrator Service 骨架 | 已完成 | Runtime、Task/Event Store、Task API、能力清单、健康检查；TypeScript typecheck + 16 tests passed |
+| `forge_prepare_query` Tool | 已完成 | 只接现有 `/api/prepare-query`；用户身份由 TaskContext 注入；拒绝任何可执行标记或结果集；Forge 端身份绑定留到 Phase 2 |
+| Phase 1 Integration Spike | 已完成 | Web → Pi TaskRun/Event → Forge prepare-query → 不可执行 SQL 预览已跑通 |
+| Web Task Event、审批与结果展示 | 已完成 | Web 仅代理 Pi Task API；审核时不可编辑 SQL；批准后展示 8 步事件与有界结果；管理员身份由服务端固定映射；Playwright 三服务 E2E 通过 |
 | Pi 模型与四个 Skill 的真实任务执行 | 四个 MVP Skills 已接入 | Coding Plan 真实执行四个 Skills 均通过；分析只接受实际 QueryRun row evidence，报告 finding 必须逐字来自 AnalysisArtifact，Markdown 服务端确定性渲染 |
-| Phase 3 分析与报告闭环 | 已完成，待提交 | 唯一一次补查闭环完成：用户选择 suggested_query → 幂等 child TaskRun → Forge 审批执行 → 父任务合并两个 QueryResult 重新分析；Coding Plan 多 QueryResult 冒烟和 Web 三服务 E2E 通过；34 TS tests、Forge full suite 383 passed |
-| Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
-| Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
+| Phase 3 分析与报告闭环 | 已完成 | 唯一一次补查闭环完成：用户选择 suggested_query → 幂等 child TaskRun → Forge 审批执行 → 父任务合并两个 QueryResult 重新分析；Coding Plan 多 QueryResult 冒烟和 Web 三服务 E2E 通过；34 TS tests、Forge full suite 383 passed |
+| Phase 3.5 Pi 状态持久化 | 已完成 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
+| Phase 3.6 Stage Attempt 与异步恢复 | 已完成 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 自动化实现完成，待人工外部 smoke | ChannelEvent、独立鉴权、身份映射、SQLite 幂等入站和 Renderer 已完成；飞书支持表单补充信息、hash 审批、取消、分析、补查 child lineage 和报告；钉钉薄 Adapter 复用同一 ChannelEvent/Presentation，不复制状态机。54 个 Orchestrator tests 与 Python Adapter tests 通过；真实飞书/钉钉应用凭证收发留给人工验收。 |
 | Phase 4.4 Model Control Plane | 已完成并通过激活门禁 | Profile/Revision/ActiveBinding/审计、Secret Ref、Provider smoke、持久化 40 题质量验证、CAS 激活/回滚和在途 snapshot 固定均已完成。DeepSeek V4 Flash deterministic revision `sha256:0de19c…` 在 Run `mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.34s、timeout 0%，已 CAS 激活为 binding v1。 |
 | Phase 4.5 Registry Studio | 已完成，待人工 UI 验收 | Canonical Schema Contract、旧 Registry 迁移、Draft/Revision/Audit/CAS publish/rollback、危险 Diff、SQLite/PostgreSQL/MySQL 受控 DDL、可信 ER、JSON/表格投影、DDL Draft 和关系确认 UI/API 已完成；不具备数据库 DDL 执行能力。 |
-| Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
-| Phase 2 QueryRun 审批执行闭环 | 已完成，待提交 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
-| Forge 内部 QueryRun 审批 API | 已完成，待提交 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
+| Phase 5 扩展 Skills 与组织能力 | 已完成，待人工业务效果验收 | 23 Skills 全部显式授权并隔离执行；19 个扩展 Skill 接入 AdvisoryArtifact 与 Task API；漏斗/留存/EDA/A-B complete 强制 QueryResult evidence；Team Policy 使用 Admin Key、SQLite CAS 与审计；StageAttempt 固定 Pi model revision。 |
+| Phase 2.5 前置 Skill 结构化执行 | 已完成 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
+| Phase 2 QueryRun 审批执行闭环 | 已完成 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
+| Forge 内部 QueryRun 审批 API | 已完成 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
 | Forge 旧 Pipeline 退出新主路径 | 已退役，显式 flag 可回滚 | 新 Web/Pi 链路不调用 `agent/pipeline.py`；旧 `/api/chat`、`/api/approve`、`/api/cancel` 默认返回 410，只有 `LEGACY_AGENT_API_ENABLED=true` 才能临时回滚。 |
 
 ### 0.4 决策记录
@@ -721,7 +722,7 @@ M4.1 问候语错误生成 SQL 修复决定：
 - 保持范围最小，只识别明确的纯问候语，不用“长度过短”等启发式误伤“用户数”“GMV”等合法短查询。
 - 增加单元测试和 NAS 真实 ChannelEvent 回归：`hello` presentation 必须为 `needs_input` 且无 SQL 审批 action；标准数据问题仍为 `query_review`。
 - 已完成：Forge commit `3323f7f` / main merge `2453bc9` 部署到 NAS；完整 Python suite 393 passed / 25 skipped；真实 ChannelEvent `hello` 返回 `needs_input`、0 actions、无 SQL。部署时同时修正 Pi 到内网 Forge 地址，避免 Forge 改为内网 IP 后仍请求 loopback。
-- 当前模型边界：NAS Forge 使用确定性 M4.1 测试模型；Pi 的 Coding Plan catalog 仍是 `volcengine-coding-plan / ark-code-latest`，但 NAS 仅有不可调用占位 Key。尚未完成真实 Coding Plan 模型验收，也未确认 `ark-code-latest` 当前是否映射到用户所说的 DeepSeek V4 Flash。
+- 当前模型边界：Forge Query Planning 已使用通过完整门禁并 CAS 激活的 DeepSeek V4 Flash revision；Pi Stage 使用隔离的 `volcengine-coding-plan / ark-code-latest` catalog，并把 catalog hash 固定到每个 StageAttempt。动态别名的底层供应商版本仍由 Provider 控制，不把无法验证的具体版本映射写成事实。
 
 M4.1 用户配置接管与服务重启规则：
 
@@ -900,10 +901,7 @@ Scope 至少支持：
 - 配置错误时真实 ChannelEvent 返回有界“LLM 配置错误”，不回显 Provider 原始响应；修正后下一条任务进入 `query_review`，批准后通过只读数据库执行。
 - 当前质量风险：`deepseek-v4-flash` 本次真实输出未满足用户问题，错误增加 2026 时间过滤、遗漏渠道和 GMV，最终结果为空。热切换与协议兼容已通过，但该模型尚未通过 Forge 40 题准确率门禁，不能作为默认生产模型；需要在模型中心展示验证结果并阻止未达标模型直接激活。
 
-仍待实施：
-
-1. 将当前文件 revision cache 升级为持久化 ModelProfile / Revision / ActiveBinding Store。
-2. 建立 SQLite `model_profiles/model_profile_revisions/active_model_bindings/model_switch_audit`。
+上述控制面待办已完成：文件 revision cache 已升级为持久化 ModelProfile / Revision / ActiveBinding / Audit Store；下文保留演进与验证记录。
 
 当前实施切片（已完成基础控制面）：Forge `forge.query_planning` scope 已具备持久化 Revision/Binding/Audit。Revision 只保存非密配置和 `secret_ref`，支持 `env:` 与严格 mode 600 `file:` Secret；真实 Tool Calling smoke 和质量/性能门禁均通过后才可 CAS activate，rollback 也使用 expected binding version。`get_model_config()` 优先读取 active binding，无 active 时兼容回退现有环境/YAML；同一查询准备的全部受控重试固定一次 Model snapshot，避免切换中途改变 QueryRun。
 
@@ -928,9 +926,7 @@ Runtime Context v2 Run `mvr_e1ba9b05bf064fe39bcca37635428c64` 已完成：Accura
 用户确认继续后完成 Runtime Context v3–v9：持久化 bounded DSL/SQL 与结果差异；迁移结构描述、语义 Convention、结果契约和 CTE/窗口示例；修复 Tool Schema 对 CTE/alias/distinct 的约束冲突；新增意图完整性 Gate、全量 retry diagnostics、确定性 temperature=0，以及仅在分子/分母或单 CTE 绑定唯一时生效的窄范围确定性 normalization。所有规则按语义模式实现，无 case ID/reference SQL 注入，Assurance 未降低。
 
 最终 Model Gate Run `mvr_520f69239b904a96af2d49e635e9a23f` 全部通过：Accuracy 87.5%（35/40，门槛 80%）、Assurance 90%（门槛 90%）、平均重试 0.675（门槛 ≤1）、P95 28.338s（门槛 ≤180s）、timeout 0%（门槛 ≤5%），Tool Calling/Structured Output smoke 均通过。Revision `sha256:0de19cfd6bccd692d15efea031590d8adb1b7368be1b0b2c83845bf6a940cecd` 已 CAS 激活为 Query Planning binding v1。
-3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
-4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
-5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
+后续事项 3–5 也已完成：真实 Provider validate/activate/rollback、配置与激活分离、QueryRun 与 Pi StageAttempt model revision、并发 CAS、在途 snapshot、失败回滚、重启恢复和 secret redaction 均已有自动测试。Pi 每个新 Stage 对专用 `models.json` 重新计算非密 revision，目录变化时重建新 Runtime；在途 Session/Attempt 固定旧 snapshot。
 
 架构全景图：`docs/architecture-diagrams/forge-platform-architecture.html`。当前包含 11 个中文视角：产品架构、技术分层、元数据模型、端到端流程、关键闭环、实现与部署、控制面演进、模型运行时、安全信任、状态一致性、API 集成。NAS 已部署到 `/admin/architecture`：匿名访问 302，登录后 200。
 
@@ -1001,14 +997,27 @@ Phase 4.5 实施结果：
 
 ### Phase 5：扩展 Skills 与组织能力
 
-按价值逐批接入：
+实施结果：
 
-1. 漏斗、留存、EDA、A/B。
-2. SQL Review、数据质量、表设计、血缘。
-3. 看板、PPT、日报周报和数据文档。
-4. 团队级 Skill 配置、Registry 版本与跨会话任务恢复。
+1. 23 个拾穗 DATA Skills 全部进入显式 production allowlist；ResourceLoader 仍关闭全局 Skills、Extensions、Prompt Templates、Themes 和 Context Files，每个 Stage 只加载一个 Skill 全文。
+2. 四个核心流程 Skill 继续使用 Clarification/MetricDefinition/Analysis/RenderedOutput 专用 Artifact；其余 19 个 Skill 统一使用版本化 `AdvisoryArtifact`，但每个 Skill 都有固定隔离执行评测。
+3. 漏斗、留存、EDA、A/B 若返回 `complete`，必须至少引用一个当前 TaskRun QueryResult evidence；任何扩展 Skill 引用输入范围外 evidence 都失败关闭。
+4. 新增 `POST /v1/tasks/{task_run_id}/run-skill` 长任务接口，固定 `202 + polling`，持久化 Artifact/Event/Attempt/Lease；Forge Web 提供同契约代理，并在 `/tasks` 支持 19 个 Advisory Skill 的选择、执行、轮询与 Artifact 展示。
+5. Team Skill Policy 持久化到 Pi SQLite schema v4，使用 expected version CAS，策略与审计原子写入；管理 API 必须携带独立 `X-Admin-Service-Key`，未配置或错误凭证失败关闭。
+6. Pi 模型目录生成不含凭证的 SHA-256 revision 并写入 StageAttempt；目录变化无需重启，新 Stage 重建 Runtime，在途 Stage 固定旧 Session 和 revision。
+7. Registry Revision 已由 QueryRun/Assurance 固定；Task/Event/Artifact/Attempt、等待审批和补查 lineage 已验证跨进程恢复且不自动重放高风险操作。
 
-每增加一个 Skill，都需要 Artifact Schema、固定测试用例和至少一条端到端评测。
+验收证据：23 Skills discovery 精确匹配；19 个扩展 Skill 均通过终止型 Tool E2E 合约评测；伪造 evidence、核心 Skill 绕过、禁用 Team Skill、过期 CAS、无 Admin Key、Stage timeout/recovery、SQLite reopen 均有失败关闭测试。Playwright 已验证 19 个 Web 选项、模式切换无脚本错误，并以 fake Pi 完成 Web → proxy → 202 polling → AdvisoryArtifact 展示 E2E。
+
+最终自动化验收（2026-08-21）：
+
+- Python 全量：`500 passed, 25 skipped`；跳过项为可选外部 benchmark/integration，不影响当前本地与 NAS 验收边界。
+- Pi Orchestrator：TypeScript typecheck 通过，`60/60` tests passed。
+- Model Gate：`mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.338s、timeout 0%，满足 80%/90%/≤1/≤180s/≤5% 门槛并已 CAS 激活。
+- Web：Playwright 模式切换与 Advisory 完整轮询展示 E2E 通过，浏览器 `pageerror=[]`。
+- QueryRun 崩溃恢复：process owner + execution lease 已完成；启动仅回收过期 lease 并标记失败，未过期其他 worker 不受影响，SQL 从不自动重放。
+- 非阻断遗留：Node 当前仍打印 `node:sqlite ExperimentalWarning`；FastAPI `on_event` 与飞书 SDK 存在上游 deprecation warning。均不改变状态、安全或验收结果，后续依赖升级时迁移。
+- 自动化范围外只剩人工外部验收：真实飞书/钉钉应用凭证的消息收发、真实业务用户对 19 个扩展 Skill 的主观方法质量，以及管理员在正式 UI/网络环境中的 Registry Studio 操作体验。
 
 ## 8. 测试策略
 
@@ -1060,9 +1069,9 @@ Phase 4.5 实施结果：
 
 ## 9. 非目标
 
-第一条垂直切片不做：
+第一条垂直切片当时不做以下内容；其中“全部 Skills”已在后续 Phase 5 按受控 Artifact/Policy 方式完成，不代表放宽 Forge 执行边界：
 
-- 一次接入全部 Skills。
+- 在首个切片中一次接入全部 Skills。
 - 让 Pi 直接访问数据库。
 - 让外部 `/api/prepare-query` 自动获得执行权限。
 - 自动执行补查或无限 Agent 循环。
@@ -1085,7 +1094,7 @@ Phase 4.5 实施结果：
 | 分析结论幻觉 | 证据引用、限制声明、固定评测和人工反馈闭环 |
 | Pi 或 Skill 升级造成行为漂移 | 锁定版本，升级前跑契约测试和端到端评测 |
 | Pi SQLite 状态库损坏或备份遗漏 WAL | WAL、foreign keys、busy timeout、schema version 门禁；生产挂载持久卷并使用 SQLite 在线备份或停服备份 |
-| Forge 在 `executing` 状态进程崩溃 | 当前不会重复执行，但需要增加超时回收与人工恢复 runbook |
+| Forge 在 `executing` 状态进程崩溃 | QueryRun claim 写入 process owner 与有界 lease；启动只将 lease 已过期的执行标记 failed，不自动重放 SQL；未过期的其他 worker lease 保持不动，人工可重新 prepare/approve |
 | Coding Plan 分析/报告阶段延迟波动 | Stage Attempt、lease、timeout 和 202 + polling 已落地；同步接口仅作兼容，渠道主路径不得依赖长连接 |
 | `node:sqlite` 在当前 Node 版本仍输出 ExperimentalWarning | 服务最低 Node 22.19，部署锁定已验证 Node 版本；Node 升级必须先跑 SQLite 重启、并发 CAS 和全套回归 |
 
@@ -1110,9 +1119,9 @@ Phase 4.5 实施结果：
 PI_ORCHESTRATOR_ENABLED=false
 ```
 
-迁移期间：
+迁移期间曾保持旧入口可用；当前迁移完成后的回滚规则是：
 
-- Forge 原有 `/api/chat`、Web 查询和飞书路径保持可用。
+- Forge 旧 `/api/chat`、`/api/approve`、`/api/cancel` 默认返回 410；只有显式 `LEGACY_AGENT_API_ENABLED=true` 才临时恢复。
 - 新 TaskRun 与旧 Session 数据分开存储。
 - Pi Orchestrator 不修改 Registry 和数据库。
 - 新链路故障时渠道回退到原有 Forge 查询入口。

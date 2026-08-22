@@ -69,6 +69,53 @@ async def _create(client: AsyncClient, headers: dict[str, str]):
 
 
 @pytest.mark.asyncio
+async def test_execution_reconciliation_fails_only_expired_leases_without_replay(
+    client: AsyncClient, query_run_env
+):
+    import aiosqlite
+    from config import cfg
+    from forge.query_runs import reconcile_expired_query_run_executions
+
+    created = (await _create(client, query_run_env)).json()
+    async with aiosqlite.connect(cfg.QUERY_RUN_DB_PATH) as db:
+        await db.execute(
+            """UPDATE query_runs SET status = 'executing', execution_owner = 'dead-worker',
+               execution_lease_expires_at = '2000-01-01T00:00:00+00:00'
+               WHERE query_run_id = ?""",
+            (created["query_run_id"],),
+        )
+        await db.commit()
+    assert await reconcile_expired_query_run_executions() == 1
+    recovered = await client.get(
+        f"/api/internal/query-runs/{created['query_run_id']}", headers=query_run_env
+    )
+    assert recovered.status_code == 200
+    assert recovered.json()["status"] == "failed"
+    assert recovered.json()["error"] == "execution_interrupted_or_lease_expired"
+    assert await reconcile_expired_query_run_executions() == 0
+
+
+@pytest.mark.asyncio
+async def test_execution_reconciliation_preserves_unexpired_other_worker_lease(
+    client: AsyncClient, query_run_env
+):
+    import aiosqlite
+    from config import cfg
+    from forge.query_runs import reconcile_expired_query_run_executions
+
+    created = (await _create(client, query_run_env)).json()
+    async with aiosqlite.connect(cfg.QUERY_RUN_DB_PATH) as db:
+        await db.execute(
+            """UPDATE query_runs SET status = 'executing', execution_owner = 'live-worker',
+               execution_lease_expires_at = '2999-01-01T00:00:00+00:00'
+               WHERE query_run_id = ?""",
+            (created["query_run_id"],),
+        )
+        await db.commit()
+    assert await reconcile_expired_query_run_executions() == 0
+
+
+@pytest.mark.asyncio
 async def test_internal_query_run_requires_dedicated_pi_service_key(
     client: AsyncClient, query_run_env
 ):

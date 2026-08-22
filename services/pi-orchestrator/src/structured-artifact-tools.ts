@@ -170,6 +170,50 @@ export const analysisPayloadSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const advisoryPayloadSchema = Type.Object(
+  {
+    status: Type.Union([Type.Literal("complete"), Type.Literal("incomplete")]),
+    skill_name: Type.String({ minLength: 1 }),
+    title: Type.String({ minLength: 1 }),
+    summary: Type.String({ minLength: 1 }),
+    findings: Type.Array(
+      Type.Object(
+        {
+          statement: Type.String({ minLength: 1 }),
+          evidence_refs: Type.Array(evidenceRefSchema, { uniqueItems: true }),
+          confidence: Type.Union([
+            Type.Literal("high"), Type.Literal("medium"), Type.Literal("low"),
+          ]),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    recommendations: Type.Array(
+      Type.Object(
+        {
+          action: Type.String({ minLength: 1 }),
+          rationale: Type.String({ minLength: 1 }),
+          priority: prioritySchema,
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    assumptions: Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true }),
+    limitations: Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true }),
+    open_questions: Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true }),
+    deliverables: Type.Array(
+      Type.Object(
+        {
+          name: Type.String({ minLength: 1 }),
+          content: Type.String({ minLength: 1 }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export const renderedOutputPayloadSchema = Type.Object(
   {
     status: Type.Union([Type.Literal("complete"), Type.Literal("incomplete")]),
@@ -216,6 +260,7 @@ export type ClarificationPayload = Static<typeof clarificationPayloadSchema>;
 export type MetricDefinitionPayload = Static<typeof metricDefinitionPayloadSchema>;
 export type QueryResultPayload = Static<typeof queryResultPayloadSchema>;
 export type AnalysisPayload = Static<typeof analysisPayloadSchema>;
+export type AdvisoryPayload = Static<typeof advisoryPayloadSchema>;
 export type RenderedOutputPayload = Static<typeof renderedOutputPayloadSchema>;
 
 export class ArtifactSubmissionError extends Error {}
@@ -267,6 +312,21 @@ export function validateAnalysisPayload(value: unknown): string | undefined {
     )
   ) {
     return "analysis findings use unsupported causal certainty; use association or hypothesis wording";
+  }
+  return undefined;
+}
+
+export function validateAdvisoryPayload(value: unknown): string | undefined {
+  if (!Value.Check(advisoryPayloadSchema, value)) {
+    return "payload does not match AdvisoryArtifact schema";
+  }
+  if (value.status === "incomplete" && value.open_questions.length === 0) {
+    return "incomplete advisory requires at least one open question";
+  }
+  if ([value.summary, ...value.findings.map((item) => item.statement)].some(
+    (text) => unsupportedCausalCertainty.test(text),
+  )) {
+    return "advisory uses unsupported causal certainty";
   }
   return undefined;
 }
@@ -381,6 +441,36 @@ export function createAnalysisSubmissionTool(options: {
         references.some((reference) => !options.allowedEvidenceRefs?.has(reference))
         ? "analysis cited an evidence reference not present in the supplied QueryResult"
         : undefined;
+    },
+  });
+}
+
+export function createAdvisorySubmissionTool(options: {
+  skillName: string;
+  allowedEvidenceRefs: Set<string>;
+  requiresQueryEvidence?: boolean;
+}) {
+  return createSubmissionTool({
+    name: "submit_advisory_artifact",
+    label: "AdvisoryArtifact",
+    description: "Submit the bounded professional advisory result. Data claims must cite only supplied QueryResult evidence references.",
+    schema: advisoryPayloadSchema,
+    validate: (payload) => {
+      const error = validateAdvisoryPayload(payload);
+      if (error !== undefined) return error;
+      if (payload.skill_name !== options.skillName) return "skill_name does not match authorized Skill";
+      const refs = payload.findings.flatMap((item) => item.evidence_refs);
+      if (
+        options.requiresQueryEvidence === true &&
+        payload.status === "complete" &&
+        (payload.findings.length === 0 || payload.findings.some((item) => item.evidence_refs.length === 0))
+      ) {
+        return "every finding in a complete data analysis advisory requires QueryResult evidence";
+      }
+      if (refs.some((ref) => !options.allowedEvidenceRefs.has(ref))) {
+        return "advisory cited evidence outside supplied QueryResults";
+      }
+      return undefined;
     },
   });
 }

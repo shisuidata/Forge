@@ -9,13 +9,20 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import type { Artifact } from "./artifacts.js";
-import type { OrchestratorConfig } from "./config.js";
-import { loadStageSkillResources, type MvpSkillName } from "./skills.js";
+import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
 import {
+  EVIDENCE_REQUIRED_SKILL_NAMES,
+  loadStageSkillResources,
+  type AdvisorySkillName,
+  type MvpSkillName,
+} from "./skills.js";
+import {
+  createAdvisorySubmissionTool,
   createAnalysisSubmissionTool,
   createClarificationSubmissionTool,
   createMetricDefinitionSubmissionTool,
   createRenderedOutputSubmissionTool,
+  type AdvisoryPayload,
   type AnalysisPayload,
   type ClarificationPayload,
   type MetricDefinitionPayload,
@@ -74,6 +81,7 @@ interface StageSession {
 export type StageSessionFactory = (options: {
   skillName: MvpSkillName;
   tool: ToolDefinition;
+  expectedModelRevision?: string | null;
 }) => Promise<StageSession>;
 
 export interface AnalysisSkillInput {
@@ -87,22 +95,37 @@ export interface ReportSkillInput {
   analysis: Artifact<AnalysisPayload>;
 }
 
+export interface AdvisorySkillInput {
+  prompt: string;
+  queryResults?: Artifact<QueryResultPayload>[];
+}
+
 export interface StructuredSkillExecutionPort {
-  clarify(task: TaskRun, message: string, signal?: AbortSignal): Promise<ClarificationPayload>;
+  clarify(task: TaskRun, message: string, signal?: AbortSignal, expectedModelRevision?: string | null): Promise<ClarificationPayload>;
   reviewMetric(
     task: TaskRun,
     message: string,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<MetricDefinitionPayload>;
   analyze(
     task: TaskRun,
     input: AnalysisSkillInput,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<AnalysisPayload>;
+  advise?(
+    task: TaskRun,
+    skillName: AdvisorySkillName,
+    input: AdvisorySkillInput,
+    signal?: AbortSignal,
+    expectedModelRevision?: string | null,
+  ): Promise<AdvisoryPayload>;
   writeReport(
     task: TaskRun,
     input: ReportSkillInput,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<RenderedOutputPayload>;
 }
 
@@ -110,6 +133,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
   readonly #config: OrchestratorConfig;
   readonly #sessionFactory: StageSessionFactory;
   #runtimePromise: Promise<ModelRuntime> | undefined;
+  #runtimeCatalogSignature: string | undefined;
 
   constructor(options: {
     config: OrchestratorConfig;
@@ -123,6 +147,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     task: TaskRun,
     message: string,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<ClarificationPayload> {
     const submission = createClarificationSubmissionTool();
     await this.#runStage({
@@ -131,6 +156,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       skillName: "data-requirement-clarifier",
       tool: submission.tool,
       ...(signal === undefined ? {} : { signal }),
+      ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
     const payload = submission.getSubmitted();
     if (payload === undefined) {
@@ -145,6 +171,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     task: TaskRun,
     message: string,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<MetricDefinitionPayload> {
     const submission = createMetricDefinitionSubmissionTool();
     await this.#runStage({
@@ -153,6 +180,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       skillName: "metric-definition-reviewer",
       tool: submission.tool,
       ...(signal === undefined ? {} : { signal }),
+      ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
     const payload = submission.getSubmitted();
     if (payload === undefined) {
@@ -167,6 +195,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     task: TaskRun,
     input: AnalysisSkillInput,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<AnalysisPayload> {
     if (input.queryResults.length === 0) {
       throw new SkillExecutionError("Analysis requires at least one QueryResultArtifact");
@@ -200,6 +229,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       skillName: "business-root-cause-analysis",
       tool: submission.tool,
       ...(signal === undefined ? {} : { signal }),
+      ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
     const payload = submission.getSubmitted();
     if (payload === undefined) {
@@ -217,10 +247,57 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     return payload;
   }
 
+  async advise(
+    task: TaskRun,
+    skillName: AdvisorySkillName,
+    input: AdvisorySkillInput,
+    signal?: AbortSignal,
+    expectedModelRevision?: string | null,
+  ): Promise<AdvisoryPayload> {
+    const queryResults = (input.queryResults ?? []).map((artifact) => ({
+      query_run_id: artifact.payload.query_run_id,
+      columns: artifact.payload.columns,
+      rows: artifact.payload.rows.map((values, index) => ({
+        evidence_ref: `${artifact.payload.query_run_id}#row:${index + 1}`,
+        values,
+      })),
+      row_count: artifact.payload.row_count,
+      truncated: artifact.payload.truncated,
+    }));
+    const allowedEvidenceRefs = new Set(
+      queryResults.flatMap((result) => result.rows.map((row) => row.evidence_ref)),
+    );
+    const submission = createAdvisorySubmissionTool({
+      skillName,
+      allowedEvidenceRefs,
+      requiresQueryEvidence: EVIDENCE_REQUIRED_SKILL_NAMES.includes(
+        skillName as (typeof EVIDENCE_REQUIRED_SKILL_NAMES)[number],
+      ),
+    });
+    await this.#runStage({
+      task,
+      skillName,
+      tool: submission.tool,
+      message: JSON.stringify({
+        request: input.prompt,
+        query_results: queryResults,
+        evidence_rule: "任何基于数据的 finding 必须引用给定 evidence_ref；没有证据时只可写 assumption、limitation 或 open_question。",
+      }),
+      ...(signal === undefined ? {} : { signal }),
+      ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
+    });
+    const payload = submission.getSubmitted();
+    if (payload === undefined) {
+      throw new SkillExecutionError(`${skillName} ended without submitting an Artifact`);
+    }
+    return payload;
+  }
+
   async writeReport(
     task: TaskRun,
     input: ReportSkillInput,
     signal?: AbortSignal,
+    expectedModelRevision?: string | null,
   ): Promise<RenderedOutputPayload> {
     const analysisReferences = new Set([
       ...input.analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
@@ -247,6 +324,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       skillName: "data-analysis-report-writer",
       tool: submission.tool,
       ...(signal === undefined ? {} : { signal }),
+      ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
     });
     const payload = submission.getSubmitted();
     if (payload === undefined) {
@@ -275,6 +353,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     skillName: MvpSkillName;
     tool: ToolDefinition;
     signal?: AbortSignal;
+    expectedModelRevision?: string | null;
   }): Promise<void> {
     if (options.message.trim().length === 0) {
       throw new SkillExecutionError("Skill input must not be empty");
@@ -288,6 +367,9 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     const session = await this.#sessionFactory({
       skillName: options.skillName,
       tool: options.tool,
+      ...(options.expectedModelRevision === undefined
+        ? {}
+        : { expectedModelRevision: options.expectedModelRevision }),
     });
     const abort = () => void session.abort();
     if (isAborted(options.signal)) {
@@ -316,6 +398,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
   async #createSession(options: {
     skillName: MvpSkillName;
     tool: ToolDefinition;
+    expectedModelRevision?: string | null;
   }): Promise<StageSession> {
     const provider = this.#config.piModelProvider;
     const modelId = this.#config.piModelId;
@@ -324,7 +407,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
         "Pi model execution is not configured; set PI_MODEL_PROVIDER and PI_MODEL_ID",
       );
     }
-    const runtime = await this.#getRuntime();
+    const runtime = await this.#getRuntime(options.expectedModelRevision);
     const model = runtime.getModel(provider, modelId);
     if (model === undefined) {
       throw new SkillExecutionError(`Configured Pi model not found: ${provider}/${modelId}`);
@@ -353,13 +436,36 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     return session;
   }
 
-  #getRuntime(): Promise<ModelRuntime> {
-    this.#runtimePromise ??= ModelRuntime.create({
-      authPath: join(this.#config.agentDir, "auth.json"),
-      modelsPath: join(this.#config.agentDir, "models.json"),
-      refreshOnCreate: false,
-      allowModelNetwork: false,
+  async #getRuntime(expectedRevision?: string | null): Promise<ModelRuntime> {
+    const currentRevision = computePiModelRevision({
+      agentDir: this.#config.agentDir,
+      provider: this.#config.piModelProvider,
+      modelId: this.#config.piModelId,
     });
-    return this.#runtimePromise;
+    if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+      throw new SkillExecutionError("Pi model revision changed before Stage session creation");
+    }
+    const signature = currentRevision ?? "unconfigured";
+    if (this.#runtimePromise === undefined || signature !== this.#runtimeCatalogSignature) {
+      this.#runtimeCatalogSignature = signature;
+      this.#runtimePromise = ModelRuntime.create({
+        authPath: join(this.#config.agentDir, "auth.json"),
+        modelsPath: join(this.#config.agentDir, "models.json"),
+        refreshOnCreate: false,
+        allowModelNetwork: false,
+      });
+    }
+    const runtime = await this.#runtimePromise;
+    const revisionAfterLoad = computePiModelRevision({
+      agentDir: this.#config.agentDir,
+      provider: this.#config.piModelProvider,
+      modelId: this.#config.piModelId,
+    });
+    if (revisionAfterLoad !== currentRevision) {
+      this.#runtimePromise = undefined;
+      this.#runtimeCatalogSignature = undefined;
+      throw new SkillExecutionError("Pi model revision changed while loading Stage runtime");
+    }
+    return runtime;
   }
 }
