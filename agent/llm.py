@@ -35,6 +35,7 @@ from forge.schema_builder import build_tool_schema
 from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 
 logger = logging.getLogger(__name__)
+RUNTIME_CONTEXT_REVISION = "runtime-context-v2"
 
 
 class LLMCompatibilityError(RuntimeError):
@@ -756,6 +757,7 @@ def call(history: list[Any], extra_tables: list[str] | None = None,
         "mode": retrieval_mode,
         "selected_tables": selected_tables,
         "tool_schema_table_count": len(filtered_registry.get("tables", {})),
+        "runtime_context_revision": RUNTIME_CONTEXT_REVISION,
     }
     return response
 
