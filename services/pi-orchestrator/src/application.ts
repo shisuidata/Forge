@@ -8,6 +8,7 @@ import {
   type PlanCapability,
   type PlanStepStatus,
 } from "./planning.js";
+import { buildChartPayload, bundleHash, type TechnicalReportPayload } from "./report-artifacts.js";
 import {
   InMemoryArtifactStore,
   type Artifact,
@@ -18,6 +19,7 @@ import type { ForgeDialect } from "./forge/client.js";
 import {
   ForgeQueryRunClient,
   type ContextSearchResult,
+  type ReportPublication,
   type QueryRunReview,
   type QueryRunResult,
 } from "./forge/query-run-client.js";
@@ -89,6 +91,12 @@ export interface ForgeQueryRunPort {
     input: { queryRunId: string; userId: string },
     signal?: AbortSignal,
   ): Promise<QueryRunReview>;
+  createReport?(
+    input: Record<string, unknown>,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<ReportPublication>;
+  getReport?(reportId: string, signal?: AbortSignal): Promise<ReportPublication>;
 }
 
 export class OrchestratorApplication {
@@ -1127,6 +1135,23 @@ export class OrchestratorApplication {
           artifact_type: artifact.artifact_type,
           schema_version: artifact.schema_version,
         });
+        const chartPayload = buildChartPayload(artifact as Artifact<QueryResultPayload>);
+        if (chartPayload !== undefined) {
+          const chart = this.#artifacts.create({
+            artifactType: "chart",
+            taskRunId,
+            producer: "pi-chart-builder",
+            payload: chartPayload,
+          });
+          this.#events.append(taskRunId, "artifact.created", {
+            artifact_id: chart.artifact_id,
+            artifact_type: chart.artifact_type,
+            schema_version: chart.schema_version,
+          });
+          this.#advanceExecutionPlan(taskRunId, { chart: "completed" });
+        } else {
+          this.#advanceExecutionPlan(taskRunId, { chart: "skipped" });
+        }
         const continueToAnalysis =
           executionTask.intent !== "query_prepare" &&
           executionTask.intent !== "analysis_supplement_query";
@@ -1562,8 +1587,7 @@ export class OrchestratorApplication {
       ) {
         throw new Error("Report introduced findings outside AnalysisArtifact");
       }
-      let finalizedTask = stageTask;
-      return this.#transactions.run(() => {
+      const assembled = this.#transactions.run(() => {
         const artifact = this.#artifacts.create({
           artifactType: "rendered_output",
           taskRunId,
@@ -1575,14 +1599,140 @@ export class OrchestratorApplication {
           artifact_type: artifact.artifact_type,
           schema_version: artifact.schema_version,
         });
-        finalizedTask = this.#transition(finalizedTask, "completed", "report_complete");
+        const queryResult = this.#artifacts.latest(taskRunId, "query_result") as
+          | Artifact<QueryResultPayload>
+          | undefined;
+        const reportEvents = this.#events.list(taskRunId);
+        const review = [...reportEvents].reverse().find((event) => event.event_type === "query.review_requested");
+        const queryCompleted = [...reportEvents].reverse().find((event) => event.event_type === "query.completed");
+        if (queryResult === undefined || review === undefined) {
+          throw new Error("Report publication requires QueryResult and approved SQL lineage");
+        }
+        const technicalPayload: TechnicalReportPayload = {
+          title: `${payload.title} · 技术报告`,
+          sql: typeof review.payload.sql === "string" ? review.payload.sql : "",
+          query_run_id: queryResult.payload.query_run_id,
+          sql_hash: queryResult.payload.sql_hash,
+          approval: { approved: true, approved_at: queryCompleted?.created_at ?? null },
+          execution: {
+            executed_at: queryResult.payload.executed_at,
+            execution_ms: queryResult.payload.execution_ms,
+            row_count: queryResult.payload.row_count,
+            truncated: queryResult.payload.truncated,
+          },
+          lineage: Object.fromEntries(Object.entries({
+            registry_version: queryResult.payload.registry_version,
+            assurance_report_hash: queryResult.payload.assurance_report_hash,
+            assurance_revision: queryResult.payload.assurance_revision,
+            policy_revision: queryResult.payload.policy_revision,
+            model_revision: queryResult.payload.model_revision,
+            assurance_registry_revision: queryResult.payload.assurance_registry_revision,
+          }).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
+          decision_log: analysis.payload.method_summary.approach_steps.map((step) => ({
+            stage: "analysis",
+            decision: step,
+            rationale: analysis.payload.method_summary.comparison_baseline,
+            evidence_refs: analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
+          })),
+          source_artifact_ids: [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id],
+        };
+        const technical = this.#artifacts.create({
+          artifactType: "technical_report",
+          taskRunId,
+          producer: "pi-report-builder",
+          payload: technicalPayload,
+        });
+        const charts = this.#artifacts.list(taskRunId).filter((candidate) => candidate.artifact_type === "chart");
+        const reportId = `rp_${bundleHash({ task_run_id: taskRunId }).slice("sha256:".length, "sha256:".length + 32)}`;
+        const sourceArtifactIds = [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id, technical.artifact_id, ...charts.map((chart) => chart.artifact_id)];
+        const reportBundlePayload = {
+          report_id: reportId,
+          revision: 1,
+          title: payload.title,
+          business_artifact_id: artifact.artifact_id,
+          technical_artifact_id: technical.artifact_id,
+          chart_artifact_ids: charts.map((chart) => chart.artifact_id),
+          source_artifact_ids: sourceArtifactIds,
+          bundle_hash: bundleHash({
+            report_id: reportId,
+            business_report: payload,
+            analysis: analysis.payload,
+            query_result_hash: queryResult.payload.sql_hash,
+            charts: charts.map((chart) => chart.payload),
+            technical_report: technicalPayload,
+          }),
+        };
+        const bundle = this.#artifacts.create({
+          artifactType: "report_bundle",
+          taskRunId,
+          producer: "pi-report-builder",
+          payload: reportBundlePayload,
+        });
+        for (const created of [technical, bundle]) {
+          this.#events.append(taskRunId, "artifact.created", {
+            artifact_id: created.artifact_id,
+            artifact_type: created.artifact_type,
+            schema_version: created.schema_version,
+          });
+        }
+        return { artifact, queryResult, technical, technicalPayload, charts, bundle, reportBundlePayload };
+      });
+      if (this.#forge.createReport === undefined || this.#forge.getReport === undefined) {
+        throw new Error("Forge Report Service is not configured");
+      }
+      let publication = await this.#forge.createReport({
+        report_id: assembled.reportBundlePayload.report_id,
+        task_run_id: taskRunId,
+        org_id: stageTask.org_id,
+        team_id: stageTask.team_id,
+        user_id: stageTask.user_id,
+        revision: assembled.reportBundlePayload.revision,
+        bundle_hash: assembled.reportBundlePayload.bundle_hash,
+        title: payload.title,
+        business_report: payload,
+        analysis: analysis.payload,
+        query_result: assembled.queryResult.payload,
+        charts: assembled.charts.map((chart) => chart.payload),
+        technical_report: assembled.technicalPayload,
+      }, input.idempotencyKey ?? `${taskRunId}:publish:${assembled.bundle.artifact_id}`, stageExecution.signal);
+      while (publication.status === "publishing") {
+        if (stageExecution.timedOut()) throw new Error("Report publication Stage timed out");
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        publication = await this.#forge.getReport(publication.report_id, stageExecution.signal);
+      }
+      if (publication.status !== "published") throw new Error("Report publication failed");
+      return this.#transactions.run(() => {
+        const publicationArtifact = this.#artifacts.create({
+          artifactType: "publication",
+          taskRunId,
+          producer: "forge-report-service",
+          payload: {
+            report_id: publication.report_id,
+            revision: publication.revision,
+            bundle_hash: publication.bundle_hash,
+            status: "published",
+            internal_url: publication.internal_url,
+            technical_url: publication.technical_url,
+            pdf: { status: publication.pdf_status, url: publication.pdf_url },
+            pptx: { status: publication.pptx_status, url: publication.pptx_url },
+            published_at: publication.updated_at,
+          },
+        });
+        this.#events.append(taskRunId, "artifact.created", {
+          artifact_id: publicationArtifact.artifact_id,
+          artifact_type: publicationArtifact.artifact_type,
+          schema_version: publicationArtifact.schema_version,
+        });
+        const finalizedTask = this.#transition(stageTask, "completed", "report_complete");
         this.#events.append(taskRunId, "report.completed", {
-          artifact_id: artifact.artifact_id,
+          artifact_id: assembled.artifact.artifact_id,
+          publication_artifact_id: publicationArtifact.artifact_id,
+          report_id: publication.report_id,
           status: payload.status,
         });
         this.#advanceExecutionPlan(taskRunId, { report: "completed" });
         this.#finishAttempt(attempt, "succeeded");
-        return { task: finalizedTask, artifact, events: this.#events.list(taskRunId) };
+        return { task: finalizedTask, artifact: assembled.artifact, events: this.#events.list(taskRunId) };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";

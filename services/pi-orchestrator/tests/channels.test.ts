@@ -88,6 +88,7 @@ test("channel renderer exposes clarification, cancellation, and supplement actio
     created_at: "2026-08-21T00:00:00.000Z",
     payload: {
       status: "incomplete",
+      method_summary: { objective: "定位原因", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["检查现有数据"] },
       summary: "需要补查",
       findings: [],
       hypotheses: [],

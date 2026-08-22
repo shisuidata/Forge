@@ -9,10 +9,20 @@ import {
   validateRenderedOutputPayload,
 } from "./structured-artifact-tools.js";
 import { validateExecutionPlanPayload } from "./planning.js";
+import {
+  validateChartPayload,
+  validatePublicationPayload,
+  validateReportBundlePayload,
+  validateTechnicalReportPayload,
+} from "./report-artifacts.js";
 
 export type ArtifactType =
   | "clarification"
   | "execution_plan"
+  | "chart"
+  | "technical_report"
+  | "report_bundle"
+  | "publication"
   | "metric_definition"
   | "query_result"
   | "analysis"
@@ -50,6 +60,10 @@ export function validateArtifactInput<TPayload extends Record<string, unknown>>(
   const validators: Record<ArtifactType, (value: unknown) => string | undefined> = {
     clarification: validateClarificationPayload,
     execution_plan: validateExecutionPlanPayload,
+    chart: validateChartPayload,
+    technical_report: validateTechnicalReportPayload,
+    report_bundle: validateReportBundlePayload,
+    publication: validatePublicationPayload,
     metric_definition: validateMetricDefinitionPayload,
     query_result: validateQueryResultPayload,
     analysis: validateAnalysisPayload,

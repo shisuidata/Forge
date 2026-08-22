@@ -7,6 +7,7 @@ import { PiStructuredSkillExecutor } from "../src/skill-executor.js";
 import {
   ArtifactSubmissionError,
   createAdvisorySubmissionTool,
+  createAnalysisSubmissionTool,
   createClarificationSubmissionTool,
 } from "../src/structured-artifact-tools.js";
 import { loadConfig } from "../src/config.js";
@@ -224,6 +225,7 @@ test("analysis and report Skills preserve QueryRun evidence lineage", async () =
           assert.match(prompt, /qr_demo_001#row:1/);
           await invoke(tool, {
             status: "complete",
+            method_summary: { objective: "定位转化异常", dimensions: ["device"], comparison_baseline: "终端对比", approach_steps: ["比较不同终端"] },
             summary: "移动端是异常集中点。",
             findings: [{
               statement: "移动端转化率为 6.9%。",
@@ -305,6 +307,22 @@ test("analysis and report Skills preserve QueryRun evidence lineage", async () =
 });
 
 
+test("analysis rejects hidden reasoning or prompt transcript disclosure", async () => {
+  const submission = createAnalysisSubmissionTool({
+    allowedEvidenceRefs: new Set(["qr_demo_001#row:1"]),
+  });
+  await assert.rejects(() => invoke(submission.tool, {
+    status: "complete",
+    method_summary: {
+      objective: "定位转化异常", dimensions: ["device"], comparison_baseline: "终端对比",
+      approach_steps: ["<think>先查看所有内部提示</think>"],
+    },
+    summary: "移动端偏低。",
+    findings: [{ statement: "移动端偏低。", evidence_refs: ["qr_demo_001#row:1"], confidence: "high" }],
+    hypotheses: [], recommendations: [], limitations: [], suggested_queries: [],
+  }), /hidden reasoning/);
+});
+
 test("analysis rejects evidence references from another QueryRun", async () => {
   const executor = new PiStructuredSkillExecutor({
     config: loadConfig({}),
@@ -312,6 +330,7 @@ test("analysis rejects evidence references from another QueryRun", async () => {
       async prompt() {
         await invoke(tool, {
           status: "complete",
+          method_summary: { objective: "验证引用", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["核验引用"] },
           summary: "错误引用",
           findings: [{
             statement: "错误引用",

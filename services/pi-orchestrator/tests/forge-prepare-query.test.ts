@@ -145,6 +145,33 @@ test("Forge context client validates bounded evidence and forwards Pi identity",
   assert.equal(mock.received().body?.user_id, "trusted-user");
 });
 
+test("Forge report client accepts only bounded publication metadata", async (context) => {
+  const mock = await startMockForge(context, {
+    response: {
+      status: "accepted",
+      report: {
+        report_id: "rp_demo001", task_run_id: "tr_demo001", revision: 1,
+        bundle_hash: `sha256:${"a".repeat(64)}`, title: "分析报告", status: "published",
+        pdf_status: "ready", pptx_status: "ready",
+        internal_url: "https://forge.test/reports/rp_demo001",
+        technical_url: "https://forge.test/reports/rp_demo001/technical",
+        pdf_url: "https://forge.test/reports/rp_demo001/download/pdf",
+        pptx_url: "https://forge.test/reports/rp_demo001/download/pptx",
+        created_at: "2026-08-21T17:00:00Z", updated_at: "2026-08-21T17:00:01Z",
+      },
+    },
+  });
+  const client = new ForgeQueryRunClient({
+    baseUrl: mock.baseUrl, serviceKey: "pi-service-secret", timeoutMs: 2_000,
+  });
+  const result = await client.createReport({
+    report_id: "rp_demo001", task_run_id: "tr_demo001", bundle_hash: `sha256:${"a".repeat(64)}`,
+  }, "report-idempotency");
+  assert.equal(result.status, "published");
+  assert.equal(result.pdf_url, "https://forge.test/reports/rp_demo001/download/pdf");
+  assert.equal(mock.received().piServiceKey, "pi-service-secret");
+});
+
 test("Pi tool creates a persisted QueryRun with identity from TaskRun", async (context) => {
   const mock = await startMockForge(context, {
     response: {

@@ -26,6 +26,7 @@
       "additionalProperties": false,
       "required": [
         "status",
+        "method_summary",
         "summary",
         "findings",
         "hypotheses",
@@ -35,6 +36,17 @@
       ],
       "properties": {
         "status": {"type": "string", "enum": ["complete", "incomplete"]},
+        "method_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["objective", "dimensions", "comparison_baseline", "approach_steps"],
+          "properties": {
+            "objective": {"type": "string", "minLength": 1},
+            "dimensions": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+            "comparison_baseline": {"type": "string", "minLength": 1},
+            "approach_steps": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "minLength": 1}}
+          }
+        },
         "summary": {"type": "string", "minLength": 1},
         "findings": {
           "type": "array",

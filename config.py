@@ -210,6 +210,16 @@ class Config:
         "db_path",
         default=".forge/query_runs.db",
     )
+    REPORT_DB_PATH: str = _env(
+        "REPORT_DB_PATH", "reports", "db_path", default=".forge/reports.db"
+    )
+    REPORT_ARTIFACT_DIR: str = _env(
+        "REPORT_ARTIFACT_DIR", "reports", "artifact_dir", default=".forge/report-artifacts"
+    )
+    REPORT_PUBLIC_BASE_URL: str = _env(
+        "REPORT_PUBLIC_BASE_URL", "reports", "public_base_url", default=""
+    )
+
     QUERY_RUN_REVIEW_TTL_SECONDS: int = int(_env(
         "QUERY_RUN_REVIEW_TTL_SECONDS",
         "query_runs",

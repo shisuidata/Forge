@@ -76,6 +76,12 @@ registry:
 staging:
   dir: ".forge/staging"   # 存放待入库的用户确认歧义消除记录
 
+# ── 报告发布与导出 ────────────────────────────────────────────────────────────
+reports:
+  db_path: ".forge/reports.db"                 # 状态、ACL、分享和下载审计
+  artifact_dir: ".forge/report-artifacts"      # HTML/SVG/PDF/PPTX，不放 SQLite
+  public_base_url: "http://localhost:8000"       # 飞书和分享链接可访问的外部地址
+
 # ── Web 服务器（Admin UI）─────────────────────────────────────────────────────
 server:
   host: "0.0.0.0"

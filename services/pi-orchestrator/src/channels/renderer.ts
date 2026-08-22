@@ -196,6 +196,37 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     };
   }
 
+  const publication = latestArtifact(input.artifacts, "publication");
+  if (input.task.status === "completed" && publication !== undefined) {
+    const internalUrl = typeof publication.payload.internal_url === "string"
+      ? publication.payload.internal_url
+      : "";
+    const technicalUrl = typeof publication.payload.technical_url === "string"
+      ? publication.payload.technical_url
+      : "";
+    const pdf = typeof publication.payload.pdf === "object" && publication.payload.pdf !== null
+      ? publication.payload.pdf as Record<string, unknown>
+      : {};
+    const pptx = typeof publication.payload.pptx === "object" && publication.payload.pptx !== null
+      ? publication.payload.pptx as Record<string, unknown>
+      : {};
+    const links = [
+      internalUrl.length > 0 ? `[查看完整分析报告](${internalUrl})` : undefined,
+      technicalUrl.length > 0 ? `[查看技术报告（需权限）](${technicalUrl})` : undefined,
+      typeof pdf.url === "string" ? `[下载 PDF](${pdf.url})` : "PDF 正在准备或当前不可用",
+      typeof pptx.url === "string" ? `[下载 PPTX](${pptx.url})` : "PPTX 正在准备或当前不可用",
+    ].filter((item): item is string => item !== undefined);
+    return {
+      ...common,
+      kind: "report",
+      title: "完整分析报告已生成",
+      markdown: links.join("\n\n"),
+      fields: [],
+      table: null,
+      actions: [],
+    };
+  }
+
   const rendered = latestArtifact(input.artifacts, "rendered_output");
   if (input.task.status === "completed" && rendered !== undefined) {
     return {
@@ -221,12 +252,33 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       .filter((item): item is string => item !== undefined)
       .map((item) => `- ${item}`)
       .join("\n");
+    const method = typeof analysis.payload.method_summary === "object" &&
+        analysis.payload.method_summary !== null
+      ? analysis.payload.method_summary as Record<string, unknown>
+      : undefined;
+    const objective = safeOptionalBusinessText(method?.objective);
+    const baseline = safeOptionalBusinessText(method?.comparison_baseline);
+    const dimensions = strings(method?.dimensions)
+      .map((item) => safeOptionalBusinessText(item))
+      .filter((item): item is string => item !== undefined);
+    const approachSteps = strings(method?.approach_steps)
+      .map((item) => safeOptionalBusinessText(item))
+      .filter((item): item is string => item !== undefined);
+    const methodText = [
+      objective === undefined ? undefined : `- **分析目标**：${objective}`,
+      dimensions.length === 0 ? undefined : `- **观察维度**：${dimensions.join("、")}`,
+      baseline === undefined ? undefined : `- **对比基线**：${baseline}`,
+      ...approachSteps.map((item, index) => `${index + 1}. ${item}`),
+    ].filter((item): item is string => item !== undefined).join("\n");
+    const limitations = strings(analysis.payload.limitations)
+      .map((item) => safeOptionalBusinessText(item))
+      .filter((item): item is string => item !== undefined);
     const suggestedQueries = Array.isArray(analysis.payload.suggested_queries)
       ? analysis.payload.suggested_queries
       : [];
     const actions: ChannelAction[] = [];
     if (input.task.status === "ready_for_report") {
-      actions.push(action(input.task.task_run_id, "render_report", "生成业务报告", {}, "primary"));
+      actions.push(action(input.task.task_run_id, "render_report", "生成完整分析报告", {}, "primary"));
     } else if (suggestedQueries.length > 0) {
       suggestedQueries.slice(0, 3).forEach((suggestion, index) => {
         const label = typeof suggestion === "object" && suggestion !== null &&
@@ -247,9 +299,11 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ...common,
       kind: "analysis",
       title: input.task.status === "incomplete" ? "分析需要补查" : "分析完成",
-      markdown:
-        findingText ||
-        safeBusinessText(analysis.payload.summary, "分析已完成。"),
+      markdown: [
+        methodText.length > 0 ? `**分析思路**\n${methodText}` : undefined,
+        `**分析结论**\n${findingText || safeBusinessText(analysis.payload.summary, "分析已完成。")}`,
+        limitations.length > 0 ? `**分析限制**\n${limitations.map((item) => `- ${item}`).join("\n")}` : undefined,
+      ].filter((item): item is string => item !== undefined).join("\n\n"),
       fields: [],
       table: null,
       actions,

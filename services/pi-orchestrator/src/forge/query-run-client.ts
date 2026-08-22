@@ -42,6 +42,23 @@ export interface ContextSearchResult {
   bounded: true;
 }
 
+export interface ReportPublication {
+  report_id: string;
+  task_run_id: string;
+  revision: number;
+  bundle_hash: string;
+  title: string;
+  status: "publishing" | "published" | "failed";
+  pdf_status: "pending" | "ready" | "failed";
+  pptx_status: "pending" | "ready" | "failed";
+  internal_url: string;
+  technical_url: string;
+  pdf_url: string | null;
+  pptx_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface QueryRunResult {
   query_run_id: string;
   task_run_id: string;
@@ -154,6 +171,24 @@ export class ForgeQueryRunClient {
     return this.#validateContext(body);
   }
 
+  async createReport(
+    input: Record<string, unknown>,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<ReportPublication> {
+    const body = asRecord(await this.#request(
+      "POST", "/api/internal/reports", input, idempotencyKey, signal,
+    ));
+    return this.#validatePublication(asRecord(body.report));
+  }
+
+  async getReport(reportId: string, signal?: AbortSignal): Promise<ReportPublication> {
+    const body = asRecord(await this.#request(
+      "GET", `/api/internal/reports/${encodeURIComponent(reportId)}`, {}, undefined, signal,
+    ));
+    return this.#validatePublication(asRecord(body.report));
+  }
+
   async cancelQueryRun(
     input: { queryRunId: string; userId: string },
     signal?: AbortSignal,
@@ -192,7 +227,7 @@ export class ForgeQueryRunClient {
       response = await fetch(`${this.#baseUrl}${path}`, {
         method,
         headers,
-        body: JSON.stringify(payload),
+        ...(method === "GET" ? {} : { body: JSON.stringify(payload) }),
         signal: AbortSignal.any(signals),
       });
     } catch (error) {
@@ -214,6 +249,21 @@ export class ForgeQueryRunClient {
       );
     }
     return body;
+  }
+
+  #validatePublication(body: Record<string, unknown>): ReportPublication {
+    if (
+      typeof body.report_id !== "string" || !/^rp_[A-Za-z0-9_-]+$/.test(body.report_id) ||
+      typeof body.task_run_id !== "string" || !/^tr_[A-Za-z0-9_-]+$/.test(body.task_run_id) ||
+      typeof body.revision !== "number" || typeof body.bundle_hash !== "string" ||
+      !new Set(["publishing", "published", "failed"]).has(String(body.status)) ||
+      !new Set(["pending", "ready", "failed"]).has(String(body.pdf_status)) ||
+      !new Set(["pending", "ready", "failed"]).has(String(body.pptx_status)) ||
+      typeof body.internal_url !== "string" || typeof body.technical_url !== "string"
+    ) {
+      throw new ForgeClientError("Forge Report API returned an invalid publication");
+    }
+    return body as unknown as ReportPublication;
   }
 
   #validateContext(value: unknown): ContextSearchResult {

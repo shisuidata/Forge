@@ -97,6 +97,43 @@ def valid_instances() -> dict[str, dict]:
                 ],
             },
         ),
+        "chart_artifact": _envelope(
+            "chart", "pi-chart-builder", {
+                "chart_id": "chart_demo", "chart_type": "bar", "title": "渠道转化率",
+                "data_ref": "ar_query_result_001", "dimension": "channel",
+                "measures": ["conversion_rate"], "evidence_refs": ["qr_demo_001#row:1"],
+                "alt_text": "按渠道展示转化率",
+            },
+        ),
+        "technical_report_artifact": _envelope(
+            "technical_report", "pi-report-builder", {
+                "title": "技术报告", "sql": "SELECT 1", "query_run_id": "qr_demo_001",
+                "sql_hash": SQL_HASH, "approval": {"approved": True, "approved_at": NOW},
+                "execution": {"executed_at": NOW, "execution_ms": 42, "row_count": 1, "truncated": False},
+                "lineage": {"registry_version": "v1"},
+                "decision_log": [{"stage": "analysis", "decision": "比较渠道", "rationale": "用户要求", "evidence_refs": ["qr_demo_001#row:1"]}],
+                "source_artifact_ids": ["ar_query_result_001", "ar_analysis_001"],
+            },
+        ),
+        "report_bundle_artifact": _envelope(
+            "report_bundle", "pi-report-builder", {
+                "report_id": "rp_demo_001", "revision": 1, "title": "分析报告",
+                "business_artifact_id": "ar_rendered_output_001", "technical_artifact_id": "ar_technical_report_001",
+                "chart_artifact_ids": ["ar_chart_001"],
+                "source_artifact_ids": ["ar_rendered_output_001", "ar_technical_report_001", "ar_chart_001"],
+                "bundle_hash": "sha256:" + "c" * 64,
+            },
+        ),
+        "publication_artifact": _envelope(
+            "publication", "forge-report-service", {
+                "report_id": "rp_demo_001", "revision": 1, "bundle_hash": "sha256:" + "c" * 64,
+                "status": "published", "internal_url": "https://forge.test/reports/rp_demo_001",
+                "technical_url": "https://forge.test/reports/rp_demo_001/technical",
+                "pdf": {"status": "ready", "url": "https://forge.test/reports/rp_demo_001/download/pdf"},
+                "pptx": {"status": "ready", "url": "https://forge.test/reports/rp_demo_001/download/pptx"},
+                "published_at": NOW,
+            },
+        ),
         "metric_definition_artifact": _envelope(
             "metric_definition",
             "metric-definition-reviewer",
@@ -137,6 +174,12 @@ def valid_instances() -> dict[str, dict]:
             "business-root-cause-analysis",
             {
                 "status": "complete",
+                "method_summary": {
+                    "objective": "定位首购转化下降的集中维度",
+                    "dimensions": ["channel", "device"],
+                    "comparison_baseline": "不同渠道和终端横向对比",
+                    "approach_steps": ["比较各维度转化率", "核验异常集中点"],
+                },
                 "summary": "移动端贡献了本轮首购转化率下降的主要部分。",
                 "findings": [
                     {
@@ -220,6 +263,10 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "task_run",
         "clarification_artifact",
         "execution_plan_artifact",
+        "chart_artifact",
+        "technical_report_artifact",
+        "report_bundle_artifact",
+        "publication_artifact",
         "metric_definition_artifact",
         "query_result_artifact",
         "analysis_artifact",
@@ -242,6 +289,8 @@ def test_valid_instances_satisfy_contracts(valid_instances: dict[str, dict]) -> 
         ("task_run", lambda value: value.update(channel="slack")),
         ("clarification_artifact", lambda value: value["payload"].pop("goal")),
         ("execution_plan_artifact", lambda value: value["payload"].update(status="done")),
+        ("chart_artifact", lambda value: value["payload"].update(chart_type="script")),
+        ("publication_artifact", lambda value: value["payload"].update(internal_url="javascript:alert(1)")),
         (
             "metric_definition_artifact",
             lambda value: value["payload"].update(status="silently_approved"),

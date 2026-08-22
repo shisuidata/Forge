@@ -114,6 +114,15 @@ export const queryResultPayloadSchema = Type.Object(
 export const analysisPayloadSchema = Type.Object(
   {
     status: Type.Union([Type.Literal("complete"), Type.Literal("incomplete")]),
+    method_summary: Type.Object(
+      {
+        objective: Type.String({ minLength: 1 }),
+        dimensions: Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true }),
+        comparison_baseline: Type.String({ minLength: 1 }),
+        approach_steps: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 6 }),
+      },
+      { additionalProperties: false },
+    ),
     summary: Type.String({ minLength: 1 }),
     findings: Type.Array(
       Type.Object(
@@ -301,10 +310,25 @@ export function validateQueryResultPayload(value: unknown): string | undefined {
 
 const unsupportedCausalCertainty =
   /(可排除|已经排除|直接导致|证明了|确定(?:的)?原因|直接来源|必然导致|\bcaused by\b|\bproves?\b|\brules? out\b|\bdefinitely\b)/i;
+const forbiddenReasoningDisclosure =
+  /(?:<\/?think>|chain[- ]of[- ]thought|system prompt|tool call|思考过程\s*[:：]|内部分析\s*[:：]|推理过程\s*[:：])/i;
 
 export function validateAnalysisPayload(value: unknown): string | undefined {
   if (!Value.Check(analysisPayloadSchema, value)) {
     return "payload does not match AnalysisArtifact schema";
+  }
+  const userFacingAnalysisText = [
+    value.method_summary.objective,
+    value.method_summary.comparison_baseline,
+    ...value.method_summary.dimensions,
+    ...value.method_summary.approach_steps,
+    value.summary,
+    ...value.findings.map((finding) => finding.statement),
+    ...value.hypotheses.map((hypothesis) => hypothesis.statement),
+    ...value.limitations,
+  ];
+  if (userFacingAnalysisText.some((text) => forbiddenReasoningDisclosure.test(text))) {
+    return "analysis contains hidden reasoning, prompt, or tool transcript disclosure";
   }
   if (value.status === "incomplete" && value.suggested_queries.length === 0) {
     return "incomplete analysis requires at least one suggested query";
