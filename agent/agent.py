@@ -183,9 +183,23 @@ def _prepare_query(
             payload["error"] = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
             payload["retry_count"] = attempt
             return payload
-        except (LLMConfigurationError, llm.LLMCompatibilityError):
-            logger.warning("LLM configuration or compatibility validation failed")
-            payload["error"] = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
+        except llm.LLMCompatibilityError:
+            logger.warning("LLM response violated the required tool contract")
+            if attempt < MAX_RETRIES:
+                retry_messages.append({
+                    "role": "user",
+                    "content": (
+                        "上一次响应未遵守 generate_forge_query 的 Tool JSON 契约。"
+                        "请重新调用该工具，只提交 Schema 允许的字段。"
+                    ),
+                })
+                continue
+            payload["error"] = "当前模型连续未遵守 Tool JSON 契约，请稍后重试或更换模型。"
+            payload["retry_count"] = attempt
+            return payload
+        except LLMConfigurationError:
+            logger.warning("LLM configuration validation failed")
+            payload["error"] = "LLM 配置错误，请管理员检查 Provider、协议、模型和凭证。"
             payload["retry_count"] = attempt
             return payload
         except Exception:

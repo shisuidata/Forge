@@ -127,6 +127,15 @@ def lint_conventions(forge_json: dict, question: str) -> list[str]:
     # ── 规则 36：占比分母窗口只用于计算，不自动暴露 ────────────────────────
     _check_ratio_denominator_output(forge_json, q, warnings)
 
+    # ── 规则 37：内部维度 ID 不自动暴露 ───────────────────────────────────
+    _check_unrequested_dimension_ids(forge_json, q, warnings)
+
+    # ── 规则 38：订单月度统计默认使用下单日期 ─────────────────────────────
+    _check_monthly_order_time_field(forge_json, q, warnings)
+
+    # ── 规则 39：阈值率先用未舍入值判断 ───────────────────────────────────
+    _check_rate_threshold_rounding(forge_json, q, warnings)
+
     return warnings
 
 
@@ -641,6 +650,58 @@ def _check_percentage_display(forge_json: dict, question: str, warnings: list[st
                 "用户询问普通“占比/比例”时，默认应输出 0~1 小数口径。"
                 "请使用 numerator * 1.0 / denominator，并 ROUND(..., 4)，"
                 "不要乘以 100 输出百分比数值。"
+            )
+            return
+
+
+def _check_unrequested_dimension_ids(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    selected = {_unqualified_field(item) for item in forge_json.get("select", []) if isinstance(item, str)}
+    dimensions = (
+        ("product_id", "product_name", ("商品ID", "product_id")),
+        ("category_id", "category_name", ("品类ID", "category_id")),
+        ("brand_id", "brand_name", ("品牌ID", "brand_id")),
+        ("channel_id", "channel_name", ("渠道ID", "channel_id")),
+    )
+    for id_field, name_field, explicit_terms in dimensions:
+        if id_field in selected and name_field in selected and not any(term in question for term in explicit_terms):
+            warnings.append(
+                f"{id_field} 仅用于 JOIN/GROUP 去重，用户未要求展示内部 ID。"
+                f"请从最终 select 删除 {id_field}，保留 {name_field}。"
+            )
+            return
+
+
+def _check_monthly_order_time_field(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if "订单" not in question or not any(term in question for term in ("按月", "每月", "月份")):
+        return
+    if any(term in question for term in ("完成时间", "支付时间", "付款时间")):
+        return
+    refs = _collect_refs_from_obj(forge_json)
+    if any(".complete_dt" in ref or ".pay_dt" in ref for ref in refs):
+        warnings.append(
+            "按月统计订单且用户未指定完成/支付时间时，月份默认使用 order_dt（下单日期）。"
+            "不要用 complete_dt 或 pay_dt 改变月份归属。"
+        )
+
+
+def _check_rate_threshold_rounding(
+    forge_json: dict, question: str, warnings: list[str]
+) -> None:
+    if "率超过" not in question and not re.search(r"率.{0,4}(?:大于|高于)", question):
+        return
+    for item in forge_json.get("select", []):
+        if not isinstance(item, dict):
+            continue
+        alias = str(item.get("as", "")).lower()
+        expr = str(item.get("expr", "")).lower()
+        if "rate" in alias and "round(" in expr:
+            warnings.append(
+                "带阈值过滤的率指标必须先用未舍入比率判断并输出，避免 ROUND 后改变阈值边界。"
+                "请移除比率表达式外层的 ROUND；普通展示型比率仍可保留 4 位小数。"
             )
             return
 

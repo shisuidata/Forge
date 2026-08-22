@@ -187,8 +187,11 @@ def _validate_intent_fulfillment(query: dict, question: str) -> None:
     if any(term in q for term in ("下一笔", "下一次", "下一个月", "下月", "lead")):
         if "lead" not in window_fns:
             raise ValueError("意图完整性校验失败：用户要求下一期记录，必须生成 LEAD 窗口结果。")
-    if "累计" in q and "sum" not in window_fns:
-        raise ValueError("意图完整性校验失败：用户要求累计值，必须生成 SUM 窗口结果。")
+    cumulative_over_rows = "累计" in q and any(
+        term in q for term in ("按时间", "下单时间", "每笔", "逐笔", "截至")
+    )
+    if cumulative_over_rows and "sum" not in window_fns:
+        raise ValueError("意图完整性校验失败：用户要求按行累计值，必须生成 SUM 窗口结果。")
 
     asks_visible_rank = (
         "显示" in q and "排名" in q
@@ -219,6 +222,30 @@ def _validate_intent_fulfillment(query: dict, question: str) -> None:
 
     if any(term in q for term in ("降序", "升序", "排序", "排列")) and not query.get("sort"):
         raise ValueError("意图完整性校验失败：用户明确要求排序，最终查询必须包含 sort。")
+
+    requested_fields = {
+        "用户名": "user_name",
+        "商品名称": "product_name",
+        "商品名": "product_name",
+        "品类名称": "category_name",
+        "品类名": "category_name",
+        "渠道名称": "channel_name",
+        "渠道名": "channel_name",
+        "注册日期": "register_date",
+        "订单id": "order_id",
+        "用户id": "user_id",
+        "商品id": "product_id",
+    }
+    missing = [
+        label for label, field in requested_fields.items()
+        if label in q and field not in final_outputs
+    ]
+    if missing:
+        raise ValueError(
+            "意图完整性校验失败：最终 SELECT 遗漏用户明确要求的字段："
+            + "、".join(missing)
+            + "。"
+        )
 
 
 def _load_registry() -> tuple[dict, str]:
