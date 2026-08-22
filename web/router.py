@@ -4,8 +4,8 @@ Forge web UI — FastAPI router.
 Routes
 ------
 ## Chat（查询对话）
-GET  /chat                           → 对话界面
-POST /api/chat                       → 发送消息，返回 AgentResponse JSON
+GET  /chat                           → 兼容重定向到 /tasks
+POST /api/chat                       → 默认 410；仅显式回滚开关恢复旧 Agent API
 POST /api/prepare-query              → 外部 Agent 生成可审核 SQL（不执行）
 POST /api/approve                    → 确认 SQL
 POST /api/cancel                     → 取消 SQL
@@ -86,7 +86,7 @@ templates.env.filters["tojson_cn"] = _tojson_cn
 # ── 认证路由（login / logout）─────────────────────────────────────────────────
 
 @chat_router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, next: str = "/chat"):
+async def login_page(request: Request, next: str = "/tasks"):
     return templates.TemplateResponse(
         request, "login.html", {"error": None, "next": next}
     )
@@ -96,7 +96,7 @@ async def login_page(request: Request, next: str = "/chat"):
 async def login_submit(
     request: Request,
     password: str = Form(...),
-    next: str = Form(default="/chat"),
+    next: str = Form(default="/tasks"),
 ):
     expected = cfg.AUTH_ADMIN_PASSWORD
     # auth disabled 时任意密码均可通过；auth enabled 时必须配置并匹配密码
@@ -177,7 +177,7 @@ def _parse_lines(text: str) -> list[str]:
 def _safe_next_path(next_path: str) -> str:
     """Allow redirects only to local absolute paths."""
     if not next_path or not next_path.startswith("/") or next_path.startswith("//"):
-        return "/chat"
+        return "/tasks"
     return next_path
 
 
@@ -286,14 +286,15 @@ def _run_sync(fn, *args):
     return loop.run_in_executor(None, partial(fn, *args))
 
 
-@chat_router.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request, _auth=Depends(require_web_auth)):
-    return templates.TemplateResponse(request, "chat.html", {})
+@chat_router.get("/chat", response_class=RedirectResponse)
+async def chat_page(_auth=Depends(require_web_auth)):
+    """Legacy Agent UI is retired; keep bookmarks on the canonical Pi task path."""
+    return RedirectResponse(url="/tasks", status_code=302)
 
 
 @chat_router.get("/tasks", response_class=HTMLResponse)
 async def task_workspace_page(request: Request, _auth=Depends(require_web_auth)):
-    """Pi Integration Spike UI: task events and non-executable SQL review preview."""
+    """Canonical Pi task UI with Artifact rendering and non-executable SQL review."""
     return templates.TemplateResponse(
         request,
         "tasks.html",

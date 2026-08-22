@@ -69,8 +69,8 @@ class TestLogin:
         page.goto("/login")
         page.fill("input[name='password']", "123456")
         page.click("button[type='submit']")
-        page.wait_for_url("**/chat**")
-        assert "/chat" in page.url
+        page.wait_for_url("**/tasks**")
+        assert "/tasks" in page.url
 
     def test_login_wrong_password_shows_error(self, page):
         page.goto("/login")
@@ -88,12 +88,13 @@ def logged_in_page(page):
     page.goto("/login")
     page.fill("input[name='password']", "123456")
     page.click("button[type='submit']")
-    page.wait_for_url("**/chat**")
+    page.wait_for_url("**/tasks**")
     return page
 
 
 # ── Chat 界面 ────────────────────────────────────────────────────────────────
 
+@pytest.mark.skip(reason="旧 Chat UI 已退役；生产查询入口由 /tasks 的 Pi TaskRun UI 覆盖")
 class TestChat:
     def test_chat_page_loads(self, logged_in_page):
         page = logged_in_page

@@ -25,10 +25,10 @@ class TestHealthCheck:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
-    async def test_root_redirects_to_chat(self, client: AsyncClient):
+    async def test_root_redirects_to_canonical_tasks(self, client: AsyncClient):
         resp = await client.get("/", follow_redirects=False)
         assert resp.status_code == 302
-        assert "/chat" in resp.headers["location"]
+        assert resp.headers["location"] == "/tasks"
 
     async def test_readiness_reports_config_issues(self, client: AsyncClient, monkeypatch, tmp_path):
         from config import cfg
@@ -128,7 +128,7 @@ class TestAuth:
             follow_redirects=False,
         )
         assert resp.status_code == 303
-        assert resp.headers["location"] == "/chat"
+        assert resp.headers["location"] == "/tasks"
 
     async def test_login_requires_password_when_auth_enabled(self, client: AsyncClient, monkeypatch):
         from config import cfg
@@ -151,7 +151,6 @@ class TestAuth:
 # ── Chat API ─────────────────────────────────────────────────────────────────
 
 class TestChatAPI:
-    @pytest.mark.skipif(True, reason="需要 LLM API Key 才能测试完整 chat 流程")
     async def test_legacy_chat_is_gone_without_explicit_rollback_flag(
         self, client: AsyncClient, monkeypatch
     ):
@@ -922,12 +921,16 @@ class TestAdminPages:
         assert resp.status_code in (302, 307)
         assert "dashboard" in resp.headers["location"]
 
-    async def test_chat_page_loads(self, client: AsyncClient):
-        resp = await client.get("/chat")
+    async def test_legacy_chat_page_redirects_to_canonical_tasks(self, client: AsyncClient):
+        resp = await client.get("/chat", follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["location"] == "/tasks"
+
+    async def test_tasks_page_is_the_only_query_navigation(self, client: AsyncClient):
+        resp = await client.get("/tasks")
         assert resp.status_code == 200
-        assert "Forge" in resp.text
-        assert "执行成功" in resp.text
-        assert "执行失败" in resp.text
+        assert "AI 数据任务" in resp.text
+        assert 'href="/chat"' not in resp.text
 
 
 # ── Dashboard 数据 ───────────────────────────────────────────────────────────
