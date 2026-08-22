@@ -19,6 +19,21 @@ def _retriever() -> SchemaRetriever:
     return SchemaRetriever(registry, metrics_registry=metrics)
 
 
+def test_retriever_does_not_reuse_llm_key_for_unrelated_embedding_endpoint(monkeypatch):
+    monkeypatch.setattr(cfg, "REGISTRY_PATH", DATASET / "schema.registry.json")
+    monkeypatch.setattr(cfg, "METRICS_PATH", DATASET / "metrics.registry.yaml")
+    monkeypatch.setattr(cfg, "EMBED_API_KEY", "")
+    monkeypatch.setattr(cfg, "LLM_API_KEY", "coding-plan-key-must-not-be-used")
+    monkeypatch.setattr(llm, "_retriever_initialized", False)
+    monkeypatch.setattr(llm, "_retriever", None)
+    monkeypatch.setattr(llm, "_query_embed_fn", None)
+
+    retriever, query_embed_fn = llm._get_retriever()
+
+    assert retriever is not None
+    assert query_embed_fn is None
+
+
 def test_bm25_rag_covers_reference_tables_for_all_40_cases():
     retriever = _retriever()
     cases = json.loads((DATASET / "cases.json").read_text())
