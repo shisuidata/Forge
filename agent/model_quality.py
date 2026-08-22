@@ -114,6 +114,17 @@ def result_sets_equal(
     return sorted(generated, key=key) == sorted(reference, key=key)
 
 
+def _result_digest(
+    rows: list[tuple[Any, ...]], *, order_sensitive: bool
+) -> str:
+    normalized = rows
+    if not order_sensitive:
+        key = lambda row: tuple(repr(value) for value in row)
+        normalized = sorted(rows, key=key)
+    canonical = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _p95(values: list[float]) -> float:
     if not values:
         return 0.0
@@ -200,15 +211,30 @@ def run_quality_validation(
             timed_out = prepared.get("status") == "timed_out"
             correct = False
             error_code: str | None = None
+            comparison: dict[str, Any] | None = None
             if assurance_passed:
                 try:
                     generated_rows = execute_fn(db_url, str(prepared["sql"]))
                     reference_rows = execute_fn(db_url, str(case["reference_sql"]))
+                    order_sensitive = "ORDER BY" in str(case["reference_sql"]).upper()
                     correct = result_sets_equal(
                         generated_rows,
                         reference_rows,
-                        order_sensitive="ORDER BY" in str(case["reference_sql"]).upper(),
+                        order_sensitive=order_sensitive,
                     )
+                    comparison = {
+                        "order_sensitive": order_sensitive,
+                        "generated_row_count": len(generated_rows),
+                        "reference_row_count": len(reference_rows),
+                        "generated_column_count": len(generated_rows[0]) if generated_rows else 0,
+                        "reference_column_count": len(reference_rows[0]) if reference_rows else 0,
+                        "generated_result_hash": _result_digest(
+                            generated_rows, order_sensitive=order_sensitive
+                        ),
+                        "reference_result_hash": _result_digest(
+                            reference_rows, order_sensitive=order_sensitive
+                        ),
+                    }
                 except Exception:
                     error_code = "execution_comparison_failed"
             else:
@@ -220,6 +246,10 @@ def run_quality_validation(
                 "latency_ms": latency_ms,
                 "timed_out": timed_out,
                 "error_code": error_code,
+                "generated_sql": prepared.get("sql"),
+                "forge_json": prepared.get("forge_json"),
+                "assurance_report": prepared.get("assurance_report"),
+                "comparison": comparison,
                 "retrieval_trace": prepared.get("retrieval_trace"),
             }
             results.append(result)

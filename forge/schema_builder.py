@@ -123,11 +123,41 @@ def build_tool_schema(registry: dict) -> dict:
 
     # ── 基础 schema 块 ─────────────────────────────────────────────────────────
 
+    identifier_pattern = r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?$"
     col_field = {
-        "type": "string",
-        "enum": col_refs,
-        "description": "Column reference in table.col format.",
-    } if col_refs else {"type": "string"}
+        "anyOf": [
+            {
+                "type": "string",
+                "enum": col_refs,
+                "description": "Physical column from the retrieved Registry context.",
+            },
+            {
+                "type": "string",
+                "pattern": identifier_pattern,
+                "description": (
+                    "Alias or CTE output reference. It must be defined by agg[].as, "
+                    "window[].as, select[].as, or by a preceding CTE select."
+                ),
+            },
+        ],
+        "description": "Physical Registry column or a query-local alias/CTE output.",
+    } if col_refs else {"type": "string", "pattern": identifier_pattern}
+
+    table_field = {
+        "anyOf": [
+            {
+                "type": "string",
+                "enum": table_names,
+                "description": "Physical table from the retrieved Registry context.",
+            },
+            {
+                "type": "string",
+                "pattern": r"^[A-Za-z_][A-Za-z0-9_]*$",
+                "description": "Name of a CTE declared earlier in cte[].name.",
+            },
+        ],
+        "description": "Physical Registry table or a declared CTE name.",
+    } if table_names else {"type": "string"}
 
     sort_key = {
         "type": "object",
@@ -324,11 +354,7 @@ def build_tool_schema(registry: dict) -> dict:
         "required": ["scan", "select"],
         "additionalProperties": False,
         "properties": {
-            "scan": {
-                "type": "string",
-                "enum": table_names,
-                "description": "Primary table (scan target).",
-            },
+            "scan": table_field,
             "joins": {
                 "type": "array",
                 "items": {
@@ -341,7 +367,7 @@ def build_tool_schema(registry: dict) -> dict:
                             "enum": ["inner", "left", "right", "full", "anti", "semi"],
                             "description": "inner=default; anti=NOT IN alternative; semi=EXISTS alternative.",
                         },
-                        "table": {"type": "string", "enum": table_names},
+                        "table": table_field,
                         "on": {"oneOf": [on_single, on_multi]},
                     },
                 },
@@ -407,10 +433,10 @@ def build_tool_schema(registry: dict) -> dict:
             "cte": {
                 "type": "array",
                 "description": (
-                    "Common Table Expressions (WITH clause). Use ONLY when a subquery result "
-                    "must be joined or filtered in a second step. "
-                    "Do NOT use for simple aggregations or filtering — just use filter/agg directly. "
-                    "Do NOT use for ranking/TopN — use window + qualify instead."
+                    "Common Table Expressions (WITH clause). Use when an aggregate result must "
+                    "be filtered, joined, ranked, or windowed in a later step. Per-group TopN over "
+                    "aggregated measures requires an aggregate CTE followed by window + qualify. "
+                    "Do not use a CTE for a simple one-stage aggregation or row filter."
                 ),
                 "items": {
                     "type": "object",

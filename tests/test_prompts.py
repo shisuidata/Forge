@@ -13,3 +13,6 @@ def test_group_topn_question_injects_topn_example():
     assert "聚合后的分组内 TopN" in prompt
     assert "qualify" in prompt
     assert "只写 `sort + limit: 3`" in prompt
+    assert "窗口意图必须落到 window" in prompt
+    assert "请求的输出不得遗漏" in prompt
+    assert "Do NOT use for ranking/TopN" not in prompt

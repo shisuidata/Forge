@@ -80,6 +80,9 @@ def test_quality_run_persists_cases_and_marks_revision_eligible(tmp_path, monkey
         return {
             "status": "needs_review",
             "sql": "SELECT 1" if question == "q1" else "SELECT 2",
+            "forge_json": {"scan": "fixture", "select": [question]},
+            "assurance_report": {"passed": True},
+            "retrieval_trace": {"runtime_context_revision": "test"},
             "retry_count": 0,
         }
 
@@ -96,6 +99,11 @@ def test_quality_run_persists_cases_and_marks_revision_eligible(tmp_path, monkey
     assert metrics["passed"] is True
     assert run["status"] == "passed"
     assert len(run["cases"]) == 2
+    first_result = run["cases"][0]
+    assert first_result["generated_sql"] == "SELECT 1"
+    assert first_result["forge_json"]["scan"] == "fixture"
+    assert first_result["comparison"]["generated_result_hash"] == first_result["comparison"]["reference_result_hash"]
+    assert first_result["comparison"]["generated_column_count"] == 1
     assert store.get_revision(revision)["validation_report"]["quality_gate"]["passed"] is True
     lineage = store.get_revision(revision)["validation_report"]["quality_gate"]["lineage"]
     assert store.activate(
