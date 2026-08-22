@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { OrchestratorApplication } from "../src/application.js";
+import type { Artifact } from "../src/artifacts.js";
 import { ChannelIdentityError, ChannelIdentityResolver } from "../src/channels/identity.js";
 import { renderChannelPresentation } from "../src/channels/renderer.js";
 import { loadConfig } from "../src/config.js";
@@ -67,6 +68,41 @@ test("channel renderer emits a hash-bound review action without advancing state"
   assert.equal(presentation.actions[0]?.type, "approve_query");
 });
 
+test("channel renderer exposes clarification, cancellation, and supplement actions", () => {
+  const needsInput = renderChannelPresentation({
+    task: task("needs_input"),
+    events: [],
+    artifacts: [],
+  });
+  assert.deepEqual(needsInput.actions.map((item) => item.type), ["provide_input", "cancel_task"]);
+
+  const analysisArtifact = {
+    artifact_id: "art_analysis",
+    task_run_id: "tr_channel_001",
+    artifact_type: "analysis",
+    schema_version: "1.0.0",
+    producer: "business-root-cause-analysis",
+    created_at: "2026-08-21T00:00:00.000Z",
+    payload: {
+      status: "incomplete",
+      summary: "需要补查",
+      findings: [],
+      hypotheses: [],
+      evidence_refs: [],
+      limitations: [],
+      suggested_queries: [{ question: "按渠道补查", reason: "缺少渠道", priority: "high" }],
+    },
+  } as unknown as Artifact;
+  const incomplete = renderChannelPresentation({
+    task: task("incomplete"),
+    events: [],
+    artifacts: [analysisArtifact],
+  });
+  assert.equal(incomplete.actions[0]?.type, "request_supplement");
+  assert.deepEqual(incomplete.actions[0]?.payload, { suggested_query_index: 0 });
+  assert.equal(incomplete.actions.at(-1)?.type, "cancel_task");
+});
+
 test("identity resolver fails closed for unknown channel users", async () => {
   const directory = await mkdtemp(join(tmpdir(), "forge-channel-identity-"));
   const path = join(directory, "identities.json");
@@ -82,6 +118,52 @@ test("identity resolver fails closed for unknown channel users", async () => {
     user_id: "user_demo",
   });
   assert.throws(() => resolver.resolve("feishu", "ou_unknown"), ChannelIdentityError);
+});
+
+test("channel cancel action is owned, persisted, and idempotent", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-cancel-"));
+  const config = loadConfig({
+    PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3"),
+  });
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  const application = new OrchestratorApplication({
+    config,
+    tasks: state.tasks,
+    events: state.events,
+    artifacts: state.artifacts,
+    attempts: state.attempts,
+    channelEvents: state.channelEvents,
+    transactions: state.transactions,
+  });
+  const created = application.createTask({
+    org_id: "org_demo",
+    team_id: "team_data",
+    user_id: "user_demo",
+    channel: "feishu",
+    channel_conversation_id: "oc_demo",
+    intent: "business_root_cause_analysis",
+    message: "待取消任务",
+  }).task;
+  const input = {
+    event_id: "evt_cancel_001",
+    channel: "feishu" as const,
+    event_type: "action" as const,
+    external_user_id: "ou_allowed",
+    conversation_id: "oc_demo",
+    message_id: "om_cancel",
+    task_run_id: created.task_run_id,
+    payload: { action: "cancel_task" },
+  };
+  const identity = { org_id: "org_demo", team_id: "team_data", user_id: "user_demo" };
+
+  const first = await application.ingestChannelAction(input, identity);
+  const replay = await application.ingestChannelAction(input, identity);
+
+  assert.equal(first.task.status, "cancelled");
+  assert.equal(first.presentation.title, "任务已取消");
+  assert.equal(replay.duplicate, true);
+  assert.equal(replay.task.task_run_id, created.task_run_id);
+  state.close();
 });
 
 test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", async (context) => {

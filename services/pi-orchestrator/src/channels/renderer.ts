@@ -106,6 +106,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
                 },
                 "primary",
               ),
+              action(input.task.task_run_id, "cancel_task", "取消任务", {}, "danger"),
             ]
           : [],
     };
@@ -127,7 +128,16 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       markdown: prompt,
       fields: [],
       table: null,
-      actions: [],
+      actions: [
+        action(
+          input.task.task_run_id,
+          "provide_input",
+          "提交补充信息",
+          { requires_text: true },
+          "primary",
+        ),
+        action(input.task.task_run_id, "cancel_task", "取消任务", {}, "danger"),
+      ],
     };
   }
 
@@ -165,7 +175,20 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     if (input.task.status === "ready_for_report") {
       actions.push(action(input.task.task_run_id, "render_report", "生成业务报告", {}, "primary"));
     } else if (suggestedQueries.length > 0) {
-      // 补查需要创建并切换到 child TaskRun，待渠道 lineage 契约完成后再开放按钮。
+      suggestedQueries.slice(0, 3).forEach((suggestion, index) => {
+        const label = typeof suggestion === "object" && suggestion !== null &&
+            typeof suggestion.question === "string"
+          ? `补查：${suggestion.question.slice(0, 24)}`
+          : `执行补查 ${index + 1}`;
+        actions.push(action(
+          input.task.task_run_id,
+          "request_supplement",
+          label,
+          { suggested_query_index: index },
+          index === 0 ? "primary" : "default",
+        ));
+      });
+      actions.push(action(input.task.task_run_id, "cancel_task", "取消任务", {}, "danger"));
     }
     return {
       ...common,

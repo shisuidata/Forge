@@ -23,10 +23,14 @@ class PiChannelClient:
         base_url: str | None = None,
         service_key: str | None = None,
         timeout_seconds: float = 15,
+        channel: str = "feishu",
     ) -> None:
         self.base_url = (base_url or cfg.PI_ORCHESTRATOR_URL).rstrip("/")
         self.service_key = service_key or cfg.PI_CHANNEL_SERVICE_KEY
         self.timeout_seconds = timeout_seconds
+        if channel not in {"feishu", "dingtalk"}:
+            raise PiChannelError(f"Unsupported Pi channel: {channel}")
+        self.channel = channel
         if not self.service_key:
             raise PiChannelError("PI_CHANNEL_SERVICE_KEY is not configured")
 
@@ -41,7 +45,7 @@ class PiChannelClient:
     ) -> dict[str, Any]:
         return self._submit({
             "event_id": event_id,
-            "channel": "feishu",
+            "channel": self.channel,
             "event_type": "message",
             "external_user_id": external_user_id,
             "conversation_id": conversation_id,
@@ -63,7 +67,7 @@ class PiChannelClient:
     ) -> dict[str, Any]:
         return self._submit({
             "event_id": event_id,
-            "channel": "feishu",
+            "channel": self.channel,
             "event_type": "action",
             "external_user_id": external_user_id,
             "conversation_id": conversation_id,
@@ -169,6 +173,26 @@ def presentation_to_feishu_card(
                 "user_id": external_user_id,
                 "conversation_id": conversation_id,
             }
+            if item.get("type") == "provide_input":
+                elements.append({
+                    "tag": "form",
+                    "name": f"clarification_{item.get('task_run_id')}",
+                    "elements": [
+                        {
+                            "tag": "input",
+                            "name": "text",
+                            "placeholder": {"tag": "plain_text", "content": "请输入补充信息"},
+                        },
+                        {
+                            "tag": "button",
+                            "text": {"tag": "plain_text", "content": str(item.get("label") or "提交")},
+                            "type": "primary",
+                            "action_type": "form_submit",
+                            "value": value,
+                        },
+                    ],
+                })
+                continue
             columns.append({
                 "tag": "column",
                 "width": "auto",
