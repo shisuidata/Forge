@@ -27,6 +27,11 @@ async def test_task_event_stream_is_incremental_and_uses_poll_backoff(client: As
     assert source.count("eventsPanel.replaceChildren();") == 1
     assert "Math.min(2000, Math.round(pollDelay * 1.5))" in source
     assert "prefers-reduced-motion: reduce" in source
+    assert 'id="result-chart"' in source
+    assert "renderResultChart(result)" in source
+    assert "采用推荐补查并继续分析" in source
+    assert "批准补查 SQL 并继续分析" in source
+    assert "await runAnalysis();" in source
 
 
 @pytest.mark.asyncio
