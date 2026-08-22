@@ -356,6 +356,10 @@ Skill 先生成语义结果，不直接拼装具体渠道组件：
 
 Pi 拥有 ReportJob 的编排状态、Attempt、lease、幂等和 Artifact 依赖；Forge Web/受限 Report Service 负责报告 ACL、Canonical HTML 投影、分享交换和 PDF/PPTX 下载，不访问数据库、不生成 SQL。业务报告、技术报告、Chart 和 Publication 都固定到同一不可变 Report Bundle revision。大文件进入受限 Artifact Store，SQLite 只保存状态与索引。业务分享与 technical scope 分离，外部链接默认只能看到业务报告，分享 token 只保存 hash并支持过期、撤销和下载审计。飞书 Adapter 只消费 presentation 与最终 URL，不承载报告生成逻辑。
 
+### 10.2 分阶段模型控制
+
+模型不是全局可变单例。Model Control Plane 以 Task Stage 为 scope 管理不可变 Profile Revision、Active Binding、CAS、Audit 与回滚；Pi 在 StageAttempt 开始时固定对应 revision，在途任务不跟随热切换。`metric_definition/query_generation/query_repair` 是 SQL Critical scope，必须通过固定 Runtime/Registry/Assurance/Policy lineage 的完整结果准确率、Assurance、重试、延迟和超时门禁；环境变量、Admin UI、回滚和非核心模型均不能绕过。分析、报告等非核心 Stage 只通过能力与 Artifact 安全门禁，且永远不获得 Forge SQL 执行权。
+
 ## 11. 可观测性
 
 每次任务应能按 `task_run_id` 查看：
