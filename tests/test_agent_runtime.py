@@ -54,7 +54,7 @@ def isolated_agent(monkeypatch, tmp_path):
     monkeypatch.setattr(
         agent_mod.llm,
         "get_model_config",
-        lambda: SimpleNamespace(
+        lambda stage="query_generation": SimpleNamespace(
             provider="openai",
             model="fixture-model",
             api_key="fixture-key",

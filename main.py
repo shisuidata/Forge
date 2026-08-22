@@ -11,6 +11,7 @@ Endpoints:
   GET  /health           — health check
   GET  /admin/*          — admin web UI (registry, audit log, settings)
 """
+from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 
@@ -39,12 +40,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=_log_handlers,
 )
-app = FastAPI(title="Forge Agent")
-
 logger = logging.getLogger("forge.startup")
 
 
-@app.on_event("startup")
 async def _startup_checks():
     """启动时的健康检查和安全提示。"""
     # Long model validations are never replayed after process restart.
@@ -118,9 +116,16 @@ async def _startup_checks():
         logger.info("  %-12s %s", name, status)
 
 
-@app.on_event("shutdown")
-async def _shutdown_managed_runtimes():
-    feishu_runtime.stop()
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    await _startup_checks()
+    try:
+        yield
+    finally:
+        feishu_runtime.stop()
+
+
+app = FastAPI(title="Forge Agent", lifespan=_lifespan)
 
 
 # Chat + API 路由挂载到根级别（/chat, /api/*）
