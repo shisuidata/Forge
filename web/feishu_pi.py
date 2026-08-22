@@ -24,6 +24,7 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
 from config import cfg
 from web.pi_channel import (
     PiChannelClient,
+    action_progress_presentation,
     presentation_to_feishu_card,
     stable_channel_action_event_id,
     task_run_id_from_response,
@@ -150,7 +151,22 @@ def _process_action(
             payload=payload,
         )
         resolved_task_run_id = task_run_id_from_response(accepted)
-        presentation = _get_pi_client().wait_for_presentation(resolved_task_run_id)
+        accepted_presentation = accepted.get("presentation")
+        if (
+            isinstance(accepted_presentation, dict)
+            and accepted_presentation.get("kind") != "progress"
+        ):
+            presentation = accepted_presentation
+        else:
+            _update_card(
+                message_id,
+                presentation_to_feishu_card(
+                    action_progress_presentation(action_type),
+                    external_user_id=open_id,
+                    conversation_id=conversation_id,
+                ),
+            )
+            presentation = _get_pi_client().wait_for_presentation(resolved_task_run_id)
         _update_card(
             message_id,
             presentation_to_feishu_card(

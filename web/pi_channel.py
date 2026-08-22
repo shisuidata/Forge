@@ -146,6 +146,25 @@ def task_run_id_from_response(response: dict[str, Any]) -> str:
     return task["task_run_id"]
 
 
+def action_progress_presentation(action: str) -> dict[str, Any]:
+    title, message = {
+        "approve_query": ("正在执行查询", "已收到审批，正在安全执行只读 SQL。"),
+        "analyze": ("正在分析结果", "正在基于已审批的查询结果生成证据分析。"),
+        "render_report": ("正在生成报告", "正在整理分析结论和证据，生成最终报告。"),
+        "provide_input": ("正在处理补充信息", "正在根据你补充的信息继续任务。"),
+        "request_supplement": ("正在准备补查", "正在生成补查 SQL，执行前仍会请你审批。"),
+        "cancel_task": ("正在取消任务", "正在安全停止后续任务步骤。"),
+    }.get(action, ("正在处理", "Forge 正在处理这项操作。"))
+    return {
+        "kind": "progress",
+        "title": title,
+        "markdown": f"⏳ {message}\n\n你可以离开当前页面，完成后这张卡片会自动更新。",
+        "fields": [],
+        "table": None,
+        "actions": [],
+    }
+
+
 def presentation_to_feishu_card(
     presentation: dict[str, Any],
     *,
