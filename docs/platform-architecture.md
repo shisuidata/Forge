@@ -350,6 +350,12 @@ Skill 先生成语义结果，不直接拼装具体渠道组件：
 
 渠道 ingress 不把每条消息都解释为查询任务，也不把“不需要 SQL”解释为拒绝。Pi 将消息路由为 `query / knowledge / conversation / forbidden`：明确取数进入 QueryRun；指标口径、Schema、语义规则和组织知识问题通过 Forge 的受控只读 Context API 获取有界 evidence，由 Pi 生成证据绑定回答；问候和正常对话直接响应；仅明确超出产品能力、身份未授权或权限策略命中时拒绝。渠道不得自行读取 Registry、Knowledge 或生成 SQL，任何查询仍由 Forge 独立 Assurance 和审批。
 
+### 10.1 分析简报与报告发布边界
+
+飞书分析卡与完整报告是两个交付层：飞书只展示用户可理解的方法摘要、结论、限制和下一步；模型 hidden chain-of-thought、Prompt、Tool transcript、内部 ID/hash/path/Secret 永不进入渠道。可复现性由结构化 DecisionLog、SQL、审批记录、执行摘要和版本 lineage 提供，不以保存私有思维链实现。
+
+Pi 拥有 ReportJob 的编排状态、Attempt、lease、幂等和 Artifact 依赖；Forge Web/受限 Report Service 负责报告 ACL、Canonical HTML 投影、分享交换和 PDF/PPTX 下载，不访问数据库、不生成 SQL。业务报告、技术报告、Chart 和 Publication 都固定到同一不可变 Report Bundle revision。大文件进入受限 Artifact Store，SQLite 只保存状态与索引。业务分享与 technical scope 分离，外部链接默认只能看到业务报告，分享 token 只保存 hash并支持过期、撤销和下载审计。飞书 Adapter 只消费 presentation 与最终 URL，不承载报告生成逻辑。
+
 ## 11. 可观测性
 
 每次任务应能按 `task_run_id` 查看：

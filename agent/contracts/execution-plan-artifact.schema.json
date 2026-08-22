@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/execution-plan-artifact.schema.json",
+  "title": "ExecutionPlanArtifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_id", "artifact_type", "schema_version", "task_run_id", "producer", "created_at", "payload"],
+  "properties": {
+    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+    "artifact_type": {"const": "execution_plan"},
+    "schema_version": {"const": 1},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "producer": {"const": "pi-planner"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_revision", "supersedes_artifact_id", "route_kind", "goal", "required_deliverables", "status", "steps"],
+      "properties": {
+        "plan_revision": {"type": "integer", "minimum": 1},
+        "supersedes_artifact_id": {"type": ["string", "null"], "pattern": "^ar_[A-Za-z0-9_-]+$"},
+        "route_kind": {"enum": ["query", "knowledge", "conversation", "action", "workflow", "clarification", "forbidden"]},
+        "goal": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "required_deliverables": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "status": {"enum": ["active", "completed", "failed"]},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["step_id", "capability", "title", "depends_on", "required", "status", "deliverable"],
+            "properties": {
+              "step_id": {"type": "string", "pattern": "^step_[a-z0-9_]{1,48}$"},
+              "capability": {"enum": ["clarification", "context", "query", "analysis", "chart", "report", "registry_draft", "memory_proposal", "approval"]},
+              "title": {"type": "string", "minLength": 1, "maxLength": 200},
+              "depends_on": {"type": "array", "items": {"type": "string", "pattern": "^step_[a-z0-9_]{1,48}$"}, "uniqueItems": true},
+              "required": {"type": "boolean"},
+              "status": {"enum": ["pending", "ready", "running", "waiting_approval", "completed", "failed", "skipped"]},
+              "deliverable": {"type": ["string", "null"], "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

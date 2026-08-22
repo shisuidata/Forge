@@ -1009,6 +1009,82 @@ Phase 4.5 实施结果：
 
 验收证据：20 个已发布 Skills discovery 精确匹配；16 个扩展 Skill 均通过终止型 Tool E2E 合约评测；伪造 evidence、核心 Skill 绕过、禁用 Team Skill、过期 CAS、无 Admin Key、Stage timeout/recovery、SQLite reopen 均有失败关闭测试。Playwright 已验证 16 个 Web 选项、模式切换无脚本错误，并以 fake Pi 完成 Web → proxy → 202 polling → AdvisoryArtifact 展示 E2E。
 
+### Phase 6：分析简报、可分享报告与导出中心
+
+#### 6.1 用户体验与边界
+
+飞书中的“开始分析”和“生成分析报告”是两个不同交付物，不能继续共用一个 RenderedOutput：
+
+1. 用户点击“开始分析”后，Pi 消费已审批的 QueryResult，飞书只展示**可解释的方法摘要**与**分析结论**：分析目标、采用的维度/对比基线、关键发现、证据强弱、限制和建议补查。这里的“分析思路”是面向用户、经过结构化整理的方法说明，不是模型原始 chain-of-thought。
+2. 飞书不得展示或保存模型隐藏思维链、System/Skill Prompt、内部 Tool transcript、Secret 或原始异常。技术复现需要的是结构化 `DecisionLog`：问题分解、采用/放弃的假设、证据映射、确定性 Gate 结果和阶段决策，而不是私有推理 token。
+3. 用户点击“生成分析报告”后，Pi 创建独立、持久化、可恢复的 `ReportJob`，立即返回进度卡；后台生成完整业务报告、图表与独立技术报告，完成后把稳定 URL 更新到原飞书卡片。
+4. 业务报告强调可读性和可视化；技术报告强调复现、审计和 lineage，不要求复杂 UI。两者权限和分享范围必须独立，默认分享链接只包含业务报告。
+
+#### 6.2 Canonical Report Bundle
+
+禁止分别让模型直接生成 HTML、PDF 和 PPT 三份可能漂移的内容。唯一真相源是版本化 `CanonicalReportBundle`：
+
+```text
+AnalysisArtifact v2
+  ├── method_summary（目标、维度、基线、步骤摘要）
+  ├── findings / hypotheses / limitations
+  └── evidence_refs
+        ↓
+ChartArtifact[]（确定性 chart spec + QueryResult evidence）
+        ↓
+CanonicalReportBundle
+  ├── BusinessReportArtifact（章节、叙事、Chart 引用）
+  ├── TechnicalReportArtifact（DecisionLog、SQL、审批与执行 lineage）
+  └── PublicationManifest（revision、ACL、可见范围、导出状态）
+        ├── 响应式 HTML URL
+        ├── PDF Export
+        └── PPTX Export
+```
+
+新增契约必须固定：
+
+- `AnalysisArtifact v2`：增加 `method_summary`，只允许结构化方法说明，不接受 `<think>`、Reasoning transcript 或 Prompt 内容。
+- `ChartArtifact`：`chart_id/type/title/encoding/data_ref/evidence_refs/alt_text`；只引用已审批 QueryResult，不复制无限结果集，不允许模型注入脚本。
+- `TechnicalReportArtifact`：SQL 文本与 hash、QueryRun 审批人/时间、执行摘要、Registry/Model/Assurance/Policy revision、Attempt 状态、结构化 DecisionLog、Artifact lineage；排除 Secret、数据库连接、内部服务地址、原始 Prompt 和 hidden chain-of-thought。
+- `ReportBundleArtifact`：固定业务报告、技术报告、Chart、源 Artifact 与版本；只有全部必需 Artifact 校验通过，ReportJob 才能完成。
+- `PublicationArtifact`：URL、固定 report revision、业务/技术 scope、分享策略、过期时间、撤销时间、导出文件摘要；不得把 bearer token 明文持久化。
+
+#### 6.3 Report Service 与存储
+
+在现有边界内增加受限 Report Service，而不是把生成逻辑堆进飞书 Adapter：
+
+- Pi 仍是 `ReportJob` Orchestrator，拥有 PlanStep、Attempt、lease、timeout、幂等与恢复；启动恢复只把过期 job 标记可重试，不自动重放模型或导出。
+- Forge Web/Report Service 负责鉴权后的报告读取、分享交换、HTML 渲染和导出下载，不读取数据库、不生成新 SQL。
+- SQLite 只保存 Report/Export 状态、ACL、hash、lineage 和对象索引；HTML、SVG、PDF、PPTX 等大文件进入 mode-700 本地 Artifact Store（后续可替换 S3/TOS），使用内容 hash、原子 rename 和不可变 revision。
+- 图表由受控 Chart Renderer 根据 ChartArtifact 生成 SVG/PNG；HTML 是 Canonical Bundle 的响应式投影。PDF 使用固定浏览器打印投影；PPTX 使用固定版式将章节、结论、表格和图表投影为可编辑或高分辨率幻灯片。导出器不能再次调用 LLM 改写内容。
+- 报告生成、PDF、PPTX 是三个独立 Attempt；PDF/PPTX 失败不能破坏已完成的 HTML 报告，可单独重试。
+
+#### 6.4 分享与权限
+
+- 登录用户 URL 使用现有 org/team/user ACL；分享默认关闭，由报告拥有者显式创建。
+- 分享链接固定 `report_id + revision + scope + expiry`，token 至少 256 bit，只持久化 hash；首次访问以一次性 token 换取短期 HttpOnly/SameSite cookie 后重定向到无 token URL，避免 token 出现在后续日志和 Referer。
+- `business` 与 `technical` scope 分开授权；外部分享默认禁止 technical scope。技术报告、SQL 和执行记录只能由具备审计权限的身份查看和下载。
+- 支持撤销、过期、下载审计、速率限制和 `Cache-Control: private/no-store`；报告 revision 更新不静默改变已分享快照。
+- QueryResult 中被 ACL/脱敏策略隐藏的列，在报告、图表、PDF 和 PPT 中必须保持同样隐藏，不能因导出绕过。
+
+#### 6.5 飞书交互
+
+- 分析完成卡片只显示方法摘要、关键结论、限制、补查建议，以及“生成完整分析报告”按钮。
+- ReportJob 运行时原地显示“正在组织章节 / 生成图表 / 发布报告 / 准备导出”等真实 Stage 状态，但不展示内部 ID、Prompt、hash、路径或伪造百分比。
+- HTML 发布成功即可返回可点击报告 URL；PDF/PPTX 尚未完成时显示“正在准备”，完成后同一卡片增加下载入口。
+- 飞书只接收 presentation 和 URL，不持有文件系统路径、分享 token 明文或报告生成逻辑。
+
+#### 6.6 实施顺序与验收
+
+1. 先完成 `AnalysisArtifact v2` 方法摘要与飞书分析简报，建立 hidden CoT 负向测试。
+2. 实现 Chart/TechnicalReport/ReportBundle/Publication/ExportJob 契约和持久化状态机。
+3. 实现 Canonical HTML 与至少柱状/折线/表格三类确定性 Chart Renderer。
+4. 实现受 ACL 保护的报告 URL、revision pin、分享创建/撤销/过期和下载审计。
+5. 实现 PDF 投影，再实现 PPTX 投影；导出必须与 HTML 的 source bundle hash 一致。
+6. 接入飞书 ReportJob 进度和最终链接，完成崩溃恢复、幂等重投和并发导出测试。
+
+验收必须覆盖：业务报告不含运维信息；技术报告可复现但不含 hidden CoT/Prompt/Secret；分享者无法越权访问 technical scope；过期/撤销链接失败关闭；HTML/PDF/PPTX 固定同一 bundle revision；重复点击只创建一个 ReportJob；进程重启不重放 SQL/模型；浏览器、PDF 和 PPT 图表数值与 QueryResult evidence 一致；真实飞书可看到分析简报、进度卡和最终 URL。
+
 最终自动化验收（2026-08-21）：
 
 - Python 全量：`500 passed, 25 skipped`；跳过项为可选外部 benchmark/integration，不影响当前本地与 NAS 验收边界。
@@ -1025,9 +1101,9 @@ Phase 4.5 实施结果：
 - 飞书自然语言入口反馈（2026-08-23，已完成）：Pi 将消息路由为 `query / knowledge / conversation`，不再默认创建 QueryRun。明确取数仍走 Forge QueryRun；指标口径、Schema、语义规则和组织知识通过带 Pi Service Key 的只读 Context API 检索 Schema/Metric/Disambiguation/Convention/Business Context/SMP，最多 12 条、单条 1200 字符，并生成 `ctx_*` evidence-bound Advisory；问候直接返回能力说明且不调用模型/Forge。用户本次失败的直接原因另含旧 Identity Map 未授权当前 `open_id`，已完成管理员配对并保留其他身份。自动化：Python `510 passed, 24 skipped`，Pi typecheck 与 `69/69` tests passed。NAS `30b3297` smoke：问候 `completed/channel_conversation/report`，知识问题 `completed/knowledge_answer/report` 且包含 `ctx_*` 引用，两类任务创建 QueryRun 数均为 0；明确查询路径原有测试保持通过。
 - 未来路由、规划与跨 Session 记忆增强（已纳入实施计划，未开始）：当前 `query / knowledge / conversation` 仅作为确定性第一层安全门禁；后续升级为“确定性门禁 + Structured Intent Router + Deliverable-driven Planner”，增加 `action / workflow` 能力，支持一条请求组合 Knowledge、Query、Analysis、Advisory、Chart 与 Report PlanStep。知识证据增加 `verified/contextual/inferred/conflicted/unknown` 等级、来源优先级、ACL、revision 与 freshness；已有 QueryResult 优先复用，证据不足只提出最小澄清；TaskRun 仅在用户声明的全部交付物存在并通过契约时完成。跨 Session 不回放无限聊天历史，而是将用户明确确认的偏好、纠错、业务事实和会话摘要提炼为有来源、scope、confidence、revision、TTL 和删除能力的 SMP 条目；写入前区分个人/团队/组织权限，查询时仍按 Registry > 已确认组织知识 > 用户记忆 > 模型推断排序。上线前建设多轮、组合任务、冲突证据、越权、记忆污染/删除与幂等路由评测集。
 - 飞书“开始分析”失败反馈（2026-08-23，已修复）：生产证据显示对应分析 Stage 实际耗时约 80.6 秒并成功生成 `AnalysisArtifact`，但 action ChannelEvent 在 processing 阶段未保存输入 `task_run_id`，HTTP ingress 无法将其识别为可轮询长任务，错误地同步等待模型；飞书客户端 15 秒后超时并把原卡片覆盖成失败提示。飞书重投又使用不同 callback event ID，第二次进入时 Task 已是 `analyzing`，因此返回 409。修复后 action claim 从已通过 ownership 校验的输入固定 TaskRun，长操作立即返回 `202 + polling`；飞书 action event ID 改为 `message_id + task_run_id + action + canonical payload` 的稳定 SHA-256 指纹，同一点击/重投只执行一次。原失败卡片已原地恢复为成功的分析展示，未重放 SQL 或模型。自动化：Pi typecheck、`69/69` tests，Python `511 passed, 24 skipped`；NAS main `4658e06`、Forge/Pi health 200。
-- 飞书按钮执行状态反馈（2026-08-23，处理中）：用户点击 SQL 审批、开始分析、生成报告、补充信息、准备补查或取消后，不能只依赖短暂 toast 并让原按钮卡片在长任务期间保持不变。Adapter 在 Pi 接受 action 后应立即将原卡片原地更新为与动作对应的不可重复点击进度态，明确“可离开当前页面，完成后自动更新”；继续通过 Task presentation polling 获取最终状态，并只在成功、需要输入、需要审批或失败时替换为最终卡片。进度展示不得伪造完成百分比、不得触发额外模型/SQL，也不得改变现有幂等和审批边界。
-- 飞书内容最小披露反馈（2026-08-23，处理中）：飞书是业务交付渠道，不得展示模型思考过程、System/Skill Prompt、Tool 调用、内部错误栈、服务地址、文件路径、Secret、Task/Attempt/Query 内部 ID、hash/revision/lease/retry 等运维元数据。Pi Channel Renderer 必须使用显式业务字段 allowlist；技术 lineage 只留在受权限保护的 Web/Admin/Audit。SQL 审批仍展示用户必须审核的 SQL、口径和必要安全提示，但 action payload 内部绑定字段不得进入可见正文。结构化 Artifact 文本还需经过确定性敏感模式检查，命中内部推理或运维信息时失败关闭或替换为安全摘要，不能依赖模型自觉隐藏。
-- 全部未完成计划收口（2026-08-23，执行中）：按用户确认，不再只记录“未来增强”，而是审计本文所有仍有效的 `未开始/处理中/待建设/遗留/后续` 项，并按依赖顺序实施、测试、部署和回写。历史阶段中已被后续实现替代的描述只做状态归档，不重复建设；需要外部凭证、真实第三方权限或人工主观验收的项目必须给出可复验证据与明确外部阻塞，不能伪报完成。当前优先顺序：①飞书最小披露与进度反馈验收；②Structured Intent Router + Deliverable-driven Planner + `action/workflow`；③跨 Session SMP 提炼、权限、TTL、删除与冲突治理；④剩余有效计划项全量审计和关闭。
+- 飞书按钮执行状态反馈（2026-08-23，已完成）：SQL 审批、分析、报告、补充信息、补查和取消 action 被 Pi 接受后，Adapter 立即原地替换为动作专属、无按钮的进度卡，明确可离开页面且完成后自动更新；若 Pi 已同步返回终态则直接展示终态，避免无意义闪烁。进度不伪造百分比，不调用额外模型/SQL，最终仍由 presentation polling 驱动。自动测试验证卡片更新顺序严格为 progress → final；NAS `b15c776` WebSocket 单进程已重连。
+- 飞书内容最小披露反馈（2026-08-23，已完成）：Channel Renderer 已改为业务字段 allowlist。SQL 审批正文只展示必要 SQL 与只读提示，隐藏 QueryRun/hash；普通失败不回显原始异常；进度不展示内部 status/stage；知识回答不展示 `ctx_*`；报告、分析、澄清和直接响应统一移除 `<think>`、reasoning 前缀、内部 ID/hash/revision、localhost、路径、Traceback、System Prompt/Tool Call 等模式，命中后给出安全业务摘要。内部 action payload 仍保留不可见的 hash-bound 审批字段。Pi `70/70` tests passed；NAS `47e73ec` 对最近 25 个 Task presentation 的 title/markdown/fields 扫描，内部模式命中 0。
+- 全部未完成计划收口（2026-08-23，执行中）：按用户确认，不再只记录“未来增强”，而是审计本文所有仍有效的 `未开始/处理中/待建设/遗留/后续` 项，并按依赖顺序实施、测试、部署和回写。历史阶段中已被后续实现替代的描述只做状态归档，不重复建设；需要外部凭证、真实第三方权限或人工主观验收的项目必须给出可复验证据与明确外部阻塞，不能伪报完成。当前优先顺序：①飞书最小披露与进度反馈验收；②Structured Intent Router + Deliverable-driven Planner + `action/workflow`；③Phase 6 分析简报、Canonical Report Bundle、图表、可分享 URL 与 PDF/PPTX 导出；④跨 Session SMP 提炼、权限、TTL、删除与冲突治理；⑤剩余有效计划项全量审计和关闭。
 - 飞书即配即用改造（2026-08-23，已完成）：设置页保存 App ID/Secret 时先调用飞书官方接口验证，随后自动启用并热启动受管 WebSocket 长连接；通道服务密钥由部署层一次性安全预连。个人部署支持一次性首用户绑定，但仅允许飞书 Identity Map 为空时首个已认证 `p2p` message 原子绑定，后续未知用户继续 fail-closed；当前部署已恢复既有 1 条授权身份，因此 bootstrap 自动关闭。设置页只展示脱敏凭证状态、长连接进程、Pi ingress、身份数和绑定状态，App Secret/Verification Token/Encrypt Key 均不回显。自动化：Python `508 passed, 24 skipped`，Pi typecheck 与 `64/64` tests passed。NAS `1c9e978`：官方凭证验证 code 0、WebSocket 已连接、Pi `channelIngressConfigured=true`、授权身份 1、受管进程 1、子进程未继承 LLM Key、配置文件 mode 600；HTTP webhook 返回 409，避免与 WebSocket 双消费。
 - 自动化范围外只剩人工外部验收：真实飞书/钉钉应用凭证的消息收发、真实业务用户对 16 个扩展 Skill 的主观方法质量，以及管理员在正式 UI/网络环境中的 Registry Studio 操作体验。
 

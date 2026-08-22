@@ -17,6 +17,7 @@ from jsonschema.validators import validator_for
 _CONTRACT_FILES = {
     "task_run": "task-run.schema.json",
     "clarification_artifact": "clarification-artifact.schema.json",
+    "execution_plan_artifact": "execution-plan-artifact.schema.json",
     "metric_definition_artifact": "metric-definition-artifact.schema.json",
     "query_result_artifact": "query-result-artifact.schema.json",
     "analysis_artifact": "analysis-artifact.schema.json",
