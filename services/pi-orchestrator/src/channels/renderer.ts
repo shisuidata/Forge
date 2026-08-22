@@ -103,6 +103,24 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     };
   }
 
+  if (input.task.status === "waiting_for_action_approval") {
+    const proposal = latestEvent(input.events, "memory.proposed");
+    const operation = proposal?.payload.operation === "delete" ? "删除" : "记住";
+    const value = safeBusinessText(proposal?.payload.value, "未提供内容");
+    return {
+      ...common,
+      kind: "query_review",
+      title: "确认个人记忆变更",
+      markdown: `Forge 将在你的个人范围内${operation}以下内容：\n\n> ${value}\n\n该记忆有有效期，可在管理页删除；不会自动提升为团队或组织事实。`,
+      fields: [],
+      table: null,
+      actions: [
+        action(input.task.task_run_id, "confirm_memory", "确认变更", {}, "primary"),
+        action(input.task.task_run_id, "cancel_task", "取消", {}, "danger"),
+      ],
+    };
+  }
+
   if (input.task.status === "waiting_for_query_approval") {
     const review = latestEvent(input.events, "query.review_requested");
     const sql = typeof review?.payload.sql === "string" ? review.payload.sql : "";

@@ -54,6 +54,9 @@ async def test_context_api_returns_bounded_registry_evidence(client: AsyncClient
     assert any(item["source_type"] == "metric" for item in body["evidence"])
     assert all(item["evidence_ref"].startswith("ctx_") for item in body["evidence"])
     assert all(len(item["content"]) <= 1200 for item in body["evidence"])
+    assert all(item["verification_level"] == "verified" for item in body["evidence"])
+    assert all(item["scope"] == "organization" for item in body["evidence"])
+    assert all(item["source_revision"].startswith("sha256:") for item in body["evidence"])
     assert "rows" not in body
 
 
