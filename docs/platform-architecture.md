@@ -152,7 +152,7 @@ Skill 输出必须区分：
 - 待确认问题。
 - 建议动作。
 
-需要数据库证据的 Skill 必须通过 Pi 调用 Forge，不允许自己访问数据源。生产 Runtime 对 23 个 Skill 使用显式 allowlist，每个 Stage 只注入一个 Skill；四个核心流程使用专用 Artifact，其余 Skill 使用有界 `AdvisoryArtifact`。组织管理员通过独立凭证和版本化 Team Policy 控制可用 Skill，普通任务不能修改 Policy。
+需要数据库证据的 Skill 必须通过 Pi 调用 Forge，不允许自己访问数据源。生产 Runtime 对固定 Skills 包中实际存在的 20 个 Skill 使用显式 allowlist，每个 Stage 只注入一个 Skill；四个核心流程使用专用 Artifact，其余 Skill 使用有界 `AdvisoryArtifact`。组织管理员通过独立凭证和版本化 Team Policy 控制可用 Skill，普通任务不能修改 Policy。
 
 ## 5. 任务与 Artifact 模型
 

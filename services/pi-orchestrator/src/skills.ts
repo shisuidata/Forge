@@ -28,9 +28,6 @@ export const AUTHORIZED_SKILL_NAMES = [
   "data-incident-postmortem-writer",
   "data-tool-integration-planner",
   "market-research-analyst",
-  "feature-engineering-advisor",
-  "model-evaluation-reviewer",
-  "stream-pipeline-designer",
 ] as const;
 
 export type AuthorizedSkillName = (typeof AUTHORIZED_SKILL_NAMES)[number];

@@ -45,8 +45,8 @@
 |---|---|---|
 | 平台四层架构与职责迁移矩阵 | 已完成 | `platform-architecture.md` |
 | TaskRun 与四类核心 Artifact Schema | 已完成 | `tests/test_artifact_contracts.py`，10 个契约测试 + 文档测试共 11 passed |
-| 拾穗 DATA Pi Package | 已完成 | 23 Skills，Pi discovery 0 diagnostics，npm 门禁通过 |
-| 生产 Skill Runtime 白名单 | 已完成 | 显式加载 23 Skills、每 Stage 仅注入 1 个；全局 Skills、Extensions、Context 均禁用；四个核心 Skill 使用专用 Artifact，其余 19 个使用 AdvisoryArtifact |
+| 拾穗 DATA Pi Package | 已完成 | Catalog 记录 23 个 Skill；固定仓库 revision 实际发布 20 个 SKILL.md，生产 discovery 0 diagnostics；3 个尚未进入该 revision 的草案条目不冒充可运行能力 |
+| 生产 Skill Runtime 白名单 | 已完成 | 显式加载固定 revision 中实际存在的 20 Skills、每 Stage 仅注入 1 个；全局 Skills、Extensions、Context 均禁用；四个核心 Skill 使用专用 Artifact，其余 16 个使用 AdvisoryArtifact |
 | 受限 Pi Orchestrator Service 骨架 | 已完成 | Runtime、Task/Event Store、Task API、能力清单、健康检查；TypeScript typecheck + 16 tests passed |
 | `forge_prepare_query` Tool | 已完成 | 只接现有 `/api/prepare-query`；用户身份由 TaskContext 注入；拒绝任何可执行标记或结果集；Forge 端身份绑定留到 Phase 2 |
 | Phase 1 Integration Spike | 已完成 | Web → Pi TaskRun/Event → Forge prepare-query → 不可执行 SQL 预览已跑通 |
@@ -58,7 +58,7 @@
 | Phase 4 飞书与钉钉渠道 | 自动化实现完成，待人工外部 smoke | ChannelEvent、独立鉴权、身份映射、SQLite 幂等入站和 Renderer 已完成；飞书支持表单补充信息、hash 审批、取消、分析、补查 child lineage 和报告；钉钉薄 Adapter 复用同一 ChannelEvent/Presentation，不复制状态机。54 个 Orchestrator tests 与 Python Adapter tests 通过；真实飞书/钉钉应用凭证收发留给人工验收。 |
 | Phase 4.4 Model Control Plane | 已完成并通过激活门禁 | Profile/Revision/ActiveBinding/审计、Secret Ref、Provider smoke、持久化 40 题质量验证、CAS 激活/回滚和在途 snapshot 固定均已完成。DeepSeek V4 Flash deterministic revision `sha256:0de19c…` 在 Run `mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.34s、timeout 0%，已 CAS 激活为 binding v1。 |
 | Phase 4.5 Registry Studio | 已完成，待人工 UI 验收 | Canonical Schema Contract、旧 Registry 迁移、Draft/Revision/Audit/CAS publish/rollback、危险 Diff、SQLite/PostgreSQL/MySQL 受控 DDL、可信 ER、JSON/表格投影、DDL Draft 和关系确认 UI/API 已完成；不具备数据库 DDL 执行能力。 |
-| Phase 5 扩展 Skills 与组织能力 | 已完成，待人工业务效果验收 | 23 Skills 全部显式授权并隔离执行；19 个扩展 Skill 接入 AdvisoryArtifact 与 Task API；漏斗/留存/EDA/A-B complete 强制 QueryResult evidence；Team Policy 使用 Admin Key、SQLite CAS 与审计；StageAttempt 固定 Pi model revision。 |
+| Phase 5 扩展 Skills 与组织能力 | 已完成，待人工业务效果验收 | 固定包中 20 Skills 全部显式授权并隔离执行；16 个扩展 Skill 接入 AdvisoryArtifact 与 Task API；漏斗/留存/EDA/A-B complete 强制 QueryResult evidence；Team Policy 使用 Admin Key、SQLite CAS 与审计；StageAttempt 固定 Pi model revision。 |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
 | Phase 2 QueryRun 审批执行闭环 | 已完成 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
 | Forge 内部 QueryRun 审批 API | 已完成 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
@@ -999,15 +999,15 @@ Phase 4.5 实施结果：
 
 实施结果：
 
-1. 23 个拾穗 DATA Skills 全部进入显式 production allowlist；ResourceLoader 仍关闭全局 Skills、Extensions、Prompt Templates、Themes 和 Context Files，每个 Stage 只加载一个 Skill 全文。
-2. 四个核心流程 Skill 继续使用 Clarification/MetricDefinition/Analysis/RenderedOutput 专用 Artifact；其余 19 个 Skill 统一使用版本化 `AdvisoryArtifact`，但每个 Skill 都有固定隔离执行评测。
+1. 固定 Skills package revision 中实际存在的 20 个拾穗 DATA Skills 全部进入显式 production allowlist；Catalog 中缺少已发布 SKILL.md 的草案条目失败关闭，不以本地未提交目录充当生产依赖；ResourceLoader 仍关闭全局 Skills、Extensions、Prompt Templates、Themes 和 Context Files，每个 Stage 只加载一个 Skill 全文。
+2. 四个核心流程 Skill 继续使用 Clarification/MetricDefinition/Analysis/RenderedOutput 专用 Artifact；其余 16 个 Skill 统一使用版本化 `AdvisoryArtifact`，但每个 Skill 都有固定隔离执行评测。
 3. 漏斗、留存、EDA、A/B 若返回 `complete`，必须至少引用一个当前 TaskRun QueryResult evidence；任何扩展 Skill 引用输入范围外 evidence 都失败关闭。
-4. 新增 `POST /v1/tasks/{task_run_id}/run-skill` 长任务接口，固定 `202 + polling`，持久化 Artifact/Event/Attempt/Lease；Forge Web 提供同契约代理，并在 `/tasks` 支持 19 个 Advisory Skill 的选择、执行、轮询与 Artifact 展示。
+4. 新增 `POST /v1/tasks/{task_run_id}/run-skill` 长任务接口，固定 `202 + polling`，持久化 Artifact/Event/Attempt/Lease；Forge Web 提供同契约代理，并在 `/tasks` 支持 16 个 Advisory Skill 的选择、执行、轮询与 Artifact 展示。
 5. Team Skill Policy 持久化到 Pi SQLite schema v4，使用 expected version CAS，策略与审计原子写入；管理 API 必须携带独立 `X-Admin-Service-Key`，未配置或错误凭证失败关闭。
 6. Pi 模型目录生成不含凭证的 SHA-256 revision 并写入 StageAttempt；目录变化无需重启，新 Stage 重建 Runtime，在途 Stage 固定旧 Session 和 revision。
 7. Registry Revision 已由 QueryRun/Assurance 固定；Task/Event/Artifact/Attempt、等待审批和补查 lineage 已验证跨进程恢复且不自动重放高风险操作。
 
-验收证据：23 Skills discovery 精确匹配；19 个扩展 Skill 均通过终止型 Tool E2E 合约评测；伪造 evidence、核心 Skill 绕过、禁用 Team Skill、过期 CAS、无 Admin Key、Stage timeout/recovery、SQLite reopen 均有失败关闭测试。Playwright 已验证 19 个 Web 选项、模式切换无脚本错误，并以 fake Pi 完成 Web → proxy → 202 polling → AdvisoryArtifact 展示 E2E。
+验收证据：20 个已发布 Skills discovery 精确匹配；16 个扩展 Skill 均通过终止型 Tool E2E 合约评测；伪造 evidence、核心 Skill 绕过、禁用 Team Skill、过期 CAS、无 Admin Key、Stage timeout/recovery、SQLite reopen 均有失败关闭测试。Playwright 已验证 16 个 Web 选项、模式切换无脚本错误，并以 fake Pi 完成 Web → proxy → 202 polling → AdvisoryArtifact 展示 E2E。
 
 最终自动化验收（2026-08-21）：
 
@@ -1017,7 +1017,7 @@ Phase 4.5 实施结果：
 - Web：Playwright 模式切换与 Advisory 完整轮询展示 E2E 通过，浏览器 `pageerror=[]`。
 - QueryRun 崩溃恢复：process owner + execution lease 已完成；启动仅回收过期 lease 并标记失败，未过期其他 worker 不受影响，SQL 从不自动重放。
 - 非阻断遗留：Node 当前仍打印 `node:sqlite ExperimentalWarning`；FastAPI `on_event` 与飞书 SDK 存在上游 deprecation warning。均不改变状态、安全或验收结果，后续依赖升级时迁移。
-- 自动化范围外只剩人工外部验收：真实飞书/钉钉应用凭证的消息收发、真实业务用户对 19 个扩展 Skill 的主观方法质量，以及管理员在正式 UI/网络环境中的 Registry Studio 操作体验。
+- 自动化范围外只剩人工外部验收：真实飞书/钉钉应用凭证的消息收发、真实业务用户对 16 个扩展 Skill 的主观方法质量，以及管理员在正式 UI/网络环境中的 Registry Studio 操作体验。
 
 ## 8. 测试策略
 
