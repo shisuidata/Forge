@@ -28,6 +28,7 @@ else:
 from forge.readiness import readiness_payload
 from web.router import chat_router, router as admin_router
 from web.auth import _LoginRedirect
+from web.feishu_runtime import feishu_runtime
 
 # ── 日志配置（可通过 forge.yaml 或环境变量调整）──────────────────────────────
 _log_handlers: list[logging.Handler] = [logging.StreamHandler()]
@@ -68,6 +69,12 @@ async def _startup_checks():
             )
     except Exception as exc:
         logger.warning("QueryRun execution reconciliation unavailable: %s", type(exc).__name__)
+
+    feishu_status = feishu_runtime.reload()
+    if feishu_status.enabled and not feishu_status.process_running:
+        logger.warning("Feishu Runtime unavailable: %s", feishu_status.last_error or "unknown")
+    elif feishu_status.process_running:
+        logger.info("Feishu Pi WebSocket Runtime started")
 
     # ── #9 默认密码安全警告 ──
     if cfg.AUTH_ENABLED and cfg.AUTH_ADMIN_PASSWORD in ("123456", ""):
@@ -111,6 +118,11 @@ async def _startup_checks():
         logger.info("  %-12s %s", name, status)
 
 
+@app.on_event("shutdown")
+async def _shutdown_managed_runtimes():
+    feishu_runtime.stop()
+
+
 # Chat + API 路由挂载到根级别（/chat, /api/*）
 app.include_router(chat_router)
 # Admin 管理后台路由保持 /admin 前缀
@@ -136,6 +148,12 @@ app.mount("/charts", StaticFiles(directory=str(_charts_dir)), name="charts")
 
 @app.post("/webhook/feishu")
 async def feishu_webhook(request: Request) -> Response:
+    if feishu_runtime.status().enabled:
+        return Response(
+            content='{"status":"disabled","reason":"managed_websocket_runtime_enabled"}',
+            media_type="application/json",
+            status_code=409,
+        )
     body = await request.body()
     headers = dict(request.headers)
     resp = dispatcher.dispatch(

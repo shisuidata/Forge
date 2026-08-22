@@ -21,8 +21,9 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# 优先加载 .env（环境变量级别最高）
-load_dotenv()
+# 优先加载 .env（环境变量级别最高）；受限 Channel Runtime 明确禁用整份 .env 注入。
+if os.getenv("FORGE_DISABLE_DOTENV") != "true":
+    load_dotenv()
 
 
 def _load_yaml_cfg() -> dict:

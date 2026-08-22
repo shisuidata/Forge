@@ -295,9 +295,23 @@
   {# ══════════════════════════════════════════════════════════════════════════ #}
   <div class="border border-gray-200 rounded-lg mb-6">
     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-      <h3 class="text-sm font-semibold text-gray-900">飞书机器人</h3>
-      <p class="text-xs text-gray-500 mt-0.5">飞书 Bot 的应用凭证，用于接收和回复飞书消息。</p>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-900">飞书机器人</h3>
+          <p class="text-xs text-gray-500 mt-0.5">保存时验证凭证并热启动 Pi WebSocket 长连接，无需手工重启。</p>
+        </div>
+        <span class="rounded-full px-2.5 py-1 text-[11px] font-medium {% if feishu_status.process_running %}bg-green-100 text-green-700{% else %}bg-amber-100 text-amber-700{% endif %}">
+          {% if feishu_status.process_running %}长连接运行中{% else %}尚未运行{% endif %}
+        </span>
+      </div>
     </div>
+    <div class="grid grid-cols-2 gap-3 border-b border-gray-100 px-6 py-4 text-xs sm:grid-cols-4">
+      <div><p class="text-gray-400">应用凭证</p><p class="mt-1 font-medium {% if feishu_status.credentials_configured %}text-green-700{% else %}text-amber-700{% endif %}">{% if feishu_status.credentials_configured %}已配置{% else %}未配置{% endif %}</p></div>
+      <div><p class="text-gray-400">Pi 通道</p><p class="mt-1 font-medium {% if pi_channel_status.available and pi_channel_status.ingress_configured %}text-green-700{% else %}text-amber-700{% endif %}">{% if pi_channel_status.available and pi_channel_status.ingress_configured %}已就绪{% else %}未就绪{% endif %}</p></div>
+      <div><p class="text-gray-400">已授权身份</p><p class="mt-1 font-medium text-gray-700">{{ pi_channel_status.identity_count if pi_channel_status.available else '—' }}</p></div>
+      <div><p class="text-gray-400">首次绑定</p><p class="mt-1 font-medium {% if pi_channel_status.auto_binding_pending %}text-blue-700{% else %}text-gray-700{% endif %}">{% if pi_channel_status.auto_binding_pending %}等待首位用户消息{% elif pi_channel_status.available %}已关闭{% else %}—{% endif %}</p></div>
+    </div>
+    {% if feishu_status.last_error %}<div class="mx-6 mt-4 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ feishu_status.last_error }}</div>{% endif %}
     <form method="post" action="/admin/settings/feishu" class="px-6 py-5 space-y-4">
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -309,22 +323,22 @@
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1.5">App Secret</label>
           <input name="app_secret" type="password"
-                 value="{{ mask_secret(y.get('feishu', {}).get('app_secret', '')) }}"
+                 value="{{ mask_secret(y.get('feishu', {}).get('app_secret', '')) if y.get('feishu', {}).get('app_secret') else '' }}"
                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
         </div>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1.5">Verification Token</label>
-          <input name="verification_token" type="text"
-                 value="{{ y.get('feishu', {}).get('verification_token', '') }}"
+          <input name="verification_token" type="password"
+                 value="{{ mask_secret(y.get('feishu', {}).get('verification_token', '')) if y.get('feishu', {}).get('verification_token') else '' }}"
                  placeholder="HTTP 模式用，长连接可留空"
                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-700 mb-1.5">Encrypt Key</label>
-          <input name="encrypt_key" type="text"
-                 value="{{ y.get('feishu', {}).get('encrypt_key', '') }}"
+          <input name="encrypt_key" type="password"
+                 value="{{ mask_secret(y.get('feishu', {}).get('encrypt_key', '')) if y.get('feishu', {}).get('encrypt_key') else '' }}"
                  placeholder="不加密留空"
                  class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
         </div>
@@ -332,7 +346,7 @@
       <div class="flex justify-end pt-2 border-t border-gray-100">
         <button type="submit"
                 class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
-          保存飞书配置
+          验证、保存并启动
         </button>
       </div>
     </form>

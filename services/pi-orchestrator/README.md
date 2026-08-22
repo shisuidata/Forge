@@ -65,6 +65,8 @@ POST /v1/tasks/{task_run_id}/render-report
 | `PI_ORCHESTRATOR_STATE_DB` | `<agentDir>/state/orchestrator.sqlite3` | Task/Event/Artifact/StageAttempt/ChannelEvent SQLite 真相源；生产环境挂载持久卷 |
 | `PI_CHANNEL_IDENTITY_MAP` | `<agentDir>/channel-identities.json` | 飞书/钉钉外部用户到组织身份的只读映射；修改后重启加载 |
 | `PI_CHANNEL_SERVICE_KEYS` | 空 | Channel Adapter 调用 `/v1/channel-events` 的服务端密钥列表 |
+| `PI_CHANNEL_AUTO_BIND_FIRST_FEISHU` | `false` | 个人部署的一次性首用户绑定；仅首个通过 Adapter 鉴权的飞书 message 可原子写入 Identity Map |
+| `PI_CHANNEL_BOOTSTRAP_ORG_ID` / `TEAM_ID` / `USER_ID` | `org_default` / `team_default` / `feishu_owner` | 一次性绑定使用的组织身份；绑定后未知用户继续失败关闭 |
 | `PI_ADMIN_SERVICE_KEYS` | 空 | 组织管理员配置 Team Skill Policy 的服务端密钥列表；未配置时管理 API 失败关闭 |
 | `PI_STAGE_TIMEOUT_MS` | `240000` | 单个模型或 Forge Stage 的执行超时 |
 | `PI_STAGE_LEASE_MS` | `300000` | StageAttempt lease；必须大于 Stage timeout |
@@ -100,4 +102,4 @@ Forge Web 可在设置 `PI_ORCHESTRATOR_ENABLED=true` 后访问 `/tasks`，审�
 
 复制 `channel-identities.example.json` 到 `PI_CHANNEL_IDENTITY_MAP` 指定位置，并为 Bot 单独注入与 `PI_CHANNEL_SERVICE_KEYS` 匹配的 `PI_CHANNEL_SERVICE_KEY`。`POST /v1/channel-events` 必须携带 `X-Channel-Service-Key`；未知飞书 `open_id` 或钉钉 `user_id` 会失败关闭。`(channel,event_id)` 在 SQLite 中唯一，平台重试不会创建第二个 TaskRun 或重复批准。
 
-飞书迁移由 `FEISHU_PI_ENABLED=true` 开启。HTTP webhook 会加载无 Forge 执行层依赖的 `web/feishu_pi.py`；WebSocket 模式应运行 `python -m web.feishu_pi`。新消息和新 Pi 卡片只走 ChannelEvent → Pi Task API，旧卡片会提示失效。关闭开关可回滚旧 Bot；两条路径不能同时消费同一飞书应用事件。
+飞书迁移由 `FEISHU_PI_ENABLED=true` 开启。设置页保存 App 凭证时会先调用飞书官方接口验证，再由受管 Runtime 热启动 `python -m web.feishu_pi` WebSocket 进程；无需重启 API。新消息和新 Pi 卡片只走 ChannelEvent → Pi Task API，旧卡片会提示失效。HTTP webhook 与 WebSocket 不能同时消费同一应用事件。个人部署可显式开启一次性首用户绑定；它只在飞书 Identity Map 为空、Adapter Service Key 已通过且收到 message 时生效一次，不是 wildcard 授权。

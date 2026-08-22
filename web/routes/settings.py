@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+import httpx
 import yaml
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from config import cfg
+from web.feishu_runtime import feishu_runtime
 from agent.model_config import (
     LLMConfigurationError,
     LLMNotConfiguredError,
@@ -106,6 +108,39 @@ def _mask_secret(value: str, visible: int = 4) -> str:
     return "*" * (len(value) - visible) + value[-visible:]
 
 
+async def _get_pi_channel_status() -> dict[str, Any]:
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return {"available": False, "error": "Pi Runtime 未启用"}
+    try:
+        async with httpx.AsyncClient(timeout=2) as client:
+            response = await client.get(f"{cfg.PI_ORCHESTRATOR_URL}/health/readiness")
+        response.raise_for_status()
+        capabilities = response.json().get("capabilities", {})
+        return {
+            "available": True,
+            "ingress_configured": bool(capabilities.get("channelIngressConfigured")),
+            "identity_count": int(capabilities.get("authorizedChannelIdentities") or 0),
+            "auto_binding_pending": bool(capabilities.get("feishuAutoBindingPending")),
+        }
+    except (httpx.HTTPError, ValueError, TypeError):
+        return {"available": False, "error": "Pi Channel 状态不可用"}
+
+
+async def _validate_feishu_credentials(app_id: str, app_secret: str) -> tuple[bool, str]:
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json={"app_id": app_id, "app_secret": app_secret},
+            )
+        payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        return False, "无法连接飞书验证应用凭证"
+    if response.status_code != 200 or payload.get("code") != 0:
+        return False, str(payload.get("msg") or "飞书应用凭证无效")[:200]
+    return True, ""
+
+
 def _mask_db_url(url: str) -> str:
     if not url:
         return "(not set)"
@@ -135,6 +170,7 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
         }
     except (LLMNotConfiguredError, LLMConfigurationError) as exc:
         model_status = {"configured": False, "error": str(exc)}
+    pi_channel_status = await _get_pi_channel_status()
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -155,6 +191,8 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
                 os.getenv(name)
                 for name in ("LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL")
             ),
+            "feishu_status": feishu_runtime.status(),
+            "pi_channel_status": pi_channel_status,
             "database_status": {
                 "configured": bool(cfg.DATABASE_URL),
                 "masked_url": _mask_db_url(cfg.DATABASE_URL),
@@ -433,12 +471,41 @@ async def settings_save_feishu(
 ):
     y = _load_forge_yaml()
     y.setdefault("feishu", {})
+    existing_secret = str(y["feishu"].get("app_secret") or "")
+    existing_verification = str(y["feishu"].get("verification_token") or "")
+    existing_encrypt_key = str(y["feishu"].get("encrypt_key") or "")
+    candidate_secret = app_secret if app_secret and not app_secret.startswith("*") else existing_secret
+    candidate_verification = (
+        verification_token
+        if verification_token and not verification_token.startswith("*")
+        else existing_verification
+    )
+    candidate_encrypt_key = (
+        encrypt_key if encrypt_key and not encrypt_key.startswith("*") else existing_encrypt_key
+    )
+    if not app_id or not candidate_secret:
+        return RedirectResponse(
+            url="/admin/settings?error=" + quote("请填写飞书 App ID 和 App Secret"),
+            status_code=303,
+        )
+    valid, validation_error = await _validate_feishu_credentials(app_id, candidate_secret)
+    if not valid:
+        return RedirectResponse(
+            url="/admin/settings?error=" + quote(validation_error),
+            status_code=303,
+        )
     y["feishu"]["app_id"] = app_id
-    if app_secret and not app_secret.startswith("*"):
-        y["feishu"]["app_secret"] = app_secret
-    y["feishu"]["verification_token"] = verification_token
-    y["feishu"]["encrypt_key"] = encrypt_key
+    y["feishu"]["app_secret"] = candidate_secret
+    y["feishu"]["verification_token"] = candidate_verification
+    y["feishu"]["encrypt_key"] = candidate_encrypt_key
+    y["feishu"]["pi_enabled"] = True
     _save_forge_yaml(y)
+    runtime_status = feishu_runtime.reload()
+    if not runtime_status.process_running:
+        return RedirectResponse(
+            url="/admin/settings?error=" + quote(runtime_status.last_error or "飞书 Runtime 启动失败"),
+            status_code=303,
+        )
     return RedirectResponse(url="/admin/settings?saved=feishu", status_code=303)
 
 
