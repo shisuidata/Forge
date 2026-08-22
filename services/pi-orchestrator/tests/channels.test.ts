@@ -67,6 +67,8 @@ test("channel renderer emits a hash-bound review action without advancing state"
     assurance_report_hash: `sha256:${"b".repeat(64)}`,
   });
   assert.equal(presentation.actions[0]?.type, "approve_query");
+  assert.deepEqual(presentation.fields, []);
+  assert.doesNotMatch(presentation.markdown, /QueryRun|sha256/);
 });
 
 test("channel renderer exposes clarification, cancellation, and supplement actions", () => {
@@ -196,10 +198,43 @@ test("channel knowledge answer is bound to Forge context evidence without a Quer
   assert.equal(result.task.status, "completed");
   assert.equal(result.task.intent, "knowledge_answer");
   assert.equal(result.presentation.kind, "report");
-  assert.match(result.presentation.markdown, /ctx_/);
+  assert.match(result.presentation.markdown, /orders\.total_amount/);
+  assert.doesNotMatch(result.presentation.markdown, /ctx_/);
   assert.deepEqual(suppliedEvidence, contextEvidence);
   assert.equal(queryCalls, 0);
   state.close();
+});
+
+test("channel renderer hides reasoning, internal lineage, raw errors, and stage names", () => {
+  const failed = renderChannelPresentation({
+    task: task("failed"),
+    events: [event(1, "skill.execution_failed", {
+      error: `Traceback (most recent call last): /home/forge TaskRun tr_${"a".repeat(24)}`,
+    })],
+    artifacts: [],
+  });
+  assert.equal(failed.markdown, "本次处理未能完成，请稍后重试或重新发起。");
+  assert.deepEqual(failed.fields, []);
+
+  const progressTask = { ...task("analyzing"), current_stage: "skill:business-root-cause-analysis" };
+  const progress = renderChannelPresentation({ task: progressTask, events: [], artifacts: [] });
+  assert.equal(progress.markdown, "正在基于查询结果进行分析。");
+  assert.doesNotMatch(JSON.stringify({ markdown: progress.markdown, fields: progress.fields }), /current_stage|business-root|analyzing/);
+
+  const report = renderChannelPresentation({
+    task: task("completed"),
+    events: [],
+    artifacts: [{
+      artifact_id: "art_report", task_run_id: "tr_channel_001", artifact_type: "rendered_output",
+      schema_version: "1.0.0", producer: "data-analysis-report-writer",
+      created_at: "2026-08-21T00:00:00.000Z",
+      payload: {
+        title: "业务报告",
+        markdown: `<think>internal reasoning</think>\n业务结论正常。\nTaskRun tr_${"b".repeat(24)}`,
+      },
+    } as unknown as Artifact],
+  });
+  assert.equal(report.markdown, "业务结论正常。");
 });
 
 test("identity resolver fails closed for unknown channel users", async () => {
