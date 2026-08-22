@@ -18,9 +18,9 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v4"
-POLICY_REVISION = "convention-policy-v3"
-INTENT_CONTRACT_REVISION = "intent-fulfillment-v2"
+ASSURANCE_REVISION = "query-assurance-v5"
+POLICY_REVISION = "convention-policy-v4"
+INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 
 
 @dataclass(frozen=True)
@@ -193,20 +193,22 @@ def _validate_intent_fulfillment(query: dict, question: str) -> None:
     if cumulative_over_rows and "sum" not in window_fns:
         raise ValueError("意图完整性校验失败：用户要求按行累计值，必须生成 SUM 窗口结果。")
 
-    asks_visible_rank = (
-        "显示" in q and "排名" in q
-        or "及排名" in q
-        or re.search(r"(?:各|每个).{0,12}(?:内|中).{0,20}(?:前\s*\d+|第\s*1)", q)
+    requests_rank_output = bool(
+        re.search(r"(?:显示|输出|列出).{0,20}(?:排名|名次)|(?:及|和)(?:排名|名次)|(?:排名|名次)列", q)
+    )
+    requires_group_rank = bool(
+        re.search(r"(?:各|每个).{0,12}(?:内|中).{0,20}(?:前\s*\d+|第\s*1)", q)
+        or re.search(r"排名第\s*1", q)
     )
     ranking_fns = {"row_number", "rank", "dense_rank"}
-    if asks_visible_rank:
+    if requests_rank_output or requires_group_rank:
         rank_aliases = {
             str(item.get("as")) for item in windows
             if item.get("fn") in ranking_fns and item.get("as")
         }
         if not rank_aliases:
             raise ValueError("意图完整性校验失败：分组排名必须生成排名窗口。")
-        if ("显示" in q and "排名" in q or "及排名" in q) and not (rank_aliases & final_outputs):
+        if requests_rank_output and not (rank_aliases & final_outputs):
             raise ValueError("意图完整性校验失败：用户要求显示排名，最终 SELECT 必须输出排名列。")
         if re.search(r"(?:各|每个).{0,12}(?:内|中).{0,20}前\s*\d+", q) and not query.get("qualify"):
             raise ValueError("意图完整性校验失败：每组 TopN 必须使用 qualify 过滤排名。")

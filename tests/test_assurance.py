@@ -229,6 +229,28 @@ def test_assurance_rejects_omitted_explicit_user_intent(
     assert caught.value.report.gates[-1].gate == "intent_fulfillment"
 
 
+def test_assurance_allows_group_rank_used_only_for_filter(assurance_registry):
+    report = assure_query(
+        {
+            "scan": "orders",
+            "window": [
+                {
+                    "fn": "row_number",
+                    "partition": ["orders.user_id"],
+                    "order": [{"col": "orders.total_amount", "dir": "desc"}],
+                    "as": "rn",
+                }
+            ],
+            "qualify": [{"col": "rn", "op": "eq", "val": 1}],
+            "select": ["orders.user_id", "orders.total_amount"],
+        },
+        "各用户内按金额排名第1，显示用户ID和金额",
+        dialect="sqlite",
+    )
+
+    assert report.status == "passed"
+
+
 def test_assurance_allows_aggregate_cumulative_spend_without_window(assurance_registry):
     report = assure_query(
         {

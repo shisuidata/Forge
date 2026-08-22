@@ -29,6 +29,7 @@ def test_tool_schema_keeps_physical_enums_and_allows_declared_cte_references():
     serialized = json.dumps(schema, ensure_ascii=False)
     assert "Alias or CTE output reference" in serialized
     assert "aggregate CTE followed by window + qualify" in serialized
+    assert schema["properties"]["distinct"]["type"] == "boolean"
 
 
 def test_cte_schema_no_longer_contradicts_aggregate_per_group_topn():
