@@ -39,6 +39,7 @@ class ModelConfigSnapshot:
     revision: str
     source: str
     max_output_tokens: int = 8192
+    temperature: float = 0.0
 
 
 _lock = threading.RLock()
@@ -137,6 +138,7 @@ def get_revision_model_config(
         timeout_seconds=float(config.get("timeout_seconds", 120)),
         revision=revision_id,
         max_output_tokens=int(config.get("max_output_tokens", 8192)),
+        temperature=float(config.get("temperature", 0.0)),
         source="model-control-validation",
     )
 
@@ -159,6 +161,7 @@ def get_model_config() -> ModelConfigSnapshot:
             "LLM_TOOL_CHOICE",
             "LLM_TIMEOUT_SECONDS",
             "LLM_MAX_OUTPUT_TOKENS",
+            "LLM_TEMPERATURE",
         )
     )
     control_path = model_control_db_path()
@@ -187,6 +190,7 @@ def get_model_config() -> ModelConfigSnapshot:
                 timeout_seconds=float(config.get("timeout_seconds", 120)),
                 revision=active.revision_id,
                 max_output_tokens=int(config.get("max_output_tokens", 8192)),
+                temperature=float(config.get("temperature", 0.0)),
                 source=f"model-control:{active.scope}:v{active.binding_version}",
             )
             _cached_signature = signature
@@ -201,6 +205,7 @@ def get_model_config() -> ModelConfigSnapshot:
         tool_choice = _value("LLM_TOOL_CHOICE", body, "tool_choice", "auto").strip().lower()
         timeout_raw = _value("LLM_TIMEOUT_SECONDS", body, "timeout_seconds", "120")
         max_output_raw = _value("LLM_MAX_OUTPUT_TOKENS", body, "max_output_tokens", "8192")
+        temperature_raw = _value("LLM_TEMPERATURE", body, "temperature", "0")
 
         if not provider and not model and not api_key:
             raise LLMNotConfiguredError("尚未配置 LLM")
@@ -214,8 +219,11 @@ def get_model_config() -> ModelConfigSnapshot:
         try:
             timeout_seconds = max(1.0, float(timeout_raw))
             max_output_tokens = max(256, int(max_output_raw))
+            temperature = float(temperature_raw)
+            if not 0.0 <= temperature <= 2.0:
+                raise ValueError("temperature out of range")
         except (TypeError, ValueError) as exc:
-            raise LLMConfigurationError("LLM timeout/max_output_tokens 配置必须是数字") from exc
+            raise LLMConfigurationError("LLM timeout/max_output_tokens/temperature 配置必须是有效数字") from exc
 
         source = "environment" if any(env_signature[:4]) else "forge.yaml"
         revision_input = json.dumps(
@@ -226,6 +234,7 @@ def get_model_config() -> ModelConfigSnapshot:
                 "tool_choice": tool_choice,
                 "timeout_seconds": timeout_seconds,
                 "max_output_tokens": max_output_tokens,
+                "temperature": temperature,
                 "key_fingerprint": hashlib.sha256(api_key.encode()).hexdigest(),
             },
             sort_keys=True,
@@ -240,6 +249,7 @@ def get_model_config() -> ModelConfigSnapshot:
             revision="sha256:" + hashlib.sha256(revision_input.encode()).hexdigest(),
             source=source,
             max_output_tokens=max_output_tokens,
+            temperature=temperature,
         )
         _cached_signature = signature
         _cached_snapshot = snapshot
