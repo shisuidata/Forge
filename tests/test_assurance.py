@@ -229,6 +229,38 @@ def test_assurance_rejects_omitted_explicit_user_intent(
     assert caught.value.report.gates[-1].gate == "intent_fulfillment"
 
 
+def test_assurance_allows_aggregate_cumulative_spend_without_window(assurance_registry):
+    report = assure_query(
+        {
+            "scan": "orders",
+            "group": ["orders.user_id"],
+            "agg": [{"fn": "sum", "col": "orders.total_amount", "as": "total_spent"}],
+            "having": [{"col": "total_spent", "op": "gt", "val": 5000}],
+            "select": ["orders.user_id", "total_spent"],
+        },
+        "找出累计消费超过5000元的用户，显示用户ID和消费总额",
+        dialect="sqlite",
+    )
+
+    assert report.status == "passed"
+
+
+def test_assurance_rejects_missing_explicit_display_field(assurance_registry):
+    with pytest.raises(QueryAssuranceError, match="用户名") as caught:
+        assure_query(
+            {
+                "scan": "orders",
+                "group": ["orders.user_id"],
+                "agg": [{"fn": "count", "col": "orders.id", "as": "order_count"}],
+                "select": ["orders.user_id", "order_count"],
+            },
+            "显示用户名和订单数",
+            dialect="sqlite",
+        )
+
+    assert caught.value.report.gates[-1].gate == "intent_fulfillment"
+
+
 def test_assurance_enforces_table_acl_server_side(assurance_registry):
     with pytest.raises(QueryAssuranceError, match="未授权或不存在"):
         assure_query(

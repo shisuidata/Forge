@@ -1279,6 +1279,45 @@ def test_lint_does_not_hide_unfiltered_rank_output():
     assert not any("内部字段" in warning for warning in warnings)
 
 
+def test_lint_hides_unrequested_dimension_id_when_name_is_displayed():
+    warnings = lint_conventions(
+        {
+            "scan": "dim_product",
+            "select": ["dim_product.product_id", "dim_product.product_name"],
+        },
+        "找出销售额最高的前10个商品",
+    )
+
+    assert any("product_id" in warning and "内部 ID" in warning for warning in warnings)
+
+
+def test_lint_monthly_orders_default_to_order_date():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_order_detail",
+            "group": [{"expr": "STRFTIME('%Y-%m', dwd_order_detail.complete_dt)", "as": "month"}],
+            "select": ["month"],
+        },
+        "每个渠道按月统计已完成订单量",
+    )
+
+    assert any("order_dt" in warning and "complete_dt" in warning for warning in warnings)
+
+
+def test_lint_rate_threshold_uses_unrounded_ratio():
+    warnings = lint_conventions(
+        {
+            "scan": "stats",
+            "select": [
+                {"expr": "ROUND(refunds * 1.0 / orders, 4)", "as": "refund_rate"}
+            ],
+        },
+        "找出退款率超过15%的品类",
+    )
+
+    assert any("阈值" in warning and "ROUND" in warning for warning in warnings)
+
+
 def test_lint_category_topn_share_rejects_denominator_grouped_by_category_id():
     warnings = lint_conventions(
         {
