@@ -8,6 +8,7 @@ from agent.model_control import (
     ModelBindingConflictError,
     ModelControlError,
     ModelControlStore,
+    MODEL_STAGE_SCOPES,
 )
 from agent.model_config import get_model_config, reset_model_config_cache
 
@@ -28,7 +29,7 @@ def _config(model: str = "model-a", secret_ref: str = "env:MODEL_TEST_KEY") -> d
         "tool_choice": "required",
         "timeout_seconds": 30,
         "secret_ref": secret_ref,
-        "capabilities": {"tool_calling": True},
+        "capabilities": {"tool_calling": True, "pi_provider_id": "openai"},
     }
 
 
@@ -126,6 +127,35 @@ def test_smoke_only_revision_cannot_bypass_quality_gate(tmp_path):
         )
 
 
+def test_noncritical_stage_uses_capability_gate_but_sql_stages_require_quality(tmp_path):
+    store = ModelControlStore(tmp_path / "models.db")
+    revision = store.create_revision(profile_id="analysis-model", name="Analysis", config=_config("analysis-model"))
+    store.record_validation(
+        revision, passed=True,
+        report={
+            "tool_calling": True, "structured_output": True,
+            "capability_gate": {"passed": True},
+            "quality_gate": {"passed": False, "status": "not_run"},
+        },
+    )
+    assert store.activate(
+        revision, expected_version=0, actor="admin", current_lineage=LINEAGE,
+        scope=MODEL_STAGE_SCOPES["analysis"],
+    ) == 1
+    assert store.get_active(MODEL_STAGE_SCOPES["analysis"]).revision_id == revision
+    with pytest.raises(ModelControlError, match="SQL Critical"):
+        store.activate(
+            revision, expected_version=0, actor="admin", current_lineage=LINEAGE,
+            scope=MODEL_STAGE_SCOPES["metric_definition"],
+        )
+
+
+def test_unknown_stage_scope_fails_closed(tmp_path):
+    store = ModelControlStore(tmp_path / "models.db")
+    with pytest.raises(ModelControlError, match="scope"):
+        store.get_active("pi.unknown")
+
+
 def test_rollback_is_versioned_and_audited(tmp_path):
     store = ModelControlStore(tmp_path / "models.db")
     first = _validated_revision(store, "model-a")
@@ -167,6 +197,31 @@ def test_active_binding_hot_loads_secret_without_yaml_or_restart(tmp_path, monke
     assert snapshot.source == "model-control:forge.query_planning:v1"
     assert snapshot.temperature == 0.0
     assert snapshot.max_output_tokens == 8192
+
+
+def test_python_runtime_resolves_stage_binding_with_query_fallback(tmp_path, monkeypatch):
+    path = tmp_path / "models.db"
+    store = ModelControlStore(path)
+    query = _validated_revision(store, "query-model")
+    analysis = store.create_revision(
+        profile_id="analysis-model", name="Analysis Model", config=_config("analysis-model")
+    )
+    store.record_validation(
+        analysis, passed=True,
+        report={"tool_calling": True, "structured_output": True,
+                "capability_gate": {"passed": True},
+                "quality_gate": {"passed": False}},
+    )
+    store.activate(query, expected_version=0, actor="admin", current_lineage=LINEAGE)
+    store.activate(
+        analysis, expected_version=0, actor="admin", current_lineage=LINEAGE,
+        scope=MODEL_STAGE_SCOPES["analysis"],
+    )
+    monkeypatch.setenv("MODEL_CONTROL_DB_PATH", str(path))
+    monkeypatch.setenv("MODEL_TEST_KEY", "actual-secret")
+    reset_model_config_cache()
+    assert get_model_config("analysis").model == "analysis-model"
+    assert get_model_config("report").model == "query-model"
 
 
 def test_new_binding_hot_loads_without_manual_cache_reset(tmp_path, monkeypatch):

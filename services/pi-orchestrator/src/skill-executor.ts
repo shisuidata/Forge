@@ -10,6 +10,7 @@ import {
 
 import type { Artifact } from "./artifacts.js";
 import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
+import { resolveStageModelBinding, skillModelStage } from "./model-bindings.js";
 import {
   EVIDENCE_REQUIRED_SKILL_NAMES,
   loadStageSkillResources,
@@ -420,14 +421,23 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     tool: ToolDefinition;
     expectedModelRevision?: string | null;
   }): Promise<StageSession> {
-    const provider = this.#config.piModelProvider;
-    const modelId = this.#config.piModelId;
+    const stageBinding = resolveStageModelBinding(this.#config, skillModelStage(options.skillName));
+    const provider = stageBinding?.provider ?? this.#config.piModelProvider;
+    const modelId = stageBinding?.modelId ?? this.#config.piModelId;
     if (provider === undefined || modelId === undefined) {
       throw new SkillExecutionError(
         "Pi model execution is not configured; set PI_MODEL_PROVIDER and PI_MODEL_ID",
       );
     }
-    const runtime = await this.#getRuntime(options.expectedModelRevision);
+    if (
+      stageBinding !== undefined && options.expectedModelRevision !== undefined &&
+      options.expectedModelRevision !== stageBinding.revisionId
+    ) {
+      throw new SkillExecutionError("Stage model binding changed before session creation");
+    }
+    const runtime = await this.#getRuntime(
+      stageBinding === undefined ? options.expectedModelRevision : undefined,
+    );
     const model = runtime.getModel(provider, modelId);
     if (model === undefined) {
       throw new SkillExecutionError(`Configured Pi model not found: ${provider}/${modelId}`);

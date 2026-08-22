@@ -11,7 +11,21 @@ import threading
 from typing import Any
 import uuid
 
-MODEL_SCOPE_QUERY_PLANNING = "forge.query_planning"
+MODEL_SCOPE_QUERY_PLANNING = "forge.query_planning"  # compatibility alias for query_generation
+MODEL_STAGE_SCOPES = {
+    "intent_router": "pi.intent_router",
+    "clarification": "pi.clarification",
+    "metric_definition": "pi.metric_definition",
+    "query_generation": MODEL_SCOPE_QUERY_PLANNING,
+    "query_repair": "forge.query_repair",
+    "knowledge_answer": "pi.knowledge_answer",
+    "analysis": "pi.analysis",
+    "report": "pi.report",
+    "memory_extraction": "pi.memory_extraction",
+}
+MODEL_SCOPE_TO_STAGE = {scope: stage for stage, scope in MODEL_STAGE_SCOPES.items()}
+SQL_CRITICAL_MODEL_STAGES = {"metric_definition", "query_generation", "query_repair"}
+SQL_CRITICAL_MODEL_SCOPES = {MODEL_STAGE_SCOPES[stage] for stage in SQL_CRITICAL_MODEL_STAGES}
 _ALLOWED_PROVIDERS = {"openai", "anthropic"}
 _ALLOWED_PROTOCOLS = {"openai_chat", "anthropic_messages"}
 _ALLOWED_TOOL_CHOICES = {"auto", "required", "named"}
@@ -172,6 +186,19 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def model_scope_for_stage(stage: str) -> str:
+    try:
+        return MODEL_STAGE_SCOPES[stage]
+    except KeyError as exc:
+        raise ModelControlError("Model Stage 不受支持。") from exc
+
+
+def validate_model_scope(scope: str) -> str:
+    if scope not in MODEL_SCOPE_TO_STAGE:
+        raise ModelControlError("Model Binding scope 不受支持。")
+    return scope
+
+
 class ModelControlStore:
     def __init__(self, path: str | Path):
         self.path = Path(path).expanduser().resolve()
@@ -254,6 +281,7 @@ class ModelControlStore:
             raise ModelControlError("Active Model Profile Revision 不允许重新验证。")
 
     def get_active(self, scope: str = MODEL_SCOPE_QUERY_PLANNING) -> ActiveModelRevision | None:
+        validate_model_scope(scope)
         with _connect(self.path) as db:
             row = db.execute(
                 "SELECT b.scope,b.binding_version,r.* FROM active_model_bindings b "
@@ -271,6 +299,14 @@ class ModelControlStore:
             validation_report=json.loads(row["validation_report_json"]),
         )
 
+    def list_active(self) -> dict[str, ActiveModelRevision]:
+        result: dict[str, ActiveModelRevision] = {}
+        for stage, scope in MODEL_STAGE_SCOPES.items():
+            active = self.get_active(scope)
+            if active is not None:
+                result[stage] = active
+        return result
+
     def activate(
         self,
         revision_id: str,
@@ -281,10 +317,11 @@ class ModelControlStore:
         scope: str = MODEL_SCOPE_QUERY_PLANNING,
         action: str = "activate",
     ) -> int:
+        validate_model_scope(scope)
         with _connect(self.path) as db:
             db.execute("BEGIN IMMEDIATE")
             revision = db.execute(
-                "SELECT validation_status FROM model_profile_revisions WHERE revision_id=?",
+                "SELECT validation_status,config_json FROM model_profile_revisions WHERE revision_id=?",
                 (revision_id,),
             ).fetchone()
             if revision is None:
@@ -295,11 +332,16 @@ class ModelControlStore:
                 "SELECT validation_report_json FROM model_profile_revisions WHERE revision_id=?",
                 (revision_id,),
             ).fetchone()["validation_report_json"])
-            quality_gate = validation_report.get("quality_gate", {})
-            if quality_gate.get("passed") is not True:
-                raise ModelControlError("Model Profile Revision 尚未通过质量与性能门禁。")
-            if quality_gate.get("lineage") != current_lineage:
-                raise ModelControlError("Model Profile Revision 的 Registry 或 Assurance lineage 已过期。")
+            if scope in SQL_CRITICAL_MODEL_SCOPES:
+                quality_gate = validation_report.get("quality_gate", {})
+                if quality_gate.get("passed") is not True:
+                    raise ModelControlError("SQL Critical Model Revision 尚未通过完整质量与性能门禁。")
+                if quality_gate.get("lineage") != current_lineage:
+                    raise ModelControlError("SQL Critical Model Revision 的 Registry 或 Assurance lineage 已过期。")
+            else:
+                capability_gate = validation_report.get("capability_gate", {})
+                if capability_gate.get("passed") is not True:
+                    raise ModelControlError("Stage Model Revision 尚未通过协议、Tool、Artifact 与内容安全门禁。")
             validation_running = db.execute(
                 "SELECT 1 FROM model_quality_validation_runs "
                 "WHERE revision_id=? AND status IN ('queued','running')",
@@ -340,6 +382,7 @@ class ModelControlStore:
         current_lineage: dict[str, str],
         scope: str = MODEL_SCOPE_QUERY_PLANNING,
     ) -> int:
+        validate_model_scope(scope)
         with _connect(self.path) as db:
             current = db.execute(
                 "SELECT previous_revision_id,binding_version FROM active_model_bindings WHERE scope=?",

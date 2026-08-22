@@ -17,7 +17,12 @@ from typing import Any
 
 import yaml
 
-from agent.model_control import MODEL_SCOPE_QUERY_PLANNING, ModelControlStore
+from agent.model_control import (
+    MODEL_SCOPE_QUERY_PLANNING,
+    ModelControlStore,
+    SQL_CRITICAL_MODEL_SCOPES,
+    model_scope_for_stage,
+)
 
 
 class LLMNotConfiguredError(RuntimeError):
@@ -143,7 +148,7 @@ def get_revision_model_config(
     )
 
 
-def get_model_config() -> ModelConfigSnapshot:
+def get_model_config(stage: str = "query_generation") -> ModelConfigSnapshot:
     """Return the current model snapshot, reloading only when config changes."""
     global _cached_signature, _cached_snapshot
     path = model_config_path()
@@ -166,16 +171,19 @@ def get_model_config() -> ModelConfigSnapshot:
     )
     control_path = model_control_db_path()
     control_signature = _control_signature(control_path)
-    signature = (str(path), *stat_signature, *env_signature, *control_signature)
+    requested_scope = model_scope_for_stage(stage)
+    signature = (requested_scope, str(path), *stat_signature, *env_signature, *control_signature)
     with _lock:
         if _cached_signature == signature and _cached_snapshot is not None:
             return _cached_snapshot
 
         try:
-            active = (
-                ModelControlStore(control_path).get_active(MODEL_SCOPE_QUERY_PLANNING)
-                if control_path.exists() else None
-            )
+            store = ModelControlStore(control_path)
+            active = store.get_active(requested_scope) if control_path.exists() else None
+            if active is None and requested_scope != MODEL_SCOPE_QUERY_PLANNING and control_path.exists():
+                active = store.get_active(MODEL_SCOPE_QUERY_PLANNING)
+            if active is None and requested_scope in SQL_CRITICAL_MODEL_SCOPES and control_path.exists():
+                raise LLMConfigurationError("SQL-critical model stage has no validated active binding")
         except (OSError, sqlite3.DatabaseError, json.JSONDecodeError, KeyError, TypeError) as exc:
             raise LLMConfigurationError("Model Control Plane 状态不可用") from exc
         if active is not None:

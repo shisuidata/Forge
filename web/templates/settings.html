@@ -92,6 +92,31 @@
     </form>
   </div>
 
+  <div class="border border-gray-200 rounded-lg mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <h3 class="text-sm font-semibold text-gray-900">分阶段模型绑定</h3>
+      <p class="text-xs text-gray-500 mt-1">新 Stage 热加载对应 Binding，在途 Attempt 固定旧 Revision。SQL 核心阶段必须先通过完整 Accuracy / Assurance / Retry / P95 / Timeout 门禁。</p>
+    </div>
+    <div class="divide-y divide-gray-100">
+      {% for stage, binding in model_stage_bindings.items() %}
+      <div class="px-6 py-4 grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-center">
+        <div>
+          <div class="text-sm font-medium text-gray-900">{{ stage }}</div>
+          <div class="text-xs {% if 'SQL' in binding.gate_class %}text-red-700{% else %}text-blue-700{% endif %}">{{ binding.gate_class }}</div>
+        </div>
+        <div>
+          <div class="text-xs text-gray-500 mb-1">当前：{% if binding.revision_id %}{{ binding.profile_id }} / v{{ binding.binding_version }} / {{ binding.revision_id[:15] }}…{% else %}使用默认模型{% endif %}</div>
+          <input id="revision-{{ stage }}" type="text" placeholder="sha256:候选 revision"
+                 class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs font-mono" />
+        </div>
+        <button type="button" onclick="activateStageModel('{{ stage }}', {{ binding.binding_version }})"
+                class="bg-slate-800 text-white text-xs font-medium px-4 py-2 rounded-md hover:bg-slate-900">验证后激活</button>
+      </div>
+      {% endfor %}
+    </div>
+    <p id="stage-model-result" class="px-6 py-3 text-xs text-gray-600 border-t border-gray-100"></p>
+  </div>
+
   {# ══════════════════════════════════════════════════════════════════════════ #}
   {# 数据库连接                                                                 #}
   {# ══════════════════════════════════════════════════════════════════════════ #}
@@ -546,5 +571,19 @@
 // 保存成功后 3 秒自动隐藏提示
 const toast = document.getElementById('save-toast');
 if (toast) setTimeout(() => toast.style.display = 'none', 4000);
+async function activateStageModel(stage, expectedVersion) {
+  const revision = document.getElementById(`revision-${stage}`).value.trim();
+  const output = document.getElementById('stage-model-result');
+  if (!revision) { output.textContent = '请输入候选 Revision。'; return; }
+  output.textContent = '正在执行服务端门禁校验…';
+  const response = await fetch('/admin/settings/model-bindings/activate', {
+    method: 'POST', headers: {'content-type': 'application/json'},
+    body: JSON.stringify({stage, revision_id: revision, expected_version: expectedVersion}),
+  });
+  const body = await response.json();
+  if (!response.ok) { output.textContent = body.detail || '激活失败'; return; }
+  output.textContent = `${stage} 已激活 Binding v${body.binding_version}，新 Stage 立即生效。`;
+  location.reload();
+}
 </script>
 {% endblock %}
