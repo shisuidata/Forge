@@ -373,6 +373,8 @@ Pi 拥有 ReportJob 的编排状态、Attempt、lease、幂等和 Artifact 依�
 
 日志不得记录数据库密码、模型 API Key、渠道密钥或未经授权的完整敏感结果集。
 
+Web 后台是跨渠道只读观测面：它从同一个 Pi Store 按已认证管理员的 `org_id + team_id` scope 列出 Web、飞书、钉钉和 API TaskRun，并增量读取 TaskEvent 与 StageAttempt。浏览器不能自行指定或扩大 scope；查看任务不会推进状态、批准 SQL 或重放 Attempt。渠道展示继续保持最小披露，后台日志也不保存或展示 hidden chain-of-thought 和 Secret。
+
 ## 12. 当前 Forge 职责迁移映射
 
 目标不是在现有 Forge Pipeline 外再套一层 Pi，而是消除重复调度。当前模块应按下表演进：

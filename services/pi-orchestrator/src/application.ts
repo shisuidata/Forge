@@ -46,7 +46,9 @@ import {
   InMemoryTaskStore,
   TaskStateError,
   type CreateTaskInput,
+  type TaskChannel,
   type TaskRun,
+  type TaskStatus,
   type TaskStore,
 } from "./task-store.js";
 import {
@@ -190,6 +192,16 @@ export class OrchestratorApplication {
 
   getTask(taskRunId: string): TaskRun | undefined {
     return this.#tasks.get(taskRunId);
+  }
+
+  listTasks(options: {
+    orgId: string;
+    teamId: string;
+    channel?: TaskChannel;
+    status?: TaskStatus;
+    limit: number;
+  }): TaskRun[] {
+    return this.#tasks.list(options);
   }
 
   getEvents(taskRunId: string, afterSequence = 0): TaskEvent[] {

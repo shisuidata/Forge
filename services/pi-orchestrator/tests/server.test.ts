@@ -92,6 +92,37 @@ test("default Server wiring restores persisted TaskRun after restart", async () 
   );
 });
 
+test("task list endpoint scopes cross-channel tasks by org and team", async (context) => {
+  const config = loadConfig({});
+  const application = new OrchestratorApplication({ config });
+  application.createTask({
+    org_id: "org_demo", team_id: "team_demo", user_id: "feishu_user",
+    channel: "feishu", intent: "query", message: "飞书任务",
+  });
+  application.createTask({
+    org_id: "org_other", team_id: "team_demo", user_id: "other_user",
+    channel: "feishu", intent: "query", message: "其他组织任务",
+  });
+  const server = createOrchestratorServer(config, application);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => server.close());
+  const address = server.address() as AddressInfo;
+
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/v1/tasks?org_id=org_demo&team_id=team_demo&channel=feishu&limit=20`,
+  );
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as { tasks: Array<{ org_id: string; channel: string }> };
+  assert.equal(body.tasks.length, 1);
+  assert.equal(body.tasks[0]?.org_id, "org_demo");
+  assert.equal(body.tasks[0]?.channel, "feishu");
+
+  const invalid = await fetch(
+    `http://127.0.0.1:${address.port}/v1/tasks?org_id=org_demo&team_id=team_demo&limit=101`,
+  );
+  assert.equal(invalid.status, 400);
+});
+
 test("async Stage returns 202 and completes through Task polling", async (context) => {
   let releaseStage: (() => void) | undefined;
   const gate = new Promise<void>((resolve) => { releaseStage = resolve; });
