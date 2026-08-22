@@ -126,7 +126,7 @@ def _connect(path: Path) -> sqlite3.Connection:
 def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "provider", "protocol", "base_url", "model", "tool_choice",
-        "timeout_seconds", "secret_ref", "capabilities",
+        "timeout_seconds", "max_output_tokens", "secret_ref", "capabilities",
     }
     if set(config) - allowed:
         raise ModelControlError("Model Profile 包含不支持的配置字段。")
@@ -149,8 +149,9 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         raise ModelControlError("Model Profile secret_ref 只支持 env: 或 file:。")
     try:
         timeout_seconds = max(1.0, float(config.get("timeout_seconds", 120)))
+        max_output_tokens = max(256, int(config.get("max_output_tokens", 8192)))
     except (TypeError, ValueError) as exc:
-        raise ModelControlError("Model Profile timeout_seconds 必须是数字。") from exc
+        raise ModelControlError("Model Profile timeout/max_output_tokens 必须是数字。") from exc
     capabilities = config.get("capabilities", {})
     if not isinstance(capabilities, dict):
         raise ModelControlError("Model Profile capabilities 必须是对象。")
@@ -161,6 +162,7 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         "model": model,
         "tool_choice": tool_choice,
         "timeout_seconds": timeout_seconds,
+        "max_output_tokens": max_output_tokens,
         "secret_ref": secret_ref,
         "capabilities": capabilities,
     }

@@ -128,6 +128,7 @@ def _prepare_query(
         "text": "",
         "error": "",
         "assurance_report": None,
+        "retrieval_trace": None,
     }
     try:
         resolved_dialect = _compile_dialect(dialect)
@@ -193,6 +194,7 @@ def _prepare_query(
             payload["retry_count"] = attempt
             return payload
 
+        payload["retrieval_trace"] = result.get("retrieval_trace")
         if result["tool"] is None:
             payload["status"] = "needs_clarification"
             payload["text"] = result.get("text", "")
