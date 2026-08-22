@@ -5,7 +5,7 @@ export type ChannelMessageRoute =
 
 const QUERY_PATTERN = /(?:统计|查询|查一下|查出|列出|筛选|计算|多少|几笔|排名|排行|趋势|同比|环比|占比|分布|明细|汇总|聚合|分析.{0,8}(?:数据|变化|原因)|gmv|销售额|营收|订单量|订单数|用户数|转化率|复购率|留存率|select\s|count\s*\(|sum\s*\(|average|show\s+me|how\s+many|top\s*\d*)/i;
 const KNOWLEDGE_PATTERN = /(?:定义|口径|是什么意思|怎么算|公式|字段|表结构|哪张表|数据字典|业务规则|语义规则|约定|规范|知识库|数据源|指标说明|schema|metric|definition|column|table)/i;
-const GREETING_PATTERN = /^(?:你好|您好|嗨|哈喽|hello|hi|hey|早上好|下午好|晚上好|早安|晚安|在吗|你是谁|帮助|help|菜单|有什么功能)[!！,.，。?？\s]*$/i;
+const GREETING_PATTERN = /^(?:你好|您好|嗨|哈喽|hello|hi|hey|早|早上好|下午好|晚上好|早安|晚安|在吗|你是谁|帮助|help|菜单|有什么功能)(?:呀|啊|哦| there)?[!！,.，。?？\s]*$/i;
 
 export function routeChannelMessage(message: string): ChannelMessageRoute {
   const normalized = message.trim();
