@@ -461,6 +461,55 @@ def test_prepare_query_reuses_retry_and_dialect_logic(isolated_agent, monkeypatc
     assert fake_memory.get_state("u-prepare", "pending_sql") is None
 
 
+def test_prepare_query_retry_includes_all_failed_assurance_diagnostics(isolated_agent, monkeypatch):
+    from forge.assurance import GateResult, QueryAssuranceError, QueryAssuranceReport
+
+    agent_mod, _ = isolated_agent
+    calls = []
+
+    def call(messages, **kwargs):
+        calls.append(messages)
+        return {
+            "tool": "generate_forge_query",
+            "input": {"scan": "orders", "select": ["orders.id"]},
+        }
+
+    assurance_calls = 0
+
+    def assure(*args, **kwargs):
+        nonlocal assurance_calls
+        assurance_calls += 1
+        if assurance_calls == 1:
+            raise QueryAssuranceError(QueryAssuranceReport(
+                status="failed",
+                assurance_revision="test",
+                policy_revision="test",
+                registry_revision="test",
+                model_revision="test",
+                gates=(GateResult(
+                    gate="convention_policy",
+                    status="failed",
+                    revision="test",
+                    diagnostics=("first contract", "second contract"),
+                ),),
+            ))
+        return type("Report", (), {
+            "sql": "SELECT orders.id FROM orders",
+            "to_dict": lambda self: {"status": "passed"},
+        })()
+
+    monkeypatch.setattr(agent_mod.llm, "call", call)
+    monkeypatch.setattr(agent_mod, "assure_query", assure)
+
+    result = agent_mod.prepare_query("u-all-diagnostics", "查询订单 ID")
+
+    assert result["status"] == "needs_review"
+    retry_text = calls[1][-1]["content"]
+    assert "first contract" in retry_text
+    assert "second contract" in retry_text
+    assert "同时修复" in retry_text
+
+
 def test_prepare_query_reports_llm_error_without_secret_leak(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
 

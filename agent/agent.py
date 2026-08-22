@@ -235,11 +235,25 @@ def _prepare_query(
             sql = assurance.sql
         except QueryAssuranceError as exc:
             if attempt < MAX_RETRIES:
+                diagnostics = [
+                    diagnostic
+                    for gate in exc.report.gates
+                    if gate.status == "failed"
+                    for diagnostic in gate.diagnostics
+                ]
+                diagnostic_text = "\n".join(f"- {item}" for item in diagnostics)
                 retry_messages.append(
                     {"role": "assistant", "content": json.dumps(forge_json, ensure_ascii=False)}
                 )
                 retry_messages.append(
-                    {"role": "user", "content": f"查询保障校验失败（第 {attempt + 1} 次）：{exc}\n请修正。"}
+                    {
+                        "role": "user",
+                        "content": (
+                            f"查询保障校验失败（第 {attempt + 1} 次），请同时修复以下全部问题，"
+                            "不要回退已经正确的反连接、字段、过滤、分组、窗口和排序：\n"
+                            f"{diagnostic_text[:6000]}"
+                        ),
+                    }
                 )
                 continue
             payload["error"] = f"查询生成失败（保障校验已重试 {MAX_RETRIES} 次）：{exc}"
