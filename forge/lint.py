@@ -1202,13 +1202,7 @@ def _check_cross_event_user_counts_contract(forge_json: dict, question: str, war
     """加购次数 + 退款次数的 CTE 汇总结果应限定字段来源。"""
     if not ("既有加购行为" in question and "退款记录" in question and "加购次数" in question and "退款次数" in question):
         return
-    final_selects = _collect_direct_select_labels(forge_json)
-    if "add_count" in final_selects or "refund_count" in final_selects:
-        warnings.append(
-            "跨事件用户计数查询最终 SELECT 应限定 CTE 字段来源："
-            "add_counts.add_count 和 refund_counts.refund_count。"
-            "不要使用裸 add_count/refund_count，避免编译后引用到不存在或歧义字段。"
-        )
+    final_selects = [_unqualified_field(item) for item in _collect_direct_select_labels(forge_json)]
     has_cart_count_distinct = any(
         isinstance(agg, dict)
         and str(agg.get("fn", "")).lower() == "count_distinct"
@@ -1230,6 +1224,26 @@ def _check_cross_event_user_counts_contract(forge_json: dict, question: str, war
             "COUNT(DISTINCT dwd_refund_detail.refund_id) AS refund_count。"
             "不要使用 count_all，避免 JOIN 或重复事件导致计数不稳定。"
         )
+    refs = _collect_field_refs(forge_json)
+    if not any("dwd_cart_detail.action_dt" in ref for ref in refs) or not any(
+        "dwd_refund_detail.apply_dt" in ref for ref in refs
+    ):
+        warnings.append(
+            "跨事件时间范围必须分别作用于两类事实："
+            "dwd_cart_detail.action_dt >= '2025-11-01' 且 "
+            "dwd_refund_detail.apply_dt >= '2025-11-01'，不能只过滤一侧。"
+        )
+    expected_outputs = ["user_name", "cart_add_count", "refund_count"]
+    if final_selects != expected_outputs:
+        warnings.append(
+            "跨事件用户计数最终只输出 user_name、cart_add_count、refund_count。"
+            "同层聚合别名可直接引用；若来自 CTE，则使用对应 CTE 限定字段。"
+        )
+    sorts = _collect_direct_sort_fields(forge_json)
+    if not sorts or not (
+        sorts[0][0].endswith("cart_add_count") and sorts[0][1] == "desc"
+    ):
+        warnings.append("跨事件用户计数结果应按 cart_add_count DESC 稳定排序。")
 
 
 def _check_unit_price_order_lookup_contract(forge_json: dict, question: str, warnings: list[str]) -> None:

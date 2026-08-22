@@ -2071,7 +2071,7 @@ def test_lint_cart_without_purchase_rejects_bare_user_id_output():
     assert any("裸 user_id" in warning for warning in warnings)
 
 
-def test_lint_cross_event_user_counts_requires_qualified_cte_outputs_and_distinct_counts():
+def test_lint_cross_event_user_counts_requires_distinct_counts_time_scope_and_outputs():
     warnings = lint_conventions(
         {
             "cte": [
@@ -2105,5 +2105,42 @@ def test_lint_cross_event_user_counts_requires_qualified_cte_outputs_and_distinc
         "2025年11月以来，既有加购行为（add）又有退款记录的用户，显示用户名、加购次数和退款次数",
     )
 
-    assert any("add_counts.add_count" in warning and "refund_counts.refund_count" in warning for warning in warnings)
     assert any("COUNT(DISTINCT dwd_cart_detail.cart_id)" in warning for warning in warnings)
+    assert any("分别作用于两类事实" in warning for warning in warnings)
+    assert any("user_name、cart_add_count、refund_count" in warning for warning in warnings)
+    assert any("cart_add_count DESC" in warning for warning in warnings)
+
+
+def test_lint_cross_event_user_counts_accepts_safe_direct_distinct_aggregation():
+    warnings = lint_conventions(
+        {
+            "scan": "dwd_cart_detail",
+            "joins": [
+                {
+                    "type": "inner",
+                    "table": "dim_user",
+                    "on": {"left": "dwd_cart_detail.user_id", "right": "dim_user.user_id"},
+                },
+                {
+                    "type": "inner",
+                    "table": "dwd_refund_detail",
+                    "on": {"left": "dim_user.user_id", "right": "dwd_refund_detail.user_id"},
+                },
+            ],
+            "filter": [
+                {"col": "dwd_cart_detail.action_type", "op": "eq", "val": "add"},
+                {"col": "dwd_cart_detail.action_dt", "op": "gte", "val": "2025-11-01"},
+                {"col": "dwd_refund_detail.apply_dt", "op": "gte", "val": "2025-11-01"},
+            ],
+            "group": ["dim_user.user_id", "dim_user.user_name"],
+            "agg": [
+                {"fn": "count_distinct", "col": "dwd_cart_detail.cart_id", "as": "cart_add_count"},
+                {"fn": "count_distinct", "col": "dwd_refund_detail.refund_id", "as": "refund_count"},
+            ],
+            "select": ["dim_user.user_name", "cart_add_count", "refund_count"],
+            "sort": [{"col": "cart_add_count", "dir": "desc"}],
+        },
+        "2025年11月以来，既有加购行为（add）又有退款记录的用户，显示用户名、加购次数和退款次数",
+    )
+
+    assert not any("跨事件" in warning or "COUNT(DISTINCT" in warning for warning in warnings)
