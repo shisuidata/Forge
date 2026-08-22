@@ -134,6 +134,9 @@ class Config:
     # ── Registry 路径 ──────────────────────────────────────────────────────────
     # 默认指向 large 测试数据集；可通过 forge.yaml 的 registry.* 或环境变量覆盖
     REGISTRY_PATH:         Path = Path(_env("REGISTRY_PATH",         "registry", "schema_path",          default="tests/datasets/large/schema.registry.json"))
+    REGISTRY_STUDIO_DB_PATH: Path = Path(
+        _env("REGISTRY_STUDIO_DB_PATH", "registry", "studio_db_path", default=".forge/registry_studio.db")
+    )
     METRICS_PATH:          Path = Path(_env("METRICS_PATH",          "registry", "metrics_path",         default="tests/datasets/large/metrics.registry.yaml"))
     DISAMBIGUATIONS_PATH:  Path = Path(_env("DISAMBIGUATIONS_PATH",  "registry", "disambiguations_path", default="tests/datasets/large/disambiguations.registry.yaml"))
     CONVENTIONS_PATH:      Path = Path(_env("CONVENTIONS_PATH",      "registry", "conventions_path",     default="tests/datasets/large/field_conventions.registry.yaml"))
@@ -169,6 +172,12 @@ class Config:
         "PI_ORCHESTRATOR_ENABLED",
         "pi_orchestrator",
         "enabled",
+        default="false",
+    ).lower() == "true"
+    LEGACY_AGENT_API_ENABLED: bool = _env(
+        "LEGACY_AGENT_API_ENABLED",
+        "pi_orchestrator",
+        "legacy_agent_api_enabled",
         default="false",
     ).lower() == "true"
     PI_ORCHESTRATOR_URL: str = _env(

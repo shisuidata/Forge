@@ -22,6 +22,7 @@ def app():
     cfg.LLM_API_KEY = ""
     cfg.EMBED_API_KEY = ""
     cfg.DATABASE_URL = "sqlite:///:memory:"
+    cfg.LEGACY_AGENT_API_ENABLED = True
 
     from main import app as _app
     return _app
