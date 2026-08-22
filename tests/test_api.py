@@ -152,6 +152,21 @@ class TestAuth:
 
 class TestChatAPI:
     @pytest.mark.skipif(True, reason="需要 LLM API Key 才能测试完整 chat 流程")
+    async def test_legacy_chat_is_gone_without_explicit_rollback_flag(
+        self, client: AsyncClient, monkeypatch
+    ):
+        from config import cfg
+        monkeypatch.setattr(cfg, "LEGACY_AGENT_API_ENABLED", False)
+
+        response = await client.post("/api/chat", json={"user_id": "u1", "message": "查询订单"})
+
+        assert response.status_code == 410
+        assert response.json()["status"] == "deprecated"
+        approve = await client.post("/api/approve", json={"user_id": "u1", "message": ""})
+        cancel = await client.post("/api/cancel", json={"user_id": "u1", "message": ""})
+        assert approve.status_code == 410
+        assert cancel.status_code == 410
+
     async def test_chat_with_llm(self, client: AsyncClient):
         """完整 chat 流程（需要 LLM API Key）。"""
         resp = await client.post(

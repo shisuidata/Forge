@@ -209,6 +209,11 @@ def main() -> None:
         default=None,
         help="schema.registry.json 输出路径，默认使用配置中的 REGISTRY_PATH",
     )
+    sync_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="明确应用同步结果；默认只输出 drift proposal，不修改 Registry",
+    )
 
     # ── sync-staging 子命令 ───────────────────────────────────────────────────
     subparsers.add_parser(
@@ -285,7 +290,7 @@ def main() -> None:
     # ── sync 处理 ────────────────────────────────────────────────────────────
     elif args.command == "sync":
         from config import cfg
-        from registry.sync import run_sync
+        from registry.sync import build_sync_proposal, run_sync
 
         database_url = args.db or cfg.DATABASE_URL
         if not database_url:
@@ -296,9 +301,14 @@ def main() -> None:
             sys.exit(1)
 
         registry_path = Path(args.out) if args.out else cfg.REGISTRY_PATH
-        registry = run_sync(database_url, registry_path)
-        table_count = len(registry.get("tables", {}))
-        print(f"已同步 {table_count} 张表 → {registry_path}")
+        if args.apply:
+            registry = run_sync(database_url, registry_path)
+            table_count = len(registry.get("tables", {}))
+            print(f"已同步 {table_count} 张表 → {registry_path}")
+        else:
+            proposal = build_sync_proposal(database_url, registry_path)
+            print(json.dumps(proposal, ensure_ascii=False, indent=2))
+            print("仅生成 drift proposal；Registry 未修改。使用 --apply 明确应用。", file=sys.stderr)
 
     # ── sync-staging 处理 ────────────────────────────────────────────────────
     elif args.command == "sync-staging":

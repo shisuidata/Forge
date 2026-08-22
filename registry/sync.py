@@ -42,6 +42,8 @@ from pathlib import Path
 
 from sqlalchemy import MetaData, Table, create_engine, func, inspect, select
 
+from registry.studio import deterministic_diff, migrate_legacy_registry
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,9 +99,20 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
             table = Table(table_name, MetaData(), autoload_with=conn)
             table_cols: dict[str, dict] = {}
 
-            for col in col_infos:
+            primary_keys = set((inspector.get_pk_constraint(table_name) or {}).get("constrained_columns") or [])
+            for ordinal, col in enumerate(col_infos):
                 col_name = col["name"]
                 col_type = str(col["type"]).upper()
+                base_meta = {
+                    "ordinal": ordinal,
+                    "raw_type": col_type,
+                    "normalized_type": _normalize_type(col_type),
+                    "nullable": bool(col.get("nullable", True)),
+                    "default": col.get("default"),
+                    "primary_key": col_name in primary_keys,
+                    "unique": False,
+                    "description": str(col.get("comment") or ""),
+                }
 
                 # 跳过时间戳、日期类列（类型检测 + 列名启发式，兼容 SQLite TEXT 存储）
                 _ts_name = col_name.lower()
@@ -109,7 +122,7 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
                     _ts_name in ("created", "updated", "deleted", "timestamp")
                 )
                 if is_ts_col:
-                    table_cols[col_name] = {}
+                    table_cols[col_name] = base_meta
                     continue
 
                 # 对字符串和小整数列尝试自动采样枚举值（跳过 id 类主键/外键）
@@ -124,12 +137,12 @@ def _introspect(database_url: str) -> dict[str, dict[str, dict]]:
                     try:
                         vals = _sample_enum_values(conn, table, col_name)
                         if vals:
-                            table_cols[col_name] = {"enum": vals}
+                            table_cols[col_name] = {**base_meta, "enum": vals}
                             continue
                     except Exception as exc:
                         logger.debug("Enum sampling failed for %s.%s: %s", table_name, col_name, exc)
 
-                table_cols[col_name] = {}
+                table_cols[col_name] = base_meta
 
             result[table_name] = table_cols
 
@@ -207,15 +220,17 @@ def _merge(
         # 合并策略：用户手动写的 enum 优先；否则用 live 采样值
         merged_cols: dict[str, dict] = {}
         for col_name, live_meta in live_cols.items():
-            existing_meta = existing_col_meta.get(col_name)
-            if existing_meta and existing_meta.get("enum"):
-                # 用户手动标注过，保留不覆盖
-                merged_cols[col_name] = existing_meta
-            else:
-                # 用 live 采样值（可能含 enum，也可能是 {}）
-                merged_cols[col_name] = live_meta
+            existing_meta = existing_col_meta.get(col_name) or {}
+            merged_meta = {**existing_meta, **live_meta}
+            if existing_meta.get("enum"):
+                merged_meta["enum"] = existing_meta["enum"]
+            if existing_meta.get("description"):
+                merged_meta["description"] = existing_meta["description"]
+            merged_cols[col_name] = merged_meta
 
-        merged[table_name] = {"columns": merged_cols}
+        table_metadata = dict(existing_table) if isinstance(existing_table, dict) else {}
+        table_metadata.pop("columns", None)
+        merged[table_name] = {**table_metadata, "columns": merged_cols}
 
     known_fields = {
         f"{table}.{column}"
@@ -245,6 +260,37 @@ def _merge(
             # administrator-confirmed definition retains its richer metadata.
             relationships[existing_index] = relationship
     return {"tables": merged, "relationships": relationships}
+
+
+def build_sync_proposal(database_url: str, registry_path: Path) -> dict:
+    """Introspect without writing and return a reviewable canonical drift proposal."""
+    live_tables = _introspect(database_url)
+    live_relationships = _introspect_declared_relationships(database_url)
+    existing: dict = {}
+    if registry_path.exists():
+        existing = json.loads(registry_path.read_text(encoding="utf-8"))
+    candidate_legacy = _merge(existing, live_tables, live_relationships)
+    before = migrate_legacy_registry(existing or {"tables": {}, "relationships": []})
+    candidate = migrate_legacy_registry(candidate_legacy)
+    return {
+        "base_revision_id": before["registry_revision"],
+        "candidate": candidate,
+        "diff": deterministic_diff(before, candidate),
+        "applied": False,
+    }
+
+
+def _normalize_type(raw: str) -> str:
+    value = raw.lower()
+    if "int" in value: return "integer"
+    if any(item in value for item in ("real", "float", "double", "decimal", "numeric")): return "number"
+    if "bool" in value: return "boolean"
+    if "datetime" in value or "timestamp" in value: return "datetime"
+    if value == "date": return "date"
+    if any(item in value for item in ("blob", "binary")): return "binary"
+    if "json" in value: return "json"
+    if any(item in value for item in ("char", "text", "string")): return "string"
+    return "unknown"
 
 
 def run_sync(database_url: str, registry_path: Path) -> dict:

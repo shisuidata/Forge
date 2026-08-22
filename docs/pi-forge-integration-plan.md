@@ -57,11 +57,11 @@
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 自动化实现完成，待人工外部 smoke | ChannelEvent、独立鉴权、身份映射、SQLite 幂等入站和 Renderer 已完成；飞书支持表单补充信息、hash 审批、取消、分析、补查 child lineage 和报告；钉钉薄 Adapter 复用同一 ChannelEvent/Presentation，不复制状态机。54 个 Orchestrator tests 与 Python Adapter tests 通过；真实飞书/钉钉应用凭证收发留给人工验收。 |
 | Phase 4.4 Model Control Plane | 已完成并通过激活门禁 | Profile/Revision/ActiveBinding/审计、Secret Ref、Provider smoke、持久化 40 题质量验证、CAS 激活/回滚和在途 snapshot 固定均已完成。DeepSeek V4 Flash deterministic revision `sha256:0de19c…` 在 Run `mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.34s、timeout 0%，已 CAS 激活为 binding v1。 |
-| Phase 4.5 Registry Studio | 待实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
+| Phase 4.5 Registry Studio | 已完成，待人工 UI 验收 | Canonical Schema Contract、旧 Registry 迁移、Draft/Revision/Audit/CAS publish/rollback、危险 Diff、SQLite/PostgreSQL/MySQL 受控 DDL、可信 ER、JSON/表格投影、DDL Draft 和关系确认 UI/API 已完成；不具备数据库 DDL 执行能力。 |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
 | Phase 2 QueryRun 审批执行闭环 | 已完成，待提交 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
 | Forge 内部 QueryRun 审批 API | 已完成，待提交 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
-| Forge 旧 Pipeline 退出新主路径 | 已完成，兼容入口待退役 | 新 Web/Pi 链路不调用 `agent/pipeline.py`；旧 `/api/chat` 等仅作 feature-flag 回滚兼容，Phase 4 渠道迁移完成后进入废弃期 |
+| Forge 旧 Pipeline 退出新主路径 | 已退役，显式 flag 可回滚 | 新 Web/Pi 链路不调用 `agent/pipeline.py`；旧 `/api/chat`、`/api/approve`、`/api/cancel` 默认返回 410，只有 `LEGACY_AGENT_API_ENABLED=true` 才能临时回滚。 |
 
 ### 0.4 决策记录
 
@@ -979,6 +979,16 @@ Runtime Context v2 Run `mvr_e1ba9b05bf064fe39bcca37635428c64` 已完成：Accura
 - ER 图不允许仅凭同名 `*_id` 自动晋升为正式外键；只能作为待确认建议。
 - DDL parser/generator 先支持 SQLite、PostgreSQL、MySQL 的受控子集；未知方言语法保留为 unsupported diagnostics，不静默丢失。
 - 结构层权限继续由 Forge ACL 控制；Pi 可编排“解释/审查结构变更”任务，但不是 Registry 真相源，也不直接落盘。
+
+Phase 4.5 实施结果：
+
+- `registry/contracts/canonical-schema.schema.json` 固化 datasource/table/column/constraint/index/relationship/metadata 契约；旧 Registry 可无损迁移并继续兼容 Compiler/Retriever reader。
+- `RegistryStudioStore` 使用 mode 600 SQLite 保存 Draft、Revision、Active Binding 和 Publish/Rollback Audit；发布与回滚都要求 expected binding version CAS，失败恢复原 Registry 文件。
+- deterministic diff 排除 revision/editor/time 等易变元数据，删除、类型、nullable、PK 和关系变化标记 `review_required`。
+- DDL renderer 支持 SQLite/PostgreSQL/MySQL 受控字段、PK 与可信 FK；Parser 只接受受控 CREATE TABLE 子集，未知定义明确报错。DDL 导入永远只创建 Draft。
+- `forge sync` 默认只输出 drift proposal，不再直接改 Registry；只有显式 `--apply` 保留兼容应用能力。
+- `/admin/registry-studio` 提供表格、DDL 编辑 Draft、可缩放/聚焦 ER 和 JSON 投影；推断关系独立显示，确认只形成 Draft，发布前仍需 diff 审核。
+- 旧 Agent API 已退出默认路径：`/api/chat`、`/api/approve`、`/api/cancel` 默认 410，仅显式 rollback flag 可启用。
 
 建议实施顺序：
 

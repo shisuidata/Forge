@@ -169,6 +169,7 @@ def test_sync_cli_out_flag_writes_requested_registry_path(tmp_path, monkeypatch,
         url,
         "--out",
         str(out_path),
+        "--apply",
     ])
 
     cli.main()
@@ -210,6 +211,24 @@ def test_sync_enum_count_is_limited_to_sample_rows(tmp_path, monkeypatch):
     assert result["tables"]["events"]["columns"]["status"]["enum"] == ["paid", "pending"]
 
 
+def test_sync_cli_defaults_to_drift_preview_without_writing(tmp_path, monkeypatch, capsys):
+    url = _make_db_url(tmp_path, [
+        "CREATE TABLE preview_only (id INTEGER PRIMARY KEY, value TEXT)",
+    ])
+    out_path = tmp_path / "preview.registry.json"
+    from forge import cli
+
+    monkeypatch.setattr(sys, "argv", [
+        "forge", "sync", "--db", url, "--out", str(out_path),
+    ])
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert not out_path.exists()
+    assert '"applied": false' in captured.out
+    assert "Registry 未修改" in captured.err
+
+
 def test_sync_ignores_null_only_enum_columns(tmp_path):
     url = _make_db_url(tmp_path, [
         "CREATE TABLE events (id INTEGER PRIMARY KEY, status TEXT)",
@@ -218,4 +237,5 @@ def test_sync_ignores_null_only_enum_columns(tmp_path):
 
     result = run_sync(url, tmp_path / "schema.registry.json")
 
-    assert result["tables"]["events"]["columns"]["status"] == {}
+    assert "enum" not in result["tables"]["events"]["columns"]["status"]
+    assert result["tables"]["events"]["columns"]["status"]["normalized_type"] == "string"

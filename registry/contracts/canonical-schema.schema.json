@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/canonical-schema.schema.json",
+  "title": "Forge Canonical Schema",
+  "type": "object",
+  "required": ["schema_version", "registry_revision", "datasource", "tables", "relationships", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "registry_revision": {"type": "string", "minLength": 1},
+    "datasource": {
+      "type": "object",
+      "required": ["id", "dialect"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "catalog": {"type": ["string", "null"]},
+        "schema": {"type": ["string", "null"]},
+        "dialect": {"enum": ["sqlite", "postgresql", "mysql"]}
+      }
+    },
+    "tables": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/table"}
+    },
+    "relationships": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/relationship"}
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["source_fingerprint", "synced_at", "editor", "change_reason"],
+      "additionalProperties": false,
+      "properties": {
+        "source_fingerprint": {"type": "string"},
+        "synced_at": {"type": "string"},
+        "editor": {"type": "string"},
+        "change_reason": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "column": {
+      "type": "object",
+      "required": ["ordinal", "raw_type", "normalized_type", "nullable", "primary_key", "unique"],
+      "additionalProperties": true,
+      "properties": {
+        "ordinal": {"type": "integer", "minimum": 0},
+        "raw_type": {"type": "string"},
+        "normalized_type": {"enum": ["integer", "number", "string", "boolean", "date", "datetime", "binary", "json", "unknown"]},
+        "nullable": {"type": "boolean"},
+        "default": {},
+        "primary_key": {"type": "boolean"},
+        "unique": {"type": "boolean"},
+        "description": {"type": "string"},
+        "enum": {"type": "array"}
+      }
+    },
+    "table": {
+      "type": "object",
+      "required": ["kind", "columns", "constraints", "indexes"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": {"enum": ["table", "view"]},
+        "description": {"type": "string"},
+        "business_aliases": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "columns": {"type": "object", "additionalProperties": {"$ref": "#/$defs/column"}},
+        "constraints": {"type": "array", "items": {"type": "object"}},
+        "indexes": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "required": ["id", "from", "to", "cardinality", "status", "source"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {"type": "string"},
+        "from": {"type": "string", "pattern": "^[^.]+\\.[^.]+$"},
+        "to": {"type": "string", "pattern": "^[^.]+\\.[^.]+$"},
+        "cardinality": {"enum": ["one_to_one", "one_to_many", "many_to_one", "many_to_many"]},
+        "status": {"enum": ["confirmed", "declared", "unconfirmed", "inferred"]},
+        "source": {"type": "string"}
+      }
+    }
+  }
+}

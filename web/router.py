@@ -56,6 +56,7 @@ from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
 from web.routes.query_runs import router as query_runs_router
 from web.routes.settings import router as settings_router
+from web.routes.registry_studio import router as registry_studio_router
 from web.auth import (
     require_web_auth,
     require_api_auth,
@@ -72,6 +73,7 @@ chat_router.include_router(query_runs_router)
 # Admin 路由 — 挂载在 /admin 前缀下（全部路由需要 Web 登录验证）
 router = APIRouter(dependencies=[Depends(require_web_auth)])
 router.include_router(settings_router)
+router.include_router(registry_studio_router)
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -664,7 +666,15 @@ async def api_pi_task_events(
 
 @chat_router.post("/api/chat", response_class=JSONResponse)
 async def api_chat(req: ChatRequest, _auth=Depends(require_api_auth)):
-    """调用 Agent process，分析/可视化意图自动走 Pipeline；其他走普通查询。"""
+    """Deprecated legacy Agent path; disabled unless an explicit rollback flag is set."""
+    if not cfg.LEGACY_AGENT_API_ENABLED:
+        return JSONResponse(
+            {
+                "status": "deprecated",
+                "error": "Legacy Agent API is disabled; create a Pi TaskRun via /tasks.",
+            },
+            status_code=410,
+        )
     from agent.pipeline import router as intent_router, runner as pipeline_runner
 
     pipeline_name = intent_router.route(req.message)
@@ -726,7 +736,9 @@ async def api_prepare_query(req: PrepareQueryRequest, _auth=Depends(require_api_
 
 @chat_router.post("/api/approve", response_class=JSONResponse)
 async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
-    """用户确认 SQL，随后执行并返回结果；若有活跃 Pipeline 则继续后续阶段。"""
+    """Deprecated legacy approval path, available only for explicit rollback."""
+    if not cfg.LEGACY_AGENT_API_ENABLED:
+        return JSONResponse({"status": "deprecated", "error": "Legacy Agent API is disabled."}, status_code=410)
     resp = await _run_sync(agent_approve, req.user_id)
     result = {"text": resp.text, "sql": resp.sql, "action": resp.action,
               "columns": None, "rows": None, "row_count": 0, "exec_error": None,
@@ -815,7 +827,9 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
 
 @chat_router.post("/api/cancel", response_class=JSONResponse)
 async def api_cancel(req: ChatRequest, _auth=Depends(require_api_auth)):
-    """用户取消 SQL。"""
+    """Deprecated legacy cancellation path, available only for explicit rollback."""
+    if not cfg.LEGACY_AGENT_API_ENABLED:
+        return JSONResponse({"status": "deprecated", "error": "Legacy Agent API is disabled."}, status_code=410)
     resp = await _run_sync(agent_cancel, req.user_id)
     await audit.update_latest_pending(req.user_id, "cancelled")
     return {"text": resp.text, "action": resp.action}
