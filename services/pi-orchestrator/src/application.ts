@@ -3,6 +3,12 @@ import type { ChannelEventInput, ChannelIdentity, ChannelPresentation } from "./
 import { renderChannelPresentation } from "./channels/renderer.js";
 import { routeChannelMessage } from "./channels/intent.js";
 import {
+  buildExecutionPlan,
+  reviseExecutionPlan,
+  type PlanCapability,
+  type PlanStepStatus,
+} from "./planning.js";
+import {
   InMemoryArtifactStore,
   type Artifact,
   type ArtifactStore,
@@ -373,6 +379,17 @@ export class OrchestratorApplication {
           external_user_id: event.external_user_id,
         },
       });
+      const plan = this.#artifacts.create({
+        artifactType: "execution_plan",
+        taskRunId: created.task.task_run_id,
+        producer: "pi-planner",
+        payload: buildExecutionPlan(route, text.trim()),
+      });
+      this.#events.append(created.task.task_run_id, "plan.created", {
+        artifact_id: plan.artifact_id,
+        plan_revision: 1,
+        route_kind: route.kind,
+      });
       this.#channelEvents?.complete(event.channel, event.event_id, created.task.task_run_id);
       return { record: claim.record, task: created.task };
     });
@@ -391,11 +408,45 @@ export class OrchestratorApplication {
       };
     }
 
-    if (route.kind === "conversation") {
+    if (route.kind === "conversation" || route.kind === "forbidden") {
+      this.#advanceExecutionPlan(claimed.task.task_run_id, { context: "completed" });
       const completed = this.#completeChannelResponse(
         claimed.task,
-        route.title,
-        route.markdown,
+        route.title ?? "Forge",
+        route.markdown ?? "我暂时无法执行这项操作。",
+      );
+      return {
+        task: completed,
+        presentation: this.getChannelPresentation(completed.task_run_id),
+        duplicate: false,
+      };
+    }
+
+    if (route.kind === "clarification") {
+      const waiting = this.#transactions.run(() => {
+        this.#events.append(claimed.task!.task_run_id, "query.clarification_requested", {
+          prompt: route.clarification_question ?? "请补充希望了解的指标和时间范围。",
+        });
+        this.#advanceExecutionPlan(claimed.task!.task_run_id, { clarification: "running" });
+        return this.#transition(claimed.task!, "needs_input", "requirement_clarification");
+      });
+      return {
+        task: waiting,
+        presentation: this.getChannelPresentation(waiting.task_run_id),
+        duplicate: false,
+      };
+    }
+
+    if (route.kind === "action") {
+      this.#advanceExecutionPlan(claimed.task.task_run_id, {
+        [route.action === "memory" ? "memory_proposal" : "registry_draft"]: "running",
+      });
+      const completed = this.#completeChannelResponse(
+        claimed.task,
+        "需要确认变更内容",
+        route.action === "memory"
+          ? "请明确要记住或删除的内容，以及它属于个人、团队还是组织范围。我会先生成待审核变更，不会直接写入长期记忆。"
+          : "请提供指标或业务规则的完整定义。我会先生成 Registry Draft 和差异，确认后才会发布。",
       );
       return {
         task: completed,
@@ -415,6 +466,7 @@ export class OrchestratorApplication {
             limit: 8,
           }, signal);
       if (context === undefined || context.evidence.length === 0) {
+        this.#advanceExecutionPlan(claimed.task.task_run_id, { context: "completed", report: "completed" });
         const completed = this.#completeChannelResponse(
           claimed.task,
           "我可以继续帮你",
@@ -426,6 +478,7 @@ export class OrchestratorApplication {
           duplicate: false,
         };
       }
+      this.#advanceExecutionPlan(claimed.task.task_run_id, { context: "completed", report: "running" });
       const advised = await this.runAdvisory(claimed.task.task_run_id, {
         skillName: "data-doc-writer",
         prompt: [
@@ -436,6 +489,7 @@ export class OrchestratorApplication {
         contextEvidence: context.evidence,
         idempotencyKey: `${event.channel}:${event.event_id}:knowledge`,
       }, signal);
+      this.#advanceExecutionPlan(claimed.task.task_run_id, { report: "completed" });
       return {
         task: advised.task,
         presentation: this.getChannelPresentation(advised.task.task_run_id),
@@ -443,6 +497,7 @@ export class OrchestratorApplication {
       };
     }
 
+    this.#advanceExecutionPlan(claimed.task.task_run_id, { query: "running" });
     await this.prepareQuery(
       claimed.task.task_run_id,
       {
@@ -451,6 +506,7 @@ export class OrchestratorApplication {
       },
       signal,
     );
+    this.#advanceExecutionPlan(claimed.task.task_run_id, { query: "waiting_approval" });
     const task = this.#tasks.get(claimed.task.task_run_id);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${claimed.task.task_run_id}`);
     return {
@@ -1083,6 +1139,7 @@ export class OrchestratorApplication {
           ...result,
           artifact_id: artifact.artifact_id,
         });
+        this.#advanceExecutionPlan(taskRunId, { query: "completed" });
         this.#finishAttempt(attempt, "succeeded");
       });
     }
@@ -1360,6 +1417,7 @@ export class OrchestratorApplication {
     let stageTask: TaskRun = task;
     stageTask = this.#transactions.run(() => {
       const running = this.#transition(stageTask, "analyzing", "business_root_cause_analysis");
+      this.#advanceExecutionPlan(taskRunId, { analysis: "running" });
       attempt = this.#startAttempt(
         running,
         "business_root_cause_analysis",
@@ -1412,6 +1470,9 @@ export class OrchestratorApplication {
           status: payload.status,
           suggested_queries: payload.suggested_queries,
         });
+        this.#advanceExecutionPlan(taskRunId, {
+          analysis: payload.status === "complete" ? "completed" : "running",
+        });
         this.#finishAttempt(attempt, "succeeded");
         return { task: finalizedTask, artifact, events: this.#events.list(taskRunId) };
       });
@@ -1461,6 +1522,7 @@ export class OrchestratorApplication {
     let stageTask: TaskRun = task;
     stageTask = this.#transactions.run(() => {
       const running = this.#transition(stageTask, "rendering", "data_analysis_report");
+      this.#advanceExecutionPlan(taskRunId, { report: "running" });
       attempt = this.#startAttempt(
         running,
         "data_analysis_report",
@@ -1518,6 +1580,7 @@ export class OrchestratorApplication {
           artifact_id: artifact.artifact_id,
           status: payload.status,
         });
+        this.#advanceExecutionPlan(taskRunId, { report: "completed" });
         this.#finishAttempt(attempt, "succeeded");
         return { task: finalizedTask, artifact, events: this.#events.list(taskRunId) };
       });
@@ -1618,6 +1681,28 @@ export class OrchestratorApplication {
       signal: parent === undefined ? timeoutSignal : AbortSignal.any([parent, timeoutSignal]),
       timedOut: () => timeoutSignal.aborted,
     };
+  }
+
+  #advanceExecutionPlan(
+    taskRunId: string,
+    updates: Partial<Record<PlanCapability, PlanStepStatus>>,
+  ): Artifact | undefined {
+    const current = this.#artifacts.latest(taskRunId, "execution_plan");
+    if (current === undefined) return undefined;
+    const payload = reviseExecutionPlan(current, updates);
+    const revised = this.#artifacts.create({
+      artifactType: "execution_plan",
+      taskRunId,
+      producer: "pi-planner",
+      payload,
+    });
+    this.#events.append(taskRunId, "plan.revised", {
+      artifact_id: revised.artifact_id,
+      supersedes_artifact_id: current.artifact_id,
+      plan_revision: payload.plan_revision,
+      status: payload.status,
+    });
+    return revised;
   }
 
   #completeChannelResponse(task: TaskRun, title: string, markdown: string): TaskRun {

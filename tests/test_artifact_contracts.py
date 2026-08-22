@@ -65,6 +65,38 @@ def valid_instances() -> dict[str, dict]:
                 "acceptance_criteria": ["识别转化下降贡献最大的渠道和终端"],
             },
         ),
+        "execution_plan_artifact": _envelope(
+            "execution_plan",
+            "pi-planner",
+            {
+                "plan_revision": 1,
+                "supersedes_artifact_id": None,
+                "route_kind": "workflow",
+                "goal": "分析销售额下降并生成报告",
+                "required_deliverables": ["query_result", "analysis", "rendered_output"],
+                "status": "active",
+                "steps": [
+                    {
+                        "step_id": "step_query",
+                        "capability": "query",
+                        "title": "准备并审批查询",
+                        "depends_on": [],
+                        "required": True,
+                        "status": "ready",
+                        "deliverable": "query_result",
+                    },
+                    {
+                        "step_id": "step_analyze",
+                        "capability": "analysis",
+                        "title": "分析查询结果",
+                        "depends_on": ["step_query"],
+                        "required": True,
+                        "status": "pending",
+                        "deliverable": "analysis",
+                    },
+                ],
+            },
+        ),
         "metric_definition_artifact": _envelope(
             "metric_definition",
             "metric-definition-reviewer",
@@ -187,6 +219,7 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
     assert contract_names() == (
         "task_run",
         "clarification_artifact",
+        "execution_plan_artifact",
         "metric_definition_artifact",
         "query_result_artifact",
         "analysis_artifact",
@@ -208,6 +241,7 @@ def test_valid_instances_satisfy_contracts(valid_instances: dict[str, dict]) -> 
     [
         ("task_run", lambda value: value.update(channel="slack")),
         ("clarification_artifact", lambda value: value["payload"].pop("goal")),
+        ("execution_plan_artifact", lambda value: value["payload"].update(status="done")),
         (
             "metric_definition_artifact",
             lambda value: value["payload"].update(status="silently_approved"),

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 export type TaskEventType =
   | "task.created"
   | "task.status_changed"
+  | "plan.created"
+  | "plan.revised"
   | "channel.response_created"
   | "query.review_requested"
   | "query.clarification_requested"
