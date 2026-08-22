@@ -242,7 +242,7 @@ class SqliteChannelEventStore implements ChannelEventStore {
       event_id: input.event_id,
       event_type: input.event_type,
       status: "processing",
-      task_run_id: null,
+      task_run_id: input.event_type === "action" ? input.task_run_id : null,
       received_at: now,
       updated_at: now,
       error: null,

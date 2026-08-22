@@ -5,6 +5,8 @@ forwards authenticated ChannelEvents to Pi and renders ChannelPresentation.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from typing import Any
 
@@ -15,6 +17,20 @@ from config import cfg
 
 class PiChannelError(RuntimeError):
     pass
+
+
+def stable_channel_action_event_id(
+    message_id: str,
+    task_run_id: str,
+    action: str,
+    payload: dict[str, Any],
+) -> str:
+    """Return one idempotency key for retries of the same rendered-card action."""
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(
+        f"{message_id}\n{task_run_id}\n{action}\n{canonical}".encode("utf-8")
+    ).hexdigest()
+    return f"feishu_action_{digest[:40]}"
 
 
 class PiChannelClient:

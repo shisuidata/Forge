@@ -25,6 +25,7 @@ from config import cfg
 from web.pi_channel import (
     PiChannelClient,
     presentation_to_feishu_card,
+    stable_channel_action_event_id,
     task_run_id_from_response,
 )
 
@@ -203,9 +204,11 @@ def _on_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
             form_value = getattr(data.event.action, "form_value", None) or {}
             if isinstance(form_value, dict):
                 payload = {**payload, "text": str(form_value.get("text") or "").strip()}
-        callback_event_id = str(
-            getattr(getattr(data, "header", None), "event_id", "")
-            or f"{message_id}:{action_type}:{open_id}"
+        callback_event_id = stable_channel_action_event_id(
+            message_id,
+            task_run_id,
+            action_type,
+            payload,
         )
         if not action_type or not task_run_id or not isinstance(payload, dict):
             raise ValueError("无效的 Pi 渠道操作")
