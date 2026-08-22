@@ -56,8 +56,8 @@
 | Phase 3.5 Pi 状态持久化 | 已完成，待提交 | Node SQLite + WAL 持久化 Task/Event/Artifact；生产 Server 默认持久化，内存 Store 仅测试；跨 Store、Application 和 Server 重启恢复通过；40 TS tests、Forge full suite 383 passed |
 | Phase 3.6 Stage Attempt 与异步恢复 | 已完成，待提交 | 全部长耗时 Stage 已绑定 Attempt/Lease/timeout；可选 `async: true` 返回 202，Web 已使用 Task/Event/Artifact/Attempt polling；过期 lease 对账和异步三服务 E2E 通过；46 TS tests、Forge full suite 383 passed |
 | Phase 4 飞书与钉钉渠道 | 进行中：飞书 gated path | ChannelEvent、独立服务鉴权、只读身份映射、SQLite 幂等入站、ChannelPresentation Renderer 已完成；`FEISHU_PI_ENABLED` 新路径已覆盖消息 → SQL 审核 → hash 绑定批准 → 结果，默认关闭；待真实飞书凭证 smoke、补充信息/取消/补查和钉钉复用 |
-| Phase 4.4 Model Control Plane | 基础热加载已实现，版本控制待建设 | Forge 查询模型使用不可变 `ModelConfigSnapshot` + mtime/revision cache；Web 保存后新任务无需重启；缺失/错误配置失败关闭。待建设 Profile Store、真实验证、CAS 激活、回滚及 Pi Stage 绑定 |
-| Phase 4.5 Registry Studio | 需求已确认，待设计实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
+| Phase 4.4 Model Control Plane | 已完成并通过激活门禁 | Profile/Revision/ActiveBinding/审计、Secret Ref、Provider smoke、持久化 40 题质量验证、CAS 激活/回滚和在途 snapshot 固定均已完成。DeepSeek V4 Flash deterministic revision `sha256:0de19c…` 在 Run `mvr_520f69239b904a96af2d49e635e9a23f` 达到 Accuracy 87.5%、Assurance 90%、平均重试 0.675、P95 28.34s、timeout 0%，已 CAS 激活为 binding v1。 |
+| Phase 4.5 Registry Studio | 待实施 | 结构层以增强 Canonical Schema 为真相源，同时提供表格、DDL、ER 图和 JSON 投影视图；编辑先形成版本化草案和差异审核，绝不从 UI 直接执行数据库 DDL |
 | Phase 2.5 前置 Skill 结构化执行 | 已完成，待提交 | 火山方舟 Coding Plan `ark-code-latest` readiness=`ready`；真实澄清生成 `ClarificationArtifact/needs_input`，真实指标审查生成 `MetricDefinitionArtifact/needs_confirmation`；Key 仅从既有 `ARK_API_KEY` 环境变量注入，未回显或复制 |
 | Phase 2 QueryRun 审批执行闭环 | 已完成，待提交 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
 | Forge 内部 QueryRun 审批 API | 已完成，待提交 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
@@ -922,7 +922,9 @@ benchmark Registry 修复已完成：新增 `relationships.reference.json` 作�
 
 Runtime Context v2 Run `mvr_e1ba9b05bf064fe39bcca37635428c64` 已完成：Accuracy 45%（18/40，原 20%）、Assurance 85%（原 45%）、平均重试 0.625、P95 28.12s（原 130.81s）、timeout 0%。RAG/上下文修复显著有效但仍未达 80%/90% 门槛，Activation 继续阻断。剩余差距集中在窗口聚合 0/5、TopN 1/5、多表聚合 2/5、时序导航 2/5。
 
-用户确认继续后进入 Runtime Context v3：先持久化失败题的 bounded DSL/SQL 与结果差异分类，按生产可泛化的语义模式迁移历史 Method AI 的 semantic enrichment 和 result contracts；规则必须进入 Registry/Runtime context builder，禁止按 case ID 或 reference SQL 注入，也不能回退 Assurance。完成离线契约测试后再跑 40 题质量门禁。
+用户确认继续后完成 Runtime Context v3–v9：持久化 bounded DSL/SQL 与结果差异；迁移结构描述、语义 Convention、结果契约和 CTE/窗口示例；修复 Tool Schema 对 CTE/alias/distinct 的约束冲突；新增意图完整性 Gate、全量 retry diagnostics、确定性 temperature=0，以及仅在分子/分母或单 CTE 绑定唯一时生效的窄范围确定性 normalization。所有规则按语义模式实现，无 case ID/reference SQL 注入，Assurance 未降低。
+
+最终 Model Gate Run `mvr_520f69239b904a96af2d49e635e9a23f` 全部通过：Accuracy 87.5%（35/40，门槛 80%）、Assurance 90%（门槛 90%）、平均重试 0.675（门槛 ≤1）、P95 28.338s（门槛 ≤180s）、timeout 0%（门槛 ≤5%），Tool Calling/Structured Output smoke 均通过。Revision `sha256:0de19cfd6bccd692d15efea031590d8adb1b7368be1b0b2c83845bf6a940cecd` 已 CAS 激活为 Query Planning binding v1。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。
