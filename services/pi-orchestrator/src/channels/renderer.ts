@@ -14,6 +14,28 @@ function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+const INTERNAL_LINE_PATTERN =
+  /(?:\b(?:TaskRun|QueryRun|StageAttempt|current_stage|assurance_report_hash|sql_hash|model_revision|registry_revision|runtime-context|lease_expires|idempotency_key)\b|\b(?:tr|qr|sa|ar|ctx)_[A-Za-z0-9]{8,}\b|sha256:[a-f0-9]{16,}|https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?|\/(?:home|Users|tmp)\/|Traceback \(most recent call last\)|\b(?:System Prompt|Tool Call)\b)/i;
+const REASONING_LINE_PATTERN =
+  /^\s*(?:thought|reasoning|chain[- ]of[- ]thought|analysis|思考(?:过程)?|内部分析|推理过程|工具调用)\s*[:：]/i;
+
+function safeBusinessText(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const withoutThinkBlocks = value.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "");
+  const visible = withoutThinkBlocks
+    .split("\n")
+    .filter((line) => !REASONING_LINE_PATTERN.test(line) && !INTERNAL_LINE_PATTERN.test(line))
+    .join("\n")
+    .trim()
+    .slice(0, 8_000);
+  return visible.length > 0 ? visible : fallback;
+}
+
+function safeOptionalBusinessText(value: unknown): string | undefined {
+  const visible = safeBusinessText(value, "");
+  return visible.length > 0 ? visible : undefined;
+}
+
 function action(
   taskRunId: string,
   type: ChannelAction["type"],
@@ -47,10 +69,8 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ...common,
       kind: "error",
       title: "查询准备超时，可重试",
-      markdown: typeof prepareTimeout.payload.error === "string"
-        ? prepareTimeout.payload.error
-        : "查询准备超时，请稍后重新提交。",
-      fields: [{ label: "TaskRun", value: input.task.task_run_id }],
+      markdown: "查询准备时间超过预期，请稍后重新提交。",
+      fields: [],
       table: null,
       actions: [],
     };
@@ -61,11 +81,10 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ...common,
       kind: "error",
       title: input.task.status === "cancelled" ? "任务已取消" : "任务未完成",
-      markdown:
-        typeof failure?.payload.error === "string"
-          ? failure.payload.error
-          : `TaskRun 状态：${input.task.status}`,
-      fields: [{ label: "TaskRun", value: input.task.task_run_id }],
+      markdown: input.task.status === "cancelled"
+        ? "任务已按你的要求取消。"
+        : "本次处理未能完成，请稍后重试或重新发起。",
+      fields: [],
       table: null,
       actions: [],
     };
@@ -76,12 +95,8 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     return {
       ...common,
       kind: "report",
-      title: typeof channelResponse.payload.title === "string"
-        ? channelResponse.payload.title
-        : "Forge",
-      markdown: typeof channelResponse.payload.markdown === "string"
-        ? channelResponse.payload.markdown
-        : "已完成。",
+      title: safeBusinessText(channelResponse.payload.title, "Forge"),
+      markdown: safeBusinessText(channelResponse.payload.markdown, "已完成。"),
       fields: [],
       table: null,
       actions: [],
@@ -102,12 +117,10 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ...common,
       kind: "query_review",
       title: "Forge SQL 审核",
-      markdown: sql.length > 0 ? `\`\`\`sql\n${sql}\n\`\`\`` : "待审核 SQL 不可用。",
-      fields: [
-        { label: "QueryRun", value: queryRunId },
-        { label: "SQL Hash", value: sqlHash },
-        { label: "Assurance Hash", value: assuranceReportHash },
-      ],
+      markdown: sql.length > 0
+        ? `请审核以下 SQL。确认后将以只读方式执行。\n\n\`\`\`sql\n${sql}\n\`\`\``
+        : "待审核 SQL 不可用。",
+      fields: [],
       table: null,
       actions:
         queryRunId.length > 0 && sqlHash.length > 0 && assuranceReportHash.length > 0
@@ -142,7 +155,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ...common,
       kind: "needs_input",
       title: "需要补充信息",
-      markdown: prompt,
+      markdown: safeBusinessText(prompt, "请补充任务所需信息。"),
       fields: [],
       table: null,
       actions: [
@@ -166,18 +179,16 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
             if (typeof finding !== "object" || finding === null || typeof finding.statement !== "string") {
               return undefined;
             }
-            const references = strings(finding.evidence_refs);
-            return `- ${finding.statement}${references.length > 0 ? `（${references.join("、")}）` : ""}`;
+            const statement = safeOptionalBusinessText(finding.statement);
+            return statement === undefined ? undefined : `- ${statement}`;
           })
           .filter((item): item is string => item !== undefined)
       : [];
-    const summary = typeof advisory.payload.summary === "string"
-      ? advisory.payload.summary
-      : "知识回答已完成。";
+    const summary = safeBusinessText(advisory.payload.summary, "知识回答已完成。");
     return {
       ...common,
       kind: "report",
-      title: typeof advisory.payload.title === "string" ? advisory.payload.title : "Forge 回答",
+      title: safeBusinessText(advisory.payload.title, "Forge 回答"),
       markdown: [summary, findings.length > 0 ? `\n${findings.join("\n")}` : ""].join(""),
       fields: [],
       table: null,
@@ -190,11 +201,8 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     return {
       ...common,
       kind: "report",
-      title: typeof rendered.payload.title === "string" ? rendered.payload.title : "分析报告",
-      markdown:
-        typeof rendered.payload.markdown === "string"
-          ? rendered.payload.markdown
-          : "报告已完成。",
+      title: safeBusinessText(rendered.payload.title, "分析报告"),
+      markdown: safeBusinessText(rendered.payload.markdown, "报告已完成。"),
       fields: [],
       table: null,
       actions: [],
@@ -206,11 +214,12 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     const findings = Array.isArray(analysis.payload.findings) ? analysis.payload.findings : [];
     const findingText = findings
       .map((finding) =>
-        typeof finding === "object" && finding !== null && typeof finding.statement === "string"
-          ? `- ${finding.statement}`
+        typeof finding === "object" && finding !== null
+          ? safeOptionalBusinessText(finding.statement)
           : undefined,
       )
       .filter((item): item is string => item !== undefined)
+      .map((item) => `- ${item}`)
       .join("\n");
     const suggestedQueries = Array.isArray(analysis.payload.suggested_queries)
       ? analysis.payload.suggested_queries
@@ -240,7 +249,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       title: input.task.status === "incomplete" ? "分析需要补查" : "分析完成",
       markdown:
         findingText ||
-        (typeof analysis.payload.summary === "string" ? analysis.payload.summary : "分析已完成。"),
+        safeBusinessText(analysis.payload.summary, "分析已完成。"),
       fields: [],
       table: null,
       actions,
@@ -273,8 +282,14 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     ...common,
     kind: "progress",
     title: "Forge 正在处理",
-    markdown: `当前阶段：${input.task.current_stage ?? input.task.status}`,
-    fields: [{ label: "状态", value: input.task.status }],
+    markdown: input.task.status === "querying"
+      ? "正在安全执行已审批的只读查询。"
+      : input.task.status === "analyzing"
+        ? "正在基于查询结果进行分析。"
+        : input.task.status === "rendering"
+          ? "正在整理分析结论并生成报告。"
+          : "正在处理你的请求，完成后会自动更新。",
+    fields: [],
     table: null,
     actions: [],
   };
