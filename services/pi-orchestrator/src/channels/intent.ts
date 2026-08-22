@@ -91,7 +91,7 @@ export function routeChannelMessage(text: string): ChannelIntentRoute {
   }
   if (QUERY_PATTERN.test(normalized)) {
     return route("query", {
-      requested_deliverables: ["query_result", "analysis", "report"],
+      requested_deliverables: ["query_result", "analysis", "chart", "report"],
       requires_fresh_data: true,
     });
   }

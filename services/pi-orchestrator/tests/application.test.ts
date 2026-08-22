@@ -430,6 +430,17 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
           error: "",
         };
       },
+      async createReport(input) {
+        return {
+          report_id: String(input.report_id), task_run_id: String(input.task_run_id), revision: 1,
+          bundle_hash: String(input.bundle_hash), title: String(input.title), status: "published",
+          pdf_status: "ready", pptx_status: "ready",
+          internal_url: "https://forge.test/reports/rp_demo", technical_url: "https://forge.test/reports/rp_demo/technical",
+          pdf_url: "https://forge.test/reports/rp_demo/download/pdf", pptx_url: "https://forge.test/reports/rp_demo/download/pptx",
+          created_at: "2026-08-21T17:00:00Z", updated_at: "2026-08-21T17:00:01Z",
+        };
+      },
+      async getReport() { throw new Error("published synchronously"); },
     },
     skillExecutor: {
       async clarify() {
@@ -442,6 +453,7 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
         assert.equal(input.queryResults[0]?.artifact_type, "query_result");
         return {
           status: "complete",
+          method_summary: { objective: "定位转化异常", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["比较各渠道转化率"] },
           summary: "移动端是异常集中点。",
           findings: [{
             statement: "移动端转化率为 6.9%。",
@@ -523,7 +535,7 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
   );
   assert.deepEqual(
     app.getArtifacts(created.task.task_run_id).map((artifact) => artifact.artifact_type),
-    ["query_result", "analysis", "rendered_output"],
+    ["query_result", "chart", "analysis", "rendered_output", "technical_report", "report_bundle", "publication"],
   );
 });
 
@@ -565,6 +577,7 @@ test("incomplete analysis pauses with suggested queries and cannot render", asyn
       async analyze() {
         return {
           status: "incomplete",
+          method_summary: { objective: "定位转化异常", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["检查现有结果"] },
           summary: "现有结果只能确认转化率水平。",
           findings: [{
             statement: "当前转化率为 6.9%。",
@@ -655,6 +668,7 @@ test("one approved supplemental child QueryRun can resume parent analysis", asyn
           assert.equal(input.queryResults.length, 1);
           return {
             status: "incomplete",
+            method_summary: { objective: "定位收入异常", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["检查渠道拆分"] },
             summary: "需要渠道拆分。",
             findings: [{
               statement: "整体转化率为 6.9%。",
@@ -675,6 +689,7 @@ test("one approved supplemental child QueryRun can resume parent analysis", asyn
         assert.equal(input.priorAnalysis?.payload.status, "incomplete");
         return {
           status: "complete",
+          method_summary: { objective: "定位收入异常", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["比较主查询与补查"] },
           summary: "渠道 A 是下降集中点。",
           findings: [{
             statement: "渠道 A 当前转化率为 6.9%。",
