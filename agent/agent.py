@@ -46,7 +46,10 @@ import yaml
 from config import cfg
 from forge.assurance import QueryAssuranceError, assure_query
 from forge.cache import cache
-from forge.normalization import complete_unambiguous_ratio_alias
+from forge.normalization import (
+    bind_unambiguous_single_cte_scan,
+    complete_unambiguous_ratio_alias,
+)
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
 from agent.memory import memory
@@ -221,7 +224,8 @@ def _prepare_query(
             payload["retry_count"] = attempt
             return payload
 
-        forge_json = complete_unambiguous_ratio_alias(result["input"], question)
+        forge_json = bind_unambiguous_single_cte_scan(result["input"])
+        forge_json = complete_unambiguous_ratio_alias(forge_json, question)
         # Keep the bounded last candidate for internal quality diagnostics even
         # when deterministic Assurance rejects it after all retries.
         payload["forge_json"] = forge_json
