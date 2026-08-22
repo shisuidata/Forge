@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Pi 任务预览 · Forge{% endblock %}
-{% block heading %}Pi 任务控制台{% endblock %}
+{% block title %}AI 数据任务 · Forge{% endblock %}
+{% block heading %}AI 数据任务{% endblock %}
 
 {% block content %}
 <style>
@@ -407,7 +407,7 @@ taskForm.addEventListener('submit', async (event) => {
       approveButton.textContent = '批准并只读执行';
       reviewPanel.classList.remove('hidden');
     } else if (prepared.result.status === 'needs_clarification') {
-      showError(prepared.result.text || '需要补充查询信息。');
+      showError(prepared.result.error || prepared.result.text || '需要补充查询信息。');
     } else {
       showError(prepared.result.error || 'Forge 无法生成审核材料。');
     }

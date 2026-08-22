@@ -9,7 +9,7 @@ from httpx import AsyncClient
 async def test_task_workspace_renders_hash_bound_queryrun_approval(client: AsyncClient):
     response = await client.get("/tasks")
     assert response.status_code == 200
-    assert "Pi 任务控制台" in response.text
+    assert "AI 数据任务" in response.text
     assert "批准并只读执行" in response.text
     assert 'id="task-mode"' in response.text
     assert "专业 Advisory Skill" in response.text
