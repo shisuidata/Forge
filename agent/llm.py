@@ -59,6 +59,8 @@ def _direct_call_config(provider: str, config: ModelConfigSnapshot | None) -> Mo
         timeout_seconds=max(1.0, float(getattr(cfg, "LLM_TIMEOUT_SECONDS", 120))),
         revision="legacy-direct-call",
         source="legacy-direct-call",
+        max_output_tokens=max(256, int(getattr(cfg, "LLM_MAX_OUTPUT_TOKENS", 8192))),
+        temperature=float(getattr(cfg, "LLM_TEMPERATURE", 0.0)),
     )
 
 
@@ -427,6 +429,7 @@ def _call_anthropic(
     request: dict[str, Any] = {
         "model": config.model,
         "max_tokens": config.max_output_tokens,
+        "temperature": config.temperature,
         "system": system,
         "tools": tools,
         "messages": messages,
@@ -482,6 +485,7 @@ def _call_openai(
         "model": config.model,
         "messages": [{"role": "system", "content": system}] + messages,
         "max_tokens": config.max_output_tokens,
+        "temperature": config.temperature,
     }
     tool_choice_mode = config.tool_choice
     if tool_choice_mode not in {"auto", "required", "named"}:

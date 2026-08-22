@@ -56,6 +56,7 @@ class ModelRevisionCreateRequest(BaseModel):
     tool_choice: str = "required"
     timeout_seconds: float = 120
     max_output_tokens: int = 8192
+    temperature: float = 0.0
     secret_ref: str
     capabilities: dict[str, Any] = Field(default_factory=dict)
 
@@ -199,6 +200,7 @@ async def create_model_profile_revision(payload: ModelRevisionCreateRequest):
                 "tool_choice": payload.tool_choice,
                 "timeout_seconds": payload.timeout_seconds,
                 "max_output_tokens": payload.max_output_tokens,
+                "temperature": payload.temperature,
                 "secret_ref": payload.secret_ref,
                 "capabilities": payload.capabilities,
             },

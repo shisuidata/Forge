@@ -19,6 +19,8 @@ llm:
   base_url:  ""                    # 仅 openai 模式需要，如 https://api.deepseek.com/v1
   tool_choice: "auto"              # auto | required | named
   timeout_seconds: 120              # 聚合网关/私有模型首包较慢时可调大
+  max_output_tokens: 8192           # Forge JSON 复杂查询输出预算
+  temperature: 0                    # 质量验证与生产查询默认确定性生成
   # 火山方舟 Ark：
   # provider: "openai"
   # model: "doubao-seed-2-1-pro-260628"
@@ -28,7 +30,7 @@ llm:
 
 # ── Embedding 模型（RAG 召回用）────────────────────────────────────────────────
 embedding:
-  api_key:   ""                    # 留空则复用 llm.api_key
+  api_key:   ""                    # 必须独立配置；留空时确定性降级 BM25，不复用 LLM Key
   base_url:  "https://api.siliconflow.cn/v1"
   model:     "BAAI/bge-m3"
   top_k:     5                     # 每次查询最多召回几张表

@@ -89,6 +89,12 @@ class Config:
     LLM_TIMEOUT_SECONDS: float = float(
         _env("LLM_TIMEOUT_SECONDS", "llm", "timeout_seconds", default="120")
     )
+    LLM_MAX_OUTPUT_TOKENS: int = int(
+        _env("LLM_MAX_OUTPUT_TOKENS", "llm", "max_output_tokens", default="8192")
+    )
+    LLM_TEMPERATURE: float = float(
+        _env("LLM_TEMPERATURE", "llm", "temperature", default="0")
+    )
     QUERY_PREPARE_TIMEOUT_SECONDS: float = float(
         _env("QUERY_PREPARE_TIMEOUT_SECONDS", "llm", "prepare_timeout_seconds", default="210")
     )

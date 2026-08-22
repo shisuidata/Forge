@@ -165,6 +165,8 @@ def test_active_binding_hot_loads_secret_without_yaml_or_restart(tmp_path, monke
     assert snapshot.api_key == "actual-secret"
     assert snapshot.revision == revision
     assert snapshot.source == "model-control:forge.query_planning:v1"
+    assert snapshot.temperature == 0.0
+    assert snapshot.max_output_tokens == 8192
 
 
 def test_new_binding_hot_loads_without_manual_cache_reset(tmp_path, monkeypatch):
