@@ -49,8 +49,9 @@ unit_price_calculation:
   label: 客单价计算粒度
   applies_to: [dwd_order_detail.total_amount, dwd_order_detail.pay_amount]
   convention: |
-    "客单价"指单个订单的平均实付金额，即 AVG(dwd_order_detail.pay_amount) 或
-    AVG(dwd_order_detail.total_amount)（明确要求已完成订单时加 order_status = '已完成'）。
+    "客单价"默认指单个订单的平均订单总金额，即 AVG(dwd_order_detail.total_amount)
+    （明确要求已完成订单时加 order_status = '已完成'）。只有用户明确说“实付客单价”
+    或 Registry 指标明确指定实付口径时，才使用 AVG(dwd_order_detail.pay_amount)。
     "客单价在 X 到 Y 之间"是对单个订单金额的过滤（filter），而非对用户平均消费的 HAVING 过滤。
     不要用 SUM(total_amount)/COUNT(user_id) 这种用户级别的均值代替客单价。
     也不要用 AVG(total_amount) OVER (...) + qualify 表达客单价范围。
@@ -160,9 +161,30 @@ refund_rate_join:
     注意：退款率输出为 0~1 小数，15% 写作 0.15；不要乘以 100，也不要输出百分比数值。
   confirmed_by_users: true
 
+order_amount_measure:
+  label: 订单金额默认口径
+  applies_to: [dwd_order_detail.total_amount, dwd_order_detail.pay_amount]
+  triggers: [订单金额, 消费金额, 消费总额, 总GMV, 客单价, 累计消费, 上一笔金额, 当前金额]
+  convention: |
+    用户说“订单金额”“消费金额”“消费总额”“总 GMV”“客单价”时，默认使用
+    dwd_order_detail.total_amount。只有明确出现“实付金额”“支付金额”“实付客单价”时，
+    才使用 dwd_order_detail.pay_amount。累计、排名、LAG/LEAD 必须沿用同一金额口径。
+  confirmed_by_users: true
+
+channel_display_grain:
+  label: 渠道展示与分组粒度
+  applies_to: [dim_channel.channel_id, dim_channel.channel_name, dim_channel.channel_type]
+  triggers: [渠道类型, 各渠道, 每个渠道]
+  convention: |
+    按“渠道类型”统计时，只按 dim_channel.channel_type 分组，不加入 channel_id，
+    否则同一类型会被拆成多行。按“渠道名称/各渠道”统计时，最终展示 channel_name；
+    channel_id 只在确需区分同名实体时用于内部 GROUP BY，不自动输出。
+  confirmed_by_users: true
+
 percentage_display:
   label: 占比展示口径
   applies_to: [derived_ratio]
+  triggers: [占比, 比例]
   convention: |
     用户说"占比"、"比例"且不是"退款率/复购率/转化率"这类业务率指标时，
     默认输出 0~1 小数，而不是百分比数值。
@@ -174,6 +196,7 @@ percentage_display:
 result_contracts:
   label: 高频查询结果列与排序契约
   applies_to: [dwd_comment_detail, dwd_refund_detail, dwd_cart_detail, dim_channel]
+  triggers: [占比, 相邻两次评价, 环比, 退款总金额, 既有加购行为, 好评记录]
   convention: |
     为了保证多次生成结果稳定，以下高频查询必须遵守固定输出和排序契约：
     - "2025年12月以来，评分为4或5星且带图片的好评记录，按评分降序"：

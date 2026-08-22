@@ -65,7 +65,7 @@ _DSL_CONSTRAINTS = """\
 | **between 用 lo/hi** | 范围过滤用 `"lo": 下界, "hi": 上界`，不能用 `"val": [下界, 上界]` |
 | **select 只引用真实列** | select 中只能出现 scan/joins 表的字段、agg 别名或 window 别名，不能虚构字段名 |
 | **group by 与 select 一致** | 有 group 时，select 中非聚合字段必须出现在 group 列表，不能用 MIN/MAX 包裹 group-by 列 |
-| **GROUP BY 包含 ID 字段** | 对维度表（品牌/品类/渠道等）分组时，必须同时包含 ID 主键 + 名称字段（如 `"group": ["dim_brand.brand_id", "dim_brand.brand_name"]`），只按名称分组会把同名不同 ID 的记录错误合并 |
+| **GROUP BY 遵守用户展示粒度** | 按具体实体名称（品牌/品类/商品/渠道名称）聚合时，通常用 ID + 名称避免同名实体误合并；按分类属性（channel_type、age_group、level_name）聚合时只按该分类属性，不得加入实体 ID 把同一展示类别拆成多行 |
 | **COUNT DISTINCT** | 统计唯一个数（如"有多少种商品"、"订单数"、"用户数"）时，若已 JOIN 明细表（order_items/item_detail），必须用 count_distinct 对主键去重（如 `count_distinct order_id`），否则会因一对多重复计数 |
 | **join 类型选择** | inner=两侧都有记录（默认首选）；left=允许右侧为空；只有明确需要保留空值时才用 left |
 | 只用已注册的表和字段 | 不得虚构字段名或表名 |
@@ -75,7 +75,7 @@ _DSL_CONSTRAINTS = """\
 | **列与列比较** | 比较两个聚合别名（如好评数 > 差评数）用 `{"col": "good_count", "op": "gt", "col2": "bad_count"}`，绝不能用 `"val": "bad_count"`（字符串不是列名） |
 | count_all 无 col 字段 | 其他聚合函数必须有 col |
 | **排名函数无 col 字段** | row_number / rank / dense_rank 只需 fn、partition、order、as，绝对不能有 col |
-| **TopN 必须用 limit** | 用户说"前 N 名""取前 N 个"时，必须在 Forge JSON 中设置 limit 字段 |
+| **全局 TopN 用 limit** | 用户说全局"前 N 名""取前 N 个"时设置 limit；每组前 N 不得用全局 limit，必须使用 window + qualify |
 | **per-group TopN 用 qualify** | "每个品类前3名"等分组内 TopN 场景：先用 window 打排名，再用 qualify 过滤 rank <= 3 |
 | agg.col 支持表达式 | 聚合列可以是表达式，如 `"col": "order_items.quantity * order_items.unit_price"` |
 | 有 joins 时用 table.col 格式 | 避免字段名歧义 |
@@ -98,7 +98,11 @@ _DSL_CONSTRAINTS = """\
 | **排名函数默认降序** | **仅** rank/dense_rank/row_number 的排名 order，默认用 `"dir": "desc"`（最大值排第1名）；lag/lead 的 order 按时间升序（`"dir": "asc"`），不适用此规则 |
 | **比率/占比用 ROUND** | 计算比率/占比（如复购率 = count/count，占比 = sum/total）时，用 `{"expr": "ROUND(expr, 4)", "as": "rate"}` 包裹；普通金额字段（sum/avg 直接来自列值）无需 ROUND |
 | **高于平均 → CROSS JOIN** | 找出"高于平均/超过均值"的记录：必须建两个 CTE（一个算明细，一个算平均），再用 `{"type": "cross", "table": "avg_cte"}` 加入主查询（不需要 on），然后用 `{"col": "明细.val", "op": "gt", "col2": "avg_cte.avg_val"}` 过滤。❌ 绝对不能在 WHERE 中直接写 `avg_cte.col`（不在 FROM 链会报 'no such column'）|
-| **select 只输出题目要求的字段** | 结果中只包含题目明确要求的维度字段和指标，不要额外输出参与计算的中间字段（如 cost_price、avg_price 等），除非题目明确说"列出"该字段 |\
+| **select 只输出题目要求的字段** | 结果中只包含题目明确要求的维度字段和指标，不要额外输出参与计算的 ID、分母、中间汇总或排名列，除非题目明确要求展示；但这些字段仍可留在 CTE 内部 |
+| **请求的输出不得遗漏** | 用户明确说“显示/列出/以及/及排名/占比/上一笔/环比”的每一项都必须出现在最终 select；不得只完成基础聚合而漏掉 window、ratio 或导航结果 |
+| **请求的排序不得遗漏** | 用户明确要求排序时，最终 sort 必须完整表达其排序字段和方向；涉及并列规则时按问题顺序稳定排序 |
+| **窗口意图必须落到 window** | 累计、排名、占比、上一笔/下一笔、环比等请求必须生成对应 window 项，并在最终 select 引用其结果；按月聚合后再做窗口时先用 CTE 聚合，再从该 CTE 扫描 |
+| **最终列顺序遵循展示语义** | 先放用户要求的维度，再按用户列举的指标顺序输出；内部 ID 只用于 JOIN/GROUP，不自动暴露到结果 |\
 """
 
 # ── 静态 Section：查询澄清 / 错误处理 / 语言（对话 Agent 模式）────────────────

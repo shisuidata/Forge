@@ -920,7 +920,9 @@ benchmark Registry 修复已完成：新增 `relationships.reference.json` 作�
 
 修复方案已部署：Embedding Key 改为必须显式配置；无 Embedding 时保留 Retriever 并确定性降级 BM25，而不是全 Registry；关系扩展改用 Canonical confirmed graph 和稳定 BFS；System Prompt/Tool Schema 共享同一 selected tables；结构层恢复表/字段描述；Convention 按实际召回表注入；每次结果保存 retrieval trace；输出上限固定在 Model Revision（默认 8192）。NAS 实测 BM25 单题召回 21 表，结构描述、字段描述、指标、关系、Convention 均存在；离线 40 题 reference 物理表召回覆盖 40/40，单题上下文 20–32 表而非 200 表。
 
-Runtime Context v2 Run `mvr_e1ba9b05bf064fe39bcca37635428c64` 已完成：Accuracy 45%（18/40，原 20%）、Assurance 85%（原 45%）、平均重试 0.625、P95 28.12s（原 130.81s）、timeout 0%。RAG/上下文修复显著有效但仍未达 80%/90% 门槛，Activation 继续阻断。剩余差距集中在窗口聚合 0/5、TopN 1/5、多表聚合 2/5、时序导航 2/5；下一步迁移历史 Method AI 的 semantic enrichment 与 result contracts，不能回退 Assurance。
+Runtime Context v2 Run `mvr_e1ba9b05bf064fe39bcca37635428c64` 已完成：Accuracy 45%（18/40，原 20%）、Assurance 85%（原 45%）、平均重试 0.625、P95 28.12s（原 130.81s）、timeout 0%。RAG/上下文修复显著有效但仍未达 80%/90% 门槛，Activation 继续阻断。剩余差距集中在窗口聚合 0/5、TopN 1/5、多表聚合 2/5、时序导航 2/5。
+
+用户确认继续后进入 Runtime Context v3：先持久化失败题的 bounded DSL/SQL 与结果差异分类，按生产可泛化的语义模式迁移历史 Method AI 的 semantic enrichment 和 result contracts；规则必须进入 Registry/Runtime context builder，禁止按 case ID 或 reference SQL 注入，也不能回退 Assurance。完成离线契约测试后再跑 40 题质量门禁。
 3. 实现真实 Provider validate/activate/rollback API；配置保存与激活分离，失败保持旧 active revision。
 4. Forge QueryRun 保存 `model_revision`；再将同一机制接入 Pi StageAttempt。
 5. 增加并发切换、在途任务固定、失败回滚、进程重启恢复和 secret redaction E2E。

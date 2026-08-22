@@ -35,7 +35,7 @@ from forge.schema_builder import build_tool_schema
 from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 
 logger = logging.getLogger(__name__)
-RUNTIME_CONTEXT_REVISION = "runtime-context-v2"
+RUNTIME_CONTEXT_REVISION = "runtime-context-v3"
 
 
 class LLMCompatibilityError(RuntimeError):
@@ -264,7 +264,8 @@ def _registry_context(
             # Convention is organization-authored semantic policy. Inject it
             # whenever its physical tables are in the exact RAG context; do not
             # depend on Chinese questions containing English column names.
-            if applies_tables & visible_tables:
+            triggers = [str(item).lower() for item in rule.get("triggers", [])]
+            if applies_tables & visible_tables or any(trigger in q_lower for trigger in triggers):
                 matched_conv.append(
                     f"  【{rule.get('label', key)}】{rule.get('convention', '').strip()}"
                 )

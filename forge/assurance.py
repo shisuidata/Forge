@@ -18,8 +18,9 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v2"
-POLICY_REVISION = "convention-policy-v1"
+ASSURANCE_REVISION = "query-assurance-v3"
+POLICY_REVISION = "convention-policy-v2"
+INTENT_CONTRACT_REVISION = "intent-fulfillment-v1"
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,17 @@ def assure_query(
     gates.append(GateResult("convention_policy", "passed", POLICY_REVISION))
 
     try:
+        _validate_intent_fulfillment(normalized, question)
+        gates.append(GateResult("intent_fulfillment", "passed", INTENT_CONTRACT_REVISION))
+    except ValueError as exc:
+        gates.append(GateResult(
+            "intent_fulfillment", "failed", INTENT_CONTRACT_REVISION, (str(exc),)
+        ))
+        raise QueryAssuranceError(
+            _failed_report(gates, registry_revision, model_revision)
+        ) from exc
+
+    try:
         sql = compile_query(normalized, dialect=dialect)
     except Exception as exc:
         gates.append(GateResult("scope_type_compile", "failed", ASSURANCE_REVISION, (str(exc),)))
@@ -140,6 +152,73 @@ def assure_query(
         sql=sql,
         sql_hash="sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest(),
     )
+
+
+def _query_nodes(query: dict) -> list[dict]:
+    nodes = [query]
+    for cte in query.get("cte", []):
+        nested = cte.get("query")
+        if isinstance(nested, dict):
+            nodes.extend(_query_nodes(nested))
+    return nodes
+
+
+def _validate_intent_fulfillment(query: dict, question: str) -> None:
+    """Reject structurally valid queries that omit an explicit user-requested operation."""
+    q = question.lower()
+    nodes = _query_nodes(query)
+    windows = [
+        item
+        for node in nodes
+        for item in node.get("window", [])
+        if isinstance(item, dict)
+    ]
+    window_fns = {str(item.get("fn", "")).lower() for item in windows}
+    final_outputs = _query_output_names(query)
+    final_exprs = [
+        str(item.get("expr", ""))
+        for item in query.get("select", [])
+        if isinstance(item, dict)
+    ]
+
+    if any(term in q for term in ("上一笔", "上一次", "上次", "上月", "环比", "时间间隔", "相邻两次")):
+        if "lag" not in window_fns:
+            raise ValueError("意图完整性校验失败：用户要求上一期/相邻记录，必须生成 LAG 窗口结果。")
+    if any(term in q for term in ("下一笔", "下一次", "下一个月", "下月", "lead")):
+        if "lead" not in window_fns:
+            raise ValueError("意图完整性校验失败：用户要求下一期记录，必须生成 LEAD 窗口结果。")
+    if "累计" in q and "sum" not in window_fns:
+        raise ValueError("意图完整性校验失败：用户要求累计值，必须生成 SUM 窗口结果。")
+
+    asks_visible_rank = (
+        "显示" in q and "排名" in q
+        or "及排名" in q
+        or re.search(r"(?:各|每个).{0,12}(?:内|中).{0,20}(?:前\s*\d+|第\s*1)", q)
+    )
+    ranking_fns = {"row_number", "rank", "dense_rank"}
+    if asks_visible_rank:
+        rank_aliases = {
+            str(item.get("as")) for item in windows
+            if item.get("fn") in ranking_fns and item.get("as")
+        }
+        if not rank_aliases:
+            raise ValueError("意图完整性校验失败：分组排名必须生成排名窗口。")
+        if ("显示" in q and "排名" in q or "及排名" in q) and not (rank_aliases & final_outputs):
+            raise ValueError("意图完整性校验失败：用户要求显示排名，最终 SELECT 必须输出排名列。")
+        if re.search(r"(?:各|每个).{0,12}(?:内|中).{0,20}前\s*\d+", q) and not query.get("qualify"):
+            raise ValueError("意图完整性校验失败：每组 TopN 必须使用 qualify 过滤排名。")
+
+    if "占比" in q or "比例" in q:
+        ratio_named = any(
+            any(token in name.lower() for token in ("pct", "ratio", "rate", "share"))
+            for name in final_outputs
+        )
+        ratio_expr = any("/" in expr for expr in final_exprs)
+        if not ratio_named and not ratio_expr:
+            raise ValueError("意图完整性校验失败：用户要求占比，最终 SELECT 必须输出比率计算结果。")
+
+    if any(term in q for term in ("降序", "升序", "排序", "排列")) and not query.get("sort"):
+        raise ValueError("意图完整性校验失败：用户明确要求排序，最终查询必须包含 sort。")
 
 
 def _load_registry() -> tuple[dict, str]:

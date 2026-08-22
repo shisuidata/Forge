@@ -8,6 +8,7 @@ from httpx import AsyncClient
 @pytest.fixture
 def query_run_env(tmp_path, monkeypatch):
     from config import cfg
+    from forge.assurance import ASSURANCE_REVISION, POLICY_REVISION
     import forge.executor as executor
 
     monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "query_runs.db"))
@@ -32,8 +33,8 @@ def query_run_env(tmp_path, monkeypatch):
             "dialect": dialect or "sqlite",
             "assurance_report": {
                 "status": "passed",
-                "assurance_revision": "query-assurance-v2",
-                "policy_revision": "convention-policy-v1",
+                "assurance_revision": ASSURANCE_REVISION,
+                "policy_revision": POLICY_REVISION,
                 "registry_revision": "sha256:assurance-registry",
                 "model_revision": "sha256:model",
                 "gates": [],
@@ -102,8 +103,9 @@ async def test_create_query_run_is_review_only_and_idempotent(
     assert first_data["sql_hash"].startswith("sha256:")
     assert first_data["assurance_report_hash"].startswith("sha256:")
     assert first_data["assurance_report"]["status"] == "passed"
-    assert first_data["assurance_revision"] == "query-assurance-v2"
-    assert first_data["policy_revision"] == "convention-policy-v1"
+    from forge.assurance import ASSURANCE_REVISION, POLICY_REVISION
+    assert first_data["assurance_revision"] == ASSURANCE_REVISION
+    assert first_data["policy_revision"] == POLICY_REVISION
     assert first_data["model_revision"] == "sha256:model"
     assert "rows" not in first_data
 
@@ -245,7 +247,7 @@ async def test_approval_rejects_assurance_policy_drift(
     created = (await _create(client, query_run_env)).json()
     import forge.assurance as assurance
 
-    monkeypatch.setattr(assurance, "POLICY_REVISION", "convention-policy-v2")
+    monkeypatch.setattr(assurance, "POLICY_REVISION", "convention-policy-v-next")
     response = await client.post(
         f"/api/internal/query-runs/{created['query_run_id']}/approve",
         headers={

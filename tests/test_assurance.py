@@ -67,6 +67,7 @@ def test_assurance_returns_versioned_hash_bound_report(assurance_registry):
         "registry_acl_alias",
         "relationship_grain",
         "convention_policy",
+        "intent_fulfillment",
         "scope_type_compile",
         "sql_safety",
     ]
@@ -192,6 +193,40 @@ def test_assurance_allows_many_to_one_aggregate_join(assurance_registry):
         dialect="sqlite",
     )
     assert report.status == "passed"
+
+
+@pytest.mark.parametrize(
+    ("question", "query", "message"),
+    [
+        (
+            "显示每个用户上一笔订单金额",
+            {"scan": "orders", "select": ["orders.user_id", "orders.total_amount"]},
+            "LAG",
+        ),
+        (
+            "订单按金额降序排列",
+            {"scan": "orders", "select": ["orders.id", "orders.total_amount"]},
+            "sort",
+        ),
+        (
+            "计算每个用户订单金额占比",
+            {"scan": "orders", "select": ["orders.user_id", "orders.total_amount"]},
+            "比率",
+        ),
+        (
+            "每笔订单金额排名并显示排名",
+            {"scan": "orders", "select": ["orders.user_id", "orders.total_amount"]},
+            "排名窗口",
+        ),
+    ],
+)
+def test_assurance_rejects_omitted_explicit_user_intent(
+    assurance_registry, question, query, message
+):
+    with pytest.raises(QueryAssuranceError, match=message) as caught:
+        assure_query(query, question, dialect="sqlite")
+
+    assert caught.value.report.gates[-1].gate == "intent_fulfillment"
 
 
 def test_assurance_enforces_table_acl_server_side(assurance_registry):

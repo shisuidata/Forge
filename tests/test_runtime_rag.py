@@ -77,3 +77,24 @@ def test_runtime_context_injects_structure_semantics_relationships_and_conventio
     assert "原子指标（直接可查）" in context
     assert "订单状态过滤原则" in context
     assert "品牌钻石会员均价审核字段" in context
+
+
+def test_runtime_context_injects_triggered_nonphysical_semantic_contracts(monkeypatch):
+    retriever = _retriever()
+    question = "计算每个商品销售额在所属品类总销售额中的占比"
+    selected = retriever.retrieve(question, None, top_k=5)
+    monkeypatch.setattr(llm, "_get_retriever", lambda: (retriever, None))
+    monkeypatch.setattr(cfg, "REGISTRY_PATH", DATASET / "schema.registry.json")
+    monkeypatch.setattr(cfg, "METRICS_PATH", DATASET / "metrics.registry.yaml")
+    monkeypatch.setattr(cfg, "DISAMBIGUATIONS_PATH", DATASET / "disambiguations.registry.yaml")
+    monkeypatch.setattr(cfg, "CONVENTIONS_PATH", DATASET / "field_conventions.registry.yaml")
+
+    context = llm._registry_context(question, selected_tables=selected)
+
+    assert "占比展示口径" in context
+    assert "高频查询结果列与排序契约" in context
+    assert "最终输出 product_name、category_name" in context
+    assert "订单金额默认口径" in llm._registry_context(
+        "计算每个用户累计消费金额",
+        selected_tables=["dwd_order_detail"],
+    )
