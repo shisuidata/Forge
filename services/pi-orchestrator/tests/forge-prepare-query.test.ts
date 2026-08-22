@@ -17,6 +17,7 @@ interface MockForgeOptions {
 async function startMockForge(context: { after: (fn: () => void) => void }, options: MockForgeOptions) {
   let receivedBody: Record<string, unknown> | undefined;
   let receivedApiKey: string | undefined;
+  let receivedPiServiceKey: string | undefined;
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -25,6 +26,7 @@ async function startMockForge(context: { after: (fn: () => void) => void }, opti
       unknown
     >;
     receivedApiKey = request.headers["x-api-key"] as string | undefined;
+    receivedPiServiceKey = request.headers["x-pi-service-key"] as string | undefined;
     response.writeHead(options.statusCode ?? 200, { "content-type": "application/json" });
     response.end(JSON.stringify(options.response));
   });
@@ -33,7 +35,7 @@ async function startMockForge(context: { after: (fn: () => void) => void }, opti
   const address = server.address() as AddressInfo;
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
-    received: () => ({ body: receivedBody, apiKey: receivedApiKey }),
+    received: () => ({ body: receivedBody, apiKey: receivedApiKey, piServiceKey: receivedPiServiceKey }),
   };
 }
 
@@ -119,6 +121,29 @@ test("Forge client preserves bounded HTTP failure information", async (context) 
   );
 });
 
+
+test("Forge context client validates bounded evidence and forwards Pi identity", async (context) => {
+  const evidenceRef = `ctx_${"a".repeat(24)}`;
+  const mock = await startMockForge(context, {
+    response: {
+      status: "ok", question: "销售额口径", bounded: true,
+      evidence: [{ evidence_ref: evidenceRef, source_type: "metric", title: "销售额",
+        content: "默认使用订单支付金额", score: 9 }],
+      evidence_count: 1, context_revision: `sha256:${"b".repeat(64)}`,
+    },
+  });
+  const client = new ForgeQueryRunClient({
+    baseUrl: mock.baseUrl, serviceKey: "pi-service-secret", timeoutMs: 2_000,
+  });
+
+  const result = await client.searchContext({
+    orgId: "org_demo", teamId: "team_demo", userId: "trusted-user", question: "销售额口径",
+  });
+
+  assert.equal(result.evidence[0]?.evidence_ref, evidenceRef);
+  assert.equal(mock.received().piServiceKey, "pi-service-secret");
+  assert.equal(mock.received().body?.user_id, "trusted-user");
+});
 
 test("Pi tool creates a persisted QueryRun with identity from TaskRun", async (context) => {
   const mock = await startMockForge(context, {

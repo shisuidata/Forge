@@ -1,6 +1,7 @@
 import type { ChannelEventStore } from "./channels/event-store.js";
 import type { ChannelEventInput, ChannelIdentity, ChannelPresentation } from "./channels/contracts.js";
 import { renderChannelPresentation } from "./channels/renderer.js";
+import { routeChannelMessage } from "./channels/intent.js";
 import {
   InMemoryArtifactStore,
   type Artifact,
@@ -10,6 +11,7 @@ import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
 import type { ForgeDialect } from "./forge/client.js";
 import {
   ForgeQueryRunClient,
+  type ContextSearchResult,
   type QueryRunReview,
   type QueryRunResult,
 } from "./forge/query-run-client.js";
@@ -51,6 +53,10 @@ export interface StateTransactionPort {
 }
 
 export interface ForgeQueryRunPort {
+  searchContext?(
+    input: { orgId: string; teamId: string; userId: string; question: string; limit?: number },
+    signal?: AbortSignal,
+  ): Promise<ContextSearchResult>;
   createQueryRun(
     input: {
       taskRunId: string;
@@ -190,7 +196,12 @@ export class OrchestratorApplication {
 
   async runAdvisory(
     taskRunId: string,
-    input: { skillName: AdvisorySkillName; prompt: string; idempotencyKey?: string },
+    input: {
+      skillName: AdvisorySkillName;
+      prompt: string;
+      idempotencyKey?: string;
+      contextEvidence?: ContextSearchResult["evidence"];
+    },
     signal?: AbortSignal,
   ): Promise<{ task: TaskRun; artifact: Artifact<AdvisoryPayload> }> {
     const task = this.#tasks.get(taskRunId);
@@ -256,6 +267,7 @@ export class OrchestratorApplication {
       const payload = await this.#skills.advise(running, input.skillName, {
         prompt: input.prompt,
         queryResults,
+        ...(input.contextEvidence === undefined ? {} : { contextEvidence: input.contextEvidence }),
       }, stageExecution.signal, attempt?.model_revision);
       if (stageExecution.timedOut()) throw new Error("Advisory Skill Stage timed out");
       return this.#transactions.run(() => {
@@ -337,6 +349,7 @@ export class OrchestratorApplication {
       throw new TaskStateError("Channel message text must not be empty");
     }
 
+    const route = routeChannelMessage(text);
     const claimed = this.#transactions.run(() => {
       const claim = this.#channelEvents?.claim(event);
       if (claim === undefined) throw new TaskStateError("ChannelEvent Store is not configured");
@@ -347,7 +360,11 @@ export class OrchestratorApplication {
         user_id: identity.user_id,
         channel: event.channel,
         channel_conversation_id: event.conversation_id,
-        intent: "business_root_cause_analysis",
+        intent: route.kind === "query"
+          ? "business_root_cause_analysis"
+          : route.kind === "knowledge"
+            ? "knowledge_answer"
+            : "channel_conversation",
         correlation_id: `${event.channel}:${event.event_id}`,
         message: text.trim(),
         metadata: {
@@ -371,6 +388,58 @@ export class OrchestratorApplication {
         task,
         presentation: this.getChannelPresentation(task.task_run_id),
         duplicate: true,
+      };
+    }
+
+    if (route.kind === "conversation") {
+      const completed = this.#completeChannelResponse(
+        claimed.task,
+        route.title,
+        route.markdown,
+      );
+      return {
+        task: completed,
+        presentation: this.getChannelPresentation(completed.task_run_id),
+        duplicate: false,
+      };
+    }
+
+    if (route.kind === "knowledge") {
+      const context = this.#forge.searchContext === undefined
+        ? undefined
+        : await this.#forge.searchContext({
+            orgId: claimed.task.org_id,
+            teamId: claimed.task.team_id,
+            userId: claimed.task.user_id,
+            question: text.trim(),
+            limit: 8,
+          }, signal);
+      if (context === undefined || context.evidence.length === 0) {
+        const completed = this.#completeChannelResponse(
+          claimed.task,
+          "我可以继续帮你",
+          "我暂时没有从当前 Registry、语义规则或组织知识中找到足够依据。你可以补充具体指标、表名、业务场景或希望查询的数据范围，我会继续澄清，而不会直接编造答案。",
+        );
+        return {
+          task: completed,
+          presentation: this.getChannelPresentation(completed.task_run_id),
+          duplicate: false,
+        };
+      }
+      const advised = await this.runAdvisory(claimed.task.task_run_id, {
+        skillName: "data-doc-writer",
+        prompt: [
+          `用户问题：${text.trim()}`,
+          "请仅根据 context_evidence 回答。回答应直接、自然，并在事实 finding 中引用对应 ctx evidence_ref。",
+          `Context revision: ${context.context_revision}`,
+        ].join("\n"),
+        contextEvidence: context.evidence,
+        idempotencyKey: `${event.channel}:${event.event_id}:knowledge`,
+      }, signal);
+      return {
+        task: advised.task,
+        presentation: this.getChannelPresentation(advised.task.task_run_id),
+        duplicate: false,
       };
     }
 
@@ -1549,6 +1618,16 @@ export class OrchestratorApplication {
       signal: parent === undefined ? timeoutSignal : AbortSignal.any([parent, timeoutSignal]),
       timedOut: () => timeoutSignal.aborted,
     };
+  }
+
+  #completeChannelResponse(task: TaskRun, title: string, markdown: string): TaskRun {
+    return this.#transactions.run(() => {
+      this.#events.append(task.task_run_id, "channel.response_created", {
+        title: title.slice(0, 200),
+        markdown: markdown.slice(0, 8_000),
+      });
+      return this.#transition(task, "completed", "channel_response");
+    });
   }
 
   #transition(task: TaskRun, status: TaskRun["status"], stage: string): TaskRun {

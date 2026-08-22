@@ -73,6 +73,9 @@ export const metricDefinitionPayloadSchema = Type.Object(
 );
 
 const evidenceRefSchema = Type.String({ pattern: "^qr_[A-Za-z0-9_-]+#.+$" });
+const advisoryEvidenceRefSchema = Type.String({
+  pattern: "^(?:qr_[A-Za-z0-9_-]+#.+|ctx_[a-f0-9]{24})$",
+});
 const prioritySchema = Type.Union([
   Type.Literal("immediate"),
   Type.Literal("high"),
@@ -180,7 +183,7 @@ export const advisoryPayloadSchema = Type.Object(
       Type.Object(
         {
           statement: Type.String({ minLength: 1 }),
-          evidence_refs: Type.Array(evidenceRefSchema, { uniqueItems: true }),
+          evidence_refs: Type.Array(advisoryEvidenceRefSchema, { uniqueItems: true }),
           confidence: Type.Union([
             Type.Literal("high"), Type.Literal("medium"), Type.Literal("low"),
           ]),
@@ -453,7 +456,7 @@ export function createAdvisorySubmissionTool(options: {
   return createSubmissionTool({
     name: "submit_advisory_artifact",
     label: "AdvisoryArtifact",
-    description: "Submit the bounded professional advisory result. Data claims must cite only supplied QueryResult evidence references.",
+    description: "Submit the bounded professional advisory result. Factual claims must cite only supplied QueryResult or Context evidence references.",
     schema: advisoryPayloadSchema,
     validate: (payload) => {
       const error = validateAdvisoryPayload(payload);
@@ -468,7 +471,7 @@ export function createAdvisorySubmissionTool(options: {
         return "every finding in a complete data analysis advisory requires QueryResult evidence";
       }
       if (refs.some((ref) => !options.allowedEvidenceRefs.has(ref))) {
-        return "advisory cited evidence outside supplied QueryResults";
+        return "advisory cited evidence outside supplied evidence";
       }
       return undefined;
     },

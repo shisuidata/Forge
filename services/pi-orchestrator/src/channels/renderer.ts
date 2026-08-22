@@ -71,6 +71,23 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     };
   }
 
+  const channelResponse = latestEvent(input.events, "channel.response_created");
+  if (input.task.status === "completed" && channelResponse !== undefined) {
+    return {
+      ...common,
+      kind: "report",
+      title: typeof channelResponse.payload.title === "string"
+        ? channelResponse.payload.title
+        : "Forge",
+      markdown: typeof channelResponse.payload.markdown === "string"
+        ? channelResponse.payload.markdown
+        : "已完成。",
+      fields: [],
+      table: null,
+      actions: [],
+    };
+  }
+
   if (input.task.status === "waiting_for_query_approval") {
     const review = latestEvent(input.events, "query.review_requested");
     const sql = typeof review?.payload.sql === "string" ? review.payload.sql : "";
@@ -138,6 +155,33 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
         ),
         action(input.task.task_run_id, "cancel_task", "取消任务", {}, "danger"),
       ],
+    };
+  }
+
+  const advisory = latestArtifact(input.artifacts, "advisory");
+  if (input.task.status === "completed" && advisory !== undefined) {
+    const findings = Array.isArray(advisory.payload.findings)
+      ? advisory.payload.findings
+          .map((finding) => {
+            if (typeof finding !== "object" || finding === null || typeof finding.statement !== "string") {
+              return undefined;
+            }
+            const references = strings(finding.evidence_refs);
+            return `- ${finding.statement}${references.length > 0 ? `（${references.join("、")}）` : ""}`;
+          })
+          .filter((item): item is string => item !== undefined)
+      : [];
+    const summary = typeof advisory.payload.summary === "string"
+      ? advisory.payload.summary
+      : "知识回答已完成。";
+    return {
+      ...common,
+      kind: "report",
+      title: typeof advisory.payload.title === "string" ? advisory.payload.title : "Forge 回答",
+      markdown: [summary, findings.length > 0 ? `\n${findings.join("\n")}` : ""].join(""),
+      fields: [],
+      table: null,
+      actions: [],
     };
   }
 
