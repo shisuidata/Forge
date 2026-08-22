@@ -26,6 +26,35 @@ class _FakeProcess:
         self.running = False
 
 
+def test_feishu_action_replaces_buttons_with_progress_before_final_card(monkeypatch):
+    import web.feishu_pi as feishu_pi
+
+    class _FakePiClient:
+        def submit_action(self, **kwargs):
+            return {"status": "accepted", "task": {"task_run_id": "tr_demo"}}
+
+        def wait_for_presentation(self, task_run_id):
+            assert task_run_id == "tr_demo"
+            return {
+                "kind": "analysis", "title": "分析完成", "markdown": "已完成",
+                "fields": [], "table": None, "actions": [],
+            }
+
+    cards: list[dict] = []
+    monkeypatch.setattr(feishu_pi, "_get_pi_client", lambda: _FakePiClient())
+    monkeypatch.setattr(feishu_pi, "_update_card", lambda _message_id, card: cards.append(card))
+
+    feishu_pi._process_action(
+        "ou_demo", "oc_demo", "om_card", "evt_action", "analyze", "tr_demo", {}
+    )
+
+    assert len(cards) == 2
+    assert cards[0]["header"]["title"]["content"] == "正在分析结果"
+    assert "自动更新" in cards[0]["body"]["elements"][0]["content"]
+    assert all(item.get("tag") != "button" for item in cards[0]["body"]["elements"])
+    assert cards[1]["header"]["title"]["content"] == "分析完成"
+
+
 def test_feishu_runtime_requires_enabled_credentials_and_channel_key(tmp_path, monkeypatch):
     config_path = tmp_path / "forge.yaml"
     config_path.write_text("feishu:\n  pi_enabled: true\n  app_id: cli_demo\n  app_secret: secret\n")

@@ -8,6 +8,7 @@ import pytest
 from web.pi_channel import (
     PiChannelClient,
     PiChannelError,
+    action_progress_presentation,
     presentation_to_feishu_card,
     stable_channel_action_event_id,
     task_run_id_from_response,
@@ -86,6 +87,14 @@ def test_feishu_needs_input_card_uses_form_submit_contract():
     assert form["elements"][0]["name"] == "text"
     assert form["elements"][1]["action_type"] == "form_submit"
     assert form["elements"][1]["value"]["action_type"] == "provide_input"
+
+
+def test_action_progress_presentation_is_specific_and_non_actionable():
+    progress = action_progress_presentation("analyze")
+    assert progress["kind"] == "progress"
+    assert progress["title"] == "正在分析结果"
+    assert "自动更新" in progress["markdown"]
+    assert progress["actions"] == []
 
 
 def test_feishu_action_id_is_stable_for_retries_and_changes_with_payload():
