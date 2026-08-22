@@ -18,9 +18,9 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v3"
-POLICY_REVISION = "convention-policy-v2"
-INTENT_CONTRACT_REVISION = "intent-fulfillment-v1"
+ASSURANCE_REVISION = "query-assurance-v4"
+POLICY_REVISION = "convention-policy-v3"
+INTENT_CONTRACT_REVISION = "intent-fulfillment-v2"
 
 
 @dataclass(frozen=True)
