@@ -35,7 +35,7 @@ from forge.schema_builder import build_tool_schema
 from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 
 logger = logging.getLogger(__name__)
-RUNTIME_CONTEXT_REVISION = "runtime-context-v7"
+RUNTIME_CONTEXT_REVISION = "runtime-context-v8"
 
 
 class LLMCompatibilityError(RuntimeError):

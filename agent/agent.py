@@ -46,6 +46,7 @@ import yaml
 from config import cfg
 from forge.assurance import QueryAssuranceError, assure_query
 from forge.cache import cache
+from forge.normalization import complete_unambiguous_ratio_alias
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
 from agent.memory import memory
@@ -55,7 +56,7 @@ from agent import llm
 logger = logging.getLogger(__name__)
 
 # 编译失败后最多重试次数（不含首次尝试）
-# 设为 2：首次失败 → 第 1 次重试 → 第 2 次重试 → 放弃
+# 设为 3：首次失败后最多再做 3 次有界修复尝试。
 MAX_RETRIES = 3
 _ALLOWED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 _PREPARE_TIMEOUT_MESSAGE = "查询准备超时，请稍后重试或缩小问题范围。"
@@ -220,7 +221,7 @@ def _prepare_query(
             payload["retry_count"] = attempt
             return payload
 
-        forge_json = result["input"]
+        forge_json = complete_unambiguous_ratio_alias(result["input"], question)
         # Keep the bounded last candidate for internal quality diagnostics even
         # when deterministic Assurance rejects it after all retries.
         payload["forge_json"] = forge_json
