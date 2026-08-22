@@ -438,6 +438,26 @@ def _check_detail_vs_group_average(forge_json: dict, question: str, warnings: li
     """每条明细相对组平均值，不能用 GROUP BY 折叠明细行。"""
     if not ("每条" in question and "平均" in question and any(w in question for w in ("偏差", "相对"))):
         return
+    avg_cte_names = {
+        str(cte.get("name"))
+        for cte in forge_json.get("cte", [])
+        if isinstance(cte, dict)
+        and isinstance(cte.get("query"), dict)
+        and any(
+            isinstance(agg, dict) and str(agg.get("fn", "")).lower() == "avg"
+            for agg in cte["query"].get("agg", [])
+        )
+    }
+    joined_tables = {
+        str(join.get("table"))
+        for join in forge_json.get("joins", [])
+        if isinstance(join, dict)
+    }
+    # A grouped average CTE joined back to the raw detail scan preserves one
+    # output row per detail and is semantically equivalent to window AVG.
+    if avg_cte_names & joined_tables and forge_json.get("scan") not in avg_cte_names:
+        return
+
     for query in _iter_queries(forge_json):
         has_avg_agg = any(
             isinstance(agg, dict) and str(agg.get("fn", "")).lower() == "avg"

@@ -909,6 +909,40 @@ def test_lint_brand_rating_deviation_rejects_unstable_output_contract():
     assert any("brand_name、rating、brand_avg_rating、rating_deviation" in warning for warning in warnings)
 
 
+def test_lint_detail_vs_group_average_accepts_grouped_cte_joined_back_to_detail():
+    warnings = lint_conventions(
+        {
+            "cte": [
+                {
+                    "name": "brand_avg",
+                    "query": {
+                        "scan": "dwd_comment_detail",
+                        "group": ["dim_brand.brand_id"],
+                        "agg": [{"fn": "avg", "col": "dwd_comment_detail.rating", "as": "brand_avg_rating"}],
+                        "select": ["dim_brand.brand_id", "brand_avg_rating"],
+                    },
+                }
+            ],
+            "scan": "dwd_comment_detail",
+            "joins": [
+                {
+                    "type": "inner",
+                    "table": "brand_avg",
+                    "on": {"left": "dim_brand.brand_id", "right": "brand_avg.brand_id"},
+                }
+            ],
+            "select": [
+                "dwd_comment_detail.rating",
+                "brand_avg.brand_avg_rating",
+                {"expr": "dwd_comment_detail.rating - brand_avg.brand_avg_rating", "as": "rating_deviation"},
+            ],
+        },
+        "每条评价相对品牌平均分的偏差",
+    )
+
+    assert not any("必须保留每条明细行" in warning for warning in warnings)
+
+
 def test_lint_order_detail_query_requires_item_id_and_item_date():
     warnings = lint_conventions(
         {
