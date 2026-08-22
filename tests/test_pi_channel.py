@@ -9,6 +9,7 @@ from web.pi_channel import (
     PiChannelClient,
     PiChannelError,
     presentation_to_feishu_card,
+    stable_channel_action_event_id,
     task_run_id_from_response,
 )
 
@@ -85,6 +86,21 @@ def test_feishu_needs_input_card_uses_form_submit_contract():
     assert form["elements"][0]["name"] == "text"
     assert form["elements"][1]["action_type"] == "form_submit"
     assert form["elements"][1]["value"]["action_type"] == "provide_input"
+
+
+def test_feishu_action_id_is_stable_for_retries_and_changes_with_payload():
+    first = stable_channel_action_event_id(
+        "om_card", "tr_demo", "analyze", {"z": 1, "a": "same"}
+    )
+    retry = stable_channel_action_event_id(
+        "om_card", "tr_demo", "analyze", {"a": "same", "z": 1}
+    )
+    changed = stable_channel_action_event_id(
+        "om_card", "tr_demo", "analyze", {"a": "changed", "z": 1}
+    )
+    assert first == retry
+    assert first.startswith("feishu_action_")
+    assert changed != first
 
 
 def test_pi_channel_client_sends_dedicated_service_key(monkeypatch):

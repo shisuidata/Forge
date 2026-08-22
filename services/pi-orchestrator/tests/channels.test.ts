@@ -300,6 +300,8 @@ test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", 
   const forgeGate = new Promise<void>((resolve) => { releaseForge = resolve; });
   let prepareCalls = 0;
   let approveCalls = 0;
+  let releaseApproval: (() => void) | undefined;
+  const approvalGate = new Promise<void>((resolve) => { releaseApproval = resolve; });
   const application = new OrchestratorApplication({
     config,
     tasks: state.tasks,
@@ -338,6 +340,7 @@ test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", 
       },
       async approveQueryRun(input) {
         approveCalls += 1;
+        await approvalGate;
         return {
           query_run_id: input.queryRunId,
           task_run_id: "tr_channel",
@@ -438,7 +441,15 @@ test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", 
     headers,
     body: JSON.stringify(actionPayload),
   });
-  assert.ok(action.status === 200 || action.status === 202);
+  assert.equal(action.status, 202);
+  const inFlightReplay = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(actionPayload),
+  });
+  assert.equal(inFlightReplay.status, 200);
+  assert.equal(approveCalls, 1);
+  releaseApproval?.();
   await new Promise((resolve) => setTimeout(resolve, 10));
   const actionReplay = await fetch(url, {
     method: "POST",
