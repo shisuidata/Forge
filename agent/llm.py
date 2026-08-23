@@ -495,6 +495,9 @@ def _call_openai(
         "max_tokens": config.max_output_tokens,
         "temperature": config.temperature,
     }
+    thinking_mode = config.capabilities.get("thinking_mode")
+    if thinking_mode in {"enabled", "disabled"}:
+        payload["thinking"] = {"type": thinking_mode}
     tool_choice_mode = config.tool_choice
     if tool_choice_mode not in {"auto", "required", "named"}:
         raise LLMCompatibilityError(

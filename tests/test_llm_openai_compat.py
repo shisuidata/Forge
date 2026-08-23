@@ -79,6 +79,42 @@ def test_openai_compatible_call_uses_configured_base_url_and_tools(monkeypatch):
     }
 
 
+def test_openai_profile_can_disable_thinking_for_required_tools(monkeypatch):
+    from agent import llm
+    from agent.model_config import ModelConfigSnapshot
+
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"tool_calls": [{"function": {
+                "name": "forge_model_validation", "arguments": '{"ok": true}',
+            }}]}}]}
+
+    def fake_post(url, headers, json, timeout):
+        captured.update(json)
+        return FakeResponse()
+
+    monkeypatch.setattr("httpx.post", fake_post)
+    snapshot = ModelConfigSnapshot(
+        provider="openai", model="deepseek-v4-flash", api_key="test-key",
+        base_url="https://api.deepseek.com", tool_choice="required",
+        timeout_seconds=90, revision="test", source="test",
+        capabilities={"thinking_mode": "disabled"},
+    )
+    result = llm._call_openai([], "system", [{
+        "name": "forge_model_validation", "description": "validate",
+        "input_schema": {"type": "object"},
+    }], config=snapshot)
+
+    assert captured["thinking"] == {"type": "disabled"}
+    assert captured["tool_choice"] == "required"
+    assert result["tool"] == "forge_model_validation"
+
+
 def test_openai_plain_text_call_omits_tools_and_tool_choice(monkeypatch):
     from agent import llm
 
