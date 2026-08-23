@@ -5,7 +5,7 @@ process configuration because they own long-lived engines and safety state.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import os
@@ -45,6 +45,7 @@ class ModelConfigSnapshot:
     source: str
     max_output_tokens: int = 8192
     temperature: float = 0.0
+    capabilities: dict[str, Any] = field(default_factory=dict)
 
 
 _lock = threading.RLock()
@@ -144,6 +145,7 @@ def get_revision_model_config(
         revision=revision_id,
         max_output_tokens=int(config.get("max_output_tokens", 8192)),
         temperature=float(config.get("temperature", 0.0)),
+        capabilities=dict(config.get("capabilities", {})),
         source="model-control-validation",
     )
 
@@ -199,6 +201,7 @@ def get_model_config(stage: str = "query_generation") -> ModelConfigSnapshot:
                 revision=active.revision_id,
                 max_output_tokens=int(config.get("max_output_tokens", 8192)),
                 temperature=float(config.get("temperature", 0.0)),
+                capabilities=dict(config.get("capabilities", {})),
                 source=f"model-control:{active.scope}:v{active.binding_version}",
             )
             _cached_signature = signature
