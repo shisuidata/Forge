@@ -63,6 +63,8 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 _ALLOWED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 _PREPARE_TIMEOUT_MESSAGE = "查询准备超时，请稍后重试或缩小问题范围。"
+_MODEL_QUOTA_MESSAGE = "模型服务额度已用完，请在额度恢复后重新发起。"
+_MODEL_RATE_LIMIT_MESSAGE = "模型服务当前请求繁忙，请稍后重新发起。"
 
 
 def _prepare_deadline() -> float:
@@ -189,6 +191,14 @@ def _prepare_query(
         except llm.LLMRequestTimeoutError:
             payload["status"] = "timed_out"
             payload["error"] = _PREPARE_TIMEOUT_MESSAGE
+            payload["retry_count"] = attempt
+            return payload
+        except llm.LLMQuotaExceededError:
+            payload["error"] = _MODEL_QUOTA_MESSAGE
+            payload["retry_count"] = attempt
+            return payload
+        except llm.LLMRateLimitError:
+            payload["error"] = _MODEL_RATE_LIMIT_MESSAGE
             payload["retry_count"] = attempt
             return payload
         except LLMNotConfiguredError:
@@ -398,6 +408,12 @@ def process(user_id: str, user_text: str) -> AgentResponse:
             err = _PREPARE_TIMEOUT_MESSAGE
             memory.record(user_id, "assistant", err, action="error")
             return AgentResponse(text=err, action="error")
+        except llm.LLMQuotaExceededError:
+            memory.record(user_id, "assistant", _MODEL_QUOTA_MESSAGE, action="error")
+            return AgentResponse(text=_MODEL_QUOTA_MESSAGE, action="error")
+        except llm.LLMRateLimitError:
+            memory.record(user_id, "assistant", _MODEL_RATE_LIMIT_MESSAGE, action="error")
+            return AgentResponse(text=_MODEL_RATE_LIMIT_MESSAGE, action="error")
         except LLMNotConfiguredError:
             err = "尚未配置 LLM，请管理员先在模型设置中完成配置。"
             memory.record(user_id, "assistant", err, action="error")

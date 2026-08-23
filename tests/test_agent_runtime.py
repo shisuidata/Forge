@@ -356,6 +356,25 @@ def test_prepare_query_reports_bounded_llm_configuration_error(isolated_agent, m
     assert "secret provider response" not in result["error"]
 
 
+def test_prepare_query_fails_fast_with_actionable_quota_message(isolated_agent, monkeypatch):
+    agent_mod, _ = isolated_agent
+    calls = 0
+
+    def call(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise agent_mod.llm.LLMQuotaExceededError("provider account detail")
+
+    monkeypatch.setattr(agent_mod.llm, "call", call)
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+
+    assert result["status"] == "error"
+    assert result["error"] == "模型服务额度已用完，请在额度恢复后重新发起。"
+    assert result["retry_count"] == 0
+    assert calls == 1
+    assert "provider account detail" not in result["error"]
+
+
 def test_prepare_query_retries_bounded_tool_contract_violations(isolated_agent, monkeypatch):
     agent_mod, _ = isolated_agent
     calls = 0

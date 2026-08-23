@@ -238,6 +238,27 @@ def test_openai_http_error_is_sanitized(monkeypatch):
     assert "secret-must-not-leak" not in str(exc_info.value)
 
 
+def test_openai_quota_and_transient_rate_limit_are_distinct(monkeypatch):
+    import httpx
+    from agent import llm
+
+    request = httpx.Request("POST", "https://provider.example/v1/chat/completions")
+
+    def raise_429(code):
+        response = httpx.Response(429, request=request, json={"error": {
+            "code": code, "message": "provider detail must stay bounded",
+        }})
+        raise httpx.HTTPStatusError("limited", request=request, response=response)
+
+    monkeypatch.setattr("httpx.post", lambda *args, **kwargs: raise_429("AccountQuotaExceeded"))
+    with pytest.raises(llm.LLMQuotaExceededError, match="quota exhausted"):
+        llm._call_openai([], "system", tools=[])
+
+    monkeypatch.setattr("httpx.post", lambda *args, **kwargs: raise_429("RateLimitExceeded"))
+    with pytest.raises(llm.LLMRateLimitError, match="rate limited"):
+        llm._call_openai([], "system", tools=[])
+
+
 def test_openai_timeout_has_distinct_bounded_error(monkeypatch):
     import httpx
     from agent import llm
