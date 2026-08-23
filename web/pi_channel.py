@@ -213,9 +213,10 @@ def presentation_to_feishu_card(
                 "conversation_id": conversation_id,
             }
             if item.get("type") == "provide_input":
+                task_suffix = str(item.get("task_run_id") or "task").replace("-", "_")
                 elements.append({
                     "tag": "form",
-                    "name": f"clarification_{item.get('task_run_id')}",
+                    "name": f"clarification_{task_suffix}",
                     "elements": [
                         {
                             "tag": "input",
@@ -224,9 +225,10 @@ def presentation_to_feishu_card(
                         },
                         {
                             "tag": "button",
+                            "name": f"clarification_submit_{task_suffix}",
                             "text": {"tag": "plain_text", "content": str(item.get("label") or "提交")},
                             "type": "primary",
-                            "action_type": "form_submit",
+                            "form_action_type": "submit",
                             "value": value,
                         },
                     ],
