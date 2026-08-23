@@ -85,8 +85,13 @@ def test_feishu_needs_input_card_uses_form_submit_contract():
 
     form = next(item for item in card["body"]["elements"] if item.get("tag") == "form")
     assert form["elements"][0]["name"] == "text"
-    assert form["elements"][1]["action_type"] == "form_submit"
+    assert form["elements"][1]["name"] == "clarification_submit_tr_demo"
+    assert form["elements"][1]["form_action_type"] == "submit"
+    assert "action_type" not in form["elements"][1]
     assert form["elements"][1]["value"]["action_type"] == "provide_input"
+    names = [form["name"], *(item["name"] for item in form["elements"])]
+    assert all(names)
+    assert len(names) == len(set(names))
 
 
 def test_action_progress_presentation_is_specific_and_non_actionable():
