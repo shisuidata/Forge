@@ -18,7 +18,7 @@ export type ChannelActionType = (typeof CHANNEL_ACTION_TYPES)[number];
 
 export interface ChannelEventInput {
   event_id: string;
-  channel: Exclude<TaskChannel, "web" | "api">;
+  channel: Exclude<TaskChannel, "api">;
   event_type: ChannelEventType;
   external_user_id: string;
   conversation_id: string;
@@ -81,7 +81,7 @@ export function parseChannelEvent(value: unknown): ChannelEventInput {
   }
   const input = value as Record<string, unknown>;
   const channel = requiredString(input.channel, "channel");
-  if (channel !== "feishu" && channel !== "dingtalk") {
+  if (channel !== "web" && channel !== "feishu" && channel !== "dingtalk") {
     throw new Error(`Unsupported channel: ${channel}`);
   }
   const eventType = requiredString(input.event_type, "event_type");

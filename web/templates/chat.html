@@ -1,691 +1,327 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forge — 查询</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* SQL 代码块样式 */
-    .sql-block {
-      background: #1e293b;
-      color: #e2e8f0;
-      border-radius: 0.5rem;
-      padding: 1rem;
-      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
-      font-size: 0.8125rem;
-      line-height: 1.6;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .sql-block .kw { color: #93c5fd; font-weight: 600; }
-    .sql-block .fn { color: #a5b4fc; }
-    .sql-block .str { color: #86efac; }
-    .sql-block .num { color: #fbbf24; }
-    .sql-block .op { color: #94a3b8; }
+{% extends "base.html" %}
+{% block title %}AI 对话 · Forge{% endblock %}
+{% block heading %}AI 对话{% endblock %}
 
-    /* 消息气泡 */
-    .msg-user { background: #f0f9ff; border: 1px solid #bae6fd; }
-    .msg-bot  { background: #ffffff; border: 1px solid #e5e7eb; }
-    .msg-system { background: #fefce8; border: 1px solid #fde68a; }
+{% block content %}
+<style>
+  :root {
+    --chat-ink: #17201d;
+    --chat-paper: #f4f1e9;
+    --chat-moss: #194d3a;
+    --chat-lime: #c9ef78;
+    --chat-line: rgba(23, 32, 29, .11);
+  }
+  .chat-shell {
+    background:
+      radial-gradient(circle at 82% 5%, rgba(201,239,120,.22), transparent 26rem),
+      linear-gradient(135deg, rgba(25,77,58,.045) 25%, transparent 25%) 0 0 / 18px 18px,
+      var(--chat-paper);
+  }
+  .chat-message { animation: chat-rise .28s cubic-bezier(.2,.8,.2,1) both; }
+  .chat-card-shadow { box-shadow: 0 18px 45px rgba(23,32,29,.08); }
+  .chat-action { transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+  .chat-action:hover { transform: translateY(-1px); box-shadow: 0 7px 18px rgba(23,32,29,.12); }
+  .chat-dot { animation: chat-pulse 1.2s infinite ease-in-out; }
+  .chat-dot:nth-child(2) { animation-delay: .16s; }
+  .chat-dot:nth-child(3) { animation-delay: .32s; }
+  .chat-prose pre { background: #111a17; color: #d9eee5; border-radius: 12px; padding: 14px 16px; overflow-x: auto; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .chat-prose p + p { margin-top: .65rem; }
+  .chat-prose ul { list-style: disc; padding-left: 1.25rem; margin: .55rem 0; }
+  .chat-prose a { color: #12634a; text-decoration: underline; text-underline-offset: 3px; }
+  @keyframes chat-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes chat-pulse { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .chat-message, .chat-dot { animation: none; } .chat-action { transition: none; } }
+</style>
 
-    /* 输入框自适应高度 */
-    #chat-input {
-      min-height: 2.5rem;
-      max-height: 8rem;
-      resize: none;
-      overflow-y: auto;
-    }
-
-    /* 打字动画 */
-    .typing-dots span {
-      animation: blink 1.4s infinite both;
-      display: inline-block;
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #94a3b8; margin: 0 2px;
-    }
-    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes blink {
-      0%, 80%, 100% { opacity: 0.3; }
-      40% { opacity: 1; }
-    }
-
-    /* 滚动条 */
-    #chat-messages::-webkit-scrollbar { width: 6px; }
-    #chat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-  </style>
-</head>
-<body class="flex h-screen bg-gray-50 font-sans text-sm text-gray-800">
-
-  <!-- 侧边栏 -->
-  <aside class="w-52 flex-shrink-0 bg-gray-900 text-gray-200 flex flex-col">
-    <div class="px-6 py-5 border-b border-gray-700">
-      <span class="text-white font-semibold text-base tracking-wide">Forge</span>
-      <span class="text-gray-500 text-xs ml-1">AI SQL Agent</span>
+<div class="chat-shell -m-6 flex min-h-[calc(100vh-4.1rem)] overflow-hidden text-[var(--chat-ink)]">
+  <aside class="hidden w-64 shrink-0 border-r border-[var(--chat-line)] bg-white/65 p-4 backdrop-blur lg:flex lg:flex-col">
+    <button id="new-conversation" type="button" class="chat-action flex items-center justify-between rounded-xl bg-[var(--chat-ink)] px-4 py-3 text-left text-sm font-semibold text-white">
+      <span>新对话</span><span class="text-[var(--chat-lime)]">＋</span>
+    </button>
+    <div class="mt-6 flex items-center justify-between px-1">
+      <p class="text-[10px] font-bold uppercase tracking-[.2em] text-gray-400">最近任务</p>
+      <span id="recent-count" class="text-[10px] text-gray-400">0</span>
     </div>
-    <nav class="flex-1 px-3 py-4 space-y-1">
-      <a href="/chat"
-         class="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-700 text-white transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-        </svg>
-        查询
-      </a>
-      <a href="/tasks"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 6h16M4 12h10M4 18h7m8-7v6m-3-3h6"/>
-        </svg>
-        Pi 任务预览
-      </a>
-      <div class="pt-3 pb-1 px-3">
-        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">管理</p>
-      </div>
-      <a href="/admin/dashboard"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
-        </svg>
-        概览
-      </a>
-      <a href="/admin/schema"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-        </svg>
-        结构层
-      </a>
-      <a href="/admin/metrics"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
-        指标库
-      </a>
-      <a href="/admin/semantic"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-        </svg>
-        语义规则
-      </a>
-      <a href="/admin/staging"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8"/>
-        </svg>
-        Staging
-      </a>
-      <a href="/admin/sessions"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-        </svg>
-        对话日志
-      </a>
-      <a href="/admin/memory"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
-        </svg>
-        记忆管理
-      </a>
-      <a href="/admin/teams"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-        </svg>
-        团队权限
-      </a>
-      <a href="/admin/audit"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2
-                   M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-        查询审计
-      </a>
-      <a href="/admin/knowledge"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-        </svg>
-        知识源
-      </a>
-      <a href="/admin/pipelines"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M13 10V3L4 14h7v7l9-11h-7z"/>
-        </svg>
-        Pipeline
-      </a>
-      <a href="/admin/settings"
-         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0
-                   002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0
-                   001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0
-                   00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0
-                   00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0
-                   00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0
-                   00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0
-                   001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        系统配置
-      </a>
-    </nav>
-    <div class="px-6 py-4 border-t border-gray-700 text-xs text-gray-500">
-      Forge v0.1.0
+    <div id="recent-tasks" class="mt-2 flex-1 space-y-1 overflow-y-auto pr-1">
+      <p class="px-2 py-4 text-xs text-gray-400">正在读取 Web 任务…</p>
     </div>
+    <a href="/tasks" class="mt-4 rounded-xl border border-[var(--chat-line)] bg-white px-3 py-2.5 text-center text-xs font-semibold text-gray-600 hover:border-gray-400">打开任务监控台 →</a>
   </aside>
 
-  <!-- 主内容区 -->
-  <div class="flex-1 flex flex-col overflow-hidden">
+  <section class="flex min-w-0 flex-1 flex-col">
+    <div class="border-b border-[var(--chat-line)] bg-white/55 px-5 py-3 backdrop-blur md:px-8">
+      <div class="mx-auto flex max-w-4xl items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--chat-moss)] font-serif text-lg font-bold text-[var(--chat-lime)]">F</div>
+          <div>
+            <p class="font-serif text-base font-semibold tracking-tight">Forge Data Desk</p>
+            <p class="text-[11px] text-gray-500">对话、查询、分析与报告，共用同一条可信任务链</p>
+          </div>
+        </div>
+        <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium {% if pi_enabled %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
+          <span class="h-1.5 w-1.5 rounded-full {% if pi_enabled %}bg-emerald-500{% else %}bg-amber-500{% endif %}"></span>
+          {% if pi_enabled %}可信运行时在线{% else %}运行时未启用{% endif %}
+        </span>
+      </div>
+    </div>
 
-    <!-- 消息区 -->
-    <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-      <!-- 欢迎消息 -->
-      <div class="max-w-2xl mx-auto text-center py-12">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-900 text-white text-xl font-bold mb-4">F</div>
-        <h2 class="text-lg font-semibold text-gray-900 mb-2">Forge 查询助手</h2>
-        <p class="text-gray-500 mb-6">用自然语言描述你的数据需求，Forge 会生成 SQL 供你审核后执行。</p>
-        <div class="flex flex-wrap justify-center gap-2">
-          <button onclick="useSuggestion('各城市的订单总额是多少？')"
-                  class="bg-white border border-gray-200 text-gray-700 text-xs px-3 py-2 rounded-lg hover:border-gray-400 transition-colors">
-            各城市的订单总额是多少？
+    <div id="chat-feed" class="flex-1 overflow-y-auto px-4 py-7 md:px-8">
+      <div id="chat-empty" class="mx-auto flex min-h-[28rem] max-w-3xl flex-col justify-center py-12">
+        <p class="font-serif text-sm italic text-[var(--chat-moss)]">Ask the data, not the dashboard.</p>
+        <h2 class="mt-3 max-w-2xl font-serif text-4xl font-semibold leading-tight tracking-tight text-[var(--chat-ink)]">从一个业务问题开始，<br>让证据一路走到报告。</h2>
+        <p class="mt-5 max-w-xl text-sm leading-6 text-gray-600">Forge 会先理解目标。需要查询时展示 SQL，只有你批准后才执行；分析结论始终绑定已审核的数据证据。</p>
+        <div class="mt-8 grid gap-3 sm:grid-cols-3">
+          <button type="button" data-suggestion="帮我看看不同品类的销售额，并分析主要差异" class="chat-action rounded-2xl border border-[var(--chat-line)] bg-white/80 p-4 text-left">
+            <span class="block text-[10px] font-bold uppercase tracking-[.16em] text-emerald-700">QUERY</span><span class="mt-2 block text-sm font-medium">不同品类销售额</span>
           </button>
-          <button onclick="useSuggestion('最近30天的VIP用户数量')"
-                  class="bg-white border border-gray-200 text-gray-700 text-xs px-3 py-2 rounded-lg hover:border-gray-400 transition-colors">
-            最近30天的VIP用户数量
+          <button type="button" data-suggestion="销售额这个指标在系统里的业务口径是什么？" class="chat-action rounded-2xl border border-[var(--chat-line)] bg-white/80 p-4 text-left">
+            <span class="block text-[10px] font-bold uppercase tracking-[.16em] text-amber-700">KNOWLEDGE</span><span class="mt-2 block text-sm font-medium">解释指标口径</span>
           </button>
-          <button onclick="useSuggestion('每个品类的退货率排名')"
-                  class="bg-white border border-gray-200 text-gray-700 text-xs px-3 py-2 rounded-lg hover:border-gray-400 transition-colors">
-            每个品类的退货率排名
+          <button type="button" data-suggestion="记住我默认查看自然月数据" class="chat-action rounded-2xl border border-[var(--chat-line)] bg-white/80 p-4 text-left">
+            <span class="block text-[10px] font-bold uppercase tracking-[.16em] text-blue-700">MEMORY</span><span class="mt-2 block text-sm font-medium">保存个人偏好</span>
           </button>
         </div>
       </div>
+      <div id="chat-messages" class="mx-auto hidden max-w-4xl space-y-5" aria-live="polite"></div>
     </div>
 
-    <!-- 输入区 -->
-    <div class="border-t border-gray-200 bg-white px-6 py-4">
-      <div class="max-w-2xl mx-auto">
-        <form id="chat-form" class="flex items-end gap-3">
-          <div class="flex-1 relative">
-            <textarea id="chat-input"
-                      rows="1"
-                      placeholder="输入你的数据查询..."
-                      class="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-shadow"
-                      ></textarea>
-          </div>
-          <button id="send-btn" type="submit"
-                  class="bg-gray-900 text-white px-4 py-2.5 rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
+    <div class="border-t border-[var(--chat-line)] bg-white/75 px-4 py-4 backdrop-blur md:px-8">
+      <form id="chat-form" class="mx-auto max-w-4xl">
+        <div class="chat-card-shadow flex items-end gap-3 rounded-2xl border border-[var(--chat-line)] bg-white p-2.5 focus-within:border-emerald-700/40">
+          <textarea id="chat-input" rows="1" maxlength="20000" {% if not pi_enabled %}disabled{% endif %}
+            class="max-h-36 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed"
+            placeholder="问一个业务问题，或说明你需要的交付物…"></textarea>
+          <button id="chat-send" type="submit" {% if not pi_enabled %}disabled{% endif %}
+            class="chat-action flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--chat-moss)] text-[var(--chat-lime)] disabled:cursor-not-allowed disabled:opacity-40" aria-label="发送">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-6-6 6 6-6 6"/></svg>
           </button>
-        </form>
-        <p class="text-xs text-gray-400 mt-2 text-center">
-          生成的 SQL 需要你确认后才会执行。按 Enter 发送，Shift+Enter 换行。
-        </p>
-      </div>
+        </div>
+        <p class="mt-2 text-center text-[10px] text-gray-400">Enter 发送 · Shift+Enter 换行 · SQL 不可在审批后修改</p>
+      </form>
     </div>
-  </div>
+  </section>
+</div>
 
 <script>
-const USER_ID = 'web_user_' + Math.random().toString(36).slice(2, 8);
-const messagesEl = document.getElementById('chat-messages');
+const PI_ENABLED = {{ pi_enabled | tojson }};
+const feed = document.getElementById('chat-feed');
+const emptyState = document.getElementById('chat-empty');
+const messages = document.getElementById('chat-messages');
 const form = document.getElementById('chat-form');
 const input = document.getElementById('chat-input');
-const sendBtn = document.getElementById('send-btn');
-let isWaiting = false;
-let welcomeVisible = true;
+const sendButton = document.getElementById('chat-send');
+const recentTasks = document.getElementById('recent-tasks');
+const recentCount = document.getElementById('recent-count');
+const terminalKinds = new Set(['needs_input', 'query_review', 'query_result', 'analysis', 'report', 'error']);
+const activePolls = new Map();
 
-// ── 工具函数 ──────────────────────────────────────────────────────────────────
-
-function scrollToBottom() {
-  messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+function randomId(prefix) {
+  const raw = globalThis.crypto?.randomUUID?.().replaceAll('-', '') || `${Date.now()}${Math.random().toString(36).slice(2)}`;
+  return `web_${prefix}_${raw}`;
 }
-
-function highlightSQL(sql) {
-  const keywords = /\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|ON|AND|OR|NOT|IN|IS|NULL|AS|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|DISTINCT|CASE|WHEN|THEN|ELSE|END|UNION|ALL|EXISTS|BETWEEN|LIKE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|WITH|OVER|PARTITION|ROWS|RANGE|UNBOUNDED|PRECEDING|FOLLOWING|CURRENT|ROW|ASC|DESC|ANTI|SEMI|ROUND|CAST|COALESCE|NULLIF|FILTER)\b/gi;
-  const functions = /\b(COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|ROW_NUMBER|RANK|DENSE_RANK|LAG|LEAD|FIRST_VALUE|LAST_VALUE|JULIANDAY|DATE|STRFTIME|IFNULL|LENGTH|SUBSTR|TRIM|UPPER|LOWER|CONCAT|ABS)\b/gi;
-  const strings = /('[^']*')/g;
-  const numbers = /\b(\d+\.?\d*)\b/g;
-
-  let h = sql
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(strings, '<span class="str">$1</span>')
-    .replace(keywords, '<span class="kw">$1</span>')
-    .replace(functions, '<span class="fn">$1</span>')
-    .replace(numbers, '<span class="num">$1</span>');
-  return h;
-}
-
-function addMessage(role, content, extra) {
-  if (welcomeVisible) {
-    messagesEl.innerHTML = '';
-    welcomeVisible = false;
+function currentConversation() {
+  let id = localStorage.getItem('forge_web_conversation');
+  if (!id || !/^web_[A-Za-z0-9_-]{8,128}$/.test(id)) {
+    id = randomId('conv');
+    localStorage.setItem('forge_web_conversation', id);
   }
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'max-w-2xl mx-auto flex ' + (role === 'user' ? 'justify-end' : 'justify-start');
-
-  const bubble = document.createElement('div');
-  const baseClass = role === 'user' ? 'msg-user' : (role === 'system' ? 'msg-system' : 'msg-bot');
-  bubble.className = `${baseClass} rounded-xl px-4 py-3 max-w-lg shadow-sm`;
-
-  if (role === 'user') {
-    bubble.innerHTML = `<p class="text-sm text-gray-800 whitespace-pre-wrap">${escapeHtml(content)}</p>`;
-  } else if (extra && extra.sql) {
-    // SQL 预览消息
-    bubble.className = 'msg-bot rounded-xl px-4 py-3 max-w-2xl shadow-sm w-full';
-    bubble._rawSQL = extra.sql;
-    bubble._isEditing = false;
-    bubble.innerHTML = `
-      ${content ? `<p class="text-sm text-gray-700 mb-3">${escapeHtml(content)}</p>` : ''}
-      <div class="sql-display">
-        <div class="sql-block mb-3">${highlightSQL(extra.sql)}</div>
-      </div>
-      <textarea class="sql-editor hidden w-full border border-gray-600 rounded-lg px-3 py-2 mb-3 font-mono text-xs leading-relaxed bg-slate-800 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500" rows="8" spellcheck="false">${escapeHtml(extra.sql)}</textarea>
-      <div class="flex items-center gap-2">
-        <button onclick="approveSQL(this)" class="bg-green-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-          确认执行
-        </button>
-        <button onclick="cancelSQL(this)" class="bg-gray-200 text-gray-700 text-xs font-medium px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors">
-          取消
-        </button>
-        <button onclick="toggleEditSQL(this)" class="text-blue-500 hover:text-blue-700 text-xs px-2 py-2 transition-colors">
-          编辑 SQL
-        </button>
-        <button onclick="copySQL(this, '${encodeURIComponent(extra.sql)}')" class="text-gray-400 hover:text-gray-600 text-xs px-2 py-2 transition-colors">
-          复制 SQL
-        </button>
-      </div>
-    `;
-  } else {
-    bubble.innerHTML = `<p class="text-sm text-gray-700 whitespace-pre-wrap">${formatText(content)}</p>`;
+  return id;
+}
+function setConversation(id) {
+  localStorage.setItem('forge_web_conversation', id);
+  messages.replaceChildren();
+  messages.classList.add('hidden');
+  emptyState.classList.remove('hidden');
+}
+function showMessages() {
+  emptyState.classList.add('hidden');
+  messages.classList.remove('hidden');
+}
+function scrollBottom() { requestAnimationFrame(() => feed.scrollTo({top: feed.scrollHeight, behavior: 'smooth'})); }
+async function readJson(response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
+}
+function textNode(tag, text, className = '') {
+  const node = document.createElement(tag); node.textContent = text; node.className = className; return node;
+}
+function appendInline(parent, text) {
+  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g;
+  let cursor = 0; let match;
+  while ((match = linkPattern.exec(text)) !== null) {
+    if (match.index > cursor) parent.append(document.createTextNode(text.slice(cursor, match.index)));
+    const link = document.createElement('a'); link.textContent = match[1]; link.href = match[2];
+    if (match[2].startsWith('http')) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+    parent.append(link); cursor = match.index + match[0].length;
   }
-
-  wrapper.appendChild(bubble);
-  messagesEl.appendChild(wrapper);
-  scrollToBottom();
-  return wrapper;
+  if (cursor < text.length) parent.append(document.createTextNode(text.slice(cursor)));
 }
-
-function addTypingIndicator() {
-  const wrapper = document.createElement('div');
-  wrapper.id = 'typing-indicator';
-  wrapper.className = 'max-w-2xl mx-auto flex justify-start';
-  wrapper.innerHTML = `
-    <div class="msg-bot rounded-xl px-4 py-3 shadow-sm">
-      <div class="typing-dots flex items-center gap-0.5">
-        <span></span><span></span><span></span>
-      </div>
-    </div>
-  `;
-  messagesEl.appendChild(wrapper);
-  scrollToBottom();
+function renderMarkdown(container, markdown) {
+  container.replaceChildren();
+  const lines = String(markdown || '').split('\n'); let code = null; let list = null;
+  for (const raw of lines) {
+    if (raw.startsWith('```')) {
+      if (code) { container.append(code); code = null; } else { code = document.createElement('pre'); code.append(document.createElement('code')); }
+      list = null; continue;
+    }
+    if (code) { code.firstChild.append(document.createTextNode(`${raw}\n`)); continue; }
+    if (/^[-*] /.test(raw)) {
+      if (!list) { list = document.createElement('ul'); container.append(list); }
+      const item = document.createElement('li'); appendInline(item, raw.slice(2)); list.append(item); continue;
+    }
+    list = null;
+    if (!raw.trim()) continue;
+    const paragraph = document.createElement('p');
+    const cleaned = raw.replace(/^#{1,4}\s+/, '').replace(/^>\s?/, '');
+    appendInline(paragraph, cleaned); container.append(paragraph);
+  }
+  if (code) container.append(code);
 }
-
-function removeTypingIndicator() {
-  const el = document.getElementById('typing-indicator');
-  if (el) el.remove();
+function userMessage(text) {
+  showMessages();
+  const row = document.createElement('div'); row.className = 'chat-message flex justify-end';
+  const bubble = textNode('div', text, 'max-w-[78%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[var(--chat-moss)] px-4 py-3 text-sm leading-6 text-white shadow-sm');
+  row.append(bubble); messages.append(row); scrollBottom();
 }
-
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+function assistantShell(taskRunId) {
+  showMessages();
+  let card = messages.querySelector(`[data-task-card="${CSS.escape(taskRunId)}"]`);
+  if (card) return card;
+  const row = document.createElement('div'); row.className = 'chat-message flex justify-start';
+  card = document.createElement('article'); card.dataset.taskCard = taskRunId; card.className = 'chat-card-shadow w-full max-w-3xl overflow-hidden rounded-2xl rounded-bl-md border border-[var(--chat-line)] bg-white';
+  row.append(card); messages.append(row); scrollBottom(); return card;
 }
-
-function formatText(text) {
-  // 简单 markdown 格式：**bold**、`code`、换行
-  return escapeHtml(text)
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
-    .replace(/\n/g, '<br>');
+function progressPresentation(taskRunId, title = 'Forge 正在处理') {
+  return {task_run_id: taskRunId, kind: 'progress', title, markdown: '正在理解请求并推进任务。', table: null, actions: [], source_event_sequence: 0};
 }
-
-function setWaiting(v) {
-  isWaiting = v;
-  sendBtn.disabled = v;
-  input.disabled = v;
-  if (v) addTypingIndicator();
-  else removeTypingIndicator();
+function renderPresentation(presentation) {
+  const card = assistantShell(presentation.task_run_id);
+  const kind = presentation.kind || 'progress';
+  const accent = {error: 'bg-red-500', query_review: 'bg-amber-400', needs_input: 'bg-orange-400', analysis: 'bg-blue-500', report: 'bg-emerald-500', query_result: 'bg-teal-500'}[kind] || 'bg-[var(--chat-lime)]';
+  card.replaceChildren();
+  const stripe = document.createElement('div'); stripe.className = `h-1 ${accent}`;
+  const body = document.createElement('div'); body.className = 'p-5';
+  const eyebrow = textNode('p', kind === 'progress' ? 'WORKING' : kind.replaceAll('_', ' ').toUpperCase(), 'text-[10px] font-bold tracking-[.18em] text-gray-400');
+  const title = textNode('h3', presentation.title || 'Forge', 'mt-1 font-serif text-lg font-semibold text-gray-950');
+  const prose = document.createElement('div'); prose.className = 'chat-prose mt-3 text-sm leading-6 text-gray-700'; renderMarkdown(prose, presentation.markdown || '');
+  body.append(eyebrow, title, prose);
+  if (kind === 'progress') {
+    const dots = document.createElement('div'); dots.className = 'mt-4 flex gap-1.5';
+    for (let i = 0; i < 3; i++) { const dot = document.createElement('span'); dot.className = 'chat-dot h-1.5 w-1.5 rounded-full bg-emerald-700'; dots.append(dot); }
+    body.append(dots);
+  }
+  if (presentation.table?.columns?.length) {
+    const wrap = document.createElement('div'); wrap.className = 'mt-4 max-h-80 overflow-auto rounded-xl border border-gray-100';
+    const table = document.createElement('table'); table.className = 'min-w-full text-xs';
+    const head = document.createElement('thead'); head.className = 'sticky top-0 bg-gray-50 text-gray-500';
+    const hr = document.createElement('tr'); presentation.table.columns.forEach((value) => hr.append(textNode('th', value, 'px-3 py-2 text-left font-semibold'))); head.append(hr);
+    const tbody = document.createElement('tbody'); tbody.className = 'divide-y divide-gray-100';
+    presentation.table.rows.forEach((values) => { const tr = document.createElement('tr'); values.forEach((value) => tr.append(textNode('td', value === null ? 'NULL' : String(value), 'whitespace-nowrap px-3 py-2 font-mono text-gray-700'))); tbody.append(tr); });
+    table.append(head, tbody); wrap.append(table); body.append(wrap);
+    if (presentation.table.truncated) body.append(textNode('p', '仅展示前 20 行，完整结果保留在任务记录中。', 'mt-2 text-[10px] text-gray-400'));
+  }
+  const actions = Array.isArray(presentation.actions) ? presentation.actions : [];
+  if (actions.length) {
+    const actionArea = document.createElement('div'); actionArea.className = 'mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4';
+    actions.forEach((action) => {
+      if (action.type === 'provide_input') {
+        const formBox = document.createElement('div'); formBox.className = 'w-full space-y-2';
+        const field = document.createElement('textarea'); field.rows = 3; field.placeholder = '补充指标、时间范围或你期望的交付物…'; field.className = 'w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-emerald-600';
+        const button = actionButton(action); button.addEventListener('click', () => runAction(presentation, action, button, field.value.trim()));
+        formBox.append(field, button); actionArea.append(formBox);
+      } else {
+        const button = actionButton(action); button.addEventListener('click', () => runAction(presentation, action, button)); actionArea.append(button);
+      }
+    });
+    body.append(actionArea);
+  }
+  card.append(stripe, body); scrollBottom();
 }
-
-// ── API 调用 ──────────────────────────────────────────────────────────────────
-
+function actionButton(action) {
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = action.label;
+  const tone = action.style === 'danger' ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100' : action.style === 'primary' ? 'border-[var(--chat-moss)] bg-[var(--chat-moss)] text-white hover:bg-emerald-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50';
+  button.className = `chat-action rounded-xl border px-4 py-2.5 text-xs font-semibold ${tone}`; return button;
+}
+async function fetchPresentation(taskRunId) {
+  const data = await readJson(await fetch(`/api/pi/chat/tasks/${encodeURIComponent(taskRunId)}/presentation`)); return data.presentation;
+}
+async function pollPresentation(taskRunId, previousSequence = -1) {
+  if (activePolls.has(taskRunId)) return activePolls.get(taskRunId);
+  const polling = (async () => {
+    const deadline = Date.now() + 360000; let delay = 650; let lastSequence = previousSequence;
+    while (Date.now() < deadline) {
+      const presentation = await fetchPresentation(taskRunId);
+      if (presentation.source_event_sequence !== lastSequence || presentation.kind !== 'progress') {
+        renderPresentation(presentation); lastSequence = presentation.source_event_sequence;
+      }
+      if (terminalKinds.has(presentation.kind)) return presentation;
+      await new Promise((resolve) => setTimeout(resolve, delay)); delay = Math.min(2000, Math.round(delay * 1.25));
+    }
+    throw new Error('任务处理时间超过预期，请前往任务监控台查看。');
+  })().finally(() => activePolls.delete(taskRunId));
+  activePolls.set(taskRunId, polling); return polling;
+}
+async function runAction(presentation, action, button, text = '') {
+  button.disabled = true; const original = button.textContent; button.textContent = '处理中…';
+  const payload = {...(action.payload || {})}; if (action.type === 'provide_input') payload.text = text;
+  if (action.type === 'provide_input' && !text) { button.disabled = false; button.textContent = original; return; }
+  try {
+    renderPresentation(progressPresentation(presentation.task_run_id, '正在处理你的操作'));
+    const data = await readJson(await fetch(`/api/pi/chat/tasks/${encodeURIComponent(presentation.task_run_id)}/actions`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: action.type, payload, conversation_id: currentConversation(), message_id: `web_card_${presentation.task_run_id}`}),
+    }));
+    const nextTaskId = data.task?.task_run_id || presentation.task_run_id;
+    if (data.presentation) renderPresentation(data.presentation);
+    await pollPresentation(nextTaskId, presentation.source_event_sequence);
+    void loadRecentTasks();
+  } catch (error) {
+    renderPresentation({task_run_id: presentation.task_run_id, kind: 'error', title: '操作未完成', markdown: error.message || '请稍后重试。', table: null, actions: [], source_event_sequence: presentation.source_event_sequence + 1});
+  }
+}
 async function sendMessage(text) {
-  addMessage('user', text);
-  setWaiting(true);
-
+  userMessage(text); sendButton.disabled = true; input.disabled = true;
+  const messageId = randomId('msg');
   try {
-    const resp = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, user_id: USER_ID }),
+    const data = await readJson(await fetch('/api/pi/chat/messages', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: text, conversation_id: currentConversation(), message_id: messageId}),
+    }));
+    const taskRunId = data.task?.task_run_id;
+    if (!taskRunId) throw new Error('Pi 没有返回 TaskRun');
+    renderPresentation(data.presentation || progressPresentation(taskRunId));
+    await pollPresentation(taskRunId, data.presentation?.source_event_sequence ?? -1);
+    void loadRecentTasks();
+  } catch (error) {
+    const localId = randomId('error');
+    renderPresentation({task_run_id: localId, kind: 'error', title: '消息未能送达', markdown: error.message || '请稍后重试。', table: null, actions: [], source_event_sequence: 1});
+  } finally { sendButton.disabled = false; input.disabled = false; input.focus(); }
+}
+async function loadRecentTasks() {
+  try {
+    const data = await readJson(await fetch('/api/pi/tasks?channel=web&limit=30'));
+    recentCount.textContent = String(data.tasks.length); recentTasks.replaceChildren();
+    if (!data.tasks.length) { recentTasks.append(textNode('p', '还没有 Web 任务。', 'px-2 py-4 text-xs text-gray-400')); return; }
+    data.tasks.forEach((task) => {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'w-full rounded-xl px-3 py-2.5 text-left hover:bg-white';
+      button.append(textNode('span', task.metadata?.original_message || task.intent, 'block truncate text-xs font-medium text-gray-700'));
+      button.append(textNode('span', new Date(task.updated_at).toLocaleString('zh-CN'), 'mt-1 block text-[10px] text-gray-400'));
+      button.addEventListener('click', async () => { showMessages(); messages.replaceChildren(); userMessage(task.metadata?.original_message || task.intent); try { renderPresentation(await fetchPresentation(task.task_run_id)); } catch (error) { renderPresentation({task_run_id: task.task_run_id, kind: 'error', title: '无法读取任务', markdown: error.message, table: null, actions: [], source_event_sequence: 1}); } });
+      recentTasks.append(button);
     });
-    const data = await resp.json();
-
-    if (data.action === 'sql_review' && data.sql) {
-      const retryHint = data.retry_count > 0 ? ` (经过 ${data.retry_count} 次修正)` : '';
-      addMessage('bot', (data.text || 'SQL 已生成，请审核：') + retryHint, { sql: data.sql });
-    } else if (data.action === 'error') {
-      addMessage('system', data.text || '处理出错，请重试。');
-    } else {
-      addMessage('bot', data.text || '(无回复)');
-    }
-  } catch (err) {
-    addMessage('system', '网络错误：' + err.message);
-  } finally {
-    setWaiting(false);
-    input.focus();
-  }
+  } catch { recentTasks.replaceChildren(textNode('p', '最近任务暂时不可用。', 'px-2 py-4 text-xs text-red-500')); }
 }
-
-function toggleEditSQL(btn) {
-  const bubble = btn.closest('.msg-bot');
-  const display = bubble.querySelector('.sql-display');
-  const editor = bubble.querySelector('.sql-editor');
-  bubble._isEditing = !bubble._isEditing;
-  if (bubble._isEditing) {
-    display.classList.add('hidden');
-    editor.classList.remove('hidden');
-    editor.focus();
-    btn.textContent = '预览';
-    btn.className = 'text-yellow-600 hover:text-yellow-800 text-xs px-2 py-2 transition-colors';
-  } else {
-    display.classList.remove('hidden');
-    editor.classList.add('hidden');
-    // 更新预览
-    display.querySelector('.sql-block').innerHTML = highlightSQL(editor.value);
-    btn.textContent = '编辑 SQL';
-    btn.className = 'text-blue-500 hover:text-blue-700 text-xs px-2 py-2 transition-colors';
-  }
-}
-
-async function approveSQL(btn) {
-  const btnGroup = btn.parentElement;
-  const bubble = btn.closest('.msg-bot');
-  btnGroup.querySelectorAll('button').forEach(b => b.disabled = true);
-  btn.textContent = '执行中...';
-
-  // 检测是否编辑了 SQL
-  const editor = bubble.querySelector('.sql-editor');
-  const editedSQL = editor ? editor.value.trim() : '';
-  const isEdited = editedSQL && editedSQL !== bubble._rawSQL;
-
-  try {
-    let resp;
-    if (isEdited) {
-      // 用户编辑过 SQL → 直接执行编辑后的 SQL
-      resp = await fetch('/api/execute-raw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql: editedSQL, user_id: USER_ID }),
-      });
-    } else {
-      // 原始 SQL → 走正常审核流程
-      resp = await fetch('/api/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: '', user_id: USER_ID }),
-      });
-    }
-    const data = await resp.json();
-    if (!resp.ok) {
-      throw new Error('服务暂时无法执行该查询');
-    }
-
-    if (data.exec_error || data.action === 'execution_failed') {
-      btnGroup.innerHTML = '<span class="text-red-600 text-xs font-medium">&#10007; 执行失败</span>';
-      addMessage('system', data.exec_error || '执行失败，请重新生成 SQL。');
-      return;
-    }
-
-    btnGroup.innerHTML = '<span class="text-green-600 text-xs font-medium">&#10003; 执行成功</span>';
-
-    if (data.columns && data.rows && data.rows.length > 0) {
-      addResultTable(data.columns, data.rows, data.row_count);
-    } else if (data.columns && data.row_count === 0) {
-      addMessage('bot', '查询完成，结果为空。');
-    } else if (data.text) {
-      addMessage('bot', data.text);
-    }
-
-    // Pipeline 后续阶段结果（分析报告 + 图表）
-    if (data.analysis) {
-      addAnalysisCard(data.analysis);
-    }
-    if (data.chart_html) {
-      addChartCard(data.chart_html);
-    }
-  } catch (err) {
-    btnGroup.innerHTML = '<span class="text-red-600 text-xs font-medium">&#10007; 执行失败</span>';
-    addMessage('system', '执行失败：' + err.message);
-  }
-}
-
-function addResultTable(columns, rows, totalCount) {
-  if (welcomeVisible) { messagesEl.innerHTML = ''; welcomeVisible = false; }
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'max-w-3xl mx-auto flex justify-start';
-
-  // 只展示前 50 行
-  const displayRows = rows.slice(0, 50);
-  const truncated = rows.length > 50;
-
-  let html = `
-    <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
-      <div class="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <span class="text-xs font-medium text-gray-700">查询结果</span>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-400">${totalCount} 行 × ${columns.length} 列</span>
-          <button onclick="downloadCSV(this)" class="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-200 transition-colors">CSV</button>
-          <button onclick="downloadJSON(this)" class="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-200 transition-colors">JSON</button>
-        </div>
-      </div>
-      <div class="overflow-x-auto max-h-96">
-        <table class="min-w-full text-xs">
-          <thead class="bg-gray-50 sticky top-0">
-            <tr>
-              ${columns.map(c => `<th class="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap border-b border-gray-200">${escapeHtml(String(c))}</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            ${displayRows.map((row, i) => `
-              <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-blue-50/40">
-                ${row.map(v => `<td class="px-3 py-1.5 text-gray-800 whitespace-nowrap font-mono">${escapeHtml(v === null ? 'NULL' : String(v))}</td>`).join('')}
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-      ${truncated ? `<div class="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-400">仅显示前 50 行</div>` : ''}
-    </div>
-  `;
-
-  wrapper.innerHTML = html;
-  // 将完整数据存到 DOM 元素上，供导出使用
-  wrapper.querySelector('.msg-bot')._exportData = { columns, rows };
-  messagesEl.appendChild(wrapper);
-  scrollToBottom();
-}
-
-function _findExportData(btn) {
-  return btn.closest('.msg-bot')._exportData;
-}
-
-function downloadCSV(btn) {
-  const { columns, rows } = _findExportData(btn);
-  const escapeCsvCell = (v) => {
-    const s = v === null ? '' : String(v);
-    return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const lines = [columns.map(escapeCsvCell).join(',')];
-  for (const row of rows) {
-    lines.push(row.map(escapeCsvCell).join(','));
-  }
-  // BOM 头确保 Excel 识别 UTF-8
-  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'forge_result_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadJSON(btn) {
-  const { columns, rows } = _findExportData(btn);
-  const data = rows.map(row => {
-    const obj = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
-    return obj;
-  });
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'forge_result_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.json';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function cancelSQL(btn) {
-  const btnGroup = btn.parentElement;
-
-  try {
-    const resp = await fetch('/api/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: '', user_id: USER_ID }),
-    });
-    const data = await resp.json();
-    btnGroup.innerHTML = '<span class="text-gray-400 text-xs">已取消</span>';
-  } catch (err) {
-    addMessage('system', '取消失败：' + err.message);
-  }
-}
-
-function copySQL(btn, encodedSql) {
-  const sql = decodeURIComponent(encodedSql);
-  navigator.clipboard.writeText(sql).then(() => {
-    const orig = btn.textContent;
-    btn.textContent = '已复制';
-    setTimeout(() => btn.textContent = orig, 1500);
-  });
-}
-
-function useSuggestion(text) {
-  input.value = text;
-  sendMessage(text);
-  input.value = '';
-}
-
-// ── 事件绑定 ──────────────────────────────────────────────────────────────────
-
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text || isWaiting) return;
-  input.value = '';
-  input.style.height = 'auto';
-  sendMessage(text);
-});
-
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    form.dispatchEvent(new Event('submit'));
-  }
-});
-
-// 输入框自适应高度
-input.addEventListener('input', () => {
-  input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 128) + 'px';
-});
-
-input.focus();
-
-// ── Pipeline 分析报告卡片 ────────────────────────────────────────────────────
-function addAnalysisCard(analysis) {
-  if (welcomeVisible) { messagesEl.innerHTML = ''; welcomeVisible = false; }
-  const wrapper = document.createElement('div');
-  wrapper.className = 'max-w-3xl mx-auto flex justify-start';
-
-  const dirIcon = { up: '↑', down: '↓', stable: '→', mixed: '↕' };
-  const dirColor = { up: 'text-green-600', down: 'text-red-600', stable: 'text-gray-600', mixed: 'text-yellow-600' };
-  const dir = analysis.trend_direction || '';
-
-  const insightsHtml = (analysis.insights || []).map(i =>
-    `<li class="text-xs text-gray-700 leading-relaxed">${escapeHtml(i)}</li>`
-  ).join('');
-
-  const metricsHtml = Object.entries(analysis.key_metrics || {}).map(([k, v]) =>
-    `<div class="bg-gray-50 rounded px-3 py-2 text-center">
-       <div class="text-xs text-gray-500">${escapeHtml(k)}</div>
-       <div class="text-sm font-semibold text-gray-900 font-mono">${escapeHtml(String(v))}</div>
-     </div>`
-  ).join('');
-
-  const recHtml = (analysis.recommendations || []).map(r =>
-    `<li class="text-xs text-gray-700 leading-relaxed">${escapeHtml(r)}</li>`
-  ).join('');
-
-  wrapper.innerHTML = `
-    <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
-      <div class="px-4 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
-        <span class="text-xs font-medium text-blue-800">📊 数据分析</span>
-        ${dir ? `<span class="text-xs font-semibold ${dirColor[dir] || 'text-gray-600'}">${dirIcon[dir] || ''} ${dir}</span>` : ''}
-      </div>
-      <div class="p-4 space-y-3">
-        ${analysis.summary ? `<p class="text-sm font-medium text-gray-900">${escapeHtml(analysis.summary)}</p>` : ''}
-        ${metricsHtml ? `<div class="grid grid-cols-3 gap-2">${metricsHtml}</div>` : ''}
-        ${insightsHtml ? `<div><div class="text-xs font-semibold text-gray-500 mb-1">关键洞察</div><ul class="space-y-1 list-disc list-inside">${insightsHtml}</ul></div>` : ''}
-        ${recHtml ? `<div><div class="text-xs font-semibold text-gray-500 mb-1">建议</div><ul class="space-y-1 list-disc list-inside">${recHtml}</ul></div>` : ''}
-      </div>
-    </div>`;
-  messagesEl.appendChild(wrapper);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-// ── 图表卡片 ─────────────────────────────────────────────────────────────────
-function addChartCard(chartHtml) {
-  if (welcomeVisible) { messagesEl.innerHTML = ''; welcomeVisible = false; }
-  const wrapper = document.createElement('div');
-  wrapper.className = 'max-w-3xl mx-auto flex justify-start';
-  wrapper.innerHTML = `
-    <div class="msg-bot rounded-xl shadow-sm w-full overflow-hidden">
-      <div class="px-4 py-2.5 bg-purple-50 border-b border-purple-100">
-        <span class="text-xs font-medium text-purple-800">📈 可视化图表</span>
-      </div>
-      <div class="p-2">${chartHtml}</div>
-    </div>`;
-  messagesEl.appendChild(wrapper);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+form.addEventListener('submit', (event) => { event.preventDefault(); const text = input.value.trim(); if (!text || sendButton.disabled) return; input.value = ''; input.style.height = 'auto'; void sendMessage(text); });
+input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 144)}px`; });
+input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); } });
+document.querySelectorAll('[data-suggestion]').forEach((button) => button.addEventListener('click', () => { input.value = button.dataset.suggestion; input.focus(); }));
+document.getElementById('new-conversation').addEventListener('click', () => { setConversation(randomId('conv')); input.focus(); });
+currentConversation();
+if (PI_ENABLED) {
+  void loadRecentTasks();
+} else {
+  recentTasks.replaceChildren(textNode('p', 'Pi Runtime 未启用。', 'px-2 py-4 text-xs text-amber-600'));
 }
 </script>
-</body>
-</html>
+{% endblock %}
