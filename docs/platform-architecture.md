@@ -52,15 +52,17 @@ Pi Agent Platform
 Pi Control Plane
 · 创建 TaskRun
 · 选择 Workflow / Skill
-· 调度 Stage
+· 调度 Stage 与绑定模型
+· 执行 API Key / OAuth 模型推理
 · 等待用户输入和审批
 · 决定继续、暂停、回退或结束
              │ 受控 Tool / API 调用
              ▼
 Forge Execution Plane
 · 校验身份、权限和输入契约
-· 生成 QueryPlan
-· Compile / Lint
+· 签发有界 QueryPlanningEnvelope
+· 验证候选 Forge JSON 并生成 QueryPlan
+· Compile / Lint / Assurance
 · 验证审批
 · 只读执行
 · 返回事实 Artifact 和审计记录
@@ -99,7 +101,8 @@ Pi 是任务底座和 Agent Runtime，负责：
 
 - 维护当前会话和短期上下文。
 - 识别任务类型并选择 Skill 或 Workflow。
-- 发起澄清、暂停、恢复、回退和分支。
+- 根据用户目标和交付物生成版本化执行计划，将复杂任务拆成有依赖关系的 PlanStep，并持续判断是否已完成全部交付物。
+- 发起澄清、计划确认、暂停、恢复、回退、重规划和受控分支。
 - 调用受控的 Forge Tools。
 - 将上一步 Artifact 交给下一阶段。
 - 记录 Stage 状态、耗时、失败和模型用量。
@@ -110,7 +113,7 @@ Pi 是任务底座和 Agent Runtime，负责：
 Pi 不负责：
 
 - 直接连接数据库。
-- 绕过 Forge 编译器生成并执行任意 SQL。
+- 绕过 Forge 签发的 QueryPlanningEnvelope、Forge JSON Contract、Compiler 或 Assurance 生成并执行任意 SQL。Pi 可在 OAuth 模型 Stage 中生成**不可信候选 Forge JSON**，但候选只有经 Forge 独立验证后才能成为 QueryPlan。
 - 将未经确认的对话内容提升为组织事实。
 - 成为 Registry、审计日志或长期业务记忆的真相源。
 
@@ -120,8 +123,8 @@ Forge 是唯一可信执行层，负责：
 
 - 数据源连接与只读账号管理。
 - Schema 同步、Registry、业务上下文和 ACL。
-- 自然语言意图到 Forge JSON。
-- 统一 Query Assurance Pipeline：Contract、Registry/ACL、Scope/Type、Convention Policy、Compiler 和 SQL Safety Gate。
+- 拥有自然语言到 Forge JSON 的规划契约、Registry Context 裁剪和最终接受权。API-key 模型可以在 Forge 内生成候选；Pi OAuth 模型可以消费 Forge 签发的有界 `QueryPlanningEnvelope` 并通过终止型 Tool 提交不可信候选，但不得读取数据库，也不得自行把候选解释为可执行计划。
+- 统一 Query Assurance Pipeline：Contract、Registry/ACL、Scope/Type、Convention Policy、Compiler 和 SQL Safety Gate；无论候选由 Forge 内部模型还是 Pi OAuth 模型生成，都进入同一 Pipeline。
 - 每次准备输出版本化 `QueryAssuranceReport`；所有入口复用同一服务，不允许各自散落调用 Schema/Lint/Compiler。
 - 生成待审核 SQL，并确保 Assurance Report、审核 SQL hash 与实际执行内容一致。
 - 查询超时、结果行数上限、敏感数据和表权限控制。
@@ -180,10 +183,13 @@ Skill 输出必须区分：
 ```text
 created
 → clarifying
+→ planning
+→ waiting_for_plan_approval（按策略可跳过）
 → ready_for_query
 → waiting_for_query_approval
 → querying
 → analyzing
+→ visualizing（按计划可跳过）
 → rendering
 → completed
 ```
@@ -200,6 +206,7 @@ needs_input / incomplete / cancelled / failed / expired
 |---|---|---|---|
 | `IntentArtifact` | Pi | Skill Router | 任务类型、目标、初始约束 |
 | `ClarificationArtifact` | 需求澄清 Skill | Pi、用户 | 已知信息、缺口、验收标准 |
+| `ExecutionPlanArtifact` | Pi Plan Runtime | Pi、用户、渠道 | 目标交付物、PlanStep、依赖、审批点、完成条件与计划版本 |
 | `MetricDefinitionArtifact` | 指标审查 Skill | Forge、用户 | 指标公式、粒度、窗口、边界 |
 | `QueryPlanArtifact` | Forge | Pi、渠道 | Forge JSON、SQL、方言、Registry 版本 |
 | `ReviewRequestArtifact` | Forge | 渠道、用户 | 审批对象、SQL hash、过期时间 |
@@ -286,7 +293,7 @@ web session / feishu open_id / dingtalk user_id
 
 | 数据 | 真相源 | 说明 |
 |---|---|---|
-| ModelProfile Revision 与 ActiveBinding | Platform Model Control Plane | 目标态：Key 只保存 secret_ref；切换使用 CAS，新任务生效，在途任务固定旧 revision。当前 Forge 已实现文件 snapshot 热加载，持久化控制面待建设 |
+| ModelProfile Revision、OAuth Auth Slot 与 ActiveBinding | Platform Model Control Plane + Pi Auth Store | API Key 只保存 secret_ref；OAuth refresh/access token 只保存在 Pi 专用 mode-600 `auth.json`，Profile 仅引用 provider/auth slot，不复制 token。切换使用 CAS，新任务生效，在途任务固定旧 revision |
 | 当前对话和推理上下文 | Pi Session | 可压缩、可过期，不作为组织事实 |
 | TaskRun 与 Stage 状态 | Pi Task Store | 支持暂停、恢复和渠道切换 |
 | QueryRun、SQL、审批、执行 | Forge | 可信查询审计真相源 |
@@ -306,16 +313,18 @@ Pi Session 不替代 Forge EMS/SMP/Registry。跨会话长期知识必须经过�
 1. 渠道创建用户消息并完成身份映射。
 2. Pi 创建 `TaskRun`，选择需求澄清 Skill。
 3. Skill 生成 `ClarificationArtifact`；缺少口径时向用户提问。
-4. 指标审查 Skill 生成 `MetricDefinitionArtifact`。
-5. Pi 调用 Forge `prepare_query`，传入任务 ID、身份和已确认口径。
-6. Forge 返回 QueryPlan 和 ReviewRequest。
-7. 渠道展示 SQL，用户确认或修改需求。
-8. Forge 验证 `sql_hash`、身份和权限后执行。
-9. Forge 返回带口径和执行元数据的 QueryResult。
-10. 归因分析 Skill 生成证据、假设树和补查建议。
-11. 若需补查，创建关联 QueryRun，继续经过审批；不得后台无限循环。
-12. 报告 Skill 生成渠道无关的 RenderedOutput。
-13. Web、飞书或钉钉适配器完成最终展示。
+4. Pi 根据已确认目标生成 `ExecutionPlanArtifact`。例如“包含可视化图表的报告”必须显式包含取数、分析、图表和报告步骤及其依赖，不能在 QueryResult 后误判任务完成。
+5. 指标审查 Skill 生成 `MetricDefinitionArtifact`。
+6. Pi 调度已就绪的查询 PlanStep。API-key Planner 可直接调用 Forge `prepare_query`；OAuth Planner 先向 Forge 获取短期、有界、绑定身份与 Registry revision 的 `QueryPlanningEnvelope`，在隔离 Pi Session 中通过唯一 Tool 生成候选 Forge JSON，再提交 Forge。
+7. Forge 对两类候选统一执行 Contract、Registry/ACL、Compiler、Lint 与 Assurance；只有通过后才返回 QueryPlan 和 ReviewRequest。
+8. 渠道展示 SQL，用户确认或修改需求。
+9. Forge 验证 `sql_hash`、身份和权限后执行。
+10. Forge 返回带口径和执行元数据的 QueryResult；Pi 将查询 PlanStep 标记完成并自动解锁依赖它的分析步骤。
+11. 归因分析 Skill 生成证据、假设树和补查建议；可视化步骤基于已确认 QueryResult/Analysis 生成 `ChartArtifact`。
+12. 若需补查，创建关联 QueryRun，继续经过审批；不得后台无限循环，必要时生成新 Plan revision。
+13. 报告 Skill 消费 Analysis 与 Chart Artifact，生成渠道无关的 RenderedOutput。
+14. Pi 只有在计划声明的所有必需交付物均存在且通过契约校验后，才能把 TaskRun 标记为 `completed`。
+15. Web、飞书或钉钉适配器展示计划进度、当前审批点和最终交付物。
 
 ## 10. 渠道无关输出
 
@@ -358,7 +367,9 @@ Pi 拥有 ReportJob 的编排状态、Attempt、lease、幂等和 Artifact 依�
 
 ### 10.2 分阶段模型控制
 
-模型不是全局可变单例。Model Control Plane 以 Task Stage 为 scope 管理不可变 Profile Revision、Active Binding、CAS、Audit 与回滚；Pi 在 StageAttempt 开始时固定对应 revision，在途任务不跟随热切换。`metric_definition/query_generation/query_repair` 是 SQL Critical scope，必须通过固定 Runtime/Registry/Assurance/Policy lineage 的完整结果准确率、Assurance、重试、延迟和超时门禁；环境变量、Admin UI、回滚和非核心模型均不能绕过。分析、报告等非核心 Stage 只通过能力与 Artifact 安全门禁，且永远不获得 Forge SQL 执行权。
+模型不是全局可变单例。Model Control Plane 以 Task Stage 为 scope 管理不可变 Profile Revision、Active Binding、CAS、Audit 与回滚；Pi 在 StageAttempt 开始时固定对应 revision，在途任务不跟随热切换。Profile 明确区分 `api_key` 与 `pi_oauth` execution backend：前者由 Secret Ref 解析，后者只引用 Pi Auth Store 的 provider/auth slot，token 不进入 Model Control DB、Artifact 或日志。所有 9 个 Stage 都可绑定 OAuth Provider；非查询 Stage 直接使用终止型 Artifact Tool，SQL Critical Stage 只能使用 Forge 签发的 PlanningEnvelope 和候选提交 Tool，最终 QueryPlan、SQL 与执行权仍属于 Forge。
+
+`metric_definition/query_generation/query_repair` 是 SQL Critical scope。完整 Accuracy/Assurance/Retry/P95/Timeout 质量门禁由管理员持久化开关控制；无论开关状态，Provider、凭证、协议、Tool Calling 与 Structured Output compatibility gate 始终必需。开关打开时固定 Runtime/Registry/Assurance/Policy lineage 并 fail-closed；关闭时必须审计为 compatibility-only，不能伪称已做完整质量保证。OAuth token 失效、订阅额度耗尽、Provider 限流、binding 漂移或 Forge Assurance 失败均不得降级绕过审批。分析、报告等非核心 Stage 只通过能力与 Artifact 安全门禁，且永远不获得 Forge SQL 执行权。
 
 ## 11. 可观测性
 
@@ -383,7 +394,7 @@ Web 后台是跨渠道只读观测面：它从同一个 Pi Store 按已认证管
 |---|---|---|
 | `agent/pipeline.py` Pipeline 路由与 Stage 推进 | Pi | 在 Pi Task Runtime 稳定后迁移并停止作为主编排器 |
 | `agent/agent.py` 通用对话循环、pending state | Pi + Forge QueryRun | 对话和任务状态归 Pi；查询准备、审批状态改为 Forge QueryRun |
-| `agent/llm.py` Registry 注入与 Forge JSON 生成 | Forge | 保留为查询规划能力，不承担通用 Skill 路由 |
+| `agent/llm.py` Registry 注入与 Forge JSON 生成 | Forge Contract + 可插拔 Model Backend | Forge 保留 PlanningEnvelope、Context、Contract 与接受权；API-key backend 可进程内生成，Pi OAuth backend 只提交不可信候选，统一进入 Forge Assurance |
 | `agent/prompts.py` 通用分析/表达 prompt | 拾穗 DATA Skills | 逐步替换为版本化 Skill 和 Artifact Schema |
 | `agent/memory` EMS/WMB 会话状态 | Pi | 当前会话、断点和工作记忆迁移到 Pi Task/Session |
 | `agent/memory` 已确认业务知识 | Forge Registry/SMP | 保留正式知识，但写入必须经过候选和确认 |
@@ -403,7 +414,7 @@ Web 后台是跨渠道只读观测面：它从同一个 Pi Store 按已认证管
 - Forge 不根据关键词自行选择 `query / analyze / visualize / report` Pipeline。
 - Forge 不在分析结果不足时自行发起下一次业务查询。
 - Forge 不直接向飞书、钉钉推进多轮任务。
-- Pi 不复制 Registry 检索、Forge JSON 生成、Compiler、Lint 或 Executor。
+- Pi 不复制 Registry 检索、Forge JSON 业务契约、Compiler、Lint 或 Executor；OAuth Session 只能消费 Forge 签发的有界 Context，并通过 Forge 定义的 Tool 生成不可信候选。
 - 同一职责在目标架构中只能有一个主实现；旧实现只允许作为有明确下线时间的兼容路径。
 
 ## 13. 当前实现基础
