@@ -46,6 +46,14 @@ class LLMRequestTimeoutError(TimeoutError):
     """Raised when one provider call exhausts its allocated deadline budget."""
 
 
+class LLMQuotaExceededError(RuntimeError):
+    """Raised when the provider account or plan has exhausted its quota."""
+
+
+class LLMRateLimitError(RuntimeError):
+    """Raised for transient provider request throttling that is not quota exhaustion."""
+
+
 def _direct_call_config(provider: str, config: ModelConfigSnapshot | None) -> ModelConfigSnapshot:
     """Keep low-level test callers compatible; production call() passes a snapshot."""
     if config is not None:
@@ -526,6 +534,20 @@ def _call_openai(
         raise LLMRequestTimeoutError("LLM Provider 调用超时") from exc
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
+        provider_code = ""
+        if exc.response is not None:
+            try:
+                error_body = exc.response.json().get("error", {})
+                if isinstance(error_body, dict):
+                    provider_code = str(error_body.get("code", ""))
+            except (TypeError, ValueError):
+                pass
+        if status == 429 and provider_code in {
+            "AccountQuotaExceeded", "QuotaExceeded", "insufficient_quota",
+        }:
+            raise LLMQuotaExceededError("LLM Provider quota exhausted") from exc
+        if status == 429:
+            raise LLMRateLimitError("LLM Provider rate limited the request") from exc
         raise LLMCompatibilityError(
             f"LLM Provider 拒绝请求（HTTP {status}），请检查协议、模型和凭证"
         ) from exc

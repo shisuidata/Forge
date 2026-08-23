@@ -222,6 +222,15 @@ test("channel renderer hides reasoning, internal lineage, raw errors, and stage 
   assert.equal(failed.markdown, "本次处理未能完成，请稍后重试或重新发起。");
   assert.deepEqual(failed.fields, []);
 
+  const quota = renderChannelPresentation({
+    task: task("failed"),
+    events: [event(1, "query.prepare_failed", {
+      error: "模型服务额度已用完，请在额度恢复后重新发起。",
+    })],
+    artifacts: [],
+  });
+  assert.equal(quota.markdown, "模型服务额度已用完，请在额度恢复后重新发起。");
+
   const progressTask = { ...task("analyzing"), current_stage: "skill:business-root-cause-analysis" };
   const progress = renderChannelPresentation({ task: progressTask, events: [], artifacts: [] });
   assert.equal(progress.markdown, "正在基于查询结果进行分析。");

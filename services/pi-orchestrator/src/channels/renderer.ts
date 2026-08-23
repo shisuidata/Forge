@@ -77,13 +77,21 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
   }
 
   if (["failed", "cancelled", "expired"].includes(input.task.status)) {
+    const failureMessage = typeof failure?.payload.error === "string"
+      ? failure.payload.error
+      : "";
+    const safeFailure = failureMessage === "模型服务额度已用完，请在额度恢复后重新发起。"
+      ? failureMessage
+      : failureMessage === "模型服务当前请求繁忙，请稍后重新发起。"
+        ? failureMessage
+        : "本次处理未能完成，请稍后重试或重新发起。";
     return {
       ...common,
       kind: "error",
       title: input.task.status === "cancelled" ? "任务已取消" : "任务未完成",
       markdown: input.task.status === "cancelled"
         ? "任务已按你的要求取消。"
-        : "本次处理未能完成，请稍后重试或重新发起。",
+        : safeFailure,
       fields: [],
       table: null,
       actions: [],
