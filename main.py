@@ -143,7 +143,7 @@ async def login_redirect_handler(request: Request, exc: _LoginRedirect):
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/tasks", status_code=302)
+    return RedirectResponse(url="/chat", status_code=302)
 
 # 图表静态文件服务
 _charts_dir = Path(__file__).parent / "web" / "static" / "charts"

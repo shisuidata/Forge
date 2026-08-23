@@ -4,7 +4,7 @@ Forge web UI — FastAPI router.
 Routes
 ------
 ## Chat（查询对话）
-GET  /chat                           → 兼容重定向到 /tasks
+GET  /chat                           → Web Chat（统一 Pi ChannelEvent / TaskRun）
 POST /api/chat                       → 默认 410；仅显式回滚开关恢复旧 Agent API
 POST /api/prepare-query              → 外部 Agent 生成可审核 SQL（不执行）
 POST /api/approve                    → 确认 SQL
@@ -25,6 +25,7 @@ GET  /admin/settings                 → current config (secrets masked)
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -42,7 +43,7 @@ import yaml
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agent import audit
 from agent import feedback
@@ -92,7 +93,7 @@ templates.env.filters["tojson_cn"] = _tojson_cn
 # ── 认证路由（login / logout）─────────────────────────────────────────────────
 
 @chat_router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, next: str = "/tasks"):
+async def login_page(request: Request, next: str = "/chat"):
     return templates.TemplateResponse(
         request, "login.html", {"error": None, "next": next}
     )
@@ -102,7 +103,7 @@ async def login_page(request: Request, next: str = "/tasks"):
 async def login_submit(
     request: Request,
     password: str = Form(...),
-    next: str = Form(default="/tasks"),
+    next: str = Form(default="/chat"),
 ):
     expected = cfg.AUTH_ADMIN_PASSWORD
     # auth disabled 时任意密码均可通过；auth enabled 时必须配置并匹配密码
@@ -183,7 +184,7 @@ def _parse_lines(text: str) -> list[str]:
 def _safe_next_path(next_path: str) -> str:
     """Allow redirects only to local absolute paths."""
     if not next_path or not next_path.startswith("/") or next_path.startswith("//"):
-        return "/tasks"
+        return "/chat"
     return next_path
 
 
@@ -208,6 +209,19 @@ class PiTaskCreateRequest(BaseModel):
     message: str
     intent: str = "query_prepare"
     channel_conversation_id: Optional[str] = None
+
+
+class PiWebChatMessageRequest(BaseModel):
+    message: str
+    conversation_id: str
+    message_id: str
+
+
+class PiWebChatActionRequest(BaseModel):
+    action: str
+    conversation_id: str
+    message_id: str
+    payload: dict = Field(default_factory=dict)
 
 
 class PiPrepareQueryRequest(BaseModel):
@@ -270,8 +284,13 @@ async def _pi_request(method: str, path: str, payload: Optional[dict] = None):
     """Web channel proxy only: forward Task API calls without business decisions."""
     url = f"{cfg.PI_ORCHESTRATOR_URL}{path}"
     timeout = httpx.Timeout(cfg.PI_ORCHESTRATOR_TIMEOUT_SECONDS)
+    headers = (
+        {"X-Channel-Service-Key": cfg.PI_CHANNEL_SERVICE_KEY}
+        if cfg.PI_CHANNEL_SERVICE_KEY
+        else {}
+    )
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.request(method, url, json=payload)
+        response = await client.request(method, url, json=payload, headers=headers)
     try:
         data = response.json()
     except ValueError:
@@ -292,10 +311,14 @@ def _run_sync(fn, *args):
     return loop.run_in_executor(None, partial(fn, *args))
 
 
-@chat_router.get("/chat", response_class=RedirectResponse)
-async def chat_page(_auth=Depends(require_web_auth)):
-    """Legacy Agent UI is retired; keep bookmarks on the canonical Pi task path."""
-    return RedirectResponse(url="/tasks", status_code=302)
+@chat_router.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request, _auth=Depends(require_web_auth)):
+    """First-class Web channel backed by Pi ChannelEvent and TaskRun contracts."""
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {"active": "chat", "pi_enabled": cfg.PI_ORCHESTRATOR_ENABLED},
+    )
 
 
 @chat_router.get("/tasks", response_class=HTMLResponse)
@@ -306,6 +329,23 @@ async def task_workspace_page(request: Request, _auth=Depends(require_web_auth))
         "tasks.html",
         {"active": "tasks", "pi_enabled": cfg.PI_ORCHESTRATOR_ENABLED},
     )
+
+
+def _valid_web_event_id(value: str) -> bool:
+    return re.fullmatch(r"web_[A-Za-z0-9_-]{8,128}", value) is not None
+
+
+def _web_action_event_id(
+    message_id: str,
+    task_run_id: str,
+    action: str,
+    payload: dict,
+) -> str:
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(
+        f"{message_id}\n{task_run_id}\n{action}\n{canonical}".encode()
+    ).hexdigest()
+    return f"web_action_{digest[:40]}"
 
 
 def _web_admin_task_scopes() -> list[tuple[str, str]]:
@@ -335,6 +375,195 @@ async def _pi_scoped_task_get(task_run_id: str, suffix: str = "") -> tuple[int, 
     if not suffix:
         return task_status, task_data
     return await _pi_request("GET", f"/v1/tasks/{task_run_id}/{suffix}")
+
+
+@chat_router.post("/api/pi/chat/messages", response_class=JSONResponse)
+async def api_pi_web_chat_message(
+    req: PiWebChatMessageRequest,
+    _auth=Depends(require_api_auth),
+):
+    """Submit one authenticated Web message through the shared ChannelEvent ingress."""
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    message = req.message.strip()
+    if not message or len(message) > 20_000:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "消息不能为空且不能超过 20000 字符"},
+            status_code=400,
+        )
+    if not _valid_web_event_id(req.conversation_id) or not _valid_web_event_id(req.message_id):
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Invalid Web conversation or message ID"},
+            status_code=400,
+        )
+    try:
+        status, data = await _pi_request(
+            "POST",
+            "/v1/channel-events",
+            {
+                "event_id": req.message_id,
+                "channel": "web",
+                "event_type": "message",
+                "external_user_id": "web_admin",
+                "conversation_id": req.conversation_id,
+                "message_id": req.message_id,
+                "task_run_id": None,
+                "payload": {"text": message, "chat_type": "web"},
+            },
+        )
+        return JSONResponse(data, status_code=status)
+    except httpx.HTTPError as exc:
+        logger.warning("Pi Web chat message failed: %s", exc)
+        return JSONResponse(
+            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
+            status_code=502,
+        )
+
+
+@chat_router.get(
+    "/api/pi/chat/tasks/{task_run_id}/presentation",
+    response_class=JSONResponse,
+)
+async def api_pi_web_chat_presentation(
+    task_run_id: str,
+    _auth=Depends(require_api_auth),
+):
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Invalid task_run_id"},
+            status_code=400,
+        )
+    try:
+        task_status, task_data = await _pi_scoped_task_get(task_run_id)
+        task = task_data.get("task") if isinstance(task_data, dict) else None
+        if task_status != 200 or not isinstance(task, dict) or task.get("channel") != "web":
+            return JSONResponse({"status": "not_found"}, status_code=404)
+        status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}/presentation")
+        return JSONResponse(data, status_code=status)
+    except httpx.HTTPError as exc:
+        logger.warning("Pi Web chat presentation failed: %s", exc)
+        return JSONResponse(
+            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
+            status_code=502,
+        )
+
+
+@chat_router.post(
+    "/api/pi/chat/tasks/{task_run_id}/actions",
+    response_class=JSONResponse,
+)
+async def api_pi_web_chat_action(
+    task_run_id: str,
+    req: PiWebChatActionRequest,
+    _auth=Depends(require_api_auth),
+):
+    """Forward only presentation-declared Web actions through shared ChannelEvent handling."""
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Invalid task_run_id"},
+            status_code=400,
+        )
+    allowed_actions = {
+        "provide_input", "approve_query", "cancel_task", "request_supplement",
+        "analyze", "render_report", "confirm_memory",
+    }
+    if req.action not in allowed_actions:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Unsupported Web chat action"},
+            status_code=400,
+        )
+    if not _valid_web_event_id(req.conversation_id) or not _valid_web_event_id(req.message_id):
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Invalid Web conversation or message ID"},
+            status_code=400,
+        )
+    try:
+        task_status, task_data = await _pi_scoped_task_get(task_run_id)
+        task = task_data.get("task") if isinstance(task_data, dict) else None
+        if (
+            task_status != 200
+            or not isinstance(task, dict)
+            or task.get("channel") != "web"
+            or task.get("user_id") != "web_admin"
+        ):
+            return JSONResponse({"status": "not_found"}, status_code=404)
+        presentation_status, presentation_data = await _pi_request(
+            "GET", f"/v1/tasks/{task_run_id}/presentation"
+        )
+        presentation = (
+            presentation_data.get("presentation")
+            if presentation_status == 200 and isinstance(presentation_data, dict)
+            else None
+        )
+        declared_actions = (
+            presentation.get("actions", []) if isinstance(presentation, dict) else []
+        )
+        allowed_extra = {"text"} if req.action == "provide_input" else set()
+        declared = None
+        for item in declared_actions:
+            if (
+                not isinstance(item, dict)
+                or item.get("type") != req.action
+                or item.get("task_run_id") != task_run_id
+            ):
+                continue
+            candidate_payload = item.get("payload")
+            if not isinstance(candidate_payload, dict):
+                candidate_payload = {}
+            if (
+                all(req.payload.get(key) == value for key, value in candidate_payload.items())
+                and not (set(req.payload) - set(candidate_payload) - allowed_extra)
+            ):
+                declared = item
+                break
+        if declared is None:
+            return JSONResponse(
+                {"status": "conflict", "error": "操作已失效，请刷新当前对话"},
+                status_code=409,
+            )
+        if req.action == "provide_input" and not str(req.payload.get("text") or "").strip():
+            return JSONResponse(
+                {"status": "invalid_request", "error": "补充信息不能为空"},
+                status_code=400,
+            )
+        task_conversation_id = task.get("channel_conversation_id")
+        if not isinstance(task_conversation_id, str) or not _valid_web_event_id(task_conversation_id):
+            return JSONResponse(
+                {"status": "conflict", "error": "该任务不属于可交互的 Web 对话"},
+                status_code=409,
+            )
+        action_message_id = f"web_card_{task_run_id}"
+        event_id = _web_action_event_id(
+            action_message_id,
+            task_run_id,
+            req.action,
+            req.payload,
+        )
+        status, data = await _pi_request(
+            "POST",
+            "/v1/channel-events",
+            {
+                "event_id": event_id,
+                "channel": "web",
+                "event_type": "action",
+                "external_user_id": "web_admin",
+                "conversation_id": task_conversation_id,
+                "message_id": action_message_id,
+                "task_run_id": task_run_id,
+                "payload": {"action": req.action, **req.payload},
+            },
+        )
+        return JSONResponse(data, status_code=status)
+    except httpx.HTTPError as exc:
+        logger.warning("Pi Web chat action failed: %s", exc)
+        return JSONResponse(
+            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
+            status_code=502,
+        )
 
 
 @chat_router.get("/api/pi/tasks", response_class=JSONResponse)

@@ -14,13 +14,13 @@ import type { ChannelIdentity } from "./contracts.js";
 
 export class ChannelIdentityError extends Error {}
 
-type ExternalChannel = Exclude<TaskChannel, "web" | "api">;
+type ExternalChannel = Exclude<TaskChannel, "api">;
 type IdentityDocument = Record<ExternalChannel, Record<string, ChannelIdentity>>;
 
 export class ChannelIdentityResolver {
   readonly #identities = new Map<string, ChannelIdentity>();
   readonly #identityMapPath: string;
-  readonly #document: IdentityDocument = { feishu: {}, dingtalk: {} };
+  readonly #document: IdentityDocument = { web: {}, feishu: {}, dingtalk: {} };
   #feishuIdentityCount = 0;
 
   constructor(identityMapPath: string) {
@@ -38,7 +38,7 @@ export class ChannelIdentityResolver {
       throw new ChannelIdentityError("Channel identity map must be an object");
     }
     for (const [channel, channelEntries] of Object.entries(value)) {
-      if (channel !== "feishu" && channel !== "dingtalk") {
+      if (channel !== "web" && channel !== "feishu" && channel !== "dingtalk") {
         throw new ChannelIdentityError(`Unsupported identity-map channel: ${channel}`);
       }
       if (

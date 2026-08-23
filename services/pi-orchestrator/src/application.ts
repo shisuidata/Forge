@@ -663,6 +663,17 @@ export class OrchestratorApplication {
         },
         signal,
       );
+      if (task.parent_task_run_id !== null) {
+        const resumed = await this.resumeAnalysisWithSupplement(
+          task.parent_task_run_id,
+          {
+            childTaskRunId: task.task_run_id,
+            idempotencyKey: `${event.channel}:${event.event_id}:resume-parent-analysis`,
+          },
+          signal,
+        );
+        responseTask = resumed.task;
+      }
     } else if (actionType === "analyze") {
       const analyzed = await this.analyzeTask(
         task.task_run_id,

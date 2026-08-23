@@ -1,4 +1,11 @@
 {
+  "web": {
+    "web_admin": {
+      "org_id": "org_default",
+      "team_id": "team_default",
+      "user_id": "web_admin"
+    }
+  },
   "feishu": {
     "ou_example": {
       "org_id": "org_demo",

@@ -38,14 +38,21 @@
       <span class="text-gray-500 text-xs ml-1">AI SQL Agent</span>
     </div>
     <nav class="flex-1 px-3 py-4 space-y-1">
+      <a href="/chat"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
+                {% if active == 'chat' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a10 10 0 01-4.3-.96L3 20l1.4-3.74A7.45 7.45 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        AI 对话
+      </a>
       <a href="/tasks"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
                 {% if active == 'tasks' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7m8-7v6m-3-3h6"/>
         </svg>
-        AI 数据任务
+        任务监控
       </a>
       <div class="pt-3 pb-1 px-3">
         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">管理</p>

@@ -359,6 +359,126 @@ async def test_web_proxy_forwards_hash_bound_approval(client: AsyncClient, monke
 
 
 @pytest.mark.asyncio
+async def test_web_chat_message_uses_shared_channel_event_with_server_identity(
+    client: AsyncClient, monkeypatch
+):
+    from config import cfg
+    import web.router as router_mod
+
+    calls = []
+
+    async def fake_pi_request(method, path, payload=None):
+        calls.append((method, path, payload))
+        return 202, {
+            "status": "accepted",
+            "task": {"task_run_id": "tr_web_chat_001", "channel": "web"},
+            "presentation": {"kind": "progress", "task_run_id": "tr_web_chat_001"},
+        }
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    response = await client.post(
+        "/api/pi/chat/messages",
+        json={
+            "message": "统计本月销售额",
+            "conversation_id": "web_conv_12345678",
+            "message_id": "web_msg_12345678",
+        },
+    )
+
+    assert response.status_code == 202
+    assert calls == [("POST", "/v1/channel-events", {
+        "event_id": "web_msg_12345678",
+        "channel": "web",
+        "event_type": "message",
+        "external_user_id": "web_admin",
+        "conversation_id": "web_conv_12345678",
+        "message_id": "web_msg_12345678",
+        "task_run_id": None,
+        "payload": {"text": "统计本月销售额", "chat_type": "web"},
+    })]
+
+
+@pytest.mark.asyncio
+async def test_web_chat_action_must_match_current_presentation(
+    client: AsyncClient, monkeypatch
+):
+    from config import cfg
+    import web.router as router_mod
+
+    calls = []
+    task = {
+        "task_run_id": "tr_web_chat_001", "channel": "web", "user_id": "web_admin",
+        "org_id": "org_default", "team_id": "team_default",
+        "channel_conversation_id": "web_conv_server_owned",
+    }
+    presentation = {
+        "task_run_id": "tr_web_chat_001", "kind": "query_review",
+        "actions": [{
+            "type": "approve_query", "task_run_id": "tr_web_chat_001",
+            "payload": {"query_run_id": "qr_001", "sql_hash": "sha256:abc", "assurance_report_hash": "sha256:def"},
+        }],
+    }
+
+    async def fake_pi_request(method, path, payload=None):
+        calls.append((method, path, payload))
+        if path == "/v1/tasks/tr_web_chat_001":
+            return 200, {"task": task}
+        if path.endswith("/presentation"):
+            return 200, {"presentation": presentation}
+        return 202, {"status": "accepted", "task": task, "presentation": {"kind": "progress"}}
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    rejected = await client.post(
+        "/api/pi/chat/tasks/tr_web_chat_001/actions",
+        json={
+            "action": "approve_query", "conversation_id": "web_conv_12345678",
+            "message_id": "web_card_12345678",
+            "payload": {"query_run_id": "qr_other", "sql_hash": "sha256:abc", "assurance_report_hash": "sha256:def"},
+        },
+    )
+    assert rejected.status_code == 409
+
+    accepted = await client.post(
+        "/api/pi/chat/tasks/tr_web_chat_001/actions",
+        json={
+            "action": "approve_query", "conversation_id": "web_conv_12345678",
+            "message_id": "web_card_12345678",
+            "payload": presentation["actions"][0]["payload"],
+        },
+    )
+    assert accepted.status_code == 202
+    forwarded = calls[-1]
+    assert forwarded[0:2] == ("POST", "/v1/channel-events")
+    assert forwarded[2]["channel"] == "web"
+    assert forwarded[2]["payload"]["query_run_id"] == "qr_001"
+
+
+@pytest.mark.asyncio
+async def test_web_chat_cannot_act_on_cross_channel_task(client: AsyncClient, monkeypatch):
+    from config import cfg
+    import web.router as router_mod
+
+    async def fake_pi_request(method, path, payload=None):
+        return 200, {"task": {
+            "task_run_id": "tr_feishu_001", "channel": "feishu", "user_id": "feishu_owner",
+            "org_id": "org_default", "team_id": "team_default",
+        }}
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    response = await client.post(
+        "/api/pi/chat/tasks/tr_feishu_001/actions",
+        json={
+            "action": "cancel_task", "conversation_id": "web_conv_12345678",
+            "message_id": "web_card_12345678", "payload": {},
+        },
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_web_proxy_rejects_invalid_task_id(client: AsyncClient, monkeypatch):
     from config import cfg
 

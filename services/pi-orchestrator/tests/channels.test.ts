@@ -9,6 +9,7 @@ import { OrchestratorApplication } from "../src/application.js";
 import type { Artifact } from "../src/artifacts.js";
 import { ChannelIdentityError, ChannelIdentityResolver } from "../src/channels/identity.js";
 import { routeChannelMessage } from "../src/channels/intent.js";
+import { parseChannelEvent } from "../src/channels/contracts.js";
 import { renderChannelPresentation } from "../src/channels/renderer.js";
 import { loadConfig } from "../src/config.js";
 import { createOrchestratorServer } from "../src/server.js";
@@ -286,6 +287,27 @@ test("personal memory requires an explicit channel approval and never escalates 
   assert.equal(memoryWrites[0]?.user_id, "user_demo");
   assert.equal(memoryWrites[0]?.operation, "upsert");
   state.close();
+});
+
+test("Web uses the same ChannelEvent and explicit identity-map contract", async () => {
+  const parsed = parseChannelEvent({
+    event_id: "web_msg_001", channel: "web", event_type: "message",
+    external_user_id: "web_admin", conversation_id: "web_conv_001",
+    message_id: "web_msg_001", task_run_id: null, payload: { text: "查询销售额" },
+  });
+  assert.equal(parsed.channel, "web");
+
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-web-identity-"));
+  const path = join(directory, "identities.json");
+  await writeFile(path, JSON.stringify({
+    web: { web_admin: { org_id: "org_default", team_id: "team_default", user_id: "web_admin" } },
+    feishu: {}, dingtalk: {},
+  }));
+  const resolver = new ChannelIdentityResolver(path);
+  assert.deepEqual(resolver.resolve("web", "web_admin"), {
+    org_id: "org_default", team_id: "team_default", user_id: "web_admin",
+  });
+  assert.throws(() => resolver.resolve("web", "unknown"), ChannelIdentityError);
 });
 
 test("identity resolver fails closed for unknown channel users", async () => {
