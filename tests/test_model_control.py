@@ -10,7 +10,7 @@ from agent.model_control import (
     ModelControlStore,
     MODEL_STAGE_SCOPES,
 )
-from agent.model_config import get_model_config, reset_model_config_cache
+from agent.model_config import LLMConfigurationError, get_model_config, reset_model_config_cache
 
 
 LINEAGE = {
@@ -45,6 +45,7 @@ def _validated_revision(store: ModelControlStore, model: str) -> str:
         report={
             "tool_calling": True,
             "structured_output": True,
+            "capability_gate": {"passed": True},
             "quality_gate": {"passed": True, "lineage": LINEAGE},
         },
     )
@@ -145,6 +146,51 @@ def test_smoke_only_revision_cannot_bypass_quality_gate(tmp_path):
         store.activate(
             revision, expected_version=0, actor="admin", current_lineage=LINEAGE
         )
+
+
+def test_sql_quality_gate_switch_allows_audited_compatibility_only_activation(tmp_path):
+    store = ModelControlStore(tmp_path / "models.db")
+    revision = store.create_revision(profile_id="query-candidate", name="Candidate", config=_config())
+    store.record_validation(
+        revision, passed=True, report={
+            "tool_calling": True, "structured_output": True,
+            "capability_gate": {"passed": True},
+            "quality_gate": {"passed": False, "status": "not_run"},
+        },
+    )
+    assert store.sql_quality_gate_enabled() is True
+    store.set_sql_quality_gate_enabled(False, actor="admin")
+    assert store.sql_quality_gate_enabled() is False
+    assert store.activate(
+        revision, expected_version=0, actor="admin", current_lineage=LINEAGE,
+    ) == 1
+    assert store.list_audit()[0]["action"] == "activate_compatibility_only"
+    store.set_sql_quality_gate_enabled(True, actor="admin")
+    assert store.sql_quality_gate_enabled() is True
+
+
+def test_enabling_quality_switch_fails_closed_for_active_compatibility_only_model(tmp_path, monkeypatch):
+    path = tmp_path / "models.db"
+    store = ModelControlStore(path)
+    revision = store.create_revision(profile_id="compat", name="Compat", config=_config("compat"))
+    store.record_validation(
+        revision, passed=True, report={
+            "tool_calling": True, "structured_output": True,
+            "capability_gate": {"passed": True},
+            "quality_gate": {"passed": False},
+        },
+    )
+    store.set_sql_quality_gate_enabled(False, actor="admin")
+    store.activate(revision, expected_version=0, actor="admin", current_lineage=LINEAGE)
+    monkeypatch.setenv("MODEL_CONTROL_DB_PATH", str(path))
+    monkeypatch.setenv("MODEL_TEST_KEY", "actual-secret")
+    reset_model_config_cache()
+    assert get_model_config().model == "compat"
+
+    store.set_sql_quality_gate_enabled(True, actor="admin")
+    reset_model_config_cache()
+    with pytest.raises(LLMConfigurationError, match="quality_gate"):
+        get_model_config()
 
 
 def test_noncritical_stage_uses_capability_gate_but_sql_stages_require_quality(tmp_path):

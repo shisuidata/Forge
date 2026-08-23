@@ -545,9 +545,9 @@ def _call_openai(
                     provider_code = str(error_body.get("code", ""))
             except (TypeError, ValueError):
                 pass
-        if status == 429 and provider_code in {
+        if status == 402 or (status == 429 and provider_code in {
             "AccountQuotaExceeded", "QuotaExceeded", "insufficient_quota",
-        }:
+        }):
             raise LLMQuotaExceededError("LLM Provider quota exhausted") from exc
         if status == 429:
             raise LLMRateLimitError("LLM Provider rate limited the request") from exc

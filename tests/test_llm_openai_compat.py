@@ -294,6 +294,16 @@ def test_openai_quota_and_transient_rate_limit_are_distinct(monkeypatch):
     with pytest.raises(llm.LLMRateLimitError, match="rate limited"):
         llm._call_openai([], "system", tools=[])
 
+    payment = httpx.Response(402, request=request, json={"error": {"code": "insufficient_balance"}})
+    monkeypatch.setattr(
+        "httpx.post",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            httpx.HTTPStatusError("payment required", request=request, response=payment)
+        ),
+    )
+    with pytest.raises(llm.LLMQuotaExceededError, match="quota exhausted"):
+        llm._call_openai([], "system", tools=[])
+
 
 def test_openai_timeout_has_distinct_bounded_error(monkeypatch):
     import httpx

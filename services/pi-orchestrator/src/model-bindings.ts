@@ -70,11 +70,22 @@ export function resolveStageModelBinding(
     }
     const modelConfig = JSON.parse(row.config_json) as Record<string, unknown>;
     const report = JSON.parse(row.validation_report_json) as Record<string, unknown>;
+    let sqlQualityGateEnabled = true;
+    try {
+      const setting = database.prepare(
+        "SELECT value_json FROM model_control_settings WHERE setting_key='sql_quality_gate_enabled'",
+      ).get() as { value_json: string } | undefined;
+      if (setting !== undefined) sqlQualityGateEnabled = JSON.parse(setting.value_json) === true;
+    } catch {
+      // Older databases have no switch table and retain the fail-closed quality gate.
+    }
     const capabilities = typeof modelConfig.capabilities === "object" && modelConfig.capabilities !== null
       ? modelConfig.capabilities as Record<string, unknown>
       : {};
     const gateClass = SQL_CRITICAL.has(stage) ? "sql_critical" : "capability";
-    const gate = gateClass === "sql_critical" ? report.quality_gate : report.capability_gate;
+    const gate = gateClass === "sql_critical" && sqlQualityGateEnabled
+      ? report.quality_gate
+      : report.capability_gate;
     if (typeof gate !== "object" || gate === null || (gate as Record<string, unknown>).passed !== true) {
       throw new Error(`Active ${stage} model binding no longer satisfies its gate`);
     }
