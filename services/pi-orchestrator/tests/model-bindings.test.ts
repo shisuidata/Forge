@@ -23,6 +23,9 @@ function bindingDb(path: string) {
       scope TEXT PRIMARY KEY, revision_id TEXT, previous_revision_id TEXT,
       binding_version INTEGER, updated_at TEXT
     );
+    CREATE TABLE model_control_settings (
+      setting_key TEXT PRIMARY KEY, value_json TEXT
+    );
   `);
   const add = (stage: string, scope: string, gate: string, model: string) => {
     const revision = `sha256:${stage.padEnd(64, "a").slice(0, 64)}`;
@@ -59,6 +62,22 @@ test("Pi resolves a hot stage binding and pins its validated revision", async ()
   assert.equal(skillModelStage("data-analysis-report-writer"), "report");
   assert.equal(attemptModelStage("business_root_cause_analysis"), "analysis");
   assert.equal(attemptModelStage("query_prepare"), "query_generation");
+});
+
+test("Pi honors the durable compatibility-only SQL gate switch", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-stage-model-compat-"));
+  const path = join(directory, "models.db");
+  bindingDb(path);
+  const db = new DatabaseSync(path);
+  db.prepare("UPDATE model_profile_revisions SET validation_report_json=? WHERE profile_id='query-profile'").run(
+    JSON.stringify({ capability_gate: { passed: true }, quality_gate: { passed: false } }),
+  );
+  db.prepare("INSERT INTO model_control_settings VALUES ('sql_quality_gate_enabled', 'false')").run();
+  db.close();
+
+  const binding = resolveStageModelBinding(loadConfig({ PI_MODEL_CONTROL_DB_PATH: path }), "query_generation");
+  assert.equal(binding?.modelId, "query-model");
+  assert.equal(binding?.gateClass, "sql_critical");
 });
 
 test("Pi rejects an active binding whose required gate is no longer valid", async () => {

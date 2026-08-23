@@ -124,6 +124,20 @@ def _connect(path: Path) -> sqlite3.Connection:
                         PRIMARY KEY(run_id, case_id),
                         FOREIGN KEY(run_id) REFERENCES model_quality_validation_runs(run_id)
                     );
+                    CREATE TABLE IF NOT EXISTS model_control_settings (
+                        setting_key TEXT PRIMARY KEY,
+                        value_json TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        updated_by TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS model_control_settings_audit (
+                        audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        setting_key TEXT NOT NULL,
+                        from_value_json TEXT,
+                        to_value_json TEXT NOT NULL,
+                        actor TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
                 """)
                 db.commit()
             finally:
@@ -307,6 +321,47 @@ class ModelControlStore:
                 result[stage] = active
         return result
 
+    def sql_quality_gate_enabled(self) -> bool:
+        """Return the durable SQL gate switch; existing installs default fail-closed."""
+        with _connect(self.path) as db:
+            row = db.execute(
+                "SELECT value_json FROM model_control_settings WHERE setting_key=?",
+                ("sql_quality_gate_enabled",),
+            ).fetchone()
+        if row is None:
+            return True
+        try:
+            value = json.loads(row["value_json"])
+        except json.JSONDecodeError as exc:
+            raise ModelControlError("SQL Quality Gate 开关状态损坏。") from exc
+        if not isinstance(value, bool):
+            raise ModelControlError("SQL Quality Gate 开关必须是布尔值。")
+        return value
+
+    def set_sql_quality_gate_enabled(self, enabled: bool, *, actor: str) -> None:
+        if not actor.strip():
+            raise ModelControlError("SQL Quality Gate 开关缺少操作者。")
+        now = _now()
+        encoded = _canonical_json(enabled)
+        with _connect(self.path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = db.execute(
+                "SELECT value_json FROM model_control_settings WHERE setting_key=?",
+                ("sql_quality_gate_enabled",),
+            ).fetchone()
+            previous = current["value_json"] if current else None
+            db.execute(
+                "INSERT INTO model_control_settings(setting_key,value_json,updated_at,updated_by) "
+                "VALUES(?,?,?,?) ON CONFLICT(setting_key) DO UPDATE SET "
+                "value_json=excluded.value_json,updated_at=excluded.updated_at,updated_by=excluded.updated_by",
+                ("sql_quality_gate_enabled", encoded, now, actor),
+            )
+            db.execute(
+                "INSERT INTO model_control_settings_audit"
+                "(setting_key,from_value_json,to_value_json,actor,created_at) VALUES(?,?,?,?,?)",
+                ("sql_quality_gate_enabled", previous, encoded, actor, now),
+            )
+
     def activate(
         self,
         revision_id: str,
@@ -332,7 +387,8 @@ class ModelControlStore:
                 "SELECT validation_report_json FROM model_profile_revisions WHERE revision_id=?",
                 (revision_id,),
             ).fetchone()["validation_report_json"])
-            if scope in SQL_CRITICAL_MODEL_SCOPES:
+            quality_gate_required = scope in SQL_CRITICAL_MODEL_SCOPES and self.sql_quality_gate_enabled()
+            if quality_gate_required:
                 quality_gate = validation_report.get("quality_gate", {})
                 if quality_gate.get("passed") is not True:
                     raise ModelControlError("SQL Critical Model Revision 尚未通过完整质量与性能门禁。")
@@ -367,10 +423,15 @@ class ModelControlStore:
                 "binding_version=excluded.binding_version,updated_at=excluded.updated_at",
                 (scope, revision_id, previous, next_version, _now()),
             )
+            effective_action = (
+                f"{action}_compatibility_only"
+                if scope in SQL_CRITICAL_MODEL_SCOPES and not quality_gate_required
+                else action
+            )
             db.execute(
                 "INSERT INTO model_switch_audit(scope,action,from_revision_id,to_revision_id,"
                 "binding_version,actor,created_at) VALUES(?,?,?,?,?,?,?)",
-                (scope, action, previous, revision_id, next_version, actor, _now()),
+                (scope, effective_action, previous, revision_id, next_version, actor, _now()),
             )
         return next_version
 

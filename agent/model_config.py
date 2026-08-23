@@ -189,6 +189,16 @@ def get_model_config(stage: str = "query_generation") -> ModelConfigSnapshot:
         except (OSError, sqlite3.DatabaseError, json.JSONDecodeError, KeyError, TypeError) as exc:
             raise LLMConfigurationError("Model Control Plane 状态不可用") from exc
         if active is not None:
+            gate_name = (
+                "quality_gate"
+                if requested_scope in SQL_CRITICAL_MODEL_SCOPES and store.sql_quality_gate_enabled()
+                else "capability_gate"
+            )
+            gate = active.validation_report.get(gate_name, {})
+            if not isinstance(gate, dict) or gate.get("passed") is not True:
+                raise LLMConfigurationError(
+                    f"Active Model Profile 不满足当前 {gate_name} 开关要求"
+                )
             config = active.config
             api_key = _resolve_secret(str(config["secret_ref"]))
             snapshot = ModelConfigSnapshot(

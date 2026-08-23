@@ -782,6 +782,38 @@ class TestSettingsRoutes:
         })
         assert conflict.status_code == 409
 
+    async def test_quality_gate_switch_allows_compatibility_only_activation(self, client: AsyncClient, monkeypatch, tmp_path):
+        import web.routes.settings as settings_routes
+
+        db_path = tmp_path / "model-control.db"
+        monkeypatch.setattr(settings_routes, "model_control_db_path", lambda: db_path)
+        monkeypatch.setenv("MODEL_TEST_KEY", "secret-not-returned")
+        monkeypatch.setattr(
+            settings_routes,
+            "validate_model_snapshot",
+            lambda snapshot: {
+                "tool_calling": True,
+                "structured_output": True,
+                "capability_gate": {"passed": True},
+                "quality_gate": {"passed": False, "status": "not_run"},
+            },
+        )
+        created = await client.post("/admin/settings/model-profiles", json={
+            "profile_id": "compat-model", "name": "Compat Model", "provider": "openai",
+            "protocol": "openai_chat", "model": "candidate", "tool_choice": "required",
+            "secret_ref": "env:MODEL_TEST_KEY",
+        })
+        revision = created.json()["revision_id"]
+        assert (await client.post(f"/admin/settings/model-profiles/{revision}/validate")).status_code == 200
+        switched = await client.post("/admin/settings/model-quality-gate", json={"enabled": False})
+        assert switched.status_code == 200
+        assert switched.json() == {"enabled": False, "mode": "compatibility_only"}
+        activated = await client.post("/admin/settings/model-bindings/activate", json={
+            "revision_id": revision, "expected_version": 0,
+        })
+        assert activated.status_code == 200
+        assert activated.json()["gate_class"] == "compatibility_only"
+
     async def test_model_profile_failed_validation_cannot_activate(self, client: AsyncClient, monkeypatch, tmp_path):
         import web.routes.settings as settings_routes
 

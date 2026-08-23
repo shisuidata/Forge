@@ -84,6 +84,10 @@ class ModelQualityValidationRequest(BaseModel):
     thresholds: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_THRESHOLDS))
 
 
+class ModelQualityGateRequest(BaseModel):
+    enabled: bool
+
+
 _quality_validation_tasks: set[asyncio.Task] = set()
 
 
@@ -226,10 +230,14 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
             if control_path.exists() else None
         )
         control_bindings = control_store.list_active() if control_path.exists() else {}
+        sql_quality_gate_enabled = (
+            control_store.sql_quality_gate_enabled() if control_path.exists() else True
+        )
     except Exception as exc:
         logger.warning("Model Control Plane status unavailable: %s", type(exc).__name__)
         control_active = None
         control_bindings = {}
+        sql_quality_gate_enabled = True
     try:
         active_model = get_model_config()
         model_status = {
@@ -258,10 +266,13 @@ async def settings_page(request: Request, saved: str = "", error: str = ""):
                 "binding_version": control_active.binding_version,
                 "validation_report": control_active.validation_report,
             },
+            "sql_quality_gate_enabled": sql_quality_gate_enabled,
             "model_stage_bindings": {
                 stage: {
                     "scope": MODEL_STAGE_SCOPES[stage],
-                    "gate_class": "SQL 核心强门禁" if stage in SQL_CRITICAL_MODEL_STAGES else "Stage 能力门禁",
+                    "gate_class": (
+                        "SQL 核心强门禁" if sql_quality_gate_enabled else "兼容性验证（质量门禁关闭）"
+                    ) if stage in SQL_CRITICAL_MODEL_STAGES else "Stage 能力门禁",
                     "revision_id": binding.revision_id if binding else None,
                     "profile_id": binding.profile_id if binding else None,
                     "binding_version": binding.binding_version if binding else 0,
@@ -315,7 +326,21 @@ async def model_control_status():
             for stage, binding in active_by_stage.items()
         },
         "available_stages": MODEL_STAGE_SCOPES,
+        "sql_quality_gate_enabled": store.sql_quality_gate_enabled(),
         "audit": audit,
+    }
+
+
+@router.post("/settings/model-quality-gate")
+async def configure_model_quality_gate(payload: ModelQualityGateRequest):
+    store = ModelControlStore(model_control_db_path())
+    try:
+        store.set_sql_quality_gate_enabled(payload.enabled, actor="admin:web")
+    except ModelControlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "enabled": store.sql_quality_gate_enabled(),
+        "mode": "full_quality" if payload.enabled else "compatibility_only",
     }
 
 
@@ -444,7 +469,9 @@ async def activate_model_profile(payload: ModelActivationRequest):
     return {
         "stage": payload.stage,
         "scope": scope,
-        "gate_class": "sql_critical" if payload.stage in SQL_CRITICAL_MODEL_STAGES else "capability",
+        "gate_class": (
+            "sql_critical" if store.sql_quality_gate_enabled() else "compatibility_only"
+        ) if payload.stage in SQL_CRITICAL_MODEL_STAGES else "capability",
         "revision_id": payload.revision_id,
         "binding_version": version,
     }
