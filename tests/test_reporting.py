@@ -21,8 +21,16 @@ def _source() -> dict:
         "title": "地区销售额分析",
         "business_report": {
             "title": "地区销售额分析",
-            "executive_summary": "华东销售额最高。",
-            "recommendations": [{"action": "继续关注华东", "rationale": "贡献最高"}],
+            "executive_summary": "华东销售额最高，但当前结论仅覆盖已审核的查询时间范围。",
+            "key_findings": [{
+                "statement": "华东销售额最高。", "interpretation": "当前样本中贡献领先。",
+                "evidence_refs": ["qr_demo#row:1"], "confidence": "high",
+            }],
+            "recommendations": [{
+                "action": "继续关注华东", "rationale": "贡献最高", "priority": "high",
+            }],
+            "limitations": ["仅覆盖当前查询时间范围"],
+            "next_steps": ["补充退款后的净销售额口径"],
         },
         "analysis": {
             "method_summary": {
@@ -66,16 +74,59 @@ def test_report_store_builds_immutable_html_and_pptx(tmp_path: Path):
     html = store.file("rp_demo001", "index.html").read_text()
     technical = store.file("rp_demo001", "technical.html").read_text()
     assert "华东销售额最高" in html
+    assert "EXECUTIVE SUMMARY" in html
+    assert 'class="finding-card"' in html
+    assert "高置信" in html
+    assert "高优先级" in html
+    assert "限制与风险" in html
+    assert "补充退款后的净销售额口径" in html
+    assert "@media print" in html
     assert "<svg" in html
     assert "SELECT region" in technical
     assert "hidden chain-of-thought" in technical
     assert (tmp_path / "artifacts").stat().st_mode & 0o777 == 0o700
     assert (tmp_path / "reports.db").stat().st_mode & 0o077 == 0
+    from pptx import Presentation
+    deck = Presentation(store.file("rp_demo001", "report.pptx"))
+    slide_text = "\n".join(shape.text for slide in deck.slides for shape in slide.shapes if hasattr(shape, "text"))
+    for expected in ("执行摘要", "分析思路", "关键发现", "建议行动", "限制与风险", "下一步"):
+        assert expected in slide_text
+    assert "补充退款后的净销售额口径" in slide_text
+    assert len(deck.slides) >= 7
     import sqlite3
     with sqlite3.connect(tmp_path / "reports.db") as conn:
         attempts = conn.execute("SELECT stage, status FROM report_attempts ORDER BY started_at").fetchall()
     assert ("html", "succeeded") in attempts
     assert ("pptx", "succeeded") in attempts
+
+
+def test_report_projection_escapes_html_and_paginates_long_pptx_content(tmp_path: Path):
+    from pptx import Presentation
+
+    source = _source()
+    source["report_id"] = "rp_long001"
+    source["task_run_id"] = "tr_long001"
+    source["bundle_hash"] = "sha256:" + "c" * 64
+    source["title"] = source["business_report"]["title"] = "丙" * 220
+    source["charts"][0]["title"] = "丁" * 180
+    source["business_report"]["executive_summary"] = "<img src=x onerror=alert(1)>" + "乙" * 260
+    source["business_report"]["key_findings"][0]["statement"] = "头" + "甲" * 300 + "尾"
+    store = ReportStore(str(tmp_path / "reports.db"), str(tmp_path / "artifacts"))
+    published = store.create(source)
+    assert published["status"] == "publishing"
+    assert store.build("rp_long001")["pptx_status"] == "ready"
+
+    report_html = store.file("rp_long001", "index.html").read_text()
+    assert "<img src=x" not in report_html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in report_html
+    deck = Presentation(store.file("rp_long001", "report.pptx"))
+    all_text = "".join(shape.text for slide in deck.slides for shape in slide.shapes if hasattr(shape, "text"))
+    assert all_text.count("甲") == 300
+    assert all_text.count("丙") >= 220
+    assert all_text.count("丁") >= 180
+    assert "头" in all_text and "尾" in all_text
+    assert max(len(shape.text) for slide in deck.slides for shape in slide.shapes if hasattr(shape, "text")) <= 160
+    assert len(deck.slides) >= 11
 
 
 def test_report_store_is_idempotent_and_rejects_bundle_drift(tmp_path: Path):
