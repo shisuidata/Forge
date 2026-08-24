@@ -27,8 +27,11 @@ def verify(base_url: str, output_dir: Path) -> dict[str, object]:
         assert page.locator(".chart-host canvas").count() == 0
 
         first_chart = page.locator("#chart-ranking").bounding_box()
-        assert first_chart is not None and first_chart["y"] < 1000, first_chart
+        summary = page.locator(".executive-summary").bounding_box()
+        assert first_chart is not None, first_chart
+        assert summary is not None and summary["y"] < 1000, summary
 
+        page.locator("#chart-ranking").scroll_into_view_if_needed()
         candidates = page.locator("#chart-ranking svg path").evaluate_all(
             "nodes => nodes.map((node, index) => { const box=node.getBoundingClientRect(); return {index,x:box.x,y:box.y,width:box.width,height:box.height}; }).filter(box => box.width > 180 && box.height > 8 && box.height < 60)"
         )
@@ -69,14 +72,15 @@ def verify(base_url: str, output_dir: Path) -> dict[str, object]:
         fallback.goto(base_url, wait_until="domcontentloaded")
         assert fallback.get_by_role("heading", name="品类组合与增长诊断").is_visible()
         assert fallback.locator(".no-script-note").is_visible()
-        assert "图表交互当前不可用" in fallback.locator(".no-script-note").inner_text()
-        assert fallback.get_by_text("三项渠道增量 87K + 53K + 34K = 174K", exact=False).is_visible()
+        assert "图表交互不可用" in fallback.locator(".no-script-note").inner_text()
+        assert "87K + 53K + 34K = 174K" in (fallback.locator("body").text_content() or "")
         no_script.close()
         browser.close()
 
     result = {
         "metrics": metrics,
         "first_chart_y": first_chart["y"],
+        "executive_summary_y": summary["y"],
         "tooltip": True,
         "legend_toggle": True,
         "evidence_bridge": True,

@@ -102,7 +102,7 @@ def capture(base_url: str, output_dir: Path) -> dict[str, object]:
         "经营六个品类",
         "四月失速",
         "4→6 月新增 174K",
-        "qr_monthly_story#row:4,6",
+        "87K + 53K + 34K = 174K",
     ))
     assert not any(token in pdf_text for token in ("file://", "/Users/", "localhost", "127.0.0.1"))
 

@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { buildAllowlistedOption } from "../src/adapter.js";
 import { channelContributions, storyMetrics } from "../src/data.js";
+import { semanticFormatPolicy, validateCallout, validateInlineTokens } from "../src/semantics.js";
 import { storyViews, validateStoryViews } from "../src/story.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -50,11 +51,45 @@ test("the candidate ships one engine and does not implement chart geometry", () 
   assert.match(source, /SVGRenderer/);
 });
 
-test("report shell starts with business content rather than a candidate hero", () => {
+test("report shell uses an editorial document structure rather than landing-page composition", () => {
   const html = readFileSync(resolve(root, "index.html"), "utf8");
-  assert.match(html, /经营复盘 · 2026 上半年/);
+  assert.match(html, /经营分析报告/);
   assert.match(html, /品类组合与增长诊断/);
+  assert.match(html, /执行摘要/);
+  assert.match(html, /目录与主要结论/);
+  assert.match(html, /<figcaption>/);
   assert.match(html, /4→6 月新增 174K/);
-  assert.doesNotMatch(html, /CHART ENGINE LAB|从图表堆砌|library-first bake-off|可信数据报告|EXECUTIVE BRIEF|DECISION NOTE|Renderer 边界|版本边界/i);
+  assert.doesNotMatch(html, /CHART ENGINE LAB|从图表堆砌|library-first bake-off|可信数据报告|EXECUTIVE BRIEF|DECISION NOTE|Renderer 边界|版本边界|class="[^"]*(?:hero|card|feature)/i);
+  assert.doesNotMatch(html, /\sstyle=/i);
   assert.ok(html.indexOf("品类组合与增长诊断") < html.indexOf("decision-ranking"));
+});
+
+test("inline emphasis and callouts are semantic allowlists, not free styling", () => {
+  assert.equal(semanticFormatPolicy.underline, "link_or_evidence_only");
+  assert.equal(semanticFormatPolicy.modelMarkup, false);
+  assert.equal(validateInlineTokens([
+    { type: "text", text: "覆盖标准从" },
+    { type: "superseded", text: "固定 Top 5", revisionRef: "criteria:r2", replacementRef: "criteria:r3" },
+    { type: "strong", text: "覆盖 80% 销售额" },
+    { type: "emphasis", text: "描述性分析" },
+    { type: "evidence", text: "来源", evidenceRef: "qr_category_story#row:1" },
+  ]), undefined);
+  assert.match(validateInlineTokens([
+    { type: "superseded", text: "旧标准" },
+  ]) ?? "", /requires revision/);
+  assert.match(validateInlineTokens([
+    { type: "strong", text: "结论", color: "#ff0000" },
+  ]) ?? "", /unsupported style field/);
+  assert.equal(validateCallout({
+    kind: "decision",
+    title: "判断",
+    tokens: [{ type: "strong", text: "直营贡献 50%" }],
+    evidenceRefs: ["qr_monthly_story#row:4", "qr_monthly_story#row:6"],
+  }), undefined);
+  assert.match(validateCallout({
+    kind: "decision",
+    title: "判断",
+    tokens: [{ type: "text", text: "没有证据" }],
+    evidenceRefs: [],
+  }) ?? "", /requires evidence/);
 });

@@ -465,7 +465,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-009：专业报告的多图叙事、现代图表与证据绑定交互
 
 - **提出日期**：2026-08-24
-- **当前状态**：`echarts_focused_candidate_awaiting_visual_confirmation`
+- **当前状态**：`editorial_report_revision_active`
 - **原始需求**：专业报告目前过于模板化，图表数量少、样式不够现代、交互有限；图表需要有标注，让图更生动、更有业务价值。
 
 ### 第一性原理评估
@@ -524,6 +524,8 @@ Bake-off 已完成，证据见 `docs/chart-engine-bakeoff-2026-08-24.md`。三�
 用户已于 2026-08-24 确认继续 ECharts focused candidate。该门继续位于隔离工具包，不接生产 Runtime：删除 bake-off 实验室宣传与多引擎切换外壳，首屏直接呈现真实报告摘要和第一决策图；将第四张图从渠道存量结构改为四月至六月的**增量贡献拆解**，明确 baseline、总增量 174K、直营增量 87K/50% 及对应 Evidence；排名图增加前两名差距表达，不以单色高亮制造赢家错觉；抽出 allowlisted Chart Story → ECharts Option mapper，禁止 Artifact/模型注入自由 Option、formatter、颜色或脚本。HTML 必须保留 tooltip、series 控制、Evidence 和 table fallback，print/PDF/PPTX 必须静态自足。只有 focused candidate 再次通过用户视觉与信息价值门禁，才提出 R1 同版本生产切换。
 
 Focused candidate 已完成，证据见 `docs/chart-storytelling-echarts-focused-evidence-2026-08-24.md`。页面已按 `REQ-2026-08-24-011` 删除所有宣传/实验说明并首屏直达报告；4→6 月增量图严格复算 `87K + 53K + 34K = 174K`，直营占 50%；排名差距、零基线趋势、Pareto threshold、tooltip、series toggle、Evidence、table、无 JS 核心结论和 5 页 PDF/PPTX 均通过。当前阻断是用户视觉确认，以及 ChartArtifact v2 尚不能完整声明 period-delta/output-grain；该 Contract 缺口不得由 Renderer 猜测，必须在 R1 兼容矩阵中同步解决。
+
+用户随后明确判定 focused candidate 视觉仍为 **FAIL**：去掉宣传文案不等于成为专业报告；当前双栏大标题、深色执行摘要、导航卡片、大圆角章节和大面积彩色侧栏仍属于 Landing Page composition。修订方向见 `REQ-2026-08-24-012`：保留 ECharts 交互与专业解释，整体改为 Editorial Report，并对 strong/emphasis/superseded/link/code/mark/callout 建立受控语义格式。
 
 ---
 
@@ -652,3 +654,94 @@ ReportRun / ReportRevision（不可变快照）
 - H5 focused candidate 同步删除“可信数据报告”、英文氛围标签、候选/Renderer/版本说明，Web 正文只保留报告内容、Evidence、质量、限制和操作。
 - 新增 `tests/test_web_product_content.py` 固定明确拒绝短语，定向 Web 测试 76 passed；H5 浏览器 gate 0 console/page error，首图在 1600×1000 首屏内开始可见。
 - 当前等待用户对去宣传后的实际页面视觉确认；确认前不宣称最终视觉门禁 `verified`。
+
+---
+
+## REQ-2026-08-24-012：建立编辑式专业报告排版与受控语义强调规范
+
+- **提出日期**：2026-08-24
+- **当前状态**：`accepted`
+- **原始需求**：报告不能像宣传单页或营销落地页；必须在内容、排版、视觉和交互上同时专业。保留现代交互式图表和专业解释；加粗、斜体、删除线、下划线、callout 等样式必须受规范控制，保证易读性。
+
+### 对当前候选的正式判定
+
+当前 ECharts focused candidate 在数据语义和交互上进步，但视觉门禁仍为 **FAIL**：
+
+- 大标题双栏首屏、深绿色 Executive Brief、四个导航卡片仍沿用 Landing Page Hero/Feature Grid 语法；
+- 每一节都是大圆角 Card + 彩色侧栏 Callout，像产品卖点陈列，而不是连续的报告论证；
+- 装饰纹理、强调色面积和大号数字过多，视觉在“推销结论”，而不是帮助读者审核结论；
+- Evidence、图表与解释虽然存在，但章节、图注、方法、论证和限制尚未形成专业文档阅读节奏。
+
+不能通过继续换颜色、减少一句文案或把圆角缩小来关闭。需要从 Landing Page composition 切换为 Editorial Report composition。
+
+### 专业报告视觉语法
+
+1. **文档而非落地页**：使用白色/近白文档画布、明确页边距、紧凑报告头、标题/副标题/作者或生成信息、数据范围、质量和 revision；禁止宣传 Hero、Feature 卡片、氛围纹理和装饰性大色块。
+2. **连续论证结构**：执行摘要 → 目录/结论索引 → 方法与数据边界 → 编号章节 → 图表 → 图注 → 解释 → Evidence/限制。章节通过字号、留白、细分隔线和编号组织，不依赖每节一个营销卡片。
+3. **图表是正文的一部分**：保留 ECharts tooltip、legend/series toggle、datum → Evidence、table fallback；图表标题、单位、轴起点、Annotation、source note 和 figure number 在静态首屏中已完整，不能依赖 hover 才理解。
+4. **解释必须专业**：每张图后固定包含“观察 / 判断 / 限制或下一步”中的适用项；事实、推断和建议不能混写；关键数字与 Evidence 在同一阅读块内。
+5. **克制的视觉 token**：正文以黑、灰、白为主；品牌绿只用于链接、图表主系列和小范围状态，coral 只用于风险/负偏差。减少圆角、阴影、胶囊标签和渐变，不用色块营造高级感。
+
+### Inline emphasis 与 Callout 规范
+
+模型/Artifact 不得自由输出 HTML/CSS、颜色或任意 class。Renderer 只投影版本化语义 token：
+
+| 语义 | 允许表现 | 禁止用途 |
+|---|---|---|
+| `strong` | 加粗关键结论、字段名或有证据的关键数字 | 整段加粗、用粗体制造口号 |
+| `emphasis` | 斜体术语、假设或轻度语气强调 | 用斜体承载关键数值或风险 |
+| `superseded` | 删除线显示被新 revision 明确替代的标准/值，并紧邻显示新值 | 删除普通错误、隐藏历史责任 |
+| `link/evidence` | 下划线只用于可点击链接、Evidence 定位和引用跳转 | 对不可点击普通文字加下划线 |
+| `code/identifier` | 等宽样式显示 SQL、字段、ID、revision | 用等宽字体装饰普通正文 |
+| `mark` | 低饱和背景强调极少量待审数字或定义，必须有语义来源 | 模型自行选择荧光颜色 |
+| `callout.info` | 方法、口径或范围说明；细边框/浅底 | 大面积占据首屏 |
+| `callout.decision` | Evidence 支持的决策结论 | 宣传口号或自我评价 |
+| `callout.warning` | 数据质量、风险或审批提醒 | 用暖色强调普通内容 |
+| `callout.limitation` | 假设、限制和不可推断范围 | 藏在页尾或仅 hover 可见 |
+
+普通下划线继续保留给链接/Evidence，避免与可点击性冲突；这不是拒绝下划线，而是把下划线纳入可验证的交互规范。删除线只表达明确 superseded lineage，不作为修辞。
+
+### 本轮实施范围
+
+- 继续只修改隔离的 ECharts focused candidate，不接生产 Runtime。
+- 将现有页面重构为桌面 Editorial Report：去除深色摘要卡、四导航卡片、大圆角章节卡、装饰纹理和营销式彩色侧栏；保留数据与四张图。
+- 增加紧凑报告信息、方法/范围、figure caption、观察/判断/限制结构和一个受控 inline-style/callout specimen；specimen 必须绑定实际报告内容，不做 design-system 宣传区。
+- HTML 继续验证 tooltip、series toggle、Evidence、table、键盘和 no-JS 核心结论；PDF/PPTX 静态完整。
+- 用户再次做桌面视觉与阅读门禁。通过前不提出 H5 R1 生产切换。
+
+### 验收与反证
+
+- 1600×1000 首屏必须看起来像报告封面/报告第一页，而不是产品首页；报告标题、元数据、摘要和正文开头均可见。
+- 去除 JS 后仍能按章节阅读结论、图注、Evidence 和限制。
+- 强调 token 有固定语义与数量边界；不存在任意 inline style、模型 class、不可点击下划线或无 lineage 删除线。
+- 每张图的交互可发现，但 controls 不抢占标题和正文；PDF/PPTX 不依赖交互。
+- 若用户仍首先感知为 Landing Page、宣传册、Dashboard 卡片墙或模板拼装，本轮继续 FAIL，不以自动测试通过代替视觉门禁。
+
+### 用户补充：内容专业不等于术语密度
+
+- 专业性的依据是事实准确、证据可复算、推理可检查和边界诚实，不是专业词、英文缩写或咨询式表达的数量。
+- 能用准确普通中文说清楚时，不使用 jargon；必要术语首次出现时说明其具体含义。
+- 正文顺序优先为“数据中看到什么 → 可以作出什么有限判断 → 当前不能说明什么 → 需要补充什么”，不得把相关性写成因果。
+- `Evidence`、`Revision`、`Ready`、`baseline/comparison` 等内部技术语言不得占据业务正文；必要 ID 放入数据来源明细。
+- 不得通过强语气、粗体密度、Callout 数量或图表标注制造确定性。无法由当前 Evidence 支持时必须降级表达或明确未知。
+
+---
+
+## REQ-2026-08-24-013：Atlas 隔离报告预览部署与阶段差距重评估
+
+- **提出日期**：2026-08-24
+- **当前状态**：`accepted`
+- **需求**：将当前 Editorial Report 候选部署到 Atlas，随后基于唯一主动计划和长期目标重新评估已完成能力、剩余差距与下一步。
+
+### 部署边界
+
+- 当前候选只作为 Atlas 内部、只读静态预览发布；不接入生产 Report Renderer，不修改 ChartArtifact、Skills、Prompt、数据库、Registry、Identity Map 或 Secret。
+- 预览必须使用本地固定构建产物，不依赖 CDN；发布前完成 candidate tests/build/audit、浏览器交互、no-JS、PDF/PPTX 与泄漏检查。
+- 使用 Atlas 现有 LAN 管理入口和独立目录；不得覆盖 `~/services/forge-m4.1/source` 或重启生产 Forge/Pi。
+- 记录部署路径、访问地址、版本、回滚/删除方式和验证结果。独立预览部署不代表 H5 R1 通过或生产报告能力已升级。
+
+### 重评估范围
+
+- 以“概率机器在不拥有最终责任能力时安全参与组织认知、决策与行动”为长期问题，检查 Governance、Coordination、Economics、Assurance 是否形成真实闭环。
+- 区分已验证、仅 Contract-ready、仅候选、未开始和被阻断，不能用代码量或测试数量替代产品完成度。
+- 给出当前目标完成度的分项估计、关键证据、最大反证、下一阶段优先级与明确不做项。
