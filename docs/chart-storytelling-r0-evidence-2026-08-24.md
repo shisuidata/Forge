@@ -8,6 +8,8 @@
 
 用户审阅截图后明确指出：首屏深绿色“从图表堆砌，到决策叙事”区域没有任何报告意义，且看不到任何交互。该判断成立：候选把设计说明误当成产品报告 Hero，占据接近整屏；真实图表和 Evidence 操作在首屏以下，原生 SVG tooltip 又缺少即时反馈；底部元信息使用按钮外观却不可点击。自动化验证“控件能工作”不能推翻用户“控件不可发现”的失败结论。
 
+用户同时要求产品不得重复造轮子。R0 手写 SVG/JS 从此只视为 Contract harness，不再作为生产 Renderer 方向；修订版先用相同 fixture 对成熟 chart engine 做 library-first 选型，Forge 仅保留 ChartArtifact 受控映射、Evidence bridge 和质量/跨媒介 Gate。
+
 ## 2. 实现范围
 
 ### Contract 与验证

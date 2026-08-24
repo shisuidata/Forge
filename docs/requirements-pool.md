@@ -513,7 +513,9 @@ ID / 标题 / 日期 / 状态
 
 R0 已完成并记录于 `docs/chart-storytelling-r0-evidence-2026-08-24.md`：ChartArtifact v2 Python/TypeScript Contract 与 QueryResult semantic gate、双正向 fixture、8 个负向 fail-closed case、自包含 HTML、5 页 PDF 和 5 页 PPTX 候选均通过自动化检查；但用户视觉门禁明确判定 **FAIL**。首屏深绿色“从图表堆砌，到决策叙事”是候选说明而不是报告内容，占据接近整屏却没有任何决策价值；交互全部藏在首屏以下，主视觉标签又像按钮但不可操作，导致用户感知为“看不到任何交互”。
 
-下一版 R0 必须删除报告内的候选宣传 Hero 和伪按钮式元信息；首屏直接呈现报告主题、数据范围/新鲜度、质量、执行摘要和第一项决策内容。图表必须提供即时可见的 custom tooltip、明确的 series 控制、图表/数据表切换和 Annotation → Evidence 操作反馈，不能依赖原生 SVG `<title>` 或让用户先滚动一整屏。修订版再次通过用户门禁前，R1 生产 Skills/Prompt/Tool/Renderer 同版本切换仍未批准。
+下一版 R0 必须删除报告内的候选宣传 Hero 和伪按钮式元信息；首屏直接呈现报告主题、数据范围/新鲜度、质量、执行摘要和第一项决策内容。图表必须提供即时可见的 tooltip、明确的 series 控制、图表/数据表切换和 Annotation → Evidence 操作反馈，不能依赖原生 SVG `<title>` 或让用户先滚动一整屏。
+
+用户进一步明确“产品不要重复造轮子”。因此当前手写 SVG/JavaScript Renderer 只能作为一次性 Contract harness，禁止演化为生产图表引擎。H5 修订版必须先做 library-first 选型门禁：优先比较 Apache ECharts、Vega/Vega-Lite 与 AntV G2；只有用户接受商业授权时才把 Highcharts/AG Charts 纳入最终候选。Forge 只保留不可替代的 `ChartArtifact v2 → allowlisted library spec` 薄适配、Evidence bridge、质量 Gate 和跨媒介一致性测试，不自研 tooltip、legend、zoom、selection、annotation geometry 或 chart layout。修订版再次通过用户门禁前，R1 生产 Skills/Prompt/Tool/Renderer 同版本切换仍未批准。
 
 ---
 

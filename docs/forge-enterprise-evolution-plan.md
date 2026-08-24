@@ -77,7 +77,7 @@ GTM：Data-Team Led
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
-| H5 Evidence-bound Chart Storytelling | R0 自动化通过、用户视觉门禁失败，修订中 | 首屏候选宣传 Hero 无决策价值且遮蔽交互；删除宣传壳，首屏直达报告摘要/第一决策，补 custom tooltip 和显式图表控制；R1 仍未批准 |
+| H5 Evidence-bound Chart Storytelling | R0 自动化通过、用户视觉门禁失败，library-first 修订中 | 手写 SVG/JS 仅保留为 Contract harness，不进入生产；先比较 ECharts/Vega-Lite/AntV G2（商业许可明确时再考虑 Highcharts/AG Charts），再重做首屏与交互；R1 仍未批准 |
 | H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -478,6 +478,7 @@ R0 实际结果：
 - 完成 Analysis/Report Skills、Structured Tool、`skill-executor`、Skills package、Contract、Renderer、Exporter 的 R1 同版本兼容矩阵。
 - 正式证据：[`chart-storytelling-r0-evidence-2026-08-24.md`](chart-storytelling-r0-evidence-2026-08-24.md)。R1 未自动批准，NAS 与生产 Skills/Prompt 未修改。
 - 用户视觉门禁反馈为 FAIL：首屏深绿色候选宣传 Hero 不承载报告决策内容，却占据接近整屏；交互位于首屏以下且缺少可发现反馈，元信息标签外观又误导为按钮。修订要求是删除宣传壳，首屏直接显示数据范围/质量/执行摘要/第一决策图，并把 tooltip、series 控制、table fallback 和 Evidence feedback 做成无需猜测的可见操作。
+- 用户明确要求“产品不要重复造轮子”。生产 Renderer 不继续扩展手写 SVG/JavaScript；图表 tooltip、legend、zoom/selection、annotation geometry、layout 与 SVG/canvas rendering 必须复用成熟 chart engine。Forge 自有代码只负责 ChartArtifact v2 的受控适配、Evidence/quality binding、设计 token 和跨媒介 Gate。正式实现前用同一双 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2；Highcharts/AG Charts 只有在商业授权成本被明确接受后才进入候选。生产最终只选一个默认 engine，不建设多引擎插件平台。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
