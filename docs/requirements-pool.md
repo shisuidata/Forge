@@ -360,7 +360,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-007：完整问数旅程的物理链路与逐阶段视觉验收
 
 - **提出日期**：2026-08-24
-- **当前状态**：`accepted_with_changes`
+- **当前状态**：`verified`
 - **原始需求**：不能只验证局部 fixture 或物理执行；需要跑通一个完整问数流程，同时从前端逐步检查每个环节是否符合预期、是否能让用户满意，并实际使用视觉能力和自动化测试能力。
 
 ### 问题确认
@@ -416,3 +416,41 @@ ID / 标题 / 日期 / 状态
 
 - **Plan**：`forge-enterprise-evolution-plan.md` H3。
 - **Architecture**：不改变 Pi/Forge/渠道职责；测试环境只验证现有 Contract、状态和 Renderer，不成为第二套生产状态机。
+- **执行结果**：同一 TaskRun 完成 Query→Approval→Execution→Analysis→Report，物理不变量全部 PASS；桌面产品旅程与可信业务结果 FAIL。Analysis 183.265s，完整 Task 349.028s；PDF/PPTX 均 ready，重复 ChannelEvent 未重放 SQL。
+- **正式评审**：[`golden-journey-acceptance-2026-08-24.md`](golden-journey-acceptance-2026-08-24.md)。Verdict：`Physical chain PASS / Trusted product outcome FAIL`。
+- **证据**：NAS `~/services/forge-m4.1/e2e/golden-20260824T101129Z/`；本地 `/tmp/forge-golden-journey-evidence/`。隔离服务已停止，临时 service/channel keys 已删除，生产 Forge/Pi health 正常。
+
+---
+
+## REQ-2026-08-24-008：关闭 Golden Journey 的 P0 可信交付缺陷
+
+- **提出日期**：2026-08-24
+- **当前状态**：`assessed`
+- **来源**：`REQ-2026-08-24-007` Golden Journey 正式评审。
+- **原始需求**：完整物理链路虽成功，但当前产品仍可能交付泄漏内部路径的 PDF、误导性 Chart，以及在真实同页操作中看不到报告完成卡片；必须在扩展 edge journey 前关闭。
+
+### P0 范围
+
+1. **PDF 内部路径泄漏**：NAS 实际 PDF 的默认 Chrome footer 暴露 `file:///home/.../index.html`、服务目录、报告 ID/revision，并带浏览器日期/标题页眉。必须关闭默认页眉页脚，并对真实目标 exporter 做内容级负向回归，不能只检查 status/size。
+2. **同页报告完成卡片不可见**：用户在长 Analysis 底部 focus/click 报告 action 后，Report running 与 Publication complete 的主区为空；刷新后 Artifact/链接存在。需要修复 Chat/Flow 的 viewport scroll containment 和短卡片替换后的滚动锚点，并以同一卡片连续路径回归。
+3. **ChartArtifact grain 误导**：`buildChartPayload` 从 sample 自动选首个字符串维度/数值列，不验证唯一标签、业务 grain 或聚合；实际 107 行只有 10 个可见品类标签，报告图表却表现为品类排名。重复 label 时必须使用稳定 key、确定性聚合或抑制图表；Critical Data Quality 不能继续发布误导图。
+
+### P1 后续切片
+
+- Critical Data Quality 的 decision-readiness 门禁；当前虽然在 prose 写了限制，Analysis/Report 仍标记 complete。
+- SQL Review 增加“修改需求/重新生成”路径、业务解释、数据范围和风险摘要，但继续禁止批准后直接编辑 SQL。
+- QueryResult 增加业务列名、单位、格式和异常标识；科学计数/超大值在 Analysis 前可见。
+- 主进度卡显示真实阶段、elapsed/deadline 含义、可离开提示和下一交付物；不伪造 ETA/百分比。
+- 长 Analysis 的下一 action 可发现；报告风险前置、Executive Summary 分块、桌面锚点/明细折叠；PPTX 封面不再截断摘要。
+
+### 评估
+
+- **用户/安全价值**：P0。PDF 路径泄漏是明确安全边界违反；Chart 误导和完成卡不可见直接破坏可信交付。
+- **职责**：PDF 属 Forge deterministic Report Renderer；Chart grain 属 Pi deterministic Chart builder + Report projection；同页可见性属 Web Renderer/scroll ownership。不得通过模型 prompt 猜测修复。
+- **建议顺序**：P0-A PDF leak → P0-B same-page completion → P0-C Chart grain/quality gate；三者各自有最小回归，再重跑同一 Golden Journey。P1 另按门禁拆分，不与 P0 混成大重写。
+- **不做**：当前不处理移动端；不改变 Pi/Forge 边界；不修改生产认证/数据库；不直接编辑已发布不可变报告；不因测试数据异常而美化/隐藏原始 QueryResult。
+- **可证伪门禁**：真实 NAS PDF 不含 `file://`/`/home/`/浏览器默认 header；same-page 长 Analysis→Report→Publication 无刷新可见；重复可见维度的 Chart fixture 被聚合、加 key 或拒绝，绝不静默画前 N 行。
+
+### 待用户确认
+
+是否接受按上述三项 P0 顺序进入修复 Plan，并在完成后重跑**同一桌面 Golden Journey**；P1 先保留在需求池，不自动扩大本轮范围？
