@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1 已完成；H1 Analysis 延迟修复中；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -73,7 +73,7 @@ GTM：Data-Team Led
 | M0.4 其余 Contract 草案 | 保留未开始 | 不阻塞 M1A；按 Coordination/Economics/Context/OAuth 的首次真实消费者 Just-in-Time 细化，避免当前过早冻结抽象 |
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
-| H1 Analysis 延迟与进度修复 | 实施中 | `REQ-2026-08-24-005`：独立 capability-gated Analysis Binding、有界输出、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；不改变 SQL、审批或 Task 真相源 |
+| H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -289,6 +289,16 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - `analysis_artifact_gate` 未通过前保持现有兼容模型路径并固定 revision；不得激活 generic-gate-only Binding。两个候选失败与自动回滚必须保留评审证据。
 - Python/Pi/typecheck/audit/Playwright/NAS health 通过；用隔离、无 SQL 的真实 Analysis smoke 验证 Artifact、耗时和阶段元数据。
 - 代码回滚不删除已有 attempt JSON 字段；失败时保持 `ready_for_analysis`，不放宽授权。
+
+### H1.4 实施结果（2026-08-24）
+
+- Analysis prompt adapter 明确将 Skill Markdown 转为唯一终止型 `submit_analysis_artifact`，并对核心数组设置有界数量；不修改专业分析方法或 Evidence 约束。
+- Pi SDK `prompt()` resolve 但 session 含 Provider error 时，Adapter 现在输出安全类别并停止 correction；原始响应、Prompt、Secret 和 hidden CoT 不落 StageAttempt/Event。
+- StageAttempt JSON 增加兼容可空 deadline/progress 时间字段，SQLite Schema/user_version 不变；Web 本地每秒显示 elapsed/remaining/slow，不伪造百分比或 heartbeat Event。
+- 两个 generic-gate-only 候选的真实 Analysis smoke 失败后均完整回滚，未保留 Binding/catalog 变更；这成为后续 `analysis_artifact_gate` 的反例测试要求。
+- NAS 原兼容模型无 SQL 隔离 smoke：2 行 `33.292s`、107 行/3 列 `119.232s`，均生成合法 Artifact 和 progress phase；修复前同规模为 `229.106s` 成功与 `240.051s` timeout。
+- 验证：Python `550 passed / 24 skipped`；Pi `93 passed`、typecheck、npm audit 通过；Web 定向测试和 Playwright 通过；NAS `45fcc87` Forge/Pi health/readiness 正常。
+- 遗留风险：119s 仍是长响应；在真实 `analysis_artifact_gate`、场景 P95 和 rollback 通过前，不激活独立 Analysis Binding，不宣称延迟问题已被任意输入完全消除。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

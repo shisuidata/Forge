@@ -221,7 +221,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-005：修复 Analysis Stage 临界超时与“假死”体验
 
 - **提出日期**：2026-08-24
-- **当前状态**：`implementing`
+- **当前状态**：`verified`
 - **原始需求**：NAS 最新 Web 任务在分析阶段长时间没有变化，看起来一直卡在同一个位置；用户确认修复。
 
 ### 诊断证据
@@ -251,7 +251,18 @@ ID / 标题 / 日期 / 状态
 - 第二个 `openai/deepseek-v4-flash` 和受限输出的 `volcengine-coding-plan/ark-code-latest` 均通过 generic Tool smoke，但真实 `submit_analysis_artifact` smoke 未提交 Artifact；所有 Binding、catalog 和 NAS 代码已恢复到部署前 `e4e3cb0`，服务健康、无 SQL/Task 重放。
 - 该结果否证“通用 Tool smoke 足以批准 Analysis Binding”，修复方向改为 Artifact-first adapter、Provider failure 分类、真实进度和场景专用 gate；不能为了满足计划而强行激活失败候选。
 
+### 实施与验证结果
+
+- Analysis Adapter 增加 Artifact-first 映射：Skill Markdown 仅作方法参考，模型直接调用终止型 Tool；findings/hypotheses/suggested queries 分别限制为最多 6/4/5 条。
+- Pi SDK session error 现在分类为 `quota_exhausted / rate_limited / authentication_failed / context_limit / provider_unavailable / aborted / unknown_provider_error`；Provider 失败不再被误报为 Artifact omission，也不再发起无效 correction。
+- StageAttempt 新增向后兼容可空 deadline/progress 时间字段；旧 SQLite user_version 不变。Web 显示业务阶段、elapsed、剩余安全窗口和 60s 慢响应提示，不记录或展示 Prompt/模型正文。
+- 通用 gate 通过但真实 Analysis smoke 失败的候选均已回滚，NAS 保持无 `pi.analysis` Binding 和原 model catalog；证明 generic gate 不能替代 `analysis_artifact_gate`。
+- 原兼容模型在新 Adapter 下的隔离、无 SQL 真实 smoke：2 行输入 `33.292s` 完成，107 行/3 列输入 `119.232s` 完成；均提交合法 Artifact，并观察到 `model_responding → artifact_submitted`。对比修复前同规模 `229.106s` 成功/`240.051s` 超时，已退出临界超时区，但大结果分析仍是剩余性能风险。
+- 自动验证：Python `550 passed / 24 skipped`；Pi `93 passed`、TypeScript typecheck 通过、npm audit 0 vulnerabilities；Web 定向测试与桌面 Playwright 通过且 0 console/page error；NAS `45fcc87` Forge/Pi health/readiness 均正常。
+- **剩余边界**：不宣称任意 107 行分析都稳定低于 120s；后续独立 Binding 必须先通过真实 Analysis Artifact 场景门禁。当前修复不重放 SQL、不自动切模型、不修改 Secret。
+
 ### 关联
 
 - **Plan**：`forge-enterprise-evolution-plan.md` H1。
-- **实现/验证**：进行中。
+- **NAS backup**：`~/services/forge-m4.1/backups/h1-analysis-v2-20260824T083911Z/`。
+- **UI 验收图**：本地 `/tmp/forge-analysis-progress.png`。
