@@ -1,24 +1,278 @@
 {
   "schema_version": 1,
   "catalog_id": "forge-governance-actions",
-  "revision": "v1.0.0",
+  "revision": "v1.1.0",
   "status": "active",
   "published_at": "2026-08-24T00:00:00Z",
   "unsupported_high_risk_behavior": "fail_closed",
   "actions": [
-    {"action":"query.prepare","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"medium","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"not_required","binding_refs":["datasource","registry"]},"truth_source":"forge_query_store","failure_policy":"deny"},
-    {"action":"query.approve","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":["datasource","registry"]},"truth_source":"forge_query_store","failure_policy":"deny"},
-    {"action":"query.execute","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":["datasource","registry"]},"truth_source":"forge_query_store","failure_policy":"deny"},
-    {"action":"query.cancel","support_status":"supported","governed":true,"owner":"pi","executor":"forge","risk_level":"medium","required_context":{"principal":true,"mandate":"required","policy_decision":"conditional","human_decision":"conditional","binding_refs":["datasource","registry"]},"truth_source":"forge_query_store","failure_policy":"deny"},
-    {"action":"registry.publish","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":["registry"]},"truth_source":"forge_registry_store","failure_policy":"deny"},
-    {"action":"registry.rollback","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":["registry"]},"truth_source":"forge_registry_store","failure_policy":"deny"},
-    {"action":"model.activate","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"forge_model_control_store","failure_policy":"deny"},
-    {"action":"model.rollback","support_status":"supported","governed":true,"owner":"forge","executor":"forge","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"forge_model_control_store","failure_policy":"deny"},
-    {"action":"skill_policy.update","support_status":"supported","governed":true,"owner":"pi_governance","executor":"pi","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"pi_skill_policy_store","failure_policy":"deny"},
-    {"action":"report.read","support_status":"supported","governed":true,"owner":"report_service","executor":"report_service","risk_level":"medium","required_context":{"principal":true,"mandate":"conditional","policy_decision":"required","human_decision":"not_required","binding_refs":[]},"truth_source":"forge_report_store","failure_policy":"deny"},
-    {"action":"report.share","support_status":"supported","governed":true,"owner":"report_service","executor":"report_service","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"forge_report_store","failure_policy":"deny"},
-    {"action":"report.export","support_status":"supported","governed":true,"owner":"report_service","executor":"report_service","risk_level":"high","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"forge_report_store","failure_policy":"deny"},
-    {"action":"memory_proposal.confirm","support_status":"supported","governed":true,"owner":"pi_governance","executor":"forge","risk_level":"medium","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"forge_memory_store","failure_policy":"deny"},
-    {"action":"memory_proposal.forget","support_status":"supported","governed":true,"owner":"pi_governance","executor":"forge","risk_level":"medium","required_context":{"principal":true,"mandate":"required","policy_decision":"required","human_decision":"required","binding_refs":[]},"truth_source":"forge_memory_store","failure_policy":"deny"}
+    {
+      "action": "query.prepare",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "medium",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "not_required",
+        "binding_refs": [
+          "datasource",
+          "registry"
+        ]
+      },
+      "truth_source": "forge_query_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "query.approve",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": [
+          "datasource",
+          "registry"
+        ]
+      },
+      "truth_source": "forge_query_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "query.execute",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": [
+          "datasource",
+          "registry"
+        ]
+      },
+      "truth_source": "forge_query_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "query.cancel",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "pi",
+      "executor": "forge",
+      "risk_level": "medium",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "conditional",
+        "human_decision": "conditional",
+        "binding_refs": [
+          "datasource",
+          "registry"
+        ]
+      },
+      "truth_source": "forge_query_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "registry.publish",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": [
+          "registry"
+        ]
+      },
+      "truth_source": "forge_registry_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "registry.rollback",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": [
+          "registry"
+        ]
+      },
+      "truth_source": "forge_registry_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "model.activate",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_model_control_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "model.rollback",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "forge",
+      "executor": "forge",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_model_control_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "skill_policy.update",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "pi_governance",
+      "executor": "pi",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "pi_skill_policy_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "report.read",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "report_service",
+      "executor": "report_service",
+      "risk_level": "medium",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "not_required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_report_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "report.share",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "report_service",
+      "executor": "report_service",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_report_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "report.export",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "report_service",
+      "executor": "report_service",
+      "risk_level": "high",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_report_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "memory_proposal.confirm",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "pi_governance",
+      "executor": "forge",
+      "risk_level": "medium",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_memory_store",
+      "failure_policy": "deny"
+    },
+    {
+      "action": "memory_proposal.forget",
+      "support_status": "supported",
+      "contract_status": "specified",
+      "runtime_enforcement_status": "not_integrated",
+      "owner": "pi_governance",
+      "executor": "forge",
+      "risk_level": "medium",
+      "required_context": {
+        "principal": true,
+        "mandate": "conditional",
+        "policy_decision": "required",
+        "human_decision": "required",
+        "binding_refs": []
+      },
+      "truth_source": "forge_memory_store",
+      "failure_policy": "deny"
+    }
   ]
 }

@@ -124,7 +124,7 @@ Forge Execution Plane
 
 这些名称首先表示版本化 Contract 和职责，不预设立即拆成独立微服务：
 
-- **Governance**：可信身份、Principal、Agent Mandate、Membership、资源 Policy、Datasource/Registry Binding。
+- **Governance**：可信身份、Principal、task-scoped DelegatedMandate（Agent Mandate 是其 Agent 特化）、Membership、资源 Policy、Datasource/Registry Binding。
 - **Coordination**：Task Participant、DecisionRequest/Record、ActionRef、依赖、责任和恢复，仍由 Pi 持有流程真相。
 - **Economics**：Task/Stage/Agent/Team 的 Budget、Usage、CostCatalog 和 Outcome；成本策略不能绕过权限与 Assurance。
 - **Context**：Source、Claim、Evidence、Conflict、MemoryProposal 和按 Purpose 编译的 ContextBundle；不把全部业务数据复制为第二真相源。
@@ -143,6 +143,7 @@ Forge Execution Plane
 - 将渠道身份映射为 `org_id / team_id / user_id`。
 - 接收文本、文件、按钮和表单输入。
 - 展示澄清问题、SQL、表格、图表和报告。
+- Web 对话右侧可只读投影当前 Web Task 的最新 ExecutionPlan DAG、TaskEvent 与 StageAttempt 实时流；数据仍来自 Pi 真相源，页面不得自行推进或持久化状态。
 - 收集确认、取消、修改、纠错和追问。
 - 传递稳定的 `task_run_id`，支持跨渠道恢复同一个任务。
 
@@ -443,6 +444,8 @@ Pi 拥有 ReportJob 的编排状态、Attempt、lease、幂等和 Artifact 依�
 日志不得记录数据库密码、模型 API Key、渠道密钥或未经授权的完整敏感结果集。
 
 Web 后台是跨渠道只读观测面：它从同一个 Pi Store 按已认证管理员的 `org_id + team_id` scope 列出 Web、飞书、钉钉和 API TaskRun，并增量读取 TaskEvent 与 StageAttempt。浏览器不能自行指定或扩大 scope；查看任务不会推进状态、批准 SQL 或重放 Attempt。渠道展示继续保持最小披露，后台日志也不保存或展示 hidden chain-of-thought 和 Secret。
+
+Web `/chat` 可复用同一观察能力提供当前任务右侧视图，但权限更窄：只允许当前 Web 用户所属 scope 中 `channel=web` 的 Task。Forge Web 服务端聚合最新有效 `ExecutionPlanArtifact`、增量 TaskEvent 和有界 StageAttempt 字段，浏览器根据 `depends_on` 绘制业务 DAG 并按 sequence 单调追加任务流。该视图是只读 projection，不新增 Web 状态库；切换 Task 只切换观察焦点，不改变 Pi TaskRun。
 
 ## 12. 当前 Forge 职责迁移映射
 

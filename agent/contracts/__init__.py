@@ -29,7 +29,7 @@ _CONTRACT_FILES = {
     "rendered_output_artifact": "rendered-output-artifact.schema.json",
     "resource_ref_v1": "resource-ref-v1.schema.json",
     "principal_context_v1": "principal-context-v1.schema.json",
-    "agent_mandate_v1": "agent-mandate-v1.schema.json",
+    "delegated_mandate_v1": "delegated-mandate-v1.schema.json",
     "policy_decision_v1": "policy-decision-v1.schema.json",
     "datasource_binding_v1": "datasource-binding-v1.schema.json",
     "registry_binding_v1": "registry-binding-v1.schema.json",

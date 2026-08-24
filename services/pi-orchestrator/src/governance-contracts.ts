@@ -109,21 +109,28 @@ export const principalContextV1Schema = Type.Object(
   { additionalProperties: false },
 );
 
-export const agentMandateV1Schema = Type.Object(
+export const delegatedMandateV1Schema = Type.Object(
   {
     schema_version: Type.Literal(1),
     mandate_id: Type.String({ pattern: "^md_[A-Za-z0-9_-]+$" }),
     revision: Type.Integer({ minimum: 1 }),
-    agent_principal_id: id,
+    delegate_principal: Type.Object(
+      {
+        principal_id: id,
+        principal_type: Type.Union([
+          Type.Literal("service"),
+          Type.Literal("agent"),
+        ]),
+      },
+      { additionalProperties: false },
+    ),
     delegator_principal: accountablePrincipalSchema,
     accountable_principal: accountablePrincipalSchema,
     organization_id: organizationId,
     workspace_id: workspaceId,
     purpose: Type.String({ minLength: 1, maxLength: 1000 }),
-    task_run_id: Type.Union([
-      Type.String({ pattern: "^tr_[A-Za-z0-9_-]+$" }),
-      Type.Null(),
-    ]),
+    task_run_id: Type.String({ pattern: "^tr_[A-Za-z0-9_-]+$" }),
+    audience: Type.String({ pattern: "^[a-z][a-z0-9_.:-]{0,127}$" }),
     capabilities: Type.Array(
       Type.String({ pattern: "^[a-z][a-z0-9_.:-]{0,127}$" }),
       { minItems: 1, maxItems: 64, uniqueItems: true },
@@ -131,7 +138,7 @@ export const agentMandateV1Schema = Type.Object(
     resource_scope: Type.Array(resourceRefV1Schema, { minItems: 1, maxItems: 128 }),
     budget_ref: Type.Union([id, Type.Null()]),
     approval_policy_ref: id,
-    can_delegate: Type.Boolean({ default: false }),
+    can_delegate: Type.Literal(false),
     status: Type.Union([
       Type.Literal("active"),
       Type.Literal("revoked"),
@@ -286,7 +293,15 @@ export const governanceActionCatalogV1Schema = Type.Object(
             Type.Literal("planned"),
             Type.Literal("unsupported"),
           ]),
-          governed: Type.Boolean(),
+          contract_status: Type.Union([
+            Type.Literal("specified"),
+            Type.Literal("incomplete"),
+          ]),
+          runtime_enforcement_status: Type.Union([
+            Type.Literal("not_integrated"),
+            Type.Literal("partial"),
+            Type.Literal("enforced"),
+          ]),
           owner: Type.Union([
             Type.Literal("pi"),
             Type.Literal("pi_governance"),
@@ -356,7 +371,7 @@ export const governanceActionCatalogV1Schema = Type.Object(
 export const governanceContractSchemas = {
   resource_ref_v1: resourceRefV1Schema,
   principal_context_v1: principalContextV1Schema,
-  agent_mandate_v1: agentMandateV1Schema,
+  delegated_mandate_v1: delegatedMandateV1Schema,
   policy_decision_v1: policyDecisionV1Schema,
   datasource_binding_v1: datasourceBindingV1Schema,
   registry_binding_v1: registryBindingV1Schema,
@@ -365,7 +380,7 @@ export const governanceContractSchemas = {
 
 export type GovernanceContractName = keyof typeof governanceContractSchemas;
 export type PrincipalContextV1 = Static<typeof principalContextV1Schema>;
-export type AgentMandateV1 = Static<typeof agentMandateV1Schema>;
+export type DelegatedMandateV1 = Static<typeof delegatedMandateV1Schema>;
 export type PolicyDecisionV1 = Static<typeof policyDecisionV1Schema>;
 export type ResourceRefV1 = Static<typeof resourceRefV1Schema>;
 export type DatasourceBindingV1 = Static<typeof datasourceBindingV1Schema>;
@@ -378,16 +393,25 @@ export function validateGovernanceContract(name: GovernanceContractName, value: 
 
 export function governanceCoverage(catalog: GovernanceActionCatalogV1): {
   supported: number;
-  governed: number;
-  coverage: number;
+  specified: number;
+  enforced: number;
+  contractCoverage: number;
+  runtimeCoverage: number;
 } {
   const supportedActions = catalog.actions.filter(
     (action) => action.support_status === "supported",
   );
-  const governed = supportedActions.filter((action) => action.governed).length;
+  const specified = supportedActions.filter(
+    (action) => action.contract_status === "specified",
+  ).length;
+  const enforced = supportedActions.filter(
+    (action) => action.runtime_enforcement_status === "enforced",
+  ).length;
   return {
     supported: supportedActions.length,
-    governed,
-    coverage: supportedActions.length === 0 ? 0 : governed / supportedActions.length,
+    specified,
+    enforced,
+    contractCoverage: supportedActions.length === 0 ? 0 : specified / supportedActions.length,
+    runtimeCoverage: supportedActions.length === 0 ? 0 : enforced / supportedActions.length,
   };
 }

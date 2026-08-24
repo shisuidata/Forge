@@ -1,6 +1,8 @@
 """Web channel adapter tests for the Pi Task API Integration Spike."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from httpx import AsyncClient
 
@@ -397,6 +399,91 @@ async def test_web_chat_message_uses_shared_channel_event_with_server_identity(
         "task_run_id": None,
         "payload": {"text": "统计本月销售额", "chat_type": "web"},
     })]
+
+
+@pytest.mark.asyncio
+async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
+    client: AsyncClient, monkeypatch
+):
+    from config import cfg
+    import web.router as router_mod
+
+    task = {
+        "task_run_id": "tr_web_chat_001", "channel": "web", "user_id": "web_admin",
+        "org_id": "org_default", "team_id": "team_default", "status": "analyzing",
+        "current_stage": "business_root_cause_analysis", "updated_at": "2026-08-24T08:00:03Z",
+    }
+    plan = {
+        "plan_revision": 2, "status": "active", "route_kind": "query",
+        "goal": "分析销售额变化", "required_deliverables": ["query_result", "analysis"],
+        "supersedes_artifact_id": "ar_plan_001",
+        "steps": [
+            {"step_id": "step_query", "capability": "query", "title": "准备并审批查询", "depends_on": [], "required": True, "status": "completed", "deliverable": "query_result"},
+            {"step_id": "step_analyze", "capability": "analysis", "title": "分析查询结果", "depends_on": ["step_query"], "required": True, "status": "running", "deliverable": "analysis"},
+        ],
+    }
+
+    async def fake_pi_request(method, path, payload=None):
+        assert method == "GET"
+        if path == "/v1/tasks/tr_web_chat_001":
+            return 200, {"task": task}
+        if path == "/v1/tasks/tr_web_chat_001/events?after=3":
+            return 200, {"events": [{
+                "event_id": "te_004", "task_run_id": "tr_web_chat_001", "sequence": 4,
+                "event_type": "stage.attempt_started", "created_at": "2026-08-24T08:00:03Z",
+                "payload": {"prompt": "must not leak", "model_revision": "secret-lineage"},
+            }]}
+        if path == "/v1/tasks/tr_web_chat_001/artifacts":
+            return 200, {"artifacts": [{
+                "artifact_id": "ar_plan_002", "artifact_type": "execution_plan",
+                "schema_version": 1, "task_run_id": "tr_web_chat_001", "producer": "pi",
+                "created_at": "2026-08-24T08:00:02Z", "payload": plan,
+            }]}
+        if path == "/v1/tasks/tr_web_chat_001/attempts":
+            return 200, {"attempts": [{
+                "attempt_id": "sa_001", "task_run_id": "tr_web_chat_001", "stage": "analysis",
+                "status": "running", "attempt_number": 1, "started_at": "2026-08-24T08:00:03Z",
+                "updated_at": "2026-08-24T08:00:03Z", "finished_at": None,
+                "error": "must not leak", "model_revision": "must-not-leak",
+            }]}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(cfg, "PI_WEB_ADMIN_TASK_SCOPES", "org_default:team_default")
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    response = await client.get("/api/pi/chat/tasks/tr_web_chat_001/flow?after=3")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["plan_revision"] == 2
+    assert body["plan"]["steps"][1]["depends_on"] == ["step_query"]
+    assert body["events"] == [{
+        "sequence": 4, "event_type": "stage.attempt_started",
+        "created_at": "2026-08-24T08:00:03Z",
+    }]
+    assert body["attempts"][0]["status"] == "running"
+    serialized = json.dumps(body)
+    assert "must not leak" not in serialized
+    assert "model_revision" not in serialized
+    assert "prompt" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_web_chat_task_flow_rejects_cross_channel_task(client: AsyncClient, monkeypatch):
+    from config import cfg
+    import web.router as router_mod
+
+    async def fake_pi_request(method, path, payload=None):
+        return 200, {"task": {
+            "task_run_id": "tr_feishu_001", "channel": "feishu", "user_id": "feishu_owner",
+            "org_id": "org_default", "team_id": "team_default",
+        }}
+
+    monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
+    monkeypatch.setattr(cfg, "PI_WEB_ADMIN_TASK_SCOPES", "org_default:team_default")
+    monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
+    response = await client.get("/api/pi/chat/tasks/tr_feishu_001/flow")
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

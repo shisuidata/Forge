@@ -4,13 +4,21 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ---
 
-## Pi 平台改造计划治理
+## 需求池与计划治理
 
-涉及 Pi、Forge 执行层、拾穗 DATA Skills、Web/飞书/钉钉渠道或职责迁移的任务时：
+任何新的产品、体验、架构或业务需求都必须先进入 `docs/requirements-pool.md`，不得直接写入 Plan 或 Architecture：
 
-1. 开始前必须阅读 `docs/platform-architecture.md` 和 `docs/pi-forge-integration-plan.md`。
-2. 用户确认新需求或方向变化后，先更新计划文档，再修改代码。
-3. 完成一个步骤后，回写计划中的当前状态、验证结果、遗留风险和下一步。
+1. 先记录为 `captured`，澄清真实问题、目标用户、场景、预期结果和边界。
+2. 评估价值、产品公理、职责归属、安全/隐私、复杂度、复用、替代方案、机会成本以及是否应更正、延期或拒绝。
+3. 给出明确建议，等待用户确认；只有 `accepted` 或 `accepted_with_changes` 才能进入主动 Plan。
+4. `deferred/rejected/superseded` 需求仍保留原因，不删除。
+5. 普通 Bug 可走简化评估；安全事故和数据损坏可先止损，但必须立即补录。
+
+涉及 Pi、Forge 执行层、拾穗 DATA Skills、Web/飞书/钉钉渠道或职责迁移的已确认需求时：
+
+1. 开始前必须阅读 `docs/platform-architecture.md`、`docs/pi-forge-integration-plan.md`、`docs/forge-enterprise-evolution-plan.md` 和 `docs/requirements-pool.md`。
+2. 用户确认新需求或方向变化后，先更新主动计划；影响职责边界时同时更新架构，再修改代码。
+3. 完成一个步骤后，回写需求池和计划中的当前状态、验证结果、遗留风险和下一步。
 4. Pi 是唯一主 Orchestrator；Forge 是可信执行层。不得新增双写任务状态或第二套主调度流程。
 5. 若实现与计划冲突，先暂停并澄清，不能靠临时兼容继续堆叠职责。
 

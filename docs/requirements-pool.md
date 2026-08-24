@@ -1,0 +1,144 @@
+# Forge 需求池
+
+> 状态：主动需求真相源 · Last updated: 2026-08-24
+>
+> 本文件记录所有产品、体验、架构和业务需求，包括未采纳、延期、拒绝和被替代的需求。需求池不等于实施计划；只有经过澄清、评估并由用户确认的需求，才能进入 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。
+
+## 1. 需求门禁
+
+```text
+用户提出需求
+→ captured：原样保留意图，不承诺实施
+→ clarifying：澄清问题、用户、场景、结果与边界
+→ assessed：评估价值、风险、替代方案、依赖和机会成本
+→ 用户确认 accept / amend / defer / reject
+→ accepted / accepted_with_changes 才能写入 Plan
+→ 如改变职责边界，再更新 Architecture
+→ planned → implementing → verified
+```
+
+### 1.1 状态
+
+| 状态 | 含义 |
+|---|---|
+| `captured` | 已记录，尚未澄清 |
+| `clarifying` | 正在确认真实问题和预期结果 |
+| `assessed` | 已完成评估，等待用户决策 |
+| `accepted` | 用户确认按原需求采纳 |
+| `accepted_with_changes` | 用户确认按修订方案采纳 |
+| `deferred` | 需求成立，但当前不实施 |
+| `rejected` | 经评估明确不采纳，保留原因 |
+| `planned` | 已进入主动 Plan 并有实施门禁 |
+| `implementing` | 正在实施 |
+| `verified` | 已完成并通过验收 |
+| `superseded` | 已被后续需求或决策替代 |
+
+### 1.2 强制规则
+
+1. 新需求可以立即以 `captured` 写入本池，但不能直接写入 Plan 或 Architecture。
+2. 在澄清和评估前，不把用户的初始方案等同于正确解法；必须考虑更正、缩小、延期或拒绝。
+3. 评估至少覆盖：用户价值、产品公理、职责归属、安全/隐私、复杂度、复用、替代方案、机会成本和不做的后果。
+4. 只有用户明确确认后，状态才能进入 `accepted` 或 `accepted_with_changes`。
+5. `deferred/rejected/superseded` 永久保留，不删除历史理由。
+6. 普通 Bug 若只是恢复已确认行为，可走简化评估；安全事故和数据损坏允许先止损，但必须立即补录。
+7. 即使用户要求“直接实现”，也先给出简短评估；用户再次确认后才进入 Plan。
+8. Requirement、Plan、Architecture 各有唯一职责：Requirement 保存需求与决策，Plan 保存已批准实施，Architecture 保存稳定职责边界。
+
+## 2. 需求模板
+
+```text
+ID / 标题 / 日期 / 状态
+原始需求
+真实问题与目标结果
+目标用户与场景
+澄清记录
+价值与架构评估
+风险与依赖
+替代方案
+建议结论与可证伪条件
+用户确认
+关联 Plan / Architecture / 实现 / 验证
+```
+
+---
+
+## REQ-2026-08-24-001：Web 对话右侧任务 DAG 与实时任务流
+
+- **提出日期**：2026-08-24
+- **当前状态**：`verified`
+- **原始需求**：Web 对话页面右侧提供一个 DAG 图和当前正在执行的实时任务流。
+
+### 真实问题与目标结果
+
+用户在对话中看不到系统计划、当前步骤、等待原因、失败位置和剩余交付物，需要跳转 `/tasks`，破坏对话连续性。目标是在不离开对话的情况下理解任务如何被推进，并增强长任务的可控感和可信度。
+
+### 评估
+
+- **用户价值**：高；直接提升 Coordination 可见性、Assurance 透明度和等待体验。
+- **战略一致性**：符合 Task/Artifact/Evidence/Decision 协作原则。
+- **现有复用**：可复用 Pi `ExecutionPlanArtifact`、`TaskEvent`、`StageAttempt` 和既有 `/tasks` 观察能力。
+- **职责边界**：必须是 Pi 真相源的只读 projection；Web 不创建第二状态机，不推进 Task。
+- **主要风险**：原始事件过度技术化、右栏挤压对话、DAG 与时间流信息过载、补查 Parent/Child 混淆、高频轮询、内部信息泄露。
+
+### 备选方案
+
+1. 完整原始 DAG + 原始事件：信息过载且存在披露风险，拒绝。
+2. 只显示线性进度：无法表达依赖和补查，价值不足。
+3. **业务化 DAG + 可折叠实时流**：复用现有真相源并控制复杂度，采纳。
+
+### 用户确认后的方案
+
+- 桌面端 `/chat` 右侧显示业务化 DAG 和可折叠实时任务流。
+- 窄屏降级为抽屉。
+- DAG 来自最新有效 `ExecutionPlanArtifact`，展示业务标题、依赖和状态。
+- 实时流展示有界 TaskEvent/StageAttempt，不展示原始 payload、Prompt、hidden CoT、Secret、内部 hash/path 或完整异常。
+- 当前最新或用户选中的 Web Task 为观察焦点；补查 child 可成为执行焦点，但不改写 parent 状态。
+- 页面关闭、折叠和切换观察焦点不影响任务执行。
+
+### 用户确认
+
+- **确认日期**：2026-08-24
+- **决策**：接受需求池机制；本需求按“业务 DAG + 可折叠实时流、移动端抽屉、默认不展示原始技术事件”方案采纳。
+
+### 关联
+
+- **Plan**：`forge-enterprise-evolution-plan.md` W1。
+- **Architecture**：`platform-architecture.md` 渠道层与可观测性边界。
+- **实现**：`web/router.py` Web-chat-scoped flow projection；`web/templates/chat.html` 桌面右栏、业务 DAG、实时流和移动抽屉。
+- **验证**：Python 全量 `546 passed / 24 skipped`；Pi `88 passed`、typecheck 通过；桌面与 390px 移动端 Playwright 通过，0 console/page error；网站构建通过；`git diff --check` 通过。
+- **剩余风险**：当前使用增量 polling 而非推送；最大 12 个 PlanStep 的窄栏布局已受控，未来更大 Work Graph 需重新评估可视化策略。
+
+---
+
+## REQ-2026-08-24-002：修正 M0 Governance Contract 评审阻断项
+
+- **提出日期**：2026-08-24
+- **当前状态**：`verified`
+- **来源**：M0.2/M0.3 正式代码审查。
+- **原始需求**：在进入 M1A 前修复 Governance Coverage、Service Delegation、Task binding、递归委托和 Human Action mandate 语义问题。
+
+### 评估
+
+- **必要性**：高；这些是身份与授权 Contract 的基础语义，带问题冻结 v1 会迫使 M1 PEP 采用错误权限模型。
+- **风险**：当前尚无运行时调用方，修订成本低；若延期到 M1 后再改，会增加数据迁移、兼容和安全风险。
+- **替代方案**：只在 M0.5 增加语义校验不能解决 Service delegation 无 Contract、`can_delegate=true` 不可表达和 Coverage 指标混淆，拒绝该替代方案。
+
+### 已确认修订方案
+
+1. 将 `Contract Coverage` 与 `Runtime Governance Coverage` 分离，当前不得用字段完整冒充运行时已治理。
+2. 将仅支持 Agent 的初版 Mandate 泛化为 task-scoped `DelegatedMandate v1`，同时覆盖 Service/Agent delegate。
+3. active Mandate 必须绑定 Task 和 Audience；v1 `can_delegate=false`，递归委托留给有 parent/subset 语义的未来版本。
+4. Human 直接 Action 使用 Membership/Role/Policy/Decision；只有 Service/Agent 代表 Principal 行动时才要求 DelegatedMandate。
+5. 补齐共享正反 fixture 和 Python/TypeScript parity tests。
+
+### 用户确认
+
+- **确认日期**：2026-08-24
+- **决策**：用户在代码审查后确认继续修复，并要求先合并到 `main`、后续直接在 `main` 开发。
+
+### 关联
+
+- **Plan**：`forge-enterprise-evolution-plan.md` M0.2/M0.3 评审修订。
+- **实现**：`DelegatedMandate v1`、Governance Action Catalog v1.1.0、Python/TypeScript 共享 fixture 与 parity/引用一致性测试。
+- **验证**：Python `548 passed / 24 skipped`；Pi `89 passed`、TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON、文档和 `git diff --check` 通过。
+- **剩余边界**：M0.5 仍需验证跨对象 Organization/Workspace、时间顺序、撤销状态和完整 Query lineage；M1A 未批准，Runtime Governance Coverage 保持 0%。

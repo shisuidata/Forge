@@ -274,7 +274,7 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "rendered_output_artifact",
         "resource_ref_v1",
         "principal_context_v1",
-        "agent_mandate_v1",
+        "delegated_mandate_v1",
         "policy_decision_v1",
         "datasource_binding_v1",
         "registry_binding_v1",

@@ -16,7 +16,7 @@ CATALOG_PATH = CONTRACTS_DIR / "governance-action-catalog.v1.json"
 GOVERNANCE_CONTRACTS = {
     "resource_ref_v1",
     "principal_context_v1",
-    "agent_mandate_v1",
+    "delegated_mandate_v1",
     "policy_decision_v1",
     "datasource_binding_v1",
     "registry_binding_v1",
@@ -74,7 +74,28 @@ def test_actor_and_final_accountability_are_distinct() -> None:
     assert agent_context["actor_principal"]["principal_id"] != agent_context["accountable_principal"]["principal_id"]
 
 
-def test_action_catalog_is_complete_unique_and_fully_governed() -> None:
+def test_delegated_mandates_cover_service_and_agent_without_recursive_authority() -> None:
+    fixtures = _load(FIXTURES_PATH)
+    mandates = fixtures["valid"]["delegated_mandate_v1"]
+    assert {item["delegate_principal"]["principal_type"] for item in mandates} == {"service", "agent"}
+    assert all(item["task_run_id"].startswith("tr_") for item in mandates)
+    assert all(item["audience"] == "forge" for item in mandates)
+    assert all(item["can_delegate"] is False for item in mandates)
+
+
+def test_principal_context_delegation_fixture_references_matching_mandates() -> None:
+    fixtures = _load(FIXTURES_PATH)["valid"]
+    mandates = {item["mandate_id"]: item for item in fixtures["delegated_mandate_v1"]}
+    for context in fixtures["principal_context_v1"]:
+        for delegation in context["delegation_chain"]:
+            mandate = mandates[delegation["mandate_id"]]
+            assert mandate["delegator_principal"]["principal_id"] == delegation["delegator_principal_id"]
+            assert mandate["delegate_principal"]["principal_id"] == delegation["delegate_principal_id"]
+            assert mandate["organization_id"] == context["organization_id"]
+            assert mandate["workspace_id"] == context["workspace_id"]
+
+
+def test_action_catalog_separates_contract_and_runtime_coverage() -> None:
     catalog = _load(CATALOG_PATH)
     validate_contract("governance_action_catalog_v1", catalog)
 
@@ -84,13 +105,16 @@ def test_action_catalog_is_complete_unique_and_fully_governed() -> None:
     assert set(action_names) == REQUIRED_ACTIONS
 
     supported = [action for action in actions if action["support_status"] == "supported"]
-    governed = [action for action in supported if action["governed"]]
+    specified = [action for action in supported if action["contract_status"] == "specified"]
+    enforced = [action for action in supported if action["runtime_enforcement_status"] == "enforced"]
     assert supported
-    assert len(governed) / len(supported) == 1.0
+    assert len(specified) / len(supported) == 1.0
+    assert len(enforced) / len(supported) == 0.0
     assert catalog["unsupported_high_risk_behavior"] == "fail_closed"
 
     for action in supported:
         assert action["required_context"]["principal"] is True
+        assert action["required_context"]["mandate"] == "conditional"
         if action["risk_level"] == "high":
             assert action["required_context"]["policy_decision"] == "required"
             assert action["required_context"]["human_decision"] == "required"
@@ -109,7 +133,7 @@ def test_governance_boundaries_do_not_define_secret_fields() -> None:
         for filename in (
             "resource-ref-v1.schema.json",
             "principal-context-v1.schema.json",
-            "agent-mandate-v1.schema.json",
+            "delegated-mandate-v1.schema.json",
             "policy-decision-v1.schema.json",
             "datasource-binding-v1.schema.json",
             "registry-binding-v1.schema.json",

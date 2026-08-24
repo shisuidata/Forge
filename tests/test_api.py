@@ -958,6 +958,10 @@ class TestAdminPages:
         assert resp.status_code == 200
         assert "Forge Data Desk" in resp.text
         assert "/api/pi/chat/messages" in resp.text
+        assert "/api/pi/chat/tasks/${encodeURIComponent(taskRunId)}/flow" in resp.text
+        assert 'id="task-flow-panel"' in resp.text
+        assert 'id="flow-dag"' in resp.text
+        assert 'id="flow-stream"' in resp.text
         assert "/api/chat" not in resp.text
 
     async def test_chat_and_task_monitor_have_separate_navigation(self, client: AsyncClient):

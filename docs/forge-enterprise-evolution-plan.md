@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0.1–M0.3 已完成，待 Contract 评审；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0.1–M0.3 评审完成，M0.4/M0.5 未开始；W1 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -17,7 +17,8 @@
 - 渠道和 Skills 不获得数据库执行权。
 - 高风险副作用不自动重放。
 - 不新建第二套任务状态或业务真相源。
-- 每个工作包遵循“先更新计划 → 再实现 → 验证 → 回写状态/风险”。
+- 新需求先进入 [`requirements-pool.md`](requirements-pool.md)，完成澄清、评估和用户确认后才能进入本文。
+- 每个已批准工作包遵循“先更新计划 → 再实现 → 验证 → 回写需求状态/计划状态/风险”。
 
 中期产品定位：
 
@@ -32,7 +33,7 @@ GTM：Data-Team Led
 治理：Human Accountable
 ```
 
-质量策略是 `100% Governed` 的受支持过程边界，而不是开放世界端到端 `100% Correct`。治理覆盖率必须以版本化 Action Catalog 中 `support_status=supported` 的 Action 为分母；目录外高风险 Action 失败关闭，不纳入能力声明。
+质量策略是 `100% Governed` 的受支持过程边界，而不是开放世界端到端 `100% Correct`。Action Catalog 必须同时报告：① `Contract Coverage`，表示受支持 Action 的治理契约是否完整；② `Runtime Governance Coverage`，表示这些 Contract 是否已由生产 PEP 执行并通过负向门禁。两者不得混称；目录外高风险 Action 失败关闭，不纳入能力声明。
 
 ## 1. 当前基线与状态
 
@@ -67,10 +68,11 @@ GTM：Data-Team Led
 | 工作包 | 状态 | 边界 |
 |---|---|---|
 | M0.1 计划文档收口 | 已完成 | 状态与基线已统一；历史计划已标记为快照；Spider data symlink 已恢复 |
-| M0.2 Governance Contract 内核 | 已完成，待评审 | 已新增 6 个内核 Contract、共享 fixture、Python/TypeScript parity test；未接运行时 |
-| M0.3 Governance Coverage Catalog | 已完成，待评审 | v1.0.0 收录 14 个 supported/governed Action；当前 100% 仅表示 Contract 分母完整 |
+| M0.2 Governance Contract 内核 | 评审修订完成 | `DelegatedMandate v1` 同时覆盖 Pi Service/Agent，强制 Task+Audience，v1 固定禁止再委托；PrincipalContext fixture 的 delegation 均有匹配 Mandate |
+| M0.3 Governance Coverage Catalog | 评审修订完成 | v1.1.0 分离 Contract Coverage=100% 与 Runtime Governance Coverage=0%；Human 直接 Action 不强制 Mandate，Service/Agent 代理时 conditional required |
 | M0.4 其余 Contract 草案 | 未开始 | 不阻塞 M1A；需 M0 内核评审后再开始 |
 | M0.5 Fixture、威胁模型与迁移设计 | 未开始 | 不修改生产授权行为 |
+| W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -96,9 +98,10 @@ GTM：Data-Team Led
   - 明确区分 `actor_principal` 与 `accountable_principal`。
   - Actor 可为 Human/Service/Agent；最终责任主体只能为 Human/Team/Organization。
   - 包含 Organization、Workspace、authentication context、delegation chain、签发/过期时间。
-- `AgentMandate v1`
-  - 绑定 delegator、accountable principal、purpose、task、capabilities、resource scope、budget ref、approval policy、expiry。
-  - `can_delegate` 必须显式给出，默认语义为 `false`。
+- `DelegatedMandate v1`
+  - 同时覆盖 Service/Agent delegate，绑定 delegator、delegate、accountable principal、purpose、task、audience、capabilities、resource scope、budget ref、approval policy、expiry。
+  - active mandate 必须绑定具体 `task_run_id`；v1 的 `can_delegate` 固定为 `false`，不声明尚不可验证的递归委托能力。
+  - “Agent Mandate”是 `delegate_principal.principal_type=agent` 的领域称谓，不另建一份重复 Contract。
 - `PolicyDecision v1`
   - 固定 subject、action、resource、`allow/deny/conditional`、reason、obligations、policy revision 和有效期。
 - `ResourceRef v1`
@@ -113,7 +116,7 @@ Contract Owner 与真相源：
 | Contract | Owner | 正式真相源 | 最小披露 |
 |---|---|---|---|
 | PrincipalContext | Pi Governance | 认证映射与 Principal/Membership Store | ID、类型、scope、auth method/hash、有效期；不含 token |
-| AgentMandate | Pi Governance | Mandate Store | Purpose、Task、能力、资源、责任主体、有效期；不含凭证 |
+| DelegatedMandate | Pi Governance | Mandate Store | Delegate、Audience、Purpose、Task、能力、资源、责任主体、有效期；不含凭证 |
 | PolicyDecision | 做出资源裁决的 PEP | 对应 Policy/Audit Store | 决策、原因码、义务、policy revision；不展开敏感策略全文 |
 | ResourceRef | 资源 Owner | 对应领域 Store | 稳定资源类型、ID、Organization/Workspace scope |
 | DatasourceBinding | Forge | Forge Datasource/Policy Store | datasource ref、revision、policy revision、生命周期 |
@@ -130,7 +133,7 @@ Contract Owner 与真相源：
 - `report.read / share / export`
 - `memory_proposal.confirm / forget`
 
-每个 Action 标记 Owner、执行者、风险级别、需要的 Principal/Mandate/Policy/Decision、真相源和失败策略。未进入支持目录的高风险 Action 必须 fail closed；对外只声明已纳入目录的治理覆盖率。
+每个 Action 标记 Owner、执行者、风险级别、需要的 Principal/Mandate/Policy/Decision、真相源和失败策略。`support_status` 只表示产品是否支持该 Action；`contract_status` 表示治理契约是否完整；`runtime_enforcement_status` 表示 v1 Contract 尚未接入、部分接入或已完整执行。Human 直接 Action 依据 Membership/Role/Policy/Decision，不强制持有 DelegatedMandate；Service/Agent 代表 Principal 行动时 mandate 才是必需。未进入支持目录的高风险 Action 必须 fail closed。
 
 ### M0.4 其余 Contract 草案
 
@@ -167,10 +170,10 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 
 - 计划状态已收口：产品方向与四平面框架确认，本文成为唯一主动计划；`pi-forge-integration-plan.md` 明确为历史快照。
 - `tests/datasets/spider/data` 已恢复为仓库记录的 `../../spider2/data` symlink，未修改 benchmark 数据内容。
-- `agent/contracts/` 新增 `PrincipalContext v1`、`AgentMandate v1`、`PolicyDecision v1`、`ResourceRef v1`、`DatasourceBinding v1`、`RegistryBinding v1` 及共享有效/无效 fixture。
+- 初版 `agent/contracts/` 新增 `PrincipalContext v1`、`AgentMandate v1`、`PolicyDecision v1`、`ResourceRef v1`、`DatasourceBinding v1`、`RegistryBinding v1` 及共享有效/无效 fixture；Contract 评审发现 AgentMandate 与 Coverage 语义问题，当前正在修订，不能据初版进入 M1A。
 - `services/pi-orchestrator/src/governance-contracts.ts` 提供对应 TypeBox 类型；Python JSON Schema 与 TypeScript 使用同一 fixture corpus 做行为 parity。
-- Governance Action Catalog v1.0.0 收录 14 个 supported Action，固定 Owner、Executor、风险、Required Context、Truth Source 与失败策略；目录外高风险 Action 语义为 fail closed。
-- 新增 Contract 与 Catalog 文档，明确 Owner、真相源、最小披露和“Contract Coverage 不等于运行时 enforcement”。
+- Governance Action Catalog 初版收录 14 个 supported Action，固定 Owner、Executor、风险、Required Context、Truth Source 与失败策略；评审发现 `governed=true` 和 100% 测试仍会把字段完整误读为运行时 enforcement，必须升级目录语义后再批准。
+- 新增 Contract 与 Catalog 文档，明确 Owner、真相源和最小披露；评审修订将使“Contract Coverage 不等于运行时 enforcement”成为机器可读字段，而不只是一句文档说明。
 - 未修改 Task API、TaskRun/QueryRun 数据库 Schema、现有授权逻辑、数据库行为或 OAuth Runtime。
 
 验证：
@@ -182,11 +185,51 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - JSON 解析、文档链接和全局 `git diff --check`：通过。
 - TypeScript/Python LSP 未配置；分别使用 `tsc --noEmit`、Python 全量测试和契约测试替代。
 
-遗留风险与下一步：
+评审修订结果与下一步：
 
-- M0.4 Coordination/Economics/Context/OAuth 草案和 M0.5 完整 Query fixture、Threat Model、迁移设计尚未开始。
+- M0.2/M0.3 阻断项已修复：`DelegatedMandate v1` 同时表达 Service/Agent delegate，active/historical Mandate 均固定具体 Task 与 Audience，v1 `can_delegate=false`；Human 直接 Action 与受托 Service/Agent 的 Mandate 条件已区分。
+- Action Catalog v1.1.0 使用 `support_status + contract_status + runtime_enforcement_status`，机器可读地报告 Contract Coverage 100% 和 v1 Runtime Governance Coverage 0%，不再把字段完整冒充运行时已治理。
+- Web/Agent PrincipalContext 的共享 fixture 引用真实匹配的 Mandate；Python/TypeScript 增加跨 Contract 引用一致性和 task/recursive delegation 负向测试。
+- 当前验证：Python `548 passed / 24 skipped`；Pi `89 passed`、TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON/文档/diff check 通过。
+- M0.4 Coordination/Economics/Context/OAuth 草案和 M0.5 完整 Query fixture、Threat Model、迁移设计尚未开始；M1A 仍未批准。
 - v1 Schema 负责稳定形状和最小类型不变量；跨对象 Organization/Workspace 一致性、时间先后、撤销状态和 delegation chain 连续性需在 M0.5 明确为语义门禁，并由 M1 PEP 失败关闭执行。
 - 新 Contract 和 Catalog 当前没有生产调用方；未经本轮 Contract 评审不得接入 M1A。
+
+## W1：Web 对话实时任务视图（独立只读切片）
+
+> Requirement：[`REQ-2026-08-24-001`](requirements-pool.md#req-2026-08-24-001web-对话右侧任务-dag-与实时任务流) · 决策：`accepted_with_changes`
+
+### W1.1 用户体验
+
+- 桌面端 `/chat` 右侧常驻当前任务面板；窄屏降级为可展开抽屉，不挤压主对话。
+- 上半部分显示最新 `ExecutionPlanArtifact` 的业务 DAG：节点标题、依赖、状态和 plan revision。
+- 下半部分显示可折叠实时任务流：Task 状态、StageAttempt 和关键 TaskEvent；按 sequence 单调追加，不因轮询闪烁。
+- 创建消息、执行卡片 Action、选择最近任务时同步观察焦点；补查 child 可成为当前执行焦点，但不能改写 parent Task 真相。
+
+### W1.2 数据与安全边界
+
+- 唯一数据源是 Pi 的 Task、最新 ExecutionPlan Artifact、TaskEvent 和 StageAttempt；Web 不计算或持久化新的任务状态。
+- Forge Web 提供 Web-chat-scoped 聚合读取接口，服务端再次验证 Organization/Team、`channel=web` 和当前 Web 用户。
+- 响应只返回 DAG/状态展示所需字段；排除 Secret、Prompt、hidden CoT、Tool transcript、完整异常、内部 hash/path 和不必要 payload。
+- 轮询使用 event sequence 增量读取和有界退避；切换任务后旧轮询失效。
+
+### W1.3 验收门禁
+
+- DAG 来自最新有效 ExecutionPlan revision，依赖边和节点状态一致。
+- StageAttempt running/terminal 状态实时更新；TaskEvent 按 sequence 去重、单调追加。
+- Web Task 可见；跨渠道、跨 scope 和非法 task ID 失败关闭。
+- 新对话、最近任务恢复、等待审批、执行中、完成和失败有展示测试。
+- 页面不推进 Task、不批准 SQL、不重放 Attempt；折叠面板不影响执行。
+- 支持 `prefers-reduced-motion`、键盘操作和窄屏抽屉。
+
+### W1.4 实施结果（2026-08-24）
+
+- Forge Web 新增 Web-chat-scoped `/flow` 聚合读取，只返回有界 Task、最新 ExecutionPlan、增量 Event 和去敏 Attempt；服务端复核 Organization/Team、`channel=web` 和 `web_admin`。
+- `/chat` 桌面端右侧绘制最多 12 个步骤的依赖 DAG，节点区分 waiting/running/completed/failed/skipped；实时流按 sequence 只追加，Attempt 状态原地更新。
+- 窄屏使用带 backdrop、Escape/关闭按钮和 ARIA 状态的抽屉；`prefers-reduced-motion` 关闭动画。
+- 新消息、Presentation、Action 返回的 child Task 和最近任务恢复都会切换观察焦点；旧轮询通过 epoch 失效，不影响 Pi 执行。
+- 自动验证：Python `546 passed / 24 skipped`；Pi `88 passed`、TypeScript typecheck 通过；Web 定向测试 77 passed；桌面和 390px 移动端 Playwright 通过且 0 console/page error；网站构建和 `git diff --check` 通过。
+- 遗留边界：当前使用有界 polling；未来 PlanStep 超过 12 或出现大规模动态 Work Graph 时必须重新进入需求池评估布局与推送方案。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
@@ -201,7 +244,7 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 
 ### 3.2 真相源
 
-- Pi Governance 模块：Principal、Membership、Service Identity、Agent Mandate 和 Task delegation。
+- Pi Governance 模块：Principal、Membership、Service Identity、DelegatedMandate 和 Task delegation。
 - Pi Task Store：Task 状态与 Principal/Mandate snapshot 引用。
 - Forge：数据资源 Policy enforcement、QueryRun 和执行审计。
 - 不建立通用共享 PDP；统一 Contract，不统一可写数据库。

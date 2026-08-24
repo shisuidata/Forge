@@ -28,9 +28,25 @@
   .chat-prose p + p { margin-top: .65rem; }
   .chat-prose ul { list-style: disc; padding-left: 1.25rem; margin: .55rem 0; }
   .chat-prose a { color: #12634a; text-decoration: underline; text-underline-offset: 3px; }
+  .flow-panel { width: 22rem; background: rgba(250,249,245,.96); border-left: 1px solid var(--chat-line); }
+  .flow-dag-canvas { position: relative; min-height: 7rem; }
+  .flow-dag-edge { fill: none; stroke: rgba(25,77,58,.2); stroke-width: 1.5; }
+  .flow-node { position: absolute; border: 1px solid var(--chat-line); background: rgba(255,255,255,.94); box-shadow: 0 7px 18px rgba(23,32,29,.06); transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+  .flow-node[data-status="running"] { border-color: #2563eb; background: #eff6ff; transform: translateY(-1px); }
+  .flow-node[data-status="waiting_approval"] { border-color: #d97706; background: #fffbeb; }
+  .flow-node[data-status="completed"] { border-color: #059669; background: #ecfdf5; }
+  .flow-node[data-status="failed"] { border-color: #dc2626; background: #fef2f2; }
+  .flow-node[data-status="skipped"] { opacity: .55; }
+  .flow-stream-row { animation: chat-rise .22s ease-out both; }
+  .flow-mobile-backdrop { display: none; }
+  @media (max-width: 1279px) {
+    .flow-panel { position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: min(24rem, 92vw); transform: translateX(102%); transition: transform .24s cubic-bezier(.2,.8,.2,1); box-shadow: -24px 0 60px rgba(23,32,29,.18); }
+    .flow-panel[data-open="true"] { transform: translateX(0); }
+    .flow-mobile-backdrop[data-open="true"] { display: block; position: fixed; z-index: 50; inset: 0; background: rgba(17,26,23,.38); backdrop-filter: blur(2px); }
+  }
   @keyframes chat-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   @keyframes chat-pulse { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
-  @media (prefers-reduced-motion: reduce) { .chat-message, .chat-dot { animation: none; } .chat-action { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .chat-message, .chat-dot, .flow-stream-row { animation: none; } .chat-action, .flow-panel, .flow-node { transition: none; } }
 </style>
 
 <div class="chat-shell -m-6 flex min-h-[calc(100vh-4.1rem)] overflow-hidden text-[var(--chat-ink)]">
@@ -58,10 +74,15 @@
             <p class="text-[11px] text-gray-500">对话、查询、分析与报告，共用同一条可信任务链</p>
           </div>
         </div>
-        <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium {% if pi_enabled %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
-          <span class="h-1.5 w-1.5 rounded-full {% if pi_enabled %}bg-emerald-500{% else %}bg-amber-500{% endif %}"></span>
-          {% if pi_enabled %}可信运行时在线{% else %}运行时未启用{% endif %}
-        </span>
+        <div class="flex items-center gap-2">
+          <button id="flow-toggle" type="button" class="chat-action inline-flex items-center gap-2 rounded-full border border-[var(--chat-line)] bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-600 xl:hidden" aria-controls="task-flow-panel" aria-expanded="false">
+            <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>任务图
+          </button>
+          <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium {% if pi_enabled %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
+            <span class="h-1.5 w-1.5 rounded-full {% if pi_enabled %}bg-emerald-500{% else %}bg-amber-500{% endif %}"></span>
+            {% if pi_enabled %}可信运行时在线{% else %}运行时未启用{% endif %}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -100,6 +121,51 @@
       </form>
     </div>
   </section>
+
+  <div id="flow-backdrop" class="flow-mobile-backdrop" data-open="false"></div>
+  <aside id="task-flow-panel" class="flow-panel flex shrink-0 flex-col overflow-hidden" data-open="false" aria-label="当前任务执行图">
+    <div class="flex items-center justify-between border-b border-[var(--chat-line)] px-4 py-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span id="flow-live-dot" class="h-2 w-2 rounded-full bg-gray-300"></span>
+          <p class="text-[10px] font-bold uppercase tracking-[.18em] text-gray-400">LIVE TASK</p>
+        </div>
+        <h2 id="flow-heading" class="mt-1 font-serif text-base font-semibold text-gray-900">等待任务</h2>
+      </div>
+      <button id="flow-close" type="button" class="chat-action rounded-lg border border-[var(--chat-line)] bg-white px-2.5 py-1.5 text-xs text-gray-500 xl:hidden" aria-label="关闭任务图">关闭</button>
+    </div>
+    <div id="flow-empty" class="flex flex-1 flex-col items-center justify-center px-8 text-center">
+      <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white font-serif text-lg text-gray-400">◇</div>
+      <p class="mt-4 text-sm font-medium text-gray-600">任务开始后，这里会显示计划与实时进度。</p>
+      <p class="mt-2 text-xs leading-5 text-gray-400">只读观察，不会推进任务或触发执行。</p>
+    </div>
+    <div id="flow-content" class="hidden min-h-0 flex-1 overflow-y-auto">
+      <section class="border-b border-[var(--chat-line)] px-4 py-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-[.17em] text-gray-400">Execution Plan</p>
+            <p id="flow-plan-meta" class="mt-1 text-xs text-gray-500">等待计划</p>
+          </div>
+          <span id="flow-task-status" class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600">等待</span>
+        </div>
+        <div id="flow-dag" class="flow-dag-canvas mt-4" role="img" aria-label="任务步骤依赖图"></div>
+      </section>
+      <section class="px-4 py-4">
+        <button id="flow-stream-toggle" type="button" class="flex w-full items-center justify-between text-left" aria-expanded="true" aria-controls="flow-stream-wrap">
+          <span>
+            <span class="block text-[10px] font-bold uppercase tracking-[.17em] text-gray-400">Realtime Flow</span>
+            <span id="flow-current-attempt" class="mt-1 block text-xs text-gray-600">等待阶段执行</span>
+          </span>
+          <span id="flow-stream-chevron" class="text-xs text-gray-400">收起</span>
+        </button>
+        <div id="flow-stream-wrap" class="mt-4">
+          <div id="flow-stream" class="space-y-3" aria-live="polite">
+            <p id="flow-stream-empty" class="text-xs text-gray-400">暂无任务事件。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </aside>
 </div>
 
 <script>
@@ -114,6 +180,27 @@ const recentTasks = document.getElementById('recent-tasks');
 const recentCount = document.getElementById('recent-count');
 const terminalKinds = new Set(['needs_input', 'query_review', 'query_result', 'analysis', 'report', 'error']);
 const activePolls = new Map();
+const flowPanel = document.getElementById('task-flow-panel');
+const flowBackdrop = document.getElementById('flow-backdrop');
+const flowToggle = document.getElementById('flow-toggle');
+const flowClose = document.getElementById('flow-close');
+const flowEmpty = document.getElementById('flow-empty');
+const flowContent = document.getElementById('flow-content');
+const flowHeading = document.getElementById('flow-heading');
+const flowLiveDot = document.getElementById('flow-live-dot');
+const flowPlanMeta = document.getElementById('flow-plan-meta');
+const flowTaskStatus = document.getElementById('flow-task-status');
+const flowDag = document.getElementById('flow-dag');
+const flowCurrentAttempt = document.getElementById('flow-current-attempt');
+const flowStream = document.getElementById('flow-stream');
+const flowStreamEmpty = document.getElementById('flow-stream-empty');
+const flowStreamToggle = document.getElementById('flow-stream-toggle');
+const flowStreamWrap = document.getElementById('flow-stream-wrap');
+const flowStreamChevron = document.getElementById('flow-stream-chevron');
+let observedFlowTaskId = null;
+let flowPollEpoch = 0;
+let flowLastEventSequence = 0;
+const renderedFlowEvents = new Set();
 
 function randomId(prefix) {
   const raw = globalThis.crypto?.randomUUID?.().replaceAll('-', '') || `${Date.now()}${Math.random().toString(36).slice(2)}`;
@@ -132,6 +219,7 @@ function setConversation(id) {
   messages.replaceChildren();
   messages.classList.add('hidden');
   emptyState.classList.remove('hidden');
+  resetTaskFlow();
 }
 function showMessages() {
   emptyState.classList.add('hidden');
@@ -146,6 +234,178 @@ async function readJson(response) {
 function textNode(tag, text, className = '') {
   const node = document.createElement(tag); node.textContent = text; node.className = className; return node;
 }
+
+const flowTaskLabels = {
+  created: '已创建', clarifying: '澄清中', ready_for_query: '准备查询',
+  waiting_for_query_approval: '等待你审批', waiting_for_action_approval: '等待确认',
+  querying: '查询执行中', ready_for_analysis: '准备分析', analyzing: '分析中',
+  ready_for_report: '准备报告', rendering: '报告生成中', completed: '已完成',
+  needs_input: '等待补充', incomplete: '需要补查', cancelled: '已取消', failed: '失败', expired: '已过期',
+};
+const flowEventLabels = {
+  'task.created': '任务已创建', 'task.status_changed': '任务状态已推进',
+  'plan.created': '执行计划已建立', 'plan.revised': '执行计划已更新',
+  'query.review_requested': '查询等待人工审批', 'query.clarification_requested': '查询需要补充信息',
+  'query.prepare_failed': '查询准备失败', 'query.prepare_timed_out': '查询准备超时',
+  'query.approval_submitted': '查询审批已提交', 'query.completed': '只读查询已完成',
+  'query.execution_failed': '查询执行失败', 'artifact.created': '任务交付物已生成',
+  'skill.started': '专业阶段已开始', 'skill.completed': '专业阶段已完成',
+  'skill.failed': '专业阶段失败', 'skill.execution_failed': '专业阶段执行失败',
+  'analysis.completed': '证据分析已完成', 'report.completed': '业务报告已完成',
+  'analysis.supplement_created': '补查任务已创建', 'analysis.supplement_consumed': '补查结果已合并',
+  'stage.attempt_started': '阶段执行已开始', 'stage.attempt_succeeded': '阶段执行成功',
+  'stage.attempt_failed': '阶段执行失败', 'stage.attempt_timed_out': '阶段执行超时',
+  'stage.attempt_interrupted': '阶段执行已中断', 'memory.proposed': '记忆变更等待确认',
+  'memory.confirmed': '记忆变更已确认', 'channel.response_created': '回复已生成',
+};
+
+function setFlowPanelOpen(open) {
+  flowPanel.dataset.open = String(open);
+  flowBackdrop.dataset.open = String(open);
+  flowToggle.setAttribute('aria-expanded', String(open));
+}
+
+function resetTaskFlow() {
+  flowPollEpoch += 1;
+  observedFlowTaskId = null;
+  flowLastEventSequence = 0;
+  renderedFlowEvents.clear();
+  flowStream.replaceChildren(flowStreamEmpty);
+  flowStreamEmpty.classList.remove('hidden');
+  flowDag.replaceChildren();
+  flowHeading.textContent = '等待任务';
+  flowPlanMeta.textContent = '等待计划';
+  flowTaskStatus.textContent = '等待';
+  flowCurrentAttempt.textContent = '等待阶段执行';
+  flowLiveDot.className = 'h-2 w-2 rounded-full bg-gray-300';
+  flowContent.classList.add('hidden');
+  flowEmpty.classList.remove('hidden');
+}
+
+function renderFlowDag(plan) {
+  flowDag.replaceChildren();
+  if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) {
+    flowDag.append(textNode('p', 'Pi 正在生成任务计划。', 'py-8 text-center text-xs text-gray-400'));
+    return;
+  }
+  const steps = plan.steps;
+  const byId = new Map(steps.map((step) => [step.step_id, step]));
+  const depthCache = new Map();
+  const depthOf = (step, visiting = new Set()) => {
+    if (depthCache.has(step.step_id)) return depthCache.get(step.step_id);
+    if (visiting.has(step.step_id)) return 0;
+    const nextVisiting = new Set(visiting); nextVisiting.add(step.step_id);
+    const dependencies = step.depends_on.map((id) => byId.get(id)).filter(Boolean);
+    const depth = dependencies.length ? Math.max(...dependencies.map((item) => depthOf(item, nextVisiting))) + 1 : 0;
+    depthCache.set(step.step_id, depth); return depth;
+  };
+  const levels = new Map();
+  steps.forEach((step) => { const depth = depthOf(step); levels.set(depth, [...(levels.get(depth) || []), step]); });
+  const width = Math.max(280, flowDag.clientWidth || 320);
+  const levelGap = 86; const nodeHeight = 55; const topPad = 6;
+  const maxDepth = Math.max(...levels.keys());
+  const height = topPad * 2 + nodeHeight + maxDepth * levelGap;
+  flowDag.style.height = `${height}px`;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('absolute', 'inset-0', 'h-full', 'w-full');
+  const positions = new Map();
+  [...levels.entries()].sort(([a], [b]) => a - b).forEach(([depth, group]) => {
+    const gap = 10; const nodeWidth = Math.min(142, (width - gap * (group.length + 1)) / group.length);
+    group.forEach((step, index) => {
+      const total = nodeWidth * group.length + gap * (group.length - 1);
+      const x = (width - total) / 2 + index * (nodeWidth + gap);
+      const y = topPad + depth * levelGap;
+      positions.set(step.step_id, {x, y, width: nodeWidth, height: nodeHeight});
+    });
+  });
+  steps.forEach((step) => {
+    const target = positions.get(step.step_id); if (!target) return;
+    step.depends_on.forEach((dependencyId) => {
+      const source = positions.get(dependencyId); if (!source) return;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const startX = source.x + source.width / 2; const startY = source.y + source.height;
+      const endX = target.x + target.width / 2; const endY = target.y;
+      const middleY = (startY + endY) / 2;
+      path.setAttribute('d', `M ${startX} ${startY} C ${startX} ${middleY}, ${endX} ${middleY}, ${endX} ${endY}`);
+      path.setAttribute('class', 'flow-dag-edge'); svg.append(path);
+    });
+  });
+  flowDag.append(svg);
+  steps.forEach((step) => {
+    const position = positions.get(step.step_id); if (!position) return;
+    const node = document.createElement('div'); node.className = 'flow-node rounded-xl px-2.5 py-2';
+    node.dataset.status = step.status; node.style.left = `${position.x}px`; node.style.top = `${position.y}px`;
+    node.style.width = `${position.width}px`; node.style.height = `${position.height}px`;
+    node.setAttribute('aria-label', `${step.title}，${step.status}`);
+    node.append(textNode('p', step.capability.toUpperCase(), 'truncate text-[8px] font-bold tracking-[.13em] text-gray-400'));
+    node.append(textNode('p', step.title, 'mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-gray-800'));
+    flowDag.append(node);
+  });
+}
+
+function appendFlowEvent(event) {
+  if (renderedFlowEvents.has(event.sequence)) return;
+  renderedFlowEvents.add(event.sequence);
+  flowStreamEmpty.classList.add('hidden');
+  const row = document.createElement('div'); row.className = 'flow-stream-row flex gap-3';
+  const rail = document.createElement('div'); rail.className = 'flex w-3 flex-col items-center';
+  const failed = /failed|timed_out|interrupted/.test(event.event_type);
+  const waiting = /review_requested|clarification_requested|proposed/.test(event.event_type);
+  const dot = document.createElement('span'); dot.className = `mt-1 h-2 w-2 rounded-full ${failed ? 'bg-red-500' : waiting ? 'bg-amber-500' : 'bg-emerald-600'}`;
+  const line = document.createElement('span'); line.className = 'mt-1 h-7 w-px bg-gray-200'; rail.append(dot, line);
+  const copy = document.createElement('div'); copy.className = 'min-w-0 flex-1 pb-2';
+  copy.append(textNode('p', flowEventLabels[event.event_type] || '任务已更新', 'text-xs font-medium text-gray-700'));
+  copy.append(textNode('p', new Date(event.created_at).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit'}), 'mt-1 text-[10px] text-gray-400'));
+  row.append(rail, copy); flowStream.append(row);
+}
+
+function renderTaskFlow(data) {
+  flowEmpty.classList.add('hidden'); flowContent.classList.remove('hidden');
+  const taskStatus = data.task?.status || 'unknown';
+  const terminal = ['completed', 'failed', 'cancelled', 'expired'].includes(taskStatus);
+  flowLiveDot.className = `h-2 w-2 rounded-full ${taskStatus === 'failed' ? 'bg-red-500' : terminal ? 'bg-emerald-500' : 'bg-blue-500 chat-dot'}`;
+  flowTaskStatus.textContent = flowTaskLabels[taskStatus] || '执行中';
+  flowTaskStatus.className = `rounded-full px-2.5 py-1 text-[10px] font-semibold ${taskStatus === 'failed' ? 'bg-red-50 text-red-700' : terminal ? 'bg-emerald-50 text-emerald-700' : taskStatus.includes('waiting') || taskStatus === 'needs_input' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`;
+  const plan = data.plan;
+  flowHeading.textContent = plan?.goal ? (plan.goal.length > 34 ? `${plan.goal.slice(0, 34)}…` : plan.goal) : '当前任务';
+  flowPlanMeta.textContent = plan ? `计划 v${plan.plan_revision} · ${plan.steps.length} 个步骤` : '正在生成计划';
+  renderFlowDag(plan);
+  const attempts = Array.isArray(data.attempts) ? data.attempts : [];
+  const currentAttempt = [...attempts].reverse().find((item) => item.status === 'running') || attempts.at(-1);
+  flowCurrentAttempt.textContent = currentAttempt ? `${currentAttempt.stage} · ${currentAttempt.status}` : (data.task?.current_stage || '等待阶段执行');
+  (data.events || []).sort((a, b) => a.sequence - b.sequence).forEach(appendFlowEvent);
+  flowLastEventSequence = Math.max(flowLastEventSequence, Number(data.last_event_sequence || 0));
+}
+
+function observeTaskFlow(taskRunId) {
+  if (!/^tr_[A-Za-z0-9_-]+$/.test(taskRunId)) return;
+  if (observedFlowTaskId === taskRunId) return;
+  observedFlowTaskId = taskRunId; flowLastEventSequence = 0; renderedFlowEvents.clear();
+  flowStream.replaceChildren(flowStreamEmpty); flowStreamEmpty.classList.remove('hidden');
+  flowEmpty.classList.add('hidden'); flowContent.classList.remove('hidden'); flowHeading.textContent = '正在读取任务';
+  const epoch = ++flowPollEpoch;
+  void (async () => {
+    let delay = 650;
+    while (epoch === flowPollEpoch && observedFlowTaskId === taskRunId) {
+      try {
+        const response = await fetch(`/api/pi/chat/tasks/${encodeURIComponent(taskRunId)}/flow?after=${flowLastEventSequence}`);
+        const data = await readJson(response); if (epoch !== flowPollEpoch) return;
+        const before = flowLastEventSequence; renderTaskFlow(data);
+        const terminal = ['completed', 'failed', 'cancelled', 'expired'].includes(data.task?.status);
+        if (terminal) return;
+        delay = flowLastEventSequence > before ? 650 : Math.min(2200, Math.round(delay * 1.3));
+      } catch (error) {
+        if (epoch !== flowPollEpoch) return;
+        flowLiveDot.className = 'h-2 w-2 rounded-full bg-red-500';
+        flowCurrentAttempt.textContent = error.message || '任务流暂时不可用';
+        delay = Math.min(3000, Math.round(delay * 1.5));
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  })();
+}
+
 function appendInline(parent, text) {
   const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g;
   let cursor = 0; let match;
@@ -197,6 +457,7 @@ function progressPresentation(taskRunId, title = 'Forge 正在处理') {
 }
 function renderPresentation(presentation) {
   const card = assistantShell(presentation.task_run_id);
+  observeTaskFlow(presentation.task_run_id);
   const kind = presentation.kind || 'progress';
   const accent = {error: 'bg-red-500', query_review: 'bg-amber-400', needs_input: 'bg-orange-400', analysis: 'bg-blue-500', report: 'bg-emerald-500', query_result: 'bg-teal-500'}[kind] || 'bg-[var(--chat-lime)]';
   card.replaceChildren();
@@ -273,6 +534,7 @@ async function runAction(presentation, action, button, text = '') {
       body: JSON.stringify({action: action.type, payload, conversation_id: currentConversation(), message_id: `web_card_${presentation.task_run_id}`}),
     }));
     const nextTaskId = data.task?.task_run_id || presentation.task_run_id;
+    observeTaskFlow(nextTaskId);
     if (data.presentation) renderPresentation(data.presentation);
     await pollPresentation(nextTaskId, presentation.source_event_sequence);
     void loadRecentTasks();
@@ -317,6 +579,16 @@ input.addEventListener('input', () => { input.style.height = 'auto'; input.style
 input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); } });
 document.querySelectorAll('[data-suggestion]').forEach((button) => button.addEventListener('click', () => { input.value = button.dataset.suggestion; input.focus(); }));
 document.getElementById('new-conversation').addEventListener('click', () => { setConversation(randomId('conv')); input.focus(); });
+flowToggle.addEventListener('click', () => setFlowPanelOpen(flowPanel.dataset.open !== 'true'));
+flowClose.addEventListener('click', () => setFlowPanelOpen(false));
+flowBackdrop.addEventListener('click', () => setFlowPanelOpen(false));
+flowStreamToggle.addEventListener('click', () => {
+  const expanded = flowStreamToggle.getAttribute('aria-expanded') === 'true';
+  flowStreamToggle.setAttribute('aria-expanded', String(!expanded));
+  flowStreamWrap.classList.toggle('hidden', expanded);
+  flowStreamChevron.textContent = expanded ? '展开' : '收起';
+});
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setFlowPanelOpen(false); });
 currentConversation();
 if (PI_ENABLED) {
   void loadRecentTasks();

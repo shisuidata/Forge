@@ -377,6 +377,98 @@ async def _pi_scoped_task_get(task_run_id: str, suffix: str = "") -> tuple[int, 
     return await _pi_request("GET", f"/v1/tasks/{task_run_id}/{suffix}")
 
 
+def _bounded_web_execution_plan(artifacts: object) -> dict | None:
+    """Project the latest ExecutionPlan without leaking arbitrary Artifact payloads."""
+    if not isinstance(artifacts, list):
+        return None
+    candidates: list[tuple[int, dict]] = []
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or artifact.get("artifact_type") != "execution_plan":
+            continue
+        payload = artifact.get("payload")
+        if not isinstance(payload, dict) or not isinstance(payload.get("steps"), list):
+            continue
+        revision = payload.get("plan_revision")
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+            continue
+        candidates.append((revision, payload))
+    if not candidates:
+        return None
+    _, payload = max(candidates, key=lambda item: item[0])
+    steps = []
+    for raw_step in payload["steps"][:12]:
+        if not isinstance(raw_step, dict):
+            continue
+        step_id = raw_step.get("step_id")
+        title = raw_step.get("title")
+        capability = raw_step.get("capability")
+        status = raw_step.get("status")
+        dependencies = raw_step.get("depends_on")
+        if not all(isinstance(value, str) for value in (step_id, title, capability, status)):
+            continue
+        if not isinstance(dependencies, list) or not all(isinstance(value, str) for value in dependencies):
+            continue
+        steps.append({
+            "step_id": step_id[:64],
+            "title": title[:200],
+            "capability": capability[:64],
+            "depends_on": dependencies[:12],
+            "required": raw_step.get("required") is True,
+            "status": status[:32],
+        })
+    return {
+        "plan_revision": payload["plan_revision"],
+        "status": str(payload.get("status") or "active")[:32],
+        "route_kind": str(payload.get("route_kind") or "unknown")[:32],
+        "goal": str(payload.get("goal") or "")[:500],
+        "steps": steps,
+    }
+
+
+def _bounded_web_task_events(events: object) -> list[dict]:
+    if not isinstance(events, list):
+        return []
+    bounded = []
+    for event in events[:200]:
+        if not isinstance(event, dict):
+            continue
+        sequence = event.get("sequence")
+        event_type = event.get("event_type")
+        created_at = event.get("created_at")
+        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1:
+            continue
+        if not isinstance(event_type, str) or not isinstance(created_at, str):
+            continue
+        bounded.append({
+            "sequence": sequence,
+            "event_type": event_type[:128],
+            "created_at": created_at[:64],
+        })
+    return bounded
+
+
+def _bounded_web_stage_attempts(attempts: object) -> list[dict]:
+    if not isinstance(attempts, list):
+        return []
+    bounded = []
+    for attempt in attempts[-50:]:
+        if not isinstance(attempt, dict):
+            continue
+        required = ("attempt_id", "stage", "status", "started_at", "updated_at")
+        if not all(isinstance(attempt.get(field), str) for field in required):
+            continue
+        bounded.append({
+            "attempt_id": str(attempt["attempt_id"])[:128],
+            "stage": str(attempt["stage"])[:128],
+            "status": str(attempt["status"])[:32],
+            "attempt_number": attempt.get("attempt_number") if isinstance(attempt.get("attempt_number"), int) else 0,
+            "started_at": str(attempt["started_at"])[:64],
+            "updated_at": str(attempt["updated_at"])[:64],
+            "finished_at": str(attempt["finished_at"])[:64] if isinstance(attempt.get("finished_at"), str) else None,
+        })
+    return bounded
+
+
 @chat_router.post("/api/pi/chat/messages", response_class=JSONResponse)
 async def api_pi_web_chat_message(
     req: PiWebChatMessageRequest,
@@ -444,6 +536,74 @@ async def api_pi_web_chat_presentation(
         return JSONResponse(data, status_code=status)
     except httpx.HTTPError as exc:
         logger.warning("Pi Web chat presentation failed: %s", exc)
+        return JSONResponse(
+            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
+            status_code=502,
+        )
+
+
+@chat_router.get(
+    "/api/pi/chat/tasks/{task_run_id}/flow",
+    response_class=JSONResponse,
+)
+async def api_pi_web_chat_task_flow(
+    task_run_id: str,
+    request: Request,
+    _auth=Depends(require_api_auth),
+):
+    """Return a minimal read-only Plan/Event/Attempt projection for Web chat."""
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "Invalid task_run_id"},
+            status_code=400,
+        )
+    raw_after = request.query_params.get("after", "0")
+    if not raw_after.isdigit() or len(raw_after) > 12:
+        return JSONResponse(
+            {"status": "invalid_request", "error": "after must be a non-negative integer"},
+            status_code=400,
+        )
+    after = int(raw_after)
+    try:
+        task_status, task_data = await _pi_scoped_task_get(task_run_id)
+        task = task_data.get("task") if isinstance(task_data, dict) else None
+        if (
+            task_status != 200
+            or not isinstance(task, dict)
+            or task.get("channel") != "web"
+            or task.get("user_id") != "web_admin"
+        ):
+            return JSONResponse({"status": "not_found"}, status_code=404)
+        event_result, artifact_result, attempt_result = await asyncio.gather(
+            _pi_request("GET", f"/v1/tasks/{task_run_id}/events?after={after}"),
+            _pi_request("GET", f"/v1/tasks/{task_run_id}/artifacts"),
+            _pi_request("GET", f"/v1/tasks/{task_run_id}/attempts"),
+        )
+        if any(status != 200 for status, _ in (event_result, artifact_result, attempt_result)):
+            return JSONResponse(
+                {"status": "upstream_unavailable", "error": "Task flow is temporarily unavailable"},
+                status_code=502,
+            )
+        events = _bounded_web_task_events(event_result[1].get("events"))
+        plan = _bounded_web_execution_plan(artifact_result[1].get("artifacts"))
+        attempts = _bounded_web_stage_attempts(attempt_result[1].get("attempts"))
+        return JSONResponse({
+            "status": "ok",
+            "task": {
+                "task_run_id": task_run_id,
+                "status": str(task.get("status") or "unknown")[:64],
+                "current_stage": str(task.get("current_stage") or "")[:128],
+                "updated_at": str(task.get("updated_at") or "")[:64],
+            },
+            "plan": plan,
+            "events": events,
+            "attempts": attempts,
+            "last_event_sequence": max((event["sequence"] for event in events), default=after),
+        })
+    except httpx.HTTPError as exc:
+        logger.warning("Pi Web chat task flow failed: %s", exc)
         return JSONResponse(
             {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
             status_code=502,

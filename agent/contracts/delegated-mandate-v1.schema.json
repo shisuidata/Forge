@@ -1,16 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://forge.local/contracts/agent-mandate-v1.schema.json",
-  "title": "AgentMandate v1",
-  "description": "A versioned, task- and purpose-bounded delegation to an agent actor. It contains authority references, never credentials.",
+  "$id": "https://forge.local/contracts/delegated-mandate-v1.schema.json",
+  "title": "DelegatedMandate v1",
+  "description": "A versioned, task-, purpose-, audience-, capability-, and resource-bounded delegation to a service or agent. v1 does not permit recursive delegation and never carries credentials.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "mandate_id", "revision", "agent_principal_id", "delegator_principal", "accountable_principal", "organization_id", "workspace_id", "purpose", "task_run_id", "capabilities", "resource_scope", "budget_ref", "approval_policy_ref", "can_delegate", "status", "issued_at", "expires_at"],
+  "required": ["schema_version", "mandate_id", "revision", "delegate_principal", "delegator_principal", "accountable_principal", "organization_id", "workspace_id", "purpose", "task_run_id", "audience", "capabilities", "resource_scope", "budget_ref", "approval_policy_ref", "can_delegate", "status", "issued_at", "expires_at"],
   "properties": {
     "schema_version": {"const": 1},
     "mandate_id": {"type": "string", "pattern": "^md_[A-Za-z0-9_-]+$"},
     "revision": {"type": "integer", "minimum": 1},
-    "agent_principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "delegate_principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"enum": ["service", "agent"]}
+      }
+    },
     "delegator_principal": {
       "type": "object",
       "additionalProperties": false,
@@ -32,7 +40,8 @@
     "organization_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "workspace_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "purpose": {"type": "string", "minLength": 1, "maxLength": 1000},
-    "task_run_id": {"type": ["string", "null"], "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "audience": {"type": "string", "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"},
     "capabilities": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"}},
     "resource_scope": {
       "type": "array",
@@ -55,7 +64,7 @@
     },
     "budget_ref": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
     "approval_policy_ref": {"type": "string", "minLength": 1, "maxLength": 256},
-    "can_delegate": {"type": "boolean", "default": false},
+    "can_delegate": {"const": false},
     "status": {"enum": ["active", "revoked", "expired"]},
     "issued_at": {"type": "string", "format": "date-time"},
     "expires_at": {"type": "string", "format": "date-time"}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://forge.local/contracts/governance-action-catalog-v1.schema.json",
   "title": "Governance Action Catalog v1",
-  "description": "The measurable denominator for Forge governance coverage. Only supported actions are included in the coverage denominator.",
+  "description": "The measurable denominator for separate Contract Coverage and Runtime Governance Coverage across supported Forge actions.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "catalog_id", "revision", "status", "published_at", "unsupported_high_risk_behavior", "actions"],
@@ -20,11 +20,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["action", "support_status", "governed", "owner", "executor", "risk_level", "required_context", "truth_source", "failure_policy"],
+        "required": ["action", "support_status", "contract_status", "runtime_enforcement_status", "owner", "executor", "risk_level", "required_context", "truth_source", "failure_policy"],
         "properties": {
           "action": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$", "maxLength": 128},
           "support_status": {"enum": ["supported", "planned", "unsupported"]},
-          "governed": {"type": "boolean"},
+          "contract_status": {"enum": ["specified", "incomplete"]},
+          "runtime_enforcement_status": {"enum": ["not_integrated", "partial", "enforced"]},
           "owner": {"enum": ["pi", "pi_governance", "forge", "report_service"]},
           "executor": {"enum": ["pi", "forge", "report_service"]},
           "risk_level": {"enum": ["low", "medium", "high", "prohibited"]},
