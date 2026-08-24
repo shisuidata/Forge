@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   governanceCoverage,
+  validateGovernanceReviewTrace,
   type GovernanceActionCatalogV1,
   type GovernanceContractName,
   validateGovernanceContract,
@@ -17,6 +18,10 @@ const catalogPath = new URL(
   "../../../agent/contracts/governance-action-catalog.v1.json",
   import.meta.url,
 );
+const reviewFixturesPath = new URL(
+  "../../../agent/contracts/governance-review-fixtures.v1.json",
+  import.meta.url,
+);
 
 const fixtures = JSON.parse(readFileSync(fixturesPath, "utf8")) as {
   valid: Record<GovernanceContractName, unknown[]>;
@@ -25,6 +30,15 @@ const fixtures = JSON.parse(readFileSync(fixturesPath, "utf8")) as {
 const catalog = JSON.parse(
   readFileSync(catalogPath, "utf8"),
 ) as GovernanceActionCatalogV1;
+const reviewFixtures = JSON.parse(readFileSync(reviewFixturesPath, "utf8")) as {
+  valid: Array<Record<string, any>>;
+  invalid: Array<{
+    case: string;
+    base_case_id: string;
+    expected_code: string;
+    mutation: { op: "set"; path: string[]; value: unknown };
+  }>;
+};
 
 const contractNames: GovernanceContractName[] = [
   "resource_ref_v1",
@@ -81,6 +95,49 @@ test("PrincipalContext delegation fixtures reference matching Service/Agent mand
       assert.equal(mandate.organization_id, context.organization_id);
       assert.equal(mandate.workspace_id, context.workspace_id);
     }
+  }
+});
+
+function applyReviewMutation(
+  value: Record<string, any>,
+  mutation: { op: "set"; path: string[]; value: unknown },
+): Record<string, any> {
+  const mutated = structuredClone(value);
+  let target = mutated;
+  for (const segment of mutation.path.slice(0, -1)) {
+    target = target[segment] as Record<string, any>;
+  }
+  assert.equal(mutation.op, "set");
+  target[mutation.path.at(-1)!] = mutation.value;
+  return mutated;
+}
+
+test("Web, Feishu and Agent review traces preserve cross-contract semantics", () => {
+  assert.deepEqual(
+    new Set(reviewFixtures.valid.map((trace) => trace.channel)),
+    new Set(["web", "feishu", "api"]),
+  );
+  for (const trace of reviewFixtures.valid) {
+    assert.deepEqual(validateGovernanceReviewTrace(trace), [], trace.case_id);
+    assert.deepEqual(trace.extensions, { economics: null, context: null });
+  }
+});
+
+test("shared review mutations fail with stable semantic reason codes", () => {
+  const validById = new Map(
+    reviewFixtures.valid.map((trace) => [trace.case_id as string, trace]),
+  );
+  assert.ok(reviewFixtures.invalid.length >= 24);
+  for (const invalidCase of reviewFixtures.invalid) {
+    const base = validById.get(invalidCase.base_case_id);
+    assert.ok(base);
+    const errors = validateGovernanceReviewTrace(
+      applyReviewMutation(base, invalidCase.mutation),
+    );
+    assert.ok(
+      errors.includes(invalidCase.expected_code),
+      `${invalidCase.case}: ${errors.join(", ")}`,
+    );
   }
 });
 

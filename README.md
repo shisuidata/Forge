@@ -234,6 +234,7 @@ tests/
 | [产品方向与架构复审](docs/product-direction-architecture-review-2026-08-24.md) | 按产品公理审核当前实现、四平面缺口、目标架构与分阶段建议 |
 | [企业演进主动计划](docs/forge-enterprise-evolution-plan.md) | Contract、身份授权、成本、协同、保障、Context 实验和企业交付的阶段门禁 |
 | [需求池](docs/requirements-pool.md) | 新需求的澄清、评估、接受、延期、拒绝、计划与验证记录 |
+| [M0 Governance Contract 评审](docs/governance-contract-review-2026-08-24.md) | 跨 Contract 语义、Threat Model、迁移/回滚与 M1A 前置结论 |
 | [工作原理与 DSL 能力](docs/how-it-works.md) | 执行流程详解、DSL 特性表、Schema RAG |
 | [基准测试详情](docs/benchmarks.md) | 版本演化、跨模型 EA 对比、Spider2 结果 |
 | [设计哲学与工程洞察](docs/philosophy.md) | 核心哲学、工程经验、开放问题 |

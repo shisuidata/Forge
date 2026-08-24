@@ -1,12 +1,12 @@
 # Forge Governance Contract v1
 
-> 状态：M0 Contract 修订基线；尚未接入运行时授权 · Last updated: 2026-08-24
+> 状态：M0 Contract Review 已通过；尚未接入运行时授权 · Last updated: 2026-08-24
 >
 > 权威 Schema 位于 [`../agent/contracts/`](../agent/contracts/)，TypeScript 对应定义位于 [`../services/pi-orchestrator/src/governance-contracts.ts`](../services/pi-orchestrator/src/governance-contracts.ts)。
 
 ## 1. Contract 边界
 
-M0 只固定跨 Python/TypeScript 的治理语义，不修改 Task API、SQLite Schema、Forge QueryRun、数据库授权或 OAuth Runtime。
+M0 只固定跨 Python/TypeScript 的治理语义，不修改 Task API、SQLite Schema、Forge QueryRun、数据库授权或 OAuth Runtime。跨 Contract 评审、Threat Model 与迁移结论见 [`governance-contract-review-2026-08-24.md`](governance-contract-review-2026-08-24.md)。
 
 | Contract | Owner | Truth Source | 用途 |
 |---|---|---|---|

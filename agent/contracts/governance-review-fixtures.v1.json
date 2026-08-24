@@ -1,0 +1,1238 @@
+{
+  "fixture_version": 1,
+  "description": "M0.5 review-only traces. Approval snapshots and query lineage are test composition records, not frozen production Contracts.",
+  "valid": [
+    {
+      "review_fixture_version": 1,
+      "case_id": "web_query_001",
+      "channel": "web",
+      "as_of": "2026-08-24T08:05:00Z",
+      "principal_context": {
+        "schema_version": 1,
+        "principal_context_id": "pc_web_query_001",
+        "actor_principal": {
+          "principal_id": "svc_pi_web",
+          "principal_type": "service"
+        },
+        "accountable_principal": {
+          "principal_id": "user_web_123",
+          "principal_type": "human"
+        },
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "authentication_context": {
+          "method": "service_key",
+          "assurance_level": "service_asserted",
+          "authenticated_at": "2026-08-24T08:00:00Z",
+          "session_id_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "delegation_chain": [
+          {
+            "delegation_id": "dlg_web_query_001",
+            "delegator_principal_id": "user_web_123",
+            "delegate_principal_id": "svc_pi_web",
+            "mandate_id": "md_web_query_001",
+            "issued_at": "2026-08-24T08:00:00Z",
+            "expires_at": "2026-08-24T08:15:00Z"
+          }
+        ],
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      "delegated_mandate": {
+        "schema_version": 1,
+        "mandate_id": "md_web_query_001",
+        "revision": 1,
+        "delegate_principal": {
+          "principal_id": "svc_pi_web",
+          "principal_type": "service"
+        },
+        "delegator_principal": {
+          "principal_id": "user_web_123",
+          "principal_type": "human"
+        },
+        "accountable_principal": {
+          "principal_id": "user_web_123",
+          "principal_type": "human"
+        },
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "purpose": "Execute the reviewed read-only query for tr_web_query_001",
+        "task_run_id": "tr_web_query_001",
+        "audience": "forge",
+        "capabilities": [
+          "query.prepare",
+          "query.execute"
+        ],
+        "resource_scope": [
+          {
+            "schema_version": 1,
+            "resource_type": "datasource",
+            "resource_id": "ds_demo",
+            "organization_id": "org_demo",
+            "workspace_id": "ws_growth",
+            "parent_resource_id": "ws_growth",
+            "resource_revision": "ds-rev-1"
+          }
+        ],
+        "budget_ref": null,
+        "approval_policy_ref": "policy_query_review_v1",
+        "can_delegate": false,
+        "status": "active",
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      "policy_decision": {
+        "schema_version": 1,
+        "policy_decision_id": "pd_web_query_001",
+        "revision": 1,
+        "subject_principal_id": "svc_pi_web",
+        "mandate_id": "md_web_query_001",
+        "action": "query.execute",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "effect": "allow",
+        "reason_code": "policy.query.review_satisfied",
+        "reason": "The exact SQL and Assurance hashes were approved by an accountable human.",
+        "obligations": [
+          {
+            "obligation_id": "obl_web_query_001",
+            "obligation_type": "approval",
+            "enforcement_point": "forge",
+            "description": "Execute only the exact approved SQL and Assurance hashes."
+          },
+          {
+            "obligation_id": "obl_readonly_web_query_001",
+            "obligation_type": "read_only",
+            "enforcement_point": "database",
+            "description": "Use the configured read-only database identity."
+          }
+        ],
+        "policy_revision": "policy-query-v1",
+        "decision_authority": {
+          "principal_id": "user_web_123",
+          "principal_type": "human"
+        },
+        "evaluated_at": "2026-08-24T08:03:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      },
+      "datasource_binding": {
+        "schema_version": 1,
+        "datasource_binding_id": "dsb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      },
+      "registry_binding": {
+        "schema_version": 1,
+        "registry_binding_id": "rgb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "registry": {
+          "schema_version": 1,
+          "resource_type": "registry",
+          "resource_id": "registry_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ds_demo",
+          "resource_revision": "registry-demo-v1"
+        },
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      },
+      "action_request": {
+        "action": "query.execute",
+        "task_run_id": "tr_web_query_001",
+        "audience": "forge",
+        "purpose": "Execute the reviewed read-only query for tr_web_query_001",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "approval_policy_ref": "policy_query_review_v1"
+      },
+      "approval_snapshot": {
+        "decision_id": "dec_web_query_001",
+        "status": "approved",
+        "authority": {
+          "principal_id": "user_web_123",
+          "principal_type": "human"
+        },
+        "action": "query.approve",
+        "task_run_id": "tr_web_query_001",
+        "query_run_id": "qr_web_query_001",
+        "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "assurance_report_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_binding_id": "rgb_growth_001",
+        "policy_revision": "policy-query-v1",
+        "decided_at": "2026-08-24T08:02:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      },
+      "query_lineage": {
+        "query_run_id": "qr_web_query_001",
+        "task_run_id": "tr_web_query_001",
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource_id": "ds_demo",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "assurance_report_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "approver_principal_id": "user_web_123",
+        "actions": [
+          "query.prepare",
+          "query.approve",
+          "query.execute"
+        ],
+        "prepared_at": "2026-08-24T08:01:00Z",
+        "approved_at": "2026-08-24T08:02:00Z",
+        "executed_at": "2026-08-24T08:04:00Z",
+        "status": "completed"
+      },
+      "request_binding": {
+        "request_id": "req_web_query_001",
+        "task_run_id": "tr_web_query_001",
+        "audience": "forge",
+        "idempotency_key_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "issued_at": "2026-08-24T08:03:30Z",
+        "expires_at": "2026-08-24T08:06:00Z"
+      },
+      "extensions": {
+        "economics": null,
+        "context": null
+      }
+    },
+    {
+      "review_fixture_version": 1,
+      "case_id": "feishu_query_001",
+      "channel": "feishu",
+      "as_of": "2026-08-24T08:05:00Z",
+      "principal_context": {
+        "schema_version": 1,
+        "principal_context_id": "pc_feishu_query_001",
+        "actor_principal": {
+          "principal_id": "svc_pi_channel",
+          "principal_type": "service"
+        },
+        "accountable_principal": {
+          "principal_id": "user_feishu_456",
+          "principal_type": "human"
+        },
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "authentication_context": {
+          "method": "service_key",
+          "assurance_level": "service_asserted",
+          "authenticated_at": "2026-08-24T08:00:00Z",
+          "session_id_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "delegation_chain": [
+          {
+            "delegation_id": "dlg_feishu_query_001",
+            "delegator_principal_id": "user_feishu_456",
+            "delegate_principal_id": "svc_pi_channel",
+            "mandate_id": "md_feishu_query_001",
+            "issued_at": "2026-08-24T08:00:00Z",
+            "expires_at": "2026-08-24T08:15:00Z"
+          }
+        ],
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      "delegated_mandate": {
+        "schema_version": 1,
+        "mandate_id": "md_feishu_query_001",
+        "revision": 1,
+        "delegate_principal": {
+          "principal_id": "svc_pi_channel",
+          "principal_type": "service"
+        },
+        "delegator_principal": {
+          "principal_id": "user_feishu_456",
+          "principal_type": "human"
+        },
+        "accountable_principal": {
+          "principal_id": "user_feishu_456",
+          "principal_type": "human"
+        },
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "purpose": "Execute the reviewed read-only query for tr_feishu_query_001",
+        "task_run_id": "tr_feishu_query_001",
+        "audience": "forge",
+        "capabilities": [
+          "query.prepare",
+          "query.execute"
+        ],
+        "resource_scope": [
+          {
+            "schema_version": 1,
+            "resource_type": "datasource",
+            "resource_id": "ds_demo",
+            "organization_id": "org_demo",
+            "workspace_id": "ws_growth",
+            "parent_resource_id": "ws_growth",
+            "resource_revision": "ds-rev-1"
+          }
+        ],
+        "budget_ref": null,
+        "approval_policy_ref": "policy_query_review_v1",
+        "can_delegate": false,
+        "status": "active",
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      "policy_decision": {
+        "schema_version": 1,
+        "policy_decision_id": "pd_feishu_query_001",
+        "revision": 1,
+        "subject_principal_id": "svc_pi_channel",
+        "mandate_id": "md_feishu_query_001",
+        "action": "query.execute",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "effect": "allow",
+        "reason_code": "policy.query.review_satisfied",
+        "reason": "The exact SQL and Assurance hashes were approved by an accountable human.",
+        "obligations": [
+          {
+            "obligation_id": "obl_feishu_query_001",
+            "obligation_type": "approval",
+            "enforcement_point": "forge",
+            "description": "Execute only the exact approved SQL and Assurance hashes."
+          },
+          {
+            "obligation_id": "obl_readonly_feishu_query_001",
+            "obligation_type": "read_only",
+            "enforcement_point": "database",
+            "description": "Use the configured read-only database identity."
+          }
+        ],
+        "policy_revision": "policy-query-v1",
+        "decision_authority": {
+          "principal_id": "user_feishu_456",
+          "principal_type": "human"
+        },
+        "evaluated_at": "2026-08-24T08:03:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      },
+      "datasource_binding": {
+        "schema_version": 1,
+        "datasource_binding_id": "dsb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      },
+      "registry_binding": {
+        "schema_version": 1,
+        "registry_binding_id": "rgb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "registry": {
+          "schema_version": 1,
+          "resource_type": "registry",
+          "resource_id": "registry_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ds_demo",
+          "resource_revision": "registry-demo-v1"
+        },
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      },
+      "action_request": {
+        "action": "query.execute",
+        "task_run_id": "tr_feishu_query_001",
+        "audience": "forge",
+        "purpose": "Execute the reviewed read-only query for tr_feishu_query_001",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "approval_policy_ref": "policy_query_review_v1"
+      },
+      "approval_snapshot": {
+        "decision_id": "dec_feishu_query_001",
+        "status": "approved",
+        "authority": {
+          "principal_id": "user_feishu_456",
+          "principal_type": "human"
+        },
+        "action": "query.approve",
+        "task_run_id": "tr_feishu_query_001",
+        "query_run_id": "qr_feishu_query_001",
+        "sql_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "assurance_report_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_binding_id": "rgb_growth_001",
+        "policy_revision": "policy-query-v1",
+        "decided_at": "2026-08-24T08:02:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      },
+      "query_lineage": {
+        "query_run_id": "qr_feishu_query_001",
+        "task_run_id": "tr_feishu_query_001",
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource_id": "ds_demo",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "sql_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "assurance_report_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "approver_principal_id": "user_feishu_456",
+        "actions": [
+          "query.prepare",
+          "query.approve",
+          "query.execute"
+        ],
+        "prepared_at": "2026-08-24T08:01:00Z",
+        "approved_at": "2026-08-24T08:02:00Z",
+        "executed_at": "2026-08-24T08:04:00Z",
+        "status": "completed"
+      },
+      "request_binding": {
+        "request_id": "req_feishu_query_001",
+        "task_run_id": "tr_feishu_query_001",
+        "audience": "forge",
+        "idempotency_key_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "issued_at": "2026-08-24T08:03:30Z",
+        "expires_at": "2026-08-24T08:06:00Z"
+      },
+      "extensions": {
+        "economics": null,
+        "context": null
+      }
+    },
+    {
+      "review_fixture_version": 1,
+      "case_id": "agent_query_001",
+      "channel": "api",
+      "as_of": "2026-08-24T08:05:00Z",
+      "principal_context": {
+        "schema_version": 1,
+        "principal_context_id": "pc_agent_query_001",
+        "actor_principal": {
+          "principal_id": "agent_analytics_01",
+          "principal_type": "agent"
+        },
+        "accountable_principal": {
+          "principal_id": "org_demo",
+          "principal_type": "organization"
+        },
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "authentication_context": {
+          "method": "workload_identity",
+          "assurance_level": "workload_asserted",
+          "authenticated_at": "2026-08-24T08:00:00Z",
+          "session_id_hash": null
+        },
+        "delegation_chain": [
+          {
+            "delegation_id": "dlg_agent_query_001",
+            "delegator_principal_id": "org_demo",
+            "delegate_principal_id": "agent_analytics_01",
+            "mandate_id": "md_agent_query_001",
+            "issued_at": "2026-08-24T08:00:00Z",
+            "expires_at": "2026-08-24T08:15:00Z"
+          }
+        ],
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      "delegated_mandate": {
+        "schema_version": 1,
+        "mandate_id": "md_agent_query_001",
+        "revision": 1,
+        "delegate_principal": {
+          "principal_id": "agent_analytics_01",
+          "principal_type": "agent"
+        },
+        "delegator_principal": {
+          "principal_id": "org_demo",
+          "principal_type": "organization"
+        },
+        "accountable_principal": {
+          "principal_id": "org_demo",
+          "principal_type": "organization"
+        },
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "purpose": "Execute the reviewed read-only query for tr_agent_query_001",
+        "task_run_id": "tr_agent_query_001",
+        "audience": "forge",
+        "capabilities": [
+          "query.prepare",
+          "query.execute"
+        ],
+        "resource_scope": [
+          {
+            "schema_version": 1,
+            "resource_type": "datasource",
+            "resource_id": "ds_demo",
+            "organization_id": "org_demo",
+            "workspace_id": "ws_growth",
+            "parent_resource_id": "ws_growth",
+            "resource_revision": "ds-rev-1"
+          }
+        ],
+        "budget_ref": null,
+        "approval_policy_ref": "policy_query_review_v1",
+        "can_delegate": false,
+        "status": "active",
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      "policy_decision": {
+        "schema_version": 1,
+        "policy_decision_id": "pd_agent_query_001",
+        "revision": 1,
+        "subject_principal_id": "agent_analytics_01",
+        "mandate_id": "md_agent_query_001",
+        "action": "query.execute",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "effect": "allow",
+        "reason_code": "policy.query.review_satisfied",
+        "reason": "The exact SQL and Assurance hashes were approved by an accountable human.",
+        "obligations": [
+          {
+            "obligation_id": "obl_agent_query_001",
+            "obligation_type": "approval",
+            "enforcement_point": "forge",
+            "description": "Execute only the exact approved SQL and Assurance hashes."
+          },
+          {
+            "obligation_id": "obl_readonly_agent_query_001",
+            "obligation_type": "read_only",
+            "enforcement_point": "database",
+            "description": "Use the configured read-only database identity."
+          }
+        ],
+        "policy_revision": "policy-query-v1",
+        "decision_authority": {
+          "principal_id": "user_steward_789",
+          "principal_type": "human"
+        },
+        "evaluated_at": "2026-08-24T08:03:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      },
+      "datasource_binding": {
+        "schema_version": 1,
+        "datasource_binding_id": "dsb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      },
+      "registry_binding": {
+        "schema_version": 1,
+        "registry_binding_id": "rgb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "registry": {
+          "schema_version": 1,
+          "resource_type": "registry",
+          "resource_id": "registry_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ds_demo",
+          "resource_revision": "registry-demo-v1"
+        },
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      },
+      "action_request": {
+        "action": "query.execute",
+        "task_run_id": "tr_agent_query_001",
+        "audience": "forge",
+        "purpose": "Execute the reviewed read-only query for tr_agent_query_001",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "approval_policy_ref": "policy_query_review_v1"
+      },
+      "approval_snapshot": {
+        "decision_id": "dec_agent_query_001",
+        "status": "approved",
+        "authority": {
+          "principal_id": "user_steward_789",
+          "principal_type": "human"
+        },
+        "action": "query.approve",
+        "task_run_id": "tr_agent_query_001",
+        "query_run_id": "qr_agent_query_001",
+        "sql_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "assurance_report_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_binding_id": "rgb_growth_001",
+        "policy_revision": "policy-query-v1",
+        "decided_at": "2026-08-24T08:02:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      },
+      "query_lineage": {
+        "query_run_id": "qr_agent_query_001",
+        "task_run_id": "tr_agent_query_001",
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource_id": "ds_demo",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "sql_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "assurance_report_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "approver_principal_id": "user_steward_789",
+        "actions": [
+          "query.prepare",
+          "query.approve",
+          "query.execute"
+        ],
+        "prepared_at": "2026-08-24T08:01:00Z",
+        "approved_at": "2026-08-24T08:02:00Z",
+        "executed_at": "2026-08-24T08:04:00Z",
+        "status": "completed"
+      },
+      "request_binding": {
+        "request_id": "req_agent_query_001",
+        "task_run_id": "tr_agent_query_001",
+        "audience": "forge",
+        "idempotency_key_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "issued_at": "2026-08-24T08:03:30Z",
+        "expires_at": "2026-08-24T08:06:00Z"
+      },
+      "extensions": {
+        "economics": null,
+        "context": null
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "case": "cross-workspace principal",
+      "base_case_id": "web_query_001",
+      "expected_code": "principal.scope_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "delegated_mandate",
+          "workspace_id"
+        ],
+        "value": "ws_other"
+      }
+    },
+    {
+      "case": "expired principal context",
+      "base_case_id": "web_query_001",
+      "expected_code": "principal.not_active",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "principal_context",
+          "expires_at"
+        ],
+        "value": "2026-08-24T08:04:00Z"
+      }
+    },
+    {
+      "case": "authentication after principal issuance",
+      "base_case_id": "web_query_001",
+      "expected_code": "principal.authentication_time_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "principal_context",
+          "authentication_context",
+          "authenticated_at"
+        ],
+        "value": "2026-08-24T08:01:00Z"
+      }
+    },
+    {
+      "case": "missing delegation continuity",
+      "base_case_id": "web_query_001",
+      "expected_code": "delegation.chain_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "principal_context",
+          "delegation_chain"
+        ],
+        "value": []
+      }
+    },
+    {
+      "case": "delegate does not match actor",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.actor_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "delegated_mandate",
+          "delegate_principal",
+          "principal_id"
+        ],
+        "value": "svc_evil"
+      }
+    },
+    {
+      "case": "revoked mandate",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.status_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "delegated_mandate",
+          "status"
+        ],
+        "value": "revoked"
+      }
+    },
+    {
+      "case": "cross-task mandate reuse",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.task_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "action_request",
+          "task_run_id"
+        ],
+        "value": "tr_other"
+      }
+    },
+    {
+      "case": "cross-audience mandate reuse",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.audience_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "action_request",
+          "audience"
+        ],
+        "value": "report_service"
+      }
+    },
+    {
+      "case": "cross-purpose context reuse",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.purpose_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "action_request",
+          "purpose"
+        ],
+        "value": "Export a report"
+      }
+    },
+    {
+      "case": "capability escalation",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.capability_missing",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "delegated_mandate",
+          "capabilities"
+        ],
+        "value": [
+          "query.prepare"
+        ]
+      }
+    },
+    {
+      "case": "resource scope escalation",
+      "base_case_id": "web_query_001",
+      "expected_code": "mandate.resource_out_of_scope",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "action_request",
+          "resource",
+          "resource_id"
+        ],
+        "value": "ds_other"
+      }
+    },
+    {
+      "case": "unresolved budget cannot be bypassed",
+      "base_case_id": "web_query_001",
+      "expected_code": "budget.unresolved",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "delegated_mandate",
+          "budget_ref"
+        ],
+        "value": "budget_missing"
+      }
+    },
+    {
+      "case": "policy subject mismatch",
+      "base_case_id": "web_query_001",
+      "expected_code": "policy.subject_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "policy_decision",
+          "subject_principal_id"
+        ],
+        "value": "svc_other"
+      }
+    },
+    {
+      "case": "conditional policy is not execution allow",
+      "base_case_id": "web_query_001",
+      "expected_code": "policy.effect_not_allow",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "policy_decision",
+          "effect"
+        ],
+        "value": "conditional"
+      }
+    },
+    {
+      "case": "expired policy decision",
+      "base_case_id": "web_query_001",
+      "expected_code": "policy.not_active",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "policy_decision",
+          "expires_at"
+        ],
+        "value": "2026-08-24T08:04:00Z"
+      }
+    },
+    {
+      "case": "missing approval obligation",
+      "base_case_id": "web_query_001",
+      "expected_code": "policy.approval_obligation_missing",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "policy_decision",
+          "obligations"
+        ],
+        "value": []
+      }
+    },
+    {
+      "case": "policy revision drift",
+      "base_case_id": "web_query_001",
+      "expected_code": "policy.revision_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "policy_decision",
+          "policy_revision"
+        ],
+        "value": "policy-query-v2"
+      }
+    },
+    {
+      "case": "retired datasource binding",
+      "base_case_id": "web_query_001",
+      "expected_code": "binding.datasource_not_active",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "datasource_binding",
+          "status"
+        ],
+        "value": "retired"
+      }
+    },
+    {
+      "case": "cross-tenant datasource binding",
+      "base_case_id": "web_query_001",
+      "expected_code": "binding.datasource_scope_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "datasource_binding",
+          "datasource",
+          "organization_id"
+        ],
+        "value": "org_other"
+      }
+    },
+    {
+      "case": "registry points to another datasource binding",
+      "base_case_id": "web_query_001",
+      "expected_code": "binding.datasource_link_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "registry_binding",
+          "datasource_binding_id"
+        ],
+        "value": "dsb_other_001"
+      }
+    },
+    {
+      "case": "registry revision drift",
+      "base_case_id": "web_query_001",
+      "expected_code": "binding.registry_revision_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "registry_binding",
+          "registry_revision"
+        ],
+        "value": "registry-demo-v2"
+      }
+    },
+    {
+      "case": "agent cannot approve execution",
+      "base_case_id": "web_query_001",
+      "expected_code": "approval.authority_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "approval_snapshot",
+          "authority",
+          "principal_type"
+        ],
+        "value": "agent"
+      }
+    },
+    {
+      "case": "expired human approval",
+      "base_case_id": "web_query_001",
+      "expected_code": "approval.not_active",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "approval_snapshot",
+          "expires_at"
+        ],
+        "value": "2026-08-24T08:04:00Z"
+      }
+    },
+    {
+      "case": "approval bound to another query",
+      "base_case_id": "web_query_001",
+      "expected_code": "approval.query_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "approval_snapshot",
+          "query_run_id"
+        ],
+        "value": "qr_other"
+      }
+    },
+    {
+      "case": "SQL changed after approval",
+      "base_case_id": "web_query_001",
+      "expected_code": "query.sql_hash_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "query_lineage",
+          "sql_hash"
+        ],
+        "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "case": "Assurance report changed after approval",
+      "base_case_id": "web_query_001",
+      "expected_code": "query.assurance_hash_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "query_lineage",
+          "assurance_report_hash"
+        ],
+        "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "case": "query action sequence changed",
+      "base_case_id": "web_query_001",
+      "expected_code": "query.action_sequence_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "query_lineage",
+          "actions"
+        ],
+        "value": [
+          "query.prepare",
+          "query.execute"
+        ]
+      }
+    },
+    {
+      "case": "query executed before approval",
+      "base_case_id": "web_query_001",
+      "expected_code": "query.time_order_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "query_lineage",
+          "executed_at"
+        ],
+        "value": "2026-08-24T08:01:30Z"
+      }
+    },
+    {
+      "case": "request replayed across task",
+      "base_case_id": "web_query_001",
+      "expected_code": "request.task_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "request_binding",
+          "task_run_id"
+        ],
+        "value": "tr_other"
+      }
+    },
+    {
+      "case": "expired request binding",
+      "base_case_id": "web_query_001",
+      "expected_code": "request.not_active",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "request_binding",
+          "expires_at"
+        ],
+        "value": "2026-08-24T08:04:00Z"
+      }
+    },
+    {
+      "case": "implicit context extension",
+      "base_case_id": "web_query_001",
+      "expected_code": "extensions.not_explicit",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "extensions",
+          "context"
+        ],
+        "value": {
+          "purpose": "other"
+        }
+      }
+    },
+    {
+      "case": "action resource crosses tenant with coordinated IDs",
+      "base_case_id": "web_query_001",
+      "expected_code": "resource.scope_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "action_request",
+          "resource",
+          "organization_id"
+        ],
+        "value": "org_other"
+      }
+    },
+    {
+      "case": "approval authority differs from policy authority",
+      "base_case_id": "web_query_001",
+      "expected_code": "approval.authority_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "policy_decision",
+          "decision_authority",
+          "principal_id"
+        ],
+        "value": "user_other"
+      }
+    },
+    {
+      "case": "approval contains malformed hashes",
+      "base_case_id": "web_query_001",
+      "expected_code": "approval.hash_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "approval_snapshot",
+          "sql_hash"
+        ],
+        "value": "sha256:"
+      }
+    },
+    {
+      "case": "query lineage is not completed",
+      "base_case_id": "web_query_001",
+      "expected_code": "query.status_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "query_lineage",
+          "status"
+        ],
+        "value": "executing"
+      }
+    },
+    {
+      "case": "request binding hash is malformed",
+      "base_case_id": "web_query_001",
+      "expected_code": "request.binding_missing",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "request_binding",
+          "idempotency_key_hash"
+        ],
+        "value": "sha256:"
+      }
+    },
+    {
+      "case": "accountable organization crosses scope",
+      "base_case_id": "agent_query_001",
+      "expected_code": "principal.accountable_scope_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "principal_context",
+          "accountable_principal",
+          "principal_id"
+        ],
+        "value": "org_other"
+      }
+    },
+    {
+      "case": "delegation interval exceeds mandate",
+      "base_case_id": "web_query_001",
+      "expected_code": "delegation.interval_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "principal_context",
+          "delegation_chain",
+          0,
+          "expires_at"
+        ],
+        "value": "2026-08-24T08:20:00Z"
+      }
+    },
+    {
+      "case": "approval snapshot time differs from QueryRun",
+      "base_case_id": "web_query_001",
+      "expected_code": "approval.time_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "approval_snapshot",
+          "decided_at"
+        ],
+        "value": "2026-08-24T08:02:30Z"
+      }
+    },
+    {
+      "case": "request was issued before approval and policy",
+      "base_case_id": "web_query_001",
+      "expected_code": "request.time_order_invalid",
+      "mutation": {
+        "op": "set",
+        "path": [
+          "request_binding",
+          "issued_at"
+        ],
+        "value": "2026-08-24T08:01:30Z"
+      }
+    }
+  ]
+}

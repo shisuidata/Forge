@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
 
 from agent.contracts import validate_contract
+from agent.contracts.governance_semantics import validate_governance_review_trace
 
 CONTRACTS_DIR = Path(__file__).resolve().parents[1] / "agent" / "contracts"
 FIXTURES_PATH = CONTRACTS_DIR / "governance-contract-fixtures.v1.json"
 CATALOG_PATH = CONTRACTS_DIR / "governance-action-catalog.v1.json"
+REVIEW_FIXTURES_PATH = CONTRACTS_DIR / "governance-review-fixtures.v1.json"
 
 GOVERNANCE_CONTRACTS = {
     "resource_ref_v1",
@@ -95,6 +98,38 @@ def test_principal_context_delegation_fixture_references_matching_mandates() -> 
             assert mandate["workspace_id"] == context["workspace_id"]
 
 
+def _apply_review_mutation(value: dict, mutation: dict) -> dict:
+    mutated = deepcopy(value)
+    target = mutated
+    for segment in mutation["path"][:-1]:
+        target = target[segment]
+    assert mutation["op"] == "set"
+    target[mutation["path"][-1]] = mutation["value"]
+    return mutated
+
+
+def test_complete_governance_review_traces_are_semantically_continuous() -> None:
+    fixtures = _load(REVIEW_FIXTURES_PATH)
+    assert {item["channel"] for item in fixtures["valid"]} == {"web", "feishu", "api"}
+    assert {
+        item["principal_context"]["actor_principal"]["principal_type"]
+        for item in fixtures["valid"]
+    } == {"service", "agent"}
+    for trace in fixtures["valid"]:
+        assert validate_governance_review_trace(trace) == [], trace["case_id"]
+        assert trace["extensions"] == {"economics": None, "context": None}
+
+
+def test_governance_review_mutations_fail_with_stable_reason_codes() -> None:
+    fixtures = _load(REVIEW_FIXTURES_PATH)
+    valid_by_id = {item["case_id"]: item for item in fixtures["valid"]}
+    assert len(fixtures["invalid"]) >= 24
+    for case in fixtures["invalid"]:
+        mutated = _apply_review_mutation(valid_by_id[case["base_case_id"]], case["mutation"])
+        errors = validate_governance_review_trace(mutated)
+        assert case["expected_code"] in errors, (case["case"], errors)
+
+
 def test_action_catalog_separates_contract_and_runtime_coverage() -> None:
     catalog = _load(CATALOG_PATH)
     validate_contract("governance_action_catalog_v1", catalog)
@@ -127,7 +162,7 @@ def test_governance_boundaries_do_not_define_secret_fields() -> None:
         "database_password", "database_url", "secret", "secret_ref",
     }
     fixtures = _load(FIXTURES_PATH)
-    documents = [fixtures["valid"], _load(CATALOG_PATH)]
+    documents = [fixtures["valid"], _load(CATALOG_PATH), _load(REVIEW_FIXTURES_PATH)]
     documents.extend(
         _load(CONTRACTS_DIR / filename)
         for filename in (

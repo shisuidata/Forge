@@ -142,3 +142,65 @@ ID / 标题 / 日期 / 状态
 - **实现**：`DelegatedMandate v1`、Governance Action Catalog v1.1.0、Python/TypeScript 共享 fixture 与 parity/引用一致性测试。
 - **验证**：Python `548 passed / 24 skipped`；Pi `89 passed`、TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON、文档和 `git diff --check` 通过。
 - **剩余边界**：M0.5 仍需验证跨对象 Organization/Workspace、时间顺序、撤销状态和完整 Query lineage；M1A 未批准，Runtime Governance Coverage 保持 0%。
+
+---
+
+## REQ-2026-08-24-003：完成 M0.5 Contract Review Closure
+
+- **提出日期**：2026-08-24
+- **当前状态**：`verified`
+- **原始需求**：在不进入运行时授权改造的前提下，完成 Governance Contract 的跨对象语义验证、完整 Query fixture、Threat Model、迁移/回滚设计和正式评审结论。
+
+### 评估与已确认方案
+
+- **必要性**：高；JSON Schema/TypeBox 只证明对象形状，尚不能证明 Principal、Mandate、Policy、Binding、Approval 与 Query lineage 在同一 Task 上连续。
+- **职责边界**：本工作包只增加 review fixture、语义验证、测试与文档；不修改 Task API、数据库 Schema、现有 PEP、QueryRun 行为或 OAuth Runtime。
+- **范围**：Web Human、Feishu Human 和 Agent 三类完整 review trace；Organization/Workspace、时间、delegation、Task/Audience/Capability/Resource、Policy/Binding、approval/hash lineage 语义门禁；威胁模型；legacy single-user 迁移和 rollback 设计。
+- **不做**：不实现 M1A，不把 review fixture 冒充生产 Event/Decision Contract，不提前建设 Coordination/Economics/Context/OAuth Runtime。
+- **建议**：M0.5 优先于宽泛的 M0.4 草案；M0.4 保留但不阻塞 M1A，按首次真实消费者 Just-in-Time 细化。
+
+### 用户确认
+
+- **确认日期**：2026-08-24
+- **决策**：用户确认按建议顺序执行：先固化当前成果，再完成 M0.5，输出正式 Contract Review verdict，并停在 M1A 授权门前。
+
+### 关联
+
+- **Plan**：`forge-enterprise-evolution-plan.md` M0.5。
+- **实现**：`governance-review-fixtures.v1.json`、Python/TypeScript 跨 Contract 语义验证、40 个共享负向 mutation、`governance-contract-review-2026-08-24.md` Threat Model 与迁移/回滚设计。
+- **验证**：Python `550 passed / 24 skipped`；Pi `91 passed`；TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON 和 `git diff --check` 通过。
+- **Verdict**：`Approved for M1A proposal`；仅允许提出 M1A 工作包，不代表 M1A 已批准，Runtime Governance Coverage 保持 0%。
+
+---
+
+## REQ-2026-08-24-004：将 NAS Forge 部署更新到当前稳定代码
+
+- **提出日期**：2026-08-24
+- **当前状态**：`assessed`
+- **原始需求**：将 NAS 上的 Forge 部署更新到最新代码，以便用户查看当前 Web Chat 和任务流情况。
+
+### 当前环境与评估
+
+- NAS SSH host `dev` 的部署仓库为 `~/services/forge-m4.1/source`，当前固定在 `3bd20a6`，工作树干净。
+- `forge-m41-api.service` 与 `forge-m41-pi.service` 当前均为 user systemd active；Forge 监听 NAS 内网地址，Pi 监听 loopback。
+- 本地 `main` 当前为 `af36001`，相对 NAS 增加企业演进/Governance Contract baseline、Web 任务 DAG/实时流和 Contract 评审修订。
+- Governance Contract 当前无生产调用方，部署后的可见行为变化主要是 `/chat` 右侧只读任务视图；不涉及数据库迁移或凭证修改。
+
+### 建议部署方案
+
+1. 部署前检查无 running 高风险 Action，并备份状态库/配置元数据；不读取或复制 Secret 内容。
+2. 未获 push 授权前，通过临时 Git bundle 将已提交的本地 `main` fast-forward 到 NAS，保持 NAS Git 历史和明确 rollback commit，不用 rsync 覆盖源码。
+3. manifests 未变化时不重装依赖；重启 Forge/Pi user services。
+4. 验证 API/Pi health、认证登录、`/chat`、Web ChannelEvent 与 `/flow` 权限/去敏；不自动执行客户 SQL。
+5. 失败时回滚到 `3bd20a6` 并重启；状态数据不随代码 rollback 覆盖。
+
+### 风险与门禁
+
+- 重启可能中断正在运行的 Stage；部署前必须确认空闲或等待 lease 安全收口。
+- 不修改 NAS mode-600 env、Identity Map、模型凭证、数据库 URL 或 Registry 数据。
+- 不 push GitHub；若用户希望远端也同步，需要另行明确授权。
+
+### 等待确认
+
+- **建议决策**：`accepted_with_changes`——按“Git bundle fast-forward + 状态备份 + 空闲检查 + health/Web smoke + 可回滚、不 push”方案部署。
+- **实施状态**：等待用户在看到本评估后确认，确认前只允许只读预检。

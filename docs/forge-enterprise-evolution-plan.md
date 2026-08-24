@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0.1–M0.3 评审完成，M0.4/M0.5 未开始；W1 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -70,8 +70,8 @@ GTM：Data-Team Led
 | M0.1 计划文档收口 | 已完成 | 状态与基线已统一；历史计划已标记为快照；Spider data symlink 已恢复 |
 | M0.2 Governance Contract 内核 | 评审修订完成 | `DelegatedMandate v1` 同时覆盖 Pi Service/Agent，强制 Task+Audience，v1 固定禁止再委托；PrincipalContext fixture 的 delegation 均有匹配 Mandate |
 | M0.3 Governance Coverage Catalog | 评审修订完成 | v1.1.0 分离 Contract Coverage=100% 与 Runtime Governance Coverage=0%；Human 直接 Action 不强制 Mandate，Service/Agent 代理时 conditional required |
-| M0.4 其余 Contract 草案 | 未开始 | 不阻塞 M1A；需 M0 内核评审后再开始 |
-| M0.5 Fixture、威胁模型与迁移设计 | 未开始 | 不修改生产授权行为 |
+| M0.4 其余 Contract 草案 | 保留未开始 | 不阻塞 M1A；按 Coordination/Economics/Context/OAuth 的首次真实消费者 Just-in-Time 细化，避免当前过早冻结抽象 |
+| M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -144,16 +144,45 @@ Contract Owner 与真相源：
 - Context：`SourceRef`、`ClaimRecord`、`EvidenceLink`、`ConflictSet`、`MemoryProposal`、`ContextBundle`。
 - OAuth：`ModelBackend`、`AuthSlotRef`、`ModelCompatibilityResult`、`ModelFallbackPolicy`、`QueryPlanningEnvelope`、`ForgeQueryCandidateSubmission`。
 
-### M0.5 Fixture、威胁模型与迁移设计
+### M0.5 Contract Review Closure
 
-使用现有 Web 和飞书 Query Task 各制作一条完整 fixture，覆盖：
+> Requirement：[`REQ-2026-08-24-003`](requirements-pool.md#req-2026-08-24-003完成-m05-contract-review-closure) · 决策：`accepted_with_changes`
 
-- Human requester → Pi service actor → Forge execution。
+本工作包只形成 review fixture、语义验证、Threat Model、迁移/回滚设计和正式 verdict，不修改生产授权、API、数据库 Schema、QueryRun 或 OAuth Runtime。
+
+#### M0.5A 完整 review trace
+
+使用现有 Web、飞书和 Agent 请求各制作一条完整 fixture，覆盖：
+
+- Human requester → Pi service actor → Forge trusted executor。
 - Agent actor → accountable human/org principal → task-scoped mandate。
-- SQL Action、PolicyDecision、审批和 QueryRun lineage。
-- 空的 Economics/Context 扩展位也必须显式表示，不能靠任意 metadata。
+- PrincipalContext、DelegatedMandate、PolicyDecision、Datasource/Registry Binding、SQL Action、human approval snapshot 和 QueryRun lineage。
+- 空的 Economics/Context 扩展位显式为 `null`，不靠任意 metadata，也不把 test-only approval snapshot 冒充未来 DecisionRecord Contract。
 
-威胁模型覆盖请求身份篡改、Service Key 重放、delegation 扩权、默认允许 ACL、跨租户枚举、Context 跨 Purpose 泄露、预算绕过和旧审批迁移。
+#### M0.5B 跨 Contract 语义门禁
+
+JSON Schema/TypeBox 继续负责形状；共享 review fixture 和 Python/TypeScript 语义验证负责：Organization/Workspace、时间有效性、delegation 连续性、Task/Audience/Capability/Resource、Policy subject/action/effect、Binding revision、human approval 与 SQL/Assurance hash lineage。每条核心不变量必须有命名负向 mutation 和稳定 reason code。
+
+#### M0.5C Threat Model
+
+覆盖请求身份篡改、Service Key 重放、跨 Task/Audience delegation、Capability/Resource 扩权、默认允许 ACL、跨租户枚举、过期/撤销 Mandate、Context 跨 Purpose 泄露、预算绕过、Binding/SQL 漂移复用旧审批和 legacy 身份伪造。
+
+#### M0.5D 迁移、兼容与回滚
+
+设计 `legacy_single_user` 显式兼容、TaskRun v2 引用/hash、无法安全映射任务的 `needs_input/expired`、单切换点、feature flag、无授权双写和 rollback；只设计不迁移数据。
+
+#### M0.5E 正式评审
+
+输出独立 review 文档与 `Approved / Approved with blockers / Rejected` verdict。即使 Approved，也只表示可以提出 M1A 实施工作包，不表示 Runtime Governance Coverage 大于 0 或 M1A 自动获批。
+
+#### M0.5 实施结果（2026-08-24）
+
+- 新增 `governance-review-fixtures.v1.json`，以 Web Human、Feishu Human 和 Agent 三条 review-only trace 组合 Principal、Mandate、Policy、Binding、Action、human approval snapshot、request binding 与 Query lineage；Economics/Context 扩展显式为 `null`。
+- Python `governance_semantics.py` 与 TypeScript `validateGovernanceReviewTrace` 对同一共享 corpus 验证 Organization/Workspace、时间、delegation、Task/Audience/Purpose/Capability/Resource、Policy/Binding、approval 和 SQL/Assurance lineage。
+- 40 个命名 mutation 覆盖跨租户、过期/撤销、扩权、默认拒绝前置条件、漂移审批、请求重用和隐式 Context；两端使用同一稳定 reason code 断言。
+- [`governance-contract-review-2026-08-24.md`](governance-contract-review-2026-08-24.md) 完成 Threat Model、legacy migration、TaskRun v2、切换与 rollback 设计；Verdict 为 **Approved for M1A proposal**。
+- 当前验证：Python `550 passed / 24 skipped`；Pi `91 passed`；TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON 与 `git diff --check` 通过。
+- 未修改 Task API、数据库 Schema、现有授权逻辑、QueryRun 行为或 OAuth Runtime；Action Catalog 的 Runtime Governance Coverage 保持 0%。
 
 ### M0 验收门禁
 
@@ -191,8 +220,8 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - Action Catalog v1.1.0 使用 `support_status + contract_status + runtime_enforcement_status`，机器可读地报告 Contract Coverage 100% 和 v1 Runtime Governance Coverage 0%，不再把字段完整冒充运行时已治理。
 - Web/Agent PrincipalContext 的共享 fixture 引用真实匹配的 Mandate；Python/TypeScript 增加跨 Contract 引用一致性和 task/recursive delegation 负向测试。
 - 当前验证：Python `548 passed / 24 skipped`；Pi `89 passed`、TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON/文档/diff check 通过。
-- M0.4 Coordination/Economics/Context/OAuth 草案和 M0.5 完整 Query fixture、Threat Model、迁移设计尚未开始；M1A 仍未批准。
-- v1 Schema 负责稳定形状和最小类型不变量；跨对象 Organization/Workspace 一致性、时间先后、撤销状态和 delegation chain 连续性需在 M0.5 明确为语义门禁，并由 M1 PEP 失败关闭执行。
+- M0.5 已在后续工作包完成完整 Query review trace、Threat Model 和迁移设计；M0.4 其余草案保留未开始且不阻塞，M1A 仍未批准。
+- v1 Schema 负责稳定形状和最小类型不变量；跨对象 Organization/Workspace 一致性、时间先后、撤销状态和 delegation chain 连续性已由 M0.5 review validator 与共享 mutation corpus固定，仍需 M1 PEP 在生产路径失败关闭执行。
 - 新 Contract 和 Catalog 当前没有生产调用方；未经本轮 Contract 评审不得接入 M1A。
 
 ## W1：Web 对话实时任务视图（独立只读切片）
