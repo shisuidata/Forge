@@ -353,3 +353,58 @@ ID / 标题 / 日期 / 状态
 - **Plan**：`forge-enterprise-evolution-plan.md` H2。
 - **实现**：R1 `7a88c70`；R2 `06ccb0d`。
 - **Architecture**：不改变职责边界；继续由渠道 Renderer 和确定性 Report Renderer 负责表示，Artifact/Pi/Forge 真相源不变。
+
+---
+
+## REQ-2026-08-24-007：完整问数旅程的物理链路与逐阶段视觉验收
+
+- **提出日期**：2026-08-24
+- **当前状态**：`assessed`
+- **原始需求**：不能只验证局部 fixture 或物理执行；需要跑通一个完整问数流程，同时从前端逐步检查每个环节是否符合预期、是否能让用户满意，并实际使用视觉能力和自动化测试能力。
+
+### 问题确认
+
+该批评成立。此前验证分别覆盖了 Chat 长文本 fixture、隔离 ReportStore、Provider/Artifact smoke、状态/API 自动测试和 NAS health，但没有形成一条“同一个用户问题、同一个 TaskRun”贯穿以下全部节点的认证后浏览器证据：
+
+```text
+提出业务问题
+→ 计划与进度
+→ SQL review
+→ 人工批准
+→ 只读执行
+→ 查询结果
+→ Analysis
+→ 报告生成
+→ Web/PDF/PPTX
+```
+
+因此此前能证明组件和局部边界可用，不能充分证明完整旅程的状态衔接、等待体验、动作可理解性和最终交付体验均令人满意；不得把局部 Playwright 截图冒充端到端产品验收。
+
+### 建议测试方案
+
+采用“真实链路 + 隔离副作用 + 逐阶段视觉审查”的 Acceptance Journey，而不是在生产认证上开后门：
+
+1. **隔离环境**：在 NAS 仅监听 loopback 的临时目录启动当前 commit 的 Forge/Pi/Web；使用版本化只读测试数据库、独立 Task/Query/Report Store 和测试 Principal。AUTH 只允许在该临时 loopback Web 中关闭，通过 SSH tunnel 供本地 Playwright 使用；生产 Web 认证不变。
+2. **真实能力**：优先使用当前真实模型 runtime 的既有 secret reference，由进程环境引用但不读取/回显 Secret；真实执行 Skills、Forge Assurance、Compiler、SQL review、只读测试 SQL、Analysis 和 Report exporter。模型不可用时记录为真实失败，不用 deterministic fake 冒充通过；可另跑 deterministic control 以区分基础设施与模型问题。
+3. **一个 Golden Journey**：问题固定为测试 Registry 可复算且能产生查询、分析和报告的业务问题；Playwright 以明确 test principal 驱动一次 SQL approval。该批准只授权隔离测试数据上的一次只读 SQL，不代表生产授权。
+4. **逐阶段证据**：每个状态保存 screenshot、DOM/ARIA 摘要、Task/Event/Attempt/Artifact/QueryRun 有界快照和耗时；不得保存 Prompt、模型正文、hidden CoT、Secret、原始服务凭证或无关完整结果集。
+5. **视觉审查**：使用视觉模型逐张检查信息层级、下一步是否明确、风险/审批是否醒目、等待是否可理解、错误是否可恢复、表格/代码/长文本是否易读、桌面/390px 是否溢出；同时用 Playwright 断言 action、焦点、ARIA、console/page error 和响应式布局。
+6. **物理链路审查**：验证同一 TaskRun 的 PlanStep、StageAttempt、QueryRun、SQL/Assurance hash、批准、执行次数、QueryResult evidence、Analysis/Report lineage 和 Publication 一致；重复点击不得重复执行 SQL，页面轮询不得推进状态。
+7. **结果产物**：输出逐阶段 Pass/Fail/Blocked 旅程报告、截图 contact sheet、状态时序、发现清单和 P0/P1/P2 修复建议。视觉不满意即记为产品失败，不能因后端状态成功而判通过。
+
+### 风险、替代方案与边界
+
+- **直接读取 NAS 管理员密码/cookie**：违反 Secret 边界，拒绝。
+- **临时关闭生产认证**：会制造安全窗口，拒绝。
+- **只用 fake model 跑 E2E**：可验证状态机但不能代表真实等待、Tool submission 和输出质量，不能作为最终通过。
+- **直接污染生产 Task/Query/Audit Store**：会把测试记录混入正式真相源；首选独立 Store。若环境变量无法安全隔离，应暂停，不靠清理审计记录补救。
+- **成本与耗时**：真实模型至少经历查询规划/分析/报告等调用，可能需要 5–15 分钟并消耗当前模型额度；只能设置有界一次主旅程，不做无限重试。
+- **验收边界**：一条 Golden Journey 只能证明代表性主链，不证明所有业务问题均正确；后续至少还需 needs-input、取消/拒绝、超时/重试三个 edge journey，但应在主链暴露的问题修复后再扩展。
+
+### 建议结论
+
+建议 `accepted_with_changes`：先执行一条隔离但真实的 NAS Golden Journey，逐阶段做物理与视觉双验收；发现问题先进入需求池，不在测试脚本里掩盖。主链稳定后再提出 edge-journey 工作包。
+
+### 待用户确认
+
+是否确认以下有界授权：允许在 NAS loopback 临时隔离环境中，使用现有模型 credential **引用**、版本化只读测试数据库和独立状态库，以 test principal 自动批准并执行一次测试 SQL，完成一次真实问数→分析→报告旅程；不读取 Secret、不修改生产认证、不访问生产数据库、不写生产 Task/Audit Store？
