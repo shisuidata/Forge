@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 NAS 部署中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -74,7 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
-| H2 长文本语义化阅读体验 | 已完成 | `REQ-2026-08-24-006`：Chat 安全语义格式、移动导航、业务 Web/PDF editorial hierarchy、分页 PPTX 与技术报告基础排版均完成；Python 551、Pi 94、Playwright/PPTX 验证通过 |
+| H2 长文本语义化阅读体验 | 本地完成，NAS 部署中 | `REQ-2026-08-24-006`：Chat/Web/PDF/PPTX/技术报告实现与本地门禁通过；用户已确认以 bundle+backup 方式部署，待目标机 health、认证和 exporter smoke 后收口 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -351,6 +351,7 @@ R2 实施结果：
 - R1 可独立回滚到旧安全文本 Renderer，不修改 Task/Artifact Store；R2 只影响新生成的不可变 Report revision，不原地改写已发布文件。
 - 如果固定语义字段无法表达所需层级、只能依靠关键词正则猜测，则暂停并重新评估版本化 Presentation Block Contract；本轮不提前新增通用 RichText DSL。
 - H2 不改变 Pi/Forge/Skill 职责、Runtime Governance Coverage、模型 Binding、数据库访问或审批边界。
+- 用户已确认将 H2 部署到 NAS：沿用 Git bundle fast-forward、running Attempt 空闲检查、SQLite online backup、API/Pi restart 和目标机隔离 exporter smoke；不得读取/修改 Secret、Identity Map、Registry 或数据库连接，不重放 SQL。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

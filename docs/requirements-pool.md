@@ -272,7 +272,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-006：对话与报告的长文本可读性和语义化强调
 
 - **提出日期**：2026-08-24
-- **当前状态**：`verified`
+- **当前状态**：`implementing`
 - **原始需求**：像截图中的长文本，应通过加粗、下划线、斜体、强调色或 callout 提升阅读体验；不仅用于对话，也用于报告。
 
 ### 真实问题与目标结果
@@ -334,7 +334,15 @@ ID / 标题 / 日期 / 状态
 - 安全与兼容：HTML 全字段 escape；恶意 `<img onerror>` 作为文本；Report Bundle、分享 ACL、下载审计、idempotency、forbidden reasoning 和文件 mode 未改变。已发布不可变报告不会被原地重写，新样式只用于新生成 revision。
 - 验证：Python `551 passed / 24 skipped`；Pi `94 passed`、TypeScript typecheck、npm audit 0 vulnerabilities；报告专项 `7 passed`；Web/移动/print/technical Playwright 0 console/page error、0 横向溢出；PPTX 构建和 Quick Look 封面通过。
 - 视觉与产物：`/tmp/forge-report-readability-desktop.png`、`/tmp/forge-report-readability-mobile.png`、`/tmp/forge-report-readability-print.png`、`/tmp/forge-report-technical.png`、`/tmp/forge-report-readability.pdf`、`/tmp/forge-report-readability/artifacts/rp_visual001/v1/report.pptx`。
-- **剩余部署边界**：本地无系统级 `google-chrome/chromium` 命令，ReportStore 内置 PDF subprocess 未在本机直接执行；已用同一 Chromium print engine 的 Playwright 生成并验证 PDF。NAS 部署和目标机 exporter smoke 不属于本需求的本地实现验证，需在部署工作包中单独确认。
+- **剩余部署边界**：本地无系统级 `google-chrome/chromium` 命令，ReportStore 内置 PDF subprocess 未在本机直接执行；已用同一 Chromium print engine 的 Playwright 生成并验证 PDF。
+
+### NAS 部署确认
+
+- **确认日期**：2026-08-24
+- **用户决策**：明确要求部署当前 R1/R2 到 NAS。
+- **部署方案**：沿用已验证的 Git bundle fast-forward；部署前确认无 running StageAttempt 并在线备份可变 SQLite；不读取或修改 Secret、Identity Map、Registry、数据库 URL/凭证；不重装未变化依赖；重启 Forge API/Pi 后验证 health/readiness、认证门禁和目标机隔离报告 HTML/PDF/PPTX exporter。
+- **回滚**：代码回滚到 NAS 当前 commit；状态库只在部署异常且确有必要时使用部署前备份，不自动推进、重放 SQL 或覆盖现有不可变报告。
+- **当前状态**：等待部署验证完成后恢复为 `verified`。
 
 ### 关联
 
