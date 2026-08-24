@@ -42,7 +42,7 @@ Database schema:
 }
 ```
 
-JSON Schema 在 token 生成层强制约束：`fn` 只能是枚举值，`scan` 只能是 Registry 里的表名。
+当 Provider 严格执行动态 Tool Schema 时，`fn` 等固定值域与多数表列引用会在生成阶段受到枚举约束。为支持 CTE、CASE/算术表达式而保留的字符串位置，以及 Provider 兼容降级路径，仍需编译、lint 和审核兜底。
 
 ### Step 3 — 确定性编译
 

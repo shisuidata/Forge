@@ -1,0 +1,17 @@
+flowchart LR
+  L["LLM"] --> J["Forge JSON"]
+  J --> S{"动态 Schema"}
+  S -->|通过| N{"Lint"}
+  N -->|通过| C{"Compiler"}
+  S -->|错误| F["结构化反馈"]
+  N -->|约定错误| F
+  C -->|编译错误| F
+  F --> L
+  C -->|成功| Q["SQL 审核"]
+  Q --> X["执行 / 反馈"]
+  X --> T["Registry · Lint · Tests"]
+  T --> L
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5,font-weight:bold
+  classDef decision fill:#F3EEDF,stroke:#C08A1A,color:#2D2A26
+  class J,Q primary; class F accent; class S,N,C decision;

@@ -54,6 +54,26 @@ export default defineConfig({
 			],
 			sidebar: [
 				{
+					label: '架构课程',
+					items: [
+						{ label: '课程导读', slug: 'course' },
+						{ label: '01 · 为什么问数不可信', slug: 'course/01-why-trust' },
+						{ label: '02 · 总体架构', slug: 'course/02-overview' },
+						{ label: '03 · 核心技术优势', slug: 'course/03-core-advantages' },
+						{ label: '04 · 查询生命周期', slug: 'course/04-query-lifecycle' },
+						{ label: '05 · DSL 与编译器', slug: 'course/05-dsl-compiler' },
+						{ label: '06 · Registry', slug: 'course/06-registry' },
+						{ label: '07 · Schema 检索', slug: 'course/07-retrieval-context' },
+						{ label: '08 · Agent 与 Pipeline', slug: 'course/08-agent-memory-pipeline' },
+						{ label: '09 · 安全与权限', slug: 'course/09-security' },
+						{ label: '10 · 部署与运维', slug: 'course/10-deployment' },
+						{ label: '11 · 基准与证据', slug: 'course/11-evidence' },
+						{ label: '12 · 完整实战', slug: 'course/12-labs' },
+						{ label: '13 · 演进路线', slug: 'course/13-roadmap' },
+						{ label: '附录', slug: 'course/appendix' },
+					],
+				},
+				{
 					label: '快速开始',
 					items: [
 						{ label: '介绍', slug: 'guides/introduction' },

@@ -100,6 +100,8 @@ forge poc report /path/to/customer-poc
 
 报告会汇总 `results/doctor.json`、`results/provider-smoke.json`、`results/database-smoke.json`、`results/production-smoke.json`、`results/ea.json` 和工作目录校验结果。缺失证据会标记为 `missing`，不会伪装成通过。
 
+PoC/生产 profile 的 `doctor` 结果还会检查 Registry 是否误指向 `tests/datasets/*`。客户交付目录必须使用客户私有 Registry 或明确的 `registry/data` 路径，不能用仓库内 benchmark Registry 代替。
+
 ## 失败处理
 
 | 根因 | 落点 |

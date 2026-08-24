@@ -5,10 +5,11 @@ Forge 审计日志模块 — 基于 aiosqlite 的异步 SQLite 存储。
     用户原始问题 → 生成的 Forge JSON → 编译后的 SQL → 执行状态
 
 状态流转：
-    pending（SQL 已生成，等待用户确认）
+    pending（内部 SQL 已生成，等待 Forge 用户确认）
         ↓ 用户确认 → approved（SQL 已确认，由调用方负责执行）
         ↓ 用户取消 → cancelled
-        ↓ 生成失败 → error（附 error_message）
+    ↓ 生成失败 → error（附 error_message）
+    needs_external_review（外部 Agent 已获取 SQL，需宿主系统审核；不可由 /api/approve 消费）
 
 文件位置：
     forge_audit.db（SQLite 文件，与服务进程同目录）
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     user_message  TEXT    NOT NULL,          -- 用户原始自然语言
     forge_json    TEXT,                      -- 生成的 Forge JSON（JSON 字符串）
     sql           TEXT,                      -- 编译后的 SQL
-    status        TEXT    NOT NULL DEFAULT 'pending',  -- pending | approved | cancelled | error
+    status        TEXT    NOT NULL DEFAULT 'pending',  -- pending | approved | cancelled | error | needs_external_review
     error_message TEXT,                      -- 仅 status=error 时填写
     row_count     INTEGER DEFAULT 0,         -- 执行返回行数
     execution_ms  INTEGER                    -- SQL 执行耗时（毫秒）
@@ -97,7 +98,7 @@ async def log(
         user_message:  用户发送的原始自然语言查询。
         forge_json:    LLM 生成的 Forge JSON 字典；None 表示生成失败。
         sql:           编译后的 SQL 字符串；None 表示编译未执行。
-        status:        初始状态，通常为 "pending" 或 "error"。
+        status:        初始状态，通常为 "pending"、"needs_external_review" 或 "error"。
         error_message: 错误详情，仅 status="error" 时填写。
 
     Returns:
@@ -154,7 +155,7 @@ async def search(
     带筛选的审计记录查询（支持分页）。
 
     Args:
-        status:  按状态过滤（pending/approved/cancelled/error），空字符串不过滤。
+        status:  按状态过滤（pending/approved/cancelled/error/needs_external_review），空字符串不过滤。
         keyword: 搜索用户消息或 SQL 中包含的关键词，空字符串不过滤。
         limit:   返回条数上限。
         offset:  分页偏移。

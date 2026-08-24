@@ -1,0 +1,18 @@
+flowchart TB
+  Q["自然语言问题"] --> K{"口径清楚？"}
+  K -->|否| C["澄清并保存 pending intent"]
+  C --> Q
+  K -->|是| R["ACL + Registry + Schema RAG + WMB"]
+  R --> L["LLM Structured Output"]
+  L --> J["Forge JSON"]
+  J --> V{"Lint / Schema / Compile"}
+  V -->|失败且可重试| L
+  V -->|成功| S["待审核 SQL"]
+  S --> H{"用户决定"}
+  H -->|取消| A["Audit cancelled"]
+  H -->|确认| E["只读执行 · timeout · row cap"]
+  E --> Z["结果 + Audit + Feedback"]
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5,font-weight:bold
+  classDef decision fill:#F3EEDF,stroke:#C08A1A,color:#2D2A26
+  class J,S,E primary; class H accent; class K,V decision;

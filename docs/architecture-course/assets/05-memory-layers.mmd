@@ -1,0 +1,12 @@
+flowchart TB
+  W["WMB 工作记忆：按 query / define / analyze 场景实时裁剪"]
+  S["SMP 语义记忆：confirmed facts · corrections · profiles · summaries"]
+  E["EMS 情景记忆：完整消息 · tool · action · state event"]
+  E -->|提炼| S
+  S -->|相关知识| W
+  E -->|最近对话| W
+  W --> L["LLM 当前调用"]
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5
+  class E primary; class S hub; class W,L accent;

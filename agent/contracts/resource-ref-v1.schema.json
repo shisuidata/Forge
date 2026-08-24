@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/resource-ref-v1.schema.json",
+  "title": "ResourceRef v1",
+  "description": "A tenant-scoped reference to a governed platform or data resource. It never embeds credentials or resource contents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "resource_type", "resource_id", "organization_id", "workspace_id", "parent_resource_id", "resource_revision"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "resource_type": {
+      "enum": ["organization", "workspace", "datasource", "registry", "schema", "table", "column", "query_result", "report", "export", "model", "skill", "audit"]
+    },
+    "resource_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "organization_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "workspace_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+    "parent_resource_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
+    "resource_revision": {"type": ["string", "null"], "minLength": 1, "maxLength": 256}
+  }
+}

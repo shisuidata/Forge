@@ -148,6 +148,7 @@ bash scripts/production-smoke.sh
 
 - `.forge` 目录需要持久化，用于审计、staging 和本地记忆库。
 - `registry/data` 建议纳入客户私有 Git 仓库，所有业务规则变更可追踪。
+- PoC/生产环境必须显式配置客户 Registry 或 `registry/data`，不能沿用 `tests/datasets/*` benchmark Registry；`forge doctor --profile poc|prod` 会将其视为交付门禁失败。
 - 每次 Registry 变更后运行客户 accuracy suite。
 - 审计库和 Registry 文件需要纳入备份。
 - 不建议在公网裸露服务，应放在公司 VPN、内网网关或反向代理之后。

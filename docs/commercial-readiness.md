@@ -38,8 +38,9 @@ large 40 题 DeepSeek V4 Pro Method AF：
 - 审计库路径可配置：`AUDIT_DB_PATH`。
 - 审计表记录用户问题、Forge JSON、SQL、状态、错误信息。
 - 执行结果记录 `row_count`、`execution_ms`。
-- `/api/approve` 执行后会回写最近一条 pending 审计记录。
-- `/api/cancel` 会把最近一条 pending 审计记录标记为 cancelled。
+- `/api/approve` 执行后会回写最近一条内部 `pending` 审计记录。
+- `/api/cancel` 会把最近一条内部 `pending` 审计记录标记为 cancelled。
+- `/api/prepare-query` 面向外部 Agent，只写入 `needs_external_review` 审计状态，不进入 `/api/approve` 可消费的内部 pending 队列。
 - `/api/execute-raw` 会记录执行状态、错误、行数和耗时。
 - `/api/feedback` 可提交 SQL/结果错误反馈，进入 `feedback_log` 待处理队列。
 
@@ -63,6 +64,7 @@ GET /health/readiness
 - 是否确认数据库使用只读账号。
 - Secure Cookie 是否开启。
 - Registry 文件是否齐备。
+- PoC/生产 profile 是否仍误用 `tests/datasets/*` benchmark Registry。
 - 审计目录是否可写。
 
 返回状态：

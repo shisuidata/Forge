@@ -1,0 +1,15 @@
+flowchart TB
+  O["Org"] --> T1["Team A"]
+  O --> T2["Team B"]
+  T1 --> U1["User A"]
+  T1 --> U2["User B"]
+  T2 --> U3["User C"]
+  T1 --> ACL["Team Table ACL"]
+  ACL --> SC["可见 Schema / Tool Schema"]
+  SC --> SQL["待审核 SQL"]
+  SQL --> APP["应用层只读校验"]
+  APP --> DB[("数据库只读账号 / 权限")]
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5,font-weight:bold
+  class O,T1,T2 primary; class ACL,SC,APP hub; class DB accent;

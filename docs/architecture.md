@@ -1,99 +1,68 @@
-# Architecture
+# Forge 架构总览
 
-## Overview
+> 本页是稳定入口。完整教材见 [`docs/architecture-course/`](architecture-course/index.md)。
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  User Interface                                             │
-│  ┌─────────────────┐    ┌─────────────────────────────┐    │
-│  │  Feishu / DingTalk │    │  Admin Web UI (/admin)      │   │
-│  │  Bot               │    │  Registry · Audit · Config  │   │
-│  └────────┬────────┘    └──────────────┬──────────────┘    │
-└───────────┼──────────────────────────────┼───────────────────┘
-            │ webhook                       │ HTTP
-┌───────────▼──────────────────────────────▼───────────────────┐
-│  Forge Backend (FastAPI)                                      │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │  Agent Loop (agent/agent.py)                         │    │
-│  │                                                      │    │
-│  │  query mode:   NL → LLM → Forge JSON → SQL → review │    │
-│  │  define mode:  NL → LLM → metric definition → save  │    │
-│  └───────────────┬──────────────────────────────────────┘    │
-│                  │                                            │
-│  ┌───────────────▼──────────┐  ┌────────────────────────┐   │
-│  │  LLM Client (agent/llm)  │  │  Forge Compiler        │   │
-│  │  Anthropic / OpenAI-compat│  │  JSON Schema validation│   │
-│  │  Tool use / Struct Output │  │  → deterministic SQL   │   │
-│  └───────────────────────────┘  └────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────┐  ┌────────────────────────┐   │
-│  │  Registry                │  │  Audit Log             │   │
-│  │  schema.registry.json    │  │  forge_audit.db        │   │
-│  │  · structural layer      │  │  · query history       │   │
-│  │  · semantic layer        │  │  · approve / cancel    │   │
-│  └──────────────────────────┘  └────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │  Database Connection                                 │    │
-│  │  forge sync → structural registry                   │    │
-│  │  execute approved SQL → return results              │    │
-│  └──────────────────────────────────────────────────────┘    │
-└───────────────────────────────────────────────────────────────┘
+Forge 是面向数据团队的**可信 AI 问数中间层与 Agent**。它把自然语言查询拆成可治理的链路，而不是让 LLM 直接连接数据库：
+
+```text
+Web / 飞书 / 外部 API
+  → Agent（澄清、调度、重试）
+  → Registry + Schema RAG + WMB
+  → LLM Structured Output
+  → Forge JSON
+  → Lint + JSON Schema + 确定性 Compiler
+  → 待审核 SQL
+  → 用户确认
+  → 只读 Executor（timeout / row cap）
+  → Result + Audit + Feedback + Memory
 ```
 
-## Key Design Decisions
+![Forge 当前系统上下文](architecture-course/assets/01-system-context.svg)
 
-### Forge JSON as intermediate representation
+## 核心架构原则
 
-The LLM never writes SQL directly. Instead it generates a structured JSON object (Forge DSL) validated against a JSON Schema. This provides:
+1. **意图与执行分离**：LLM 表达 Forge JSON，Compiler 负责 SQL 语法。
+2. **组织语义外置**：指标、歧义、字段约定和业务上下文进入 Registry。
+3. **高风险动作由人决定**：SQL 与组织事实默认审核后执行/入库。
+4. **数据库权限是最终边界**：应用层只读检查不能替代只读账号。
+5. **兼容声明按证据分层**：compile、sync、execute、smoke、production 分开描述。
+6. **诚实标注算法边界**：DSL 能稳定编译已表达意图，不能替模型发明正确算法。
 
-- **Structured Output compatibility**: token-level generation constraints
-- **Schema validation before compilation**: hallucinated field names rejected at compile time
-- **Determinism**: same Forge JSON always produces the same SQL
+## 主要组件
 
-### Two error categories
-
-| Type | Description | Forge helps? |
+| 层 | 模块 | 职责 |
 |---|---|---|
-| Generation errors | Model knows the right approach but produces wrong syntax | ✅ |
-| Business logic errors | Metric definitions are ambiguous | ✅ via Registry |
-| Algorithmic logic errors | Model doesn't know to use CTE for this pattern | ❌ |
+| 入口 | `web/`, `agent/feishu.py` | Chat/Admin/API/飞书、认证与交互 |
+| 调度 | `agent/agent.py` | Query/Define、澄清、重试、review state |
+| 上下文 | `agent/llm.py`, `forge/retriever.py` | Registry、RAG、ACL 与 Provider 调用 |
+| 中间表示 | `forge/schema.json`, `forge/schema_builder.py` | 静态 DSL 与动态 Tool Schema |
+| 确定性核心 | `forge/compiler.py`, `forge/lint.py` | 校验、coerce、方言编译和规则检查 |
+| 执行 | `forge/executor.py` | 只读校验、超时、结果上限与查询执行 |
+| 知识 | `registry/`, `agent/memory/` | 组织知识、EMS/SMP/WMB 和记忆提炼 |
+| 编排 | `agent/pipeline.py` | Query/Analyze/Visualize/Report Artifact 流 |
+| 治理 | `agent/tenant.py`, `agent/audit.py` | team ACL、审计、反馈与回放 |
+| 交付 | `forge/readiness.py`, `forge/poc.py` | dev/PoC/prod 门禁和交付证据 |
 
-### Registry as organizational knowledge
+## 当前状态与目标状态
 
-The Registry has two layers with different management strategies:
+- **已实现并有测试的主线**：查询/定义、DSL/Compiler、Registry、Retriever、审核执行、Audit/Feedback、Web/Admin、认证、Memory、team ACL 和 readiness。
+- **已有代码路径、仍需客户验收**：分析/可视化/报告 Pipeline、知识收集、多租户治理。
+- **兼容层级**：SQLite/PostgreSQL/MySQL 有 smoke 证据；BigQuery/Snowflake 主要是编译路径，不能等同完整执行支持。
+- **正式规模交付前重点**：客户域 accuracy suite、规则租户化、Registry 版本/回滚、企业权限和运维 runbook。
 
-- **Structural layer** (`tables`): auto-generated by `forge sync` from the database. Never manually edited.
-- **Semantic layer** (`metrics`): maintained through conversation. Business users define metrics in natural language; Forge extracts structure and saves definitions.
+## 教材入口
 
-### Human-in-the-loop SQL review
+- [导读与阅读路线](architecture-course/index.md)
+- [核心技术优势](architecture-course/03-core-advantages.md)
+- [一次查询的完整生命周期](architecture-course/04-query-lifecycle.md)
+- [完整实战课程](architecture-course/12-labs.md)
+- [目标架构与路线图](architecture-course/13-roadmap.md)
 
-All SQL is shown to the user before execution. The Feishu interactive card with ✅/❌ buttons enforces this. The audit log records every query attempt and its outcome.
+## 深入参考
 
-## Data Flow: Query Mode
-
-```
-1. User sends message in Feishu
-2. feishu.py receives im.message.receive_v1 event
-3. agent.py:process(user_id, text) is called
-4. Session history is assembled
-5. llm.py:call(history) sends to LLM with:
-   - Forge JSON Schema (as tool definition)
-   - Registry context (tables + metrics)
-6. LLM calls generate_forge_query tool with Forge JSON
-7. compiler.py:compile_query(forge_json) produces SQL
-8. feishu.py sends interactive card with SQL
-9. User clicks ✅ → agent.py:approve() → SQL executed
-   User clicks ❌ → agent.py:cancel()
-10. audit.py logs the full interaction
-```
-
-## Data Flow: Define Mode
-
-```
-1. User describes a metric ("复购率是指...")
-2. LLM calls define_metric tool
-3. agent.py:_save_metric() writes to Registry semantic layer
-4. Future queries can reference the metric by name
-```
+- [工作原理与 DSL 能力](how-it-works.md)
+- [DSL 形式化语义](dsl-semantics.md)
+- [Registry](registry.md)
+- [兼容性矩阵](compatibility-matrix.md)
+- [生产部署](production-deployment.md)
+- [基准测试](benchmarks.md)

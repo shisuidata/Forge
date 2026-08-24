@@ -1,0 +1,10 @@
+flowchart LR
+  D["Dev\nDemo SQLite · 本地配置 · warn 可接受"] --> P["PoC\n客户只读库 · 客户 Registry · Golden Questions"]
+  P --> R["Prod\nHTTPS · Auth · 只读副本 · 持久化 · 监控 · 回滚"]
+  D --> DD["doctor --profile dev"]
+  P --> PD["doctor poc + provider/database smoke"]
+  R --> RD["doctor prod + production smoke + 客户验收"]
+  classDef muted fill:#F3EEDF,stroke:#9A9488,color:#2D2A26
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  class D,DD muted; class P,PD hub; class R,RD primary;

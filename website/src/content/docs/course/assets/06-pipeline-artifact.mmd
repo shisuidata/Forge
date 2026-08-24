@@ -1,0 +1,16 @@
+flowchart LR
+  O["Orchestrator"] --> Q["Query Agent"]
+  Q --> QR["QueryResult v1"]
+  QR --> H{"SQL 审核"}
+  H --> A["Analysis Agent"]
+  A --> AR["AnalysisReport v1"]
+  AR --> V["Visualization Agent"]
+  V --> CS["ChartSpec v1"]
+  CS --> P["Report Writer"]
+  P --> RP["Report Artifact"]
+  QR -. "Artifact，不自由对话" .-> A
+  AR -. "Artifact" .-> V
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5,font-weight:bold
+  class Q,A,V,P primary; class QR,AR,CS,RP hub; class H accent;

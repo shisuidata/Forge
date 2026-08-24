@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/principal-context-v1.schema.json",
+  "title": "PrincipalContext v1",
+  "description": "A bounded authentication and accountability snapshot. The actor may be human, service, or agent; the accountable principal may only be human, team, or organization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "principal_context_id", "actor_principal", "accountable_principal", "organization_id", "workspace_id", "authentication_context", "delegation_chain", "issued_at", "expires_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "principal_context_id": {"type": "string", "pattern": "^pc_[A-Za-z0-9_-]+$"},
+    "actor_principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"enum": ["human", "service", "agent"]}
+      }
+    },
+    "accountable_principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"enum": ["human", "team", "organization"]}
+      }
+    },
+    "organization_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "authentication_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "assurance_level", "authenticated_at", "session_id_hash"],
+      "properties": {
+        "method": {"enum": ["local", "oidc", "service_key", "oauth", "workload_identity"]},
+        "assurance_level": {"enum": ["single_factor", "multi_factor", "service_asserted", "workload_asserted"]},
+        "authenticated_at": {"type": "string", "format": "date-time"},
+        "session_id_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "delegation_chain": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["delegation_id", "delegator_principal_id", "delegate_principal_id", "mandate_id", "issued_at", "expires_at"],
+        "properties": {
+          "delegation_id": {"type": "string", "pattern": "^dlg_[A-Za-z0-9_-]+$"},
+          "delegator_principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "delegate_principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "mandate_id": {"type": ["string", "null"], "pattern": "^md_[A-Za-z0-9_-]+$"},
+          "issued_at": {"type": "string", "format": "date-time"},
+          "expires_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}

@@ -1,8 +1,8 @@
 # Pi × Forge × 拾穗 DATA 集成计划
 
-> 状态：自动化实施与验收完成，待人工测试 · Last updated: 2026-08-21
+> 状态：历史实施快照（Phase 0–7 项目侧基线已完成；不再承载当前 TODO） · Snapshot updated: 2026-08-24
 >
-> 本文是本次平台改造的**计划真相源**。总体架构见 [`platform-architecture.md`](platform-architecture.md)，现有外部 Agent 安全边界见 [`agent-integration.md`](agent-integration.md)。
+> 本文保留 Pi × Forge 集成的历史实施状态、当时决策与验收证据。文中的“当前”“进行中”“后续”均按所在段落日期理解，不代表 2026-08-24 之后的主动工作；新的唯一主动计划真相源是 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。总体架构仍以 [`platform-architecture.md`](platform-architecture.md) 为准，现有外部 Agent 安全边界见 [`agent-integration.md`](agent-integration.md)。任何后续实施必须同时遵守本文既有职责边界和新主动计划，不得借换计划恢复双 Orchestrator 或绕过 Forge 可信执行。
 
 ## 0. 计划治理
 
@@ -63,6 +63,9 @@
 | Phase 2 QueryRun 审批执行闭环 | 已完成 | Forge 持久化 QueryRun；独立 Pi 服务认证；hash/身份/Registry/过期/只读/幂等门禁；Web 审批与结果展示 E2E 通过；Forge full suite 380 passed |
 | Forge 内部 QueryRun 审批 API | 已完成 | create/get/approve/cancel/result；外部 `/api/prepare-query` 语义未改变 |
 | Forge 旧 Pipeline 退出新主路径 | 已退役，显式 flag 可回滚 | 新 Web/Pi 链路不调用 `agent/pipeline.py`；旧 `/api/chat`、`/api/approve`、`/api/cancel` 默认返回 410，只有 `LEGACY_AGENT_API_ENABLED=true` 才能临时回滚。 |
+| 第一性原理与长期产品论证资产 | 已完成 | `product-axioms.md` 固化 32 条产品公理、四问题平面与决策清单；`ai-native-enterprise-thesis.md` 保存完整论证、反证、高概率情景和证伪标准。架构已声明当前产品边界，不启动统一记忆或通用 AI Infra 实施。文档/Artifact/架构课程定向测试 18 passed，相关文件 `git diff --check` 通过。 |
+| 基于产品公理的产品方向与架构复审 | 已完成并确认进入新计划 | `product-direction-architecture-review-2026-08-24.md` 对照实际代码审核四平面与 32 条公理；已确认重新制定企业演进计划，保留可信数据任务纵向切片，优先补 Principal/AuthZ、多人 Decision、Economics Ledger 和 Claim/Evidence 分型，不直接跃迁通用 AI Infra 或单一 Memory Store。 |
+| Forge 企业演进阶段性计划 v1.1 | 已确认；M0.1–M0.3 已完成待评审 | 当前唯一主动计划为 `forge-enterprise-evolution-plan.md`；Governance Contract 内核与 Action Catalog 已建立，M0 评审后再分别批准 M1A/M1B/M1C。运行时授权、API、数据库 Schema 与 OAuth Runtime 尚未修改。 |
 
 ### 0.4 决策记录
 
@@ -73,6 +76,12 @@
 | 2026-08-21 | 模型切换不得依赖服务重启 | 模型配置改为版本化 ModelProfile + ActiveBinding；切换前验证，切换后新任务生效，在途任务固定旧 revision，可审计回滚 |
 | 2026-08-21 | Pi 拥有流程调度权，Forge 拥有可信执行权与否决权 | 禁止形成双 Orchestrator |
 | 2026-08-21 | 计划文档随需求确认和实施结果持续更新 | 文档更新成为开发门禁，而非事后总结 |
+| 2026-08-24 | 采用第一性原理审视 Forge 长期边界，建立治理、协同、成本、保障四问题框架 | Data Agent 是当前验证入口而非预设终局；产品公理约束后续身份、记忆、Agent 协作、成本和保障设计 |
+| 2026-08-24 | 确认中期定位为“供人和企业 Agent 使用的可信数据任务控制与执行平台” | 不退回 Text-to-SQL，也不直接宣称通用 AI Infra；现实切入保持 Data-Team Led / Business Accessible / Agent Native / Human Accountable |
+| 2026-08-24 | 质量策略采用“100% Governed，不承诺端到端 100% Correct” | 安全不变量和确定性投影追求 100%；统计质量同时测量 coverage、clarification、safe abstention 和 silent error，开放式推断必须暴露不确定性 |
+| 2026-08-24 | 新建企业演进主动计划，原 Pi 集成计划转为历史实施基线 | 新计划必须继承 Pi 唯一 Orchestrator、Forge 唯一可信数据执行层、Artifact Contract 和高风险动作不自动重放等既有硬边界 |
+| 2026-08-24 | 跨 Agent 长期上下文连续性作为高可信需求，单一统一记忆系统保留为待验证假设 | 不把全部对话、事实和业务系统复制成第二真相源；先比较集中 Memory、联邦 Context 和组合方案，并要求第二个真实消费者 |
+| 2026-08-24 | 长期参与者采用 Data-Team Led / Business Accessible / Agent Native / Human Accountable 的研究框架 | 数据团队是当前治理与购买入口，业务人员和 Agent 可发起需求；Agent 必须绑定 Principal、Mandate、Task、Policy，不能成为最终责任主体 |
 | 2026-08-21 | Pi Runtime 默认关闭内置工具，仅显式加载四个 MVP Skills | 客户运行环境不继承个人 Pi 配置，也不具备文件或 Shell 权限 |
 | 2026-08-21 | 首个 Forge Tool 只包装现有 `/api/prepare-query` | Pi 可取得待审核 SQL，但不能批准、执行或接收查询结果 |
 | 2026-08-21 | Integration Spike 的 Web 只消费 Pi Task/Event API | 渠道不再直接选择 Forge Pipeline；Phase 1 页面不提供执行按钮 |
@@ -651,7 +660,7 @@ Forge 必须服务端复核：
 
 ### Phase 4：飞书与钉钉渠道
 
-> 当前状态：进行中。第一步先建立可信且可复用的渠道边界，不能直接把现有飞书 Bot 从 Forge Agent 改成另一个会编排业务的 Bot。
+> 历史时点状态（2026-08-21）：当时进行中。后续项目侧自动化收口与外部验收边界见本章末尾记录；本节不再作为当前 TODO。第一步先建立可信且可复用的渠道边界，不能直接把现有飞书 Bot 从 Forge Agent 改成另一个会编排业务的 Bot。
 
 当前已完成：
 

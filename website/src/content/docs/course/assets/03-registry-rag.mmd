@@ -1,0 +1,15 @@
+flowchart LR
+  DB[("数据库 Schema")] --> SY["forge sync"]
+  SY --> ST["结构层：表 · 列 · 枚举"]
+  B["业务人员 / 文档 / 对话"] --> CA["Candidate + 人工确认"]
+  CA --> SE["语义层：指标 · 歧义 · 约定 · 上下文"]
+  ST --> RE["Retriever"]
+  SE --> RE
+  AC["Team ACL"] --> RE
+  ME["SMP + EMS"] --> WM["WMB 场景裁剪"]
+  RE --> WM
+  WM --> CT["当前 LLM 上下文"]
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5
+  class ST,SE primary; class RE,WM hub; class CT accent;

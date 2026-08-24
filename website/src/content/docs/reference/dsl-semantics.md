@@ -41,8 +41,9 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 | 投影（SELECT） | `select` | 列引用、表达式、别名 |
 | 内连接 | `joins[type=inner]` | 等值和多条件 |
 | 左/右/全外连接 | `joins[type=left/right/full]` | MySQL 不支持 FULL |
-| 反连接 | `joins[type=anti]` | 编译为 LEFT JOIN + IS NULL |
+| 反连接 | `joins[type=anti]` | 编译为安全的反连接语义 |
 | 半连接 | `joins[type=semi]` | 编译为 WHERE EXISTS |
+| 显式笛卡儿积 | `joins[type=cross]` | 用于引用标量 CTE；无 `on`，不作为普通 JOIN 默认值 |
 | 聚合 | `group` + `agg` | count/sum/avg/min/max/distinct/concat |
 | 集合运算 | `union / intersect / except` | |
 
@@ -62,7 +63,7 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 
 | 能力 | 原因 |
 |---|---|
-| CROSS JOIN | 强制声明 JOIN 意图，消灭意外笛卡儿积 |
+| 隐式/无意图的笛卡儿积 | 只允许显式 `cross` 场景，合理性仍由 lint、审核与测试判断 |
 | DDL / DML | Forge 是只读查询语言 |
 | 存储过程 | 超出查询范围 |
 | PIVOT / LATERAL JOIN | 暂未支持 |
@@ -71,13 +72,13 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 
 ## 不可能性保证
 
-以下错误类型**在物理层面不可能出现**在合法的 Forge DSL 中：
+以下保证只在**合法 DSL、动态 Schema 覆盖且 Provider 严格执行 Structured Output**的相应字段上成立；表达式透传、Provider 降级、业务口径和算法选择不在保证内：
 
 | 错误类型 | SQL 中的问题 | Forge 如何消灭 |
 |---|---|---|
 | **无类型 JOIN** | 裸 `JOIN` 等价于 INNER，但意图可能是 LEFT | `type` 字段是必填枚举值 |
 | **NOT IN + NULL** | 子查询含 NULL 时结果集静默为空 | `anti` join 编译为 LEFT JOIN + IS NULL |
-| **幻觉列名/表名** | LLM 生成不存在的列名 | Structured Output 在 token 生成层强制枚举 |
+| **受约束位置的幻觉列名/表名** | LLM 生成不存在的列名 | 严格 Provider 路径下，动态 Schema 对多数表列引用强制枚举 |
 | **WHERE vs HAVING 混淆** | 聚合条件放在 WHERE | `filter` 和 `having` 是独立字段 |
 | **GROUP BY 歧义** | MySQL/PG 跨方言行为不一致 | `_coerce` 自动补齐 GROUP BY |
 | **Alias 作用域错误** | 同层 SELECT 中引用 agg alias | `_expand_aliases()` 自动展开 |

@@ -59,7 +59,7 @@ Forge DSL 覆盖"无歧义的声明式关系查询"的核心子集。下表列�
 |---|---|---|---|
 | 选择（σ） | WHERE | `filter` | 支持比较、范围、IN、LIKE、IS NULL、OR/AND 嵌套 |
 | 投影（π） | SELECT | `select` | 支持列引用、计算表达式、别名 |
-| 笛卡儿积 × | CROSS JOIN | 不支持 | 刻意省略，强迫声明 JOIN 意图 |
+| 笛卡儿积 × | CROSS JOIN | `joins[type=cross]` | 仅用于显式场景（如引用标量 CTE）；无 `on`，不得作为普通 JOIN 的默认替代 |
 | 内连接（⋈） | INNER JOIN | `joins[type=inner]` | 支持等值和多条件 |
 | 左外连接 | LEFT JOIN | `joins[type=left]` | |
 | 右外连接 | RIGHT JOIN | `joins[type=right]` | |
@@ -89,7 +89,7 @@ Forge DSL 覆盖"无歧义的声明式关系查询"的核心子集。下表列�
 
 | 能力 | 原因 |
 |---|---|
-| CROSS JOIN | 强制要求声明 JOIN 意图，消灭意外笛卡儿积 |
+| 隐式/无意图的笛卡儿积 | 当前允许显式 `cross` 以引用标量 CTE，但没有默认 CROSS JOIN；是否合理仍由 lint、审核与测试判断 |
 | 裸子查询（非 IN/EXISTS） | 用 CTE 代替，结构更清晰可读 |
 | DDL（CREATE/ALTER/DROP） | Forge 是只读查询语言 |
 | DML（INSERT/UPDATE/DELETE） | 同上 |
@@ -101,7 +101,7 @@ Forge DSL 覆盖"无歧义的声明式关系查询"的核心子集。下表列�
 
 ## 四、不可能性保证（Impossibility Guarantees）
 
-这是 Forge DSL 最核心的价值主张。以下错误类型**在物理层面不可能出现**在合法的 Forge DSL 中：
+这是 Forge DSL 的核心价值主张。以下保证只在**合法 DSL、动态 Schema 覆盖且 Provider 严格执行 Structured Output**的相应字段上成立；表达式透传、Provider 降级、业务口径和算法选择不在这些保证内：
 
 ### 4.1 无类型 JOIN
 
@@ -128,8 +128,8 @@ Forge DSL 中不存在 `NOT IN` 原语。反连接只能通过 `type: "anti"` �
 
 SQL 中，LLM 可以生成任何字符串作为列名（`SELECT orders.amount` 当列名实际是 `total_amount`）。
 
-Forge DSL 通过 `schema_builder.py` 动态注入 Registry 中的合法枚举值到 JSON Schema，
-Structured Output 在 token 生成层强制枚举约束——不在 Registry 中的列名**在生成阶段就被阻止**。
+Forge DSL 通过 `schema_builder.py` 将 Registry 中的合法表名和多数列引用注入 JSON Schema。
+当 Provider 严格执行该 Schema 时，这些受约束字段中的未知名称可在生成阶段被阻止。为支持 CASE/算术保留的字符串表达式，以及未严格执行 Schema 的兼容路径，仍需编译、lint、审核和数据库权限兜底。
 
 ### 4.4 WHERE vs HAVING 混淆
 

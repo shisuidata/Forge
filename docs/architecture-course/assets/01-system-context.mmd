@@ -1,0 +1,17 @@
+flowchart LR
+  U["用户 / 外部 Agent"] --> E["Web · 飞书 · API"]
+  E --> A["FastAPI + Agent"]
+  A --> C["Registry · RAG · Memory"]
+  A --> L["LLM Provider"]
+  L --> J["Forge JSON"]
+  J --> P["Lint + Compiler"]
+  P --> R{"人工审核"}
+  R -->|确认| X["只读 Executor"]
+  R -->|取消| O["Audit"]
+  X --> D[("客户数据库")]
+  X --> O
+  O --> F["Feedback · Test · Registry"]
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5,font-weight:bold
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  class A,J,P primary; class R accent; class C,L,X,O,F hub;

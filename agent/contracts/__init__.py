@@ -27,6 +27,13 @@ _CONTRACT_FILES = {
     "analysis_artifact": "analysis-artifact.schema.json",
     "advisory_artifact": "advisory-artifact.schema.json",
     "rendered_output_artifact": "rendered-output-artifact.schema.json",
+    "resource_ref_v1": "resource-ref-v1.schema.json",
+    "principal_context_v1": "principal-context-v1.schema.json",
+    "agent_mandate_v1": "agent-mandate-v1.schema.json",
+    "policy_decision_v1": "policy-decision-v1.schema.json",
+    "datasource_binding_v1": "datasource-binding-v1.schema.json",
+    "registry_binding_v1": "registry-binding-v1.schema.json",
+    "governance_action_catalog_v1": "governance-action-catalog-v1.schema.json",
 }
 
 

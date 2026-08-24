@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/registry-binding-v1.schema.json",
+  "title": "RegistryBinding v1",
+  "description": "An immutable revision of a Workspace-to-Registry binding anchored to one Datasource binding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_binding_id", "revision", "organization_id", "workspace_id", "registry", "datasource_binding_id", "registry_revision", "policy_revision", "status", "valid_from", "valid_until"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "registry_binding_id": {"type": "string", "pattern": "^rgb_[A-Za-z0-9_-]+$"},
+    "revision": {"type": "integer", "minimum": 1},
+    "organization_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "workspace_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "resource_type", "resource_id", "organization_id", "workspace_id", "parent_resource_id", "resource_revision"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "resource_type": {"const": "registry"},
+        "resource_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "organization_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "workspace_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "parent_resource_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
+        "resource_revision": {"type": ["string", "null"], "minLength": 1, "maxLength": 256}
+      }
+    },
+    "datasource_binding_id": {"type": "string", "pattern": "^dsb_[A-Za-z0-9_-]+$"},
+    "registry_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+    "policy_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+    "status": {"enum": ["draft", "active", "retired"]},
+    "valid_from": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": ["string", "null"], "format": "date-time"}
+  }
+}

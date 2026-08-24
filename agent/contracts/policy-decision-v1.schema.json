@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/policy-decision-v1.schema.json",
+  "title": "PolicyDecision v1",
+  "description": "A bounded resource policy decision. Decision authority is explicitly human, team, or organization and can never be an agent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_decision_id", "revision", "subject_principal_id", "mandate_id", "action", "resource", "effect", "reason_code", "reason", "obligations", "policy_revision", "decision_authority", "evaluated_at", "expires_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "policy_decision_id": {"type": "string", "pattern": "^pd_[A-Za-z0-9_-]+$"},
+    "revision": {"type": "integer", "minimum": 1},
+    "subject_principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "mandate_id": {"type": ["string", "null"], "pattern": "^md_[A-Za-z0-9_-]+$"},
+    "action": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$", "maxLength": 128},
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "resource_type", "resource_id", "organization_id", "workspace_id", "parent_resource_id", "resource_revision"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "resource_type": {"enum": ["organization", "workspace", "datasource", "registry", "schema", "table", "column", "query_result", "report", "export", "model", "skill", "audit"]},
+        "resource_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "organization_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "workspace_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+        "parent_resource_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
+        "resource_revision": {"type": ["string", "null"], "minLength": 1, "maxLength": 256}
+      }
+    },
+    "effect": {"enum": ["allow", "deny", "conditional"]},
+    "reason_code": {"type": "string", "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "obligations": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["obligation_id", "obligation_type", "enforcement_point", "description"],
+        "properties": {
+          "obligation_id": {"type": "string", "pattern": "^obl_[A-Za-z0-9_-]+$"},
+          "obligation_type": {"enum": ["approval", "mask", "row_filter", "audit", "expiry", "budget", "read_only"]},
+          "enforcement_point": {"enum": ["pi", "forge", "report_service", "database"]},
+          "description": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "policy_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+    "decision_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"enum": ["human", "team", "organization"]}
+      }
+    },
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": ["string", "null"], "format": "date-time"}
+  }
+}

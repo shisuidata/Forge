@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/governance-action-catalog-v1.schema.json",
+  "title": "Governance Action Catalog v1",
+  "description": "The measurable denominator for Forge governance coverage. Only supported actions are included in the coverage denominator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "catalog_id", "revision", "status", "published_at", "unsupported_high_risk_behavior", "actions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "catalog_id": {"const": "forge-governance-actions"},
+    "revision": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "status": {"enum": ["draft", "active", "retired"]},
+    "published_at": {"type": "string", "format": "date-time"},
+    "unsupported_high_risk_behavior": {"const": "fail_closed"},
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "support_status", "governed", "owner", "executor", "risk_level", "required_context", "truth_source", "failure_policy"],
+        "properties": {
+          "action": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$", "maxLength": 128},
+          "support_status": {"enum": ["supported", "planned", "unsupported"]},
+          "governed": {"type": "boolean"},
+          "owner": {"enum": ["pi", "pi_governance", "forge", "report_service"]},
+          "executor": {"enum": ["pi", "forge", "report_service"]},
+          "risk_level": {"enum": ["low", "medium", "high", "prohibited"]},
+          "required_context": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["principal", "mandate", "policy_decision", "human_decision", "binding_refs"],
+            "properties": {
+              "principal": {"const": true},
+              "mandate": {"enum": ["required", "conditional", "not_required"]},
+              "policy_decision": {"enum": ["required", "conditional", "not_required"]},
+              "human_decision": {"enum": ["required", "conditional", "not_required"]},
+              "binding_refs": {"type": "array", "uniqueItems": true, "items": {"enum": ["datasource", "registry"]}}
+            }
+          },
+          "truth_source": {"enum": ["pi_task_store", "pi_governance_store", "pi_skill_policy_store", "forge_query_store", "forge_registry_store", "forge_model_control_store", "forge_report_store", "forge_memory_store"]},
+          "failure_policy": {"enum": ["deny", "pause", "needs_input"]}
+        }
+      }
+    }
+  }
+}

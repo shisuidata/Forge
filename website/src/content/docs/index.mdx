@@ -1,9 +1,9 @@
 ---
 title: Forge — AI SQL Query Agent
-description: 面向数据团队的 AI 查询 Agent，让弱模型也能生成可信 SQL。
+description: 面向数据团队的可信 AI 问数中间层与 Agent。
 template: splash
 hero:
-  tagline: 私有化部署的可信 SQL Agent。<br/>弱模型理解意图，Forge 用 Registry、DSL 和确定性编译守住业务口径与执行边界。
+  tagline: 私有化部署的可信 AI 问数中间层。<br/>用 Registry、受约束 DSL、确定性编译、人工审核和审计守住业务口径与执行边界。
   image:
     file: ../../assets/forge-chat.png
   actions:
@@ -33,12 +33,12 @@ import { Card, CardGrid, Tabs, TabItem, LinkCard } from '@astrojs/starlight/comp
     <div class="metric-label">Case EA(any)</div>
   </div>
   <div>
-    <div class="metric-value" style="color: var(--sl-color-white);">97.5%</div>
+    <div class="metric-value" style="color: var(--sl-color-white);">100%</div>
     <div class="metric-label">Run ACC</div>
   </div>
   <div>
-    <div class="metric-value" style="color: var(--sl-color-white);">337</div>
-    <div class="metric-label">自动化测试通过</div>
+    <div class="metric-value" style="color: var(--sl-color-white);">0%</div>
+    <div class="metric-label">生成/编译失败率</div>
   </div>
   <div>
     <div class="metric-value" style="color: var(--sl-color-white);">97.6%</div>
@@ -56,7 +56,7 @@ LLM 生成 SQL 的错误不是一个笼统的"不准"，而是三个截然不同
   <Card title="生成错误 — 已解决" icon="approve-check">
     推理对了，SQL 写错了。`INNER JOIN` 替代 `LEFT JOIN`、`NOT IN` 遇 NULL 静默返错。
 
-    **Forge 方案**：DSL 约束 + Structured Output，token 级别约束，物理上不可能出错。
+    **Forge 方案**：在严格 Structured Output 覆盖的字段上收窄输出空间，再由 Schema、Lint、Compiler 和审核继续兜底。
   </Card>
   <Card title="业务逻辑错误 — 已解决" icon="approve-check">
     指标定义歧义。"复购率"的分母是谁？"销售额"含不含退款？
@@ -88,7 +88,7 @@ LLM 生成 SQL 的错误不是一个笼统的"不准"，而是三个截然不同
 
 <CardGrid stagger>
   <Card title="01 · 约束是自由的前提" icon="seti:lock">
-    收窄输出空间，让整类错误在物理上不可能发生。JSON Schema 在 token 级别约束——不是"建议"LLM，而是让它**不可能不这样做**。
+    在合法 DSL、动态 Schema 覆盖且 Provider 严格执行的字段上收窄输出空间；表达式、兼容降级、业务口径和算法仍需后续护栏。
   </Card>
   <Card title="02 · 意图与执行分离" icon="seti:pipeline">
     LLM 负责理解意图（生成 JSON），编译器负责正确执行（翻译 SQL）。编译器修了一个 bug，所有 LLM 都受益。
@@ -105,14 +105,14 @@ LLM 生成 SQL 的错误不是一个笼统的"不准"，而是三个截然不同
 
 ## 基准测试
 
-当前推荐基线是 large 40 题业务查询集，DeepSeek V4 Pro / Method AF，每题 3 次生成。Forge 已经不是 demo 级“偶尔能答对”，而是进入受控生产落地 / 封闭 Beta 候选阶段。
+当前推荐基线是 large 40 题业务查询集、火山方舟 Coding Plan `ark-code-latest` / Method AI，每题 3 次生成。该结果只对当次模型、Provider、Registry、版本和数据集成立，不代表任意陌生 Schema 都是 100%。
 
 | 指标 | 结果 |
 |---|---:|
 | Case EA(any) | **100.0%** |
-| Case EA(all) | **92.5%** |
-| Run ACC | **97.5%** |
-| 编译失败率 | **0.0%** |
+| Case EA(all) | **100.0%** |
+| Run ACC | **100.0%（120/120）** |
+| 生成/编译失败率 | **0.0%** |
 
 <LinkCard title="查看完整基准测试详情" href="/reference/benchmarks/" />
 
@@ -124,14 +124,14 @@ LLM 生成 SQL 的错误不是一个笼统的"不准"，而是三个截然不同
   <Card title="Web UI + Chat" icon="laptop">12 个 Admin 管理页面 + Dashboard 概览</Card>
   <Card title="SQL 审核编辑" icon="pencil">生成后可修改 SQL 再执行</Card>
   <Card title="结果导出" icon="document">CSV / JSON 一键下载</Card>
-  <Card title="认证 + 多租户" icon="setting">org / team / user 三层隔离</Card>
+  <Card title="认证 + 多租户基础" icon="setting">user / team 映射；完整 org 隔离仍在演进</Card>
   <Card title="数据权限" icon="approve-check-circle">Team 级别表可见性 ACL</Card>
   <Card title="三层记忆系统" icon="seti:db">EMS + SMP + WMB</Card>
-  <Card title="Pipeline 引擎" icon="seti:pipeline">查询 → 分析 → 可视化</Card>
+  <Card title="Pipeline 引擎" icon="seti:pipeline">查询 → 分析 → 可视化；客户域需验收</Card>
   <Card title="飞书 Bot" icon="rocket">流式卡片 + 按钮回调</Card>
   <Card title="知识收集" icon="open-book">五通道自动提取业务知识</Card>
   <Card title="PostgreSQL" icon="seti:db">SQLite 零改动切换</Card>
-  <Card title="自动化测试" icon="approve-check">342 passed / 25 skipped</Card>
+  <Card title="自动化测试" icon="approve-check">Compiler / API / Executor / Compatibility / Docs</Card>
   <Card title="生产门禁" icon="heart">forge doctor --profile + production smoke</Card>
 </CardGrid>
 

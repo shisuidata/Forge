@@ -43,6 +43,12 @@ def _check(name: str, base_status: str, message: str, profile: ReadinessProfile)
     }
 
 
+def _uses_test_registry(path: Path) -> bool:
+    """Return True when a Registry path points at bundled benchmark data."""
+    normalized = path.expanduser().as_posix()
+    return normalized.startswith("tests/datasets/") or "/tests/datasets/" in normalized
+
+
 def readiness_checks(profile: ReadinessProfile = "prod") -> list[dict]:
     """Return readiness checks adjusted for dev, poc, or prod profile."""
     if profile not in {"dev", "poc", "prod"}:
@@ -113,8 +119,20 @@ def readiness_checks(profile: ReadinessProfile = "prod") -> list[dict]:
         )
         if not Path(path).exists()
     ]
+    registry_paths = (
+        cfg.REGISTRY_PATH,
+        cfg.METRICS_PATH,
+        cfg.DISAMBIGUATIONS_PATH,
+        cfg.CONVENTIONS_PATH,
+    )
     if registry_missing:
         add("registry", "fail", "部分 Registry 文件不存在：" + ", ".join(registry_missing))
+    elif any(_uses_test_registry(Path(path)) for path in registry_paths):
+        add(
+            "registry",
+            "fail" if profile in {"poc", "prod"} else "warn",
+            "当前 Registry 指向 tests/datasets benchmark 数据；PoC/生产交付必须显式配置客户 Registry 或 registry/data。",
+        )
     else:
         add("registry", "ok", "Registry 文件齐备。")
 

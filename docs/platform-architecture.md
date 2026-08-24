@@ -1,6 +1,6 @@
 # Forge AI 数据任务平台架构
 
-> 状态：已确认目标架构 · Last updated: 2026-08-21。本文描述 Pi、Forge、拾穗 DATA Skills 与渠道之间的长期边界，不表示所有模块均已实现。
+> 状态：已确认目标架构，企业演进横向平面已纳入规划 · Last updated: 2026-08-24。本文描述 Pi、Forge、拾穗 DATA Skills 与渠道之间的长期边界，不表示所有模块均已实现。主动实施计划见 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。
 >
 > 中文架构全景图：[`architecture-diagrams/forge-platform-architecture.html`](architecture-diagrams/forge-platform-architecture.html)，包含产品、技术、元数据、流程、闭环、部署、模型、安全、状态和接口等 11 个视角。
 
@@ -31,6 +31,28 @@ Pi Agent Platform
 ```
 
 对外产品仍可统一使用 **Forge** 品牌。Pi 和拾穗 DATA Skills 是内部能力层，不要求最终用户理解其存在。
+
+### 1.1 长期问题框架与当前边界
+
+2026-08-24 确认采用第一性原理重新审视长期产品边界。长期研究问题不是预设“Data Agent”“统一记忆”或“Agent Control Plane”必然成立，而是：
+
+> 一个概率性的机器，如何在不拥有最终责任能力的前提下，安全参与组织的认知、决策和行动？
+
+由此识别四个相互约束的企业 AI 问题：
+
+- **Governance**：Agent 依据什么、允许做什么；数据、知识、身份、Mandate、决策权和作用域如何治理。
+- **Coordination**：多人、多 Agent 如何通过 Task、Artifact、Evidence、Decision 和 Action 协作，而不是依赖群聊形成隐式状态。
+- **Economics**：如何控制模型、上下文、工具、重试和人工审核的总成本，优化每个可信结果的成本，而不是只优化 Token 单价。
+- **Assurance**：如何证明结果正确、权限合法、行动与审批一致，并把结果、失败和修正转化为可追溯证据。
+
+当前确认的是上述问题框架和产品公理，不是新的大范围实施承诺：
+
+- Forge 当前对外定位继续是**可信 AI 数据任务平台**；结构化数据任务是高价值、高风险、可复算的第一验证场景。
+- “跨 Agent 长期上下文连续性”是高可信需求；“所有信息进入单一统一记忆系统”仍是待验证假设。集中式 Memory Store、联邦式 Context Plane、Registry/Event Store 组合之间尚未定案。
+- 长期架构研究可讨论 Agent Native、Data-Team Led、Business Accessible、Human Accountable，但不得据此让 Forge 吞并通用 Agent Runtime、全部业务真相源或无边界工具执行。
+- 任何新基础设施必须先由第二个真实消费者、明确责任边界、可证伪指标和相对现有方案的不可替代价值证明，再进入实施计划。
+
+稳定原则见 [`product-axioms.md`](product-axioms.md)，完整论证、反证和待验证假设见 [`ai-native-enterprise-thesis.md`](ai-native-enterprise-thesis.md)。
 
 ## 2. 核心原则
 
@@ -75,6 +97,42 @@ Forge Execution Plane
 - 用户保留高风险操作的最终批准权。
 
 任何需要多个阶段、等待用户、选择 Skill、补查、重试业务步骤或跨渠道恢复的工作，都由 Pi 管理。Forge 内部只保留一次能力调用所必需的有限重试，例如 Provider 瞬时错误重试或 Forge JSON 编译纠错；这类重试必须有上限、可审计，且不能越过审批边界。
+
+### 3.1 企业演进的横向控制契约
+
+现有四层职责不变，但后续企业化需要四个横向平面共同约束 Task 和 Action：
+
+```text
+业务人员 / Data Team / Enterprise Agent
+                    │
+          Identity & Delegation Boundary
+                    │
+                    ▼
+              Pi Coordination
+         Task · Plan · Participant · Decision
+                    │
+       ┌────────────┼─────────────┐
+       ▼            ▼             ▼
+ Governance       Economics      Context
+ Principal        Budget         Source / Claim
+ Mandate          Usage          Evidence / Conflict
+ Policy           Outcome        ContextBundle
+       └────────────┼─────────────┘
+                    ▼
+          Forge Trusted Execution
+```
+
+这些名称首先表示版本化 Contract 和职责，不预设立即拆成独立微服务：
+
+- **Governance**：可信身份、Principal、Agent Mandate、Membership、资源 Policy、Datasource/Registry Binding。
+- **Coordination**：Task Participant、DecisionRequest/Record、ActionRef、依赖、责任和恢复，仍由 Pi 持有流程真相。
+- **Economics**：Task/Stage/Agent/Team 的 Budget、Usage、CostCatalog 和 Outcome；成本策略不能绕过权限与 Assurance。
+- **Context**：Source、Claim、Evidence、Conflict、MemoryProposal 和按 Purpose 编译的 ContextBundle；不把全部业务数据复制为第二真相源。
+- **Assurance** 是跨平面约束：身份、Context、Decision、Budget、Registry、Model 和 Action lineage 必须可组合回放。
+
+外部 IdP 或部署身份系统负责认证；Pi 对 Task 执行授权，Forge 对数据资源和实际 Action 独立执行授权。是否需要共享 PDP、独立 Context/Memory Service 或 Cost Service，必须由真实负载、第二消费者和安全边界证明后决定。
+
+质量目标采用分层策略：安全/权限/审批一致等系统不变量和支持范围内的确定性投影追求 100% 回归；自然语言理解、SQL 语义和分析属于统计质量，必须同时测量 coverage、clarification、safe abstention 和 silent error；开放式推断必须暴露来源、假设、冲突和限制。Forge 承诺 `100% Governed` 的过程边界，不承诺开放世界端到端 `100% Correct`。
 
 ## 4. 四层职责
 

@@ -1,0 +1,296 @@
+{
+  "valid": {
+    "resource_ref_v1": [
+      {
+        "schema_version": 1,
+        "resource_type": "table",
+        "resource_id": "table_orders",
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "parent_resource_id": "schema_public",
+        "resource_revision": "registry-demo-v1"
+      }
+    ],
+    "principal_context_v1": [
+      {
+        "schema_version": 1,
+        "principal_context_id": "pc_web_query_001",
+        "actor_principal": {"principal_id": "svc_pi_web", "principal_type": "service"},
+        "accountable_principal": {"principal_id": "user_123", "principal_type": "human"},
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "authentication_context": {
+          "method": "service_key",
+          "assurance_level": "service_asserted",
+          "authenticated_at": "2026-08-24T08:00:00Z",
+          "session_id_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "delegation_chain": [
+          {
+            "delegation_id": "dlg_web_to_pi_001",
+            "delegator_principal_id": "user_123",
+            "delegate_principal_id": "svc_pi_web",
+            "mandate_id": "md_query_001",
+            "issued_at": "2026-08-24T08:00:00Z",
+            "expires_at": "2026-08-24T08:15:00Z"
+          }
+        ],
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:15:00Z"
+      },
+      {
+        "schema_version": 1,
+        "principal_context_id": "pc_agent_query_001",
+        "actor_principal": {"principal_id": "agent_analytics_01", "principal_type": "agent"},
+        "accountable_principal": {"principal_id": "org_demo", "principal_type": "organization"},
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "authentication_context": {
+          "method": "workload_identity",
+          "assurance_level": "workload_asserted",
+          "authenticated_at": "2026-08-24T08:00:00Z",
+          "session_id_hash": null
+        },
+        "delegation_chain": [
+          {
+            "delegation_id": "dlg_org_to_agent_001",
+            "delegator_principal_id": "org_demo",
+            "delegate_principal_id": "agent_analytics_01",
+            "mandate_id": "md_agent_query_001",
+            "issued_at": "2026-08-24T08:00:00Z",
+            "expires_at": "2026-08-24T08:10:00Z"
+          }
+        ],
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      }
+    ],
+    "agent_mandate_v1": [
+      {
+        "schema_version": 1,
+        "mandate_id": "md_agent_query_001",
+        "revision": 1,
+        "agent_principal_id": "agent_analytics_01",
+        "delegator_principal": {"principal_id": "org_demo", "principal_type": "organization"},
+        "accountable_principal": {"principal_id": "org_demo", "principal_type": "organization"},
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "purpose": "Prepare one governed sales analysis query for Task tr_demo_001",
+        "task_run_id": "tr_demo_001",
+        "capabilities": ["query.prepare"],
+        "resource_scope": [
+          {
+            "schema_version": 1,
+            "resource_type": "datasource",
+            "resource_id": "ds_demo",
+            "organization_id": "org_demo",
+            "workspace_id": "ws_growth",
+            "parent_resource_id": "ws_growth",
+            "resource_revision": "ds-rev-1"
+          }
+        ],
+        "budget_ref": null,
+        "approval_policy_ref": "policy_query_review_v1",
+        "can_delegate": false,
+        "status": "active",
+        "issued_at": "2026-08-24T08:00:00Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      }
+    ],
+    "policy_decision_v1": [
+      {
+        "schema_version": 1,
+        "policy_decision_id": "pd_query_prepare_001",
+        "revision": 1,
+        "subject_principal_id": "agent_analytics_01",
+        "mandate_id": "md_agent_query_001",
+        "action": "query.prepare",
+        "resource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "effect": "conditional",
+        "reason_code": "policy.query.review_required",
+        "reason": "The query may be prepared but execution requires an exact human approval.",
+        "obligations": [
+          {
+            "obligation_id": "obl_sql_review_001",
+            "obligation_type": "approval",
+            "enforcement_point": "forge",
+            "description": "Bind approval to the immutable SQL and Assurance hashes before execution."
+          }
+        ],
+        "policy_revision": "policy-query-v1",
+        "decision_authority": {"principal_id": "team_data_governance", "principal_type": "team"},
+        "evaluated_at": "2026-08-24T08:00:01Z",
+        "expires_at": "2026-08-24T08:10:00Z"
+      }
+    ],
+    "datasource_binding_v1": [
+      {
+        "schema_version": 1,
+        "datasource_binding_id": "dsb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "datasource": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ws_growth",
+          "resource_revision": "ds-rev-1"
+        },
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      }
+    ],
+    "registry_binding_v1": [
+      {
+        "schema_version": 1,
+        "registry_binding_id": "rgb_growth_001",
+        "revision": 1,
+        "organization_id": "org_demo",
+        "workspace_id": "ws_growth",
+        "registry": {
+          "schema_version": 1,
+          "resource_type": "registry",
+          "resource_id": "registry_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": "ds_demo",
+          "resource_revision": "registry-demo-v1"
+        },
+        "datasource_binding_id": "dsb_growth_001",
+        "registry_revision": "registry-demo-v1",
+        "policy_revision": "policy-query-v1",
+        "status": "active",
+        "valid_from": "2026-08-24T00:00:00Z",
+        "valid_until": null
+      }
+    ]
+  },
+  "invalid": {
+    "resource_ref_v1": [
+      {
+        "case": "credentials cannot cross the boundary",
+        "value": {
+          "schema_version": 1,
+          "resource_type": "datasource",
+          "resource_id": "ds_demo",
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "parent_resource_id": null,
+          "resource_revision": "ds-rev-1",
+          "database_password": "forbidden"
+        }
+      }
+    ],
+    "principal_context_v1": [
+      {
+        "case": "an agent cannot be the accountable principal",
+        "value": {
+          "schema_version": 1,
+          "principal_context_id": "pc_invalid_001",
+          "actor_principal": {"principal_id": "agent_analytics_01", "principal_type": "agent"},
+          "accountable_principal": {"principal_id": "agent_analytics_01", "principal_type": "agent"},
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "authentication_context": {"method": "workload_identity", "assurance_level": "workload_asserted", "authenticated_at": "2026-08-24T08:00:00Z", "session_id_hash": null},
+          "delegation_chain": [],
+          "issued_at": "2026-08-24T08:00:00Z",
+          "expires_at": "2026-08-24T08:10:00Z"
+        }
+      }
+    ],
+    "agent_mandate_v1": [
+      {
+        "case": "delegation intent must be explicit",
+        "value": {
+          "schema_version": 1,
+          "mandate_id": "md_invalid_001",
+          "revision": 1,
+          "agent_principal_id": "agent_analytics_01",
+          "delegator_principal": {"principal_id": "org_demo", "principal_type": "organization"},
+          "accountable_principal": {"principal_id": "org_demo", "principal_type": "organization"},
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "purpose": "Prepare a query",
+          "task_run_id": "tr_demo_001",
+          "capabilities": ["query.prepare"],
+          "resource_scope": [{"schema_version":1,"resource_type":"datasource","resource_id":"ds_demo","organization_id":"org_demo","workspace_id":"ws_growth","parent_resource_id":null,"resource_revision":"ds-rev-1"}],
+          "budget_ref": null,
+          "approval_policy_ref": "policy-query-v1",
+          "status": "active",
+          "issued_at": "2026-08-24T08:00:00Z",
+          "expires_at": "2026-08-24T08:10:00Z"
+        }
+      }
+    ],
+    "policy_decision_v1": [
+      {
+        "case": "an agent cannot be the final decision authority",
+        "value": {
+          "schema_version": 1,
+          "policy_decision_id": "pd_invalid_001",
+          "revision": 1,
+          "subject_principal_id": "agent_analytics_01",
+          "mandate_id": "md_agent_query_001",
+          "action": "query.execute",
+          "resource": {"schema_version":1,"resource_type":"datasource","resource_id":"ds_demo","organization_id":"org_demo","workspace_id":"ws_growth","parent_resource_id":null,"resource_revision":"ds-rev-1"},
+          "effect": "allow",
+          "reason_code": "invalid.agent_approved",
+          "reason": "An agent attempted to approve its own execution.",
+          "obligations": [],
+          "policy_revision": "policy-query-v1",
+          "decision_authority": {"principal_id": "agent_analytics_01", "principal_type": "agent"},
+          "evaluated_at": "2026-08-24T08:00:00Z",
+          "expires_at": null
+        }
+      }
+    ],
+    "datasource_binding_v1": [
+      {
+        "case": "a datasource binding cannot point at a registry",
+        "value": {
+          "schema_version": 1,
+          "datasource_binding_id": "dsb_invalid_001",
+          "revision": 1,
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "datasource": {"schema_version":1,"resource_type":"registry","resource_id":"registry_demo","organization_id":"org_demo","workspace_id":"ws_growth","parent_resource_id":null,"resource_revision":"registry-demo-v1"},
+          "policy_revision": "policy-query-v1",
+          "status": "active",
+          "valid_from": "2026-08-24T00:00:00Z",
+          "valid_until": null
+        }
+      }
+    ],
+    "registry_binding_v1": [
+      {
+        "case": "a registry binding requires a datasource binding id",
+        "value": {
+          "schema_version": 1,
+          "registry_binding_id": "rgb_invalid_001",
+          "revision": 1,
+          "organization_id": "org_demo",
+          "workspace_id": "ws_growth",
+          "registry": {"schema_version":1,"resource_type":"registry","resource_id":"registry_demo","organization_id":"org_demo","workspace_id":"ws_growth","parent_resource_id":"ds_demo","resource_revision":"registry-demo-v1"},
+          "registry_revision": "registry-demo-v1",
+          "policy_revision": "policy-query-v1",
+          "status": "active",
+          "valid_from": "2026-08-24T00:00:00Z",
+          "valid_until": null
+        }
+      }
+    ]
+  }
+}

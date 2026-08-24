@@ -1,0 +1,11 @@
+flowchart LR
+  C["当前：可信查询主链\nRegistry 基础 · Memory/Pipeline · Team ACL · Doctor"]
+  N["近期：客户 accuracy suite\n规则租户化 · Registry 版本治理 · 运维 runbook"]
+  M["中期：Database/LLM Adapter\n企业权限 · 审计隔离 · 可观测性"]
+  L["长期：组织知识 + 证据飞轮\n跨模型/数据库的持续可信"]
+  C --> N --> M --> L
+  classDef muted fill:#F3EEDF,stroke:#9A9488,color:#2D2A26
+  classDef hub fill:#3B5A80,stroke:#3B5A80,color:#FDFBF5
+  classDef primary fill:#2D5A3D,stroke:#2D5A3D,color:#FDFBF5,font-weight:bold
+  classDef accent fill:#A6432C,stroke:#A6432C,color:#FDFBF5,font-weight:bold
+  class C muted; class N hub; class M primary; class L accent;

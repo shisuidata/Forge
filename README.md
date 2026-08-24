@@ -23,16 +23,16 @@ Forge 不是再做一个 SQL 生成器，而是 AI 参与数据查询时的可�
 
 ### 当前推荐基线
 
-large 40 题业务查询基准，DeepSeek V4 Pro，Method AF，每题 3 次生成：
+large 40 题业务查询基准，火山方舟 Coding Plan `ark-code-latest`，Method AI，每题 3 次生成：
 
 | 指标 | 结果 |
 |---|---:|
 | Case EA(any) | **100.0%**（40/40） |
-| Case EA(all) | **92.5%**（37/40） |
-| Run ACC | **97.5%**（117/120） |
-| 编译失败率 | **0.0%**（120/120 成功） |
+| Case EA(all) | **100.0%**（40/40） |
+| Run ACC | **100.0%**（120/120） |
+| 生成/编译失败率 | **0.0%**（120/120） |
 
-这组结果说明：Forge 不只是“偶尔能答对”，而是在重复生成下已经有较强稳定性。详见 [测试报告](docs/test-report-2026-05-06.md) 和 [基准测试](docs/benchmarks.md)。
+该结果只证明当前模型、Provider、Registry、代码版本和 40 题数据集的组合，不代表任意陌生 Schema 都是 100%。详见 [2026-07-13 测试报告](docs/test-report-2026-07-13.md) 和 [基准测试](docs/benchmarks.md)。
 
 ---
 
@@ -132,9 +132,9 @@ flowchart LR
     DB --> RESULT
 ```
 
-自然语言经 Registry 语义注入后，由 LLM 生成结构化的 Forge JSON（JSON Schema 在 token 级别约束合法输出），再由确定性编译器翻译为 SQL。用户审核的 SQL 和执行的 SQL 是同一份，无运行时变换。
+自然语言经 Registry 语义注入后，由 LLM 生成结构化的 Forge JSON，再由确定性编译器翻译为 SQL。在 Provider 严格执行动态 JSON Schema 的字段上，非法候选可在生成阶段被阻止；表达式透传、兼容降级路径、业务口径和算法选择仍需校验、审核与测试。用户审核的 SQL 和执行的 SQL 是同一份。
 
-详见 [工作原理与 DSL 能力](docs/how-it-works.md)。
+从产品价值、核心原理到生产落地的系统讲解，见 [Forge 完整架构教材](docs/architecture-course/index.md)；快速参考见 [工作原理与 DSL 能力](docs/how-it-works.md)。
 
 ---
 
@@ -142,10 +142,10 @@ flowchart LR
 
 | 指标 | 值 |
 |---|---|
-| EA（large schema, DeepSeek V4 Pro, Method AF） | **100.0% Case EA / 97.5% Run ACC** |
-| Case EA(all)（large schema, DeepSeek V4 Pro, Method AF） | **92.5%** |
-| EA best（small schema, Claude/DeepSeek） | **95.0%** |
-| 全量自动化测试 | **342 passed, 25 skipped** |
+| EA（large schema, Ark Coding Plan, Method AI） | **100.0% Case EA / 100.0% Run ACC** |
+| Case EA(all)（large schema, Ark Coding Plan, Method AI） | **100.0%** |
+| 上一交付基线（DeepSeek V4 Pro, Method AF） | **97.5% Run ACC** |
+| 自动化测试 | compiler / API / executor / compatibility / docs 等，数量以当前 CI 为准 |
 | Spider2-Lite 编译成功率 | **97.6%** |
 | Spider2-Lite EA | **9.2%** |
 
@@ -159,11 +159,11 @@ flowchart LR
 | SQL 审核编辑（生成后可修改 SQL 再执行） | ✅ |
 | 查询结果导出（CSV / JSON，中文 BOM 兼容） | ✅ |
 | 认证鉴权（Cookie session + API Key） | ✅ |
-| 多租户（org → team → user 三层隔离） | ✅ |
+| 多租户基础（user → team 映射；org/team/user 仍在完善） | ✅ 基础能力 |
 | 数据权限（team 级别表可见性 ACL + 无权限提示） | ✅ |
 | PostgreSQL 支持（SQLite 零改动切换） | ✅ |
 | 三层记忆系统（EMS / SMP / WMB） | ✅ |
-| Pipeline 引擎（分析 / 可视化 / 报告） | ✅ |
+| Pipeline 引擎（分析 / 可视化 / 报告） | ✅ 代码路径；需客户域验收 |
 | 飞书 Bot（流式卡片 + 按钮回调） | ✅ |
 | 五通道知识收集（RSS / URL / 文档 / 对话 / 手动） | ✅ |
 | 文档导入（上传 .txt/.md → LLM 提取 → 确认入库） | ✅ |
@@ -217,7 +217,7 @@ tests/
   ├── test_api.py          — API 端点测试（26 个用例）
   ├── test_e2e.py          — Playwright E2E 测试（22 个用例）
   ├── test_docs_links.py   — 公开文档本地链接检查
-  ├── accuracy/            — 自有 40 题基准（当前推荐 Method AF）
+  ├── accuracy/            — 自有 40 题基准（当前推荐 Method AI）
   └── spider2/             — Spider2-Lite SQLite 子集（123 题）
 ```
 
@@ -227,7 +227,12 @@ tests/
 
 | 文档 | 内容 |
 |---|---|
-| [架构设计](docs/architecture.md) | 系统整体架构与模块职责 |
+| [完整架构教材](docs/architecture-course/index.md) | 从可信问数原理、核心技术优势到实战与生产架构 |
+| [架构设计](docs/architecture.md) | 系统整体架构与模块职责的精简入口 |
+| [产品公理](docs/product-axioms.md) | 以第一性原理约束身份、证据、协同、记忆、成本与可信行动 |
+| [AI Native 企业长期论证](docs/ai-native-enterprise-thesis.md) | Data Agent、组织协同、统一记忆、企业 AI Infra 的论证、反证与待验证假设 |
+| [产品方向与架构复审](docs/product-direction-architecture-review-2026-08-24.md) | 按产品公理审核当前实现、四平面缺口、目标架构与分阶段建议 |
+| [企业演进主动计划](docs/forge-enterprise-evolution-plan.md) | Contract、身份授权、成本、协同、保障、Context 实验和企业交付的阶段门禁 |
 | [工作原理与 DSL 能力](docs/how-it-works.md) | 执行流程详解、DSL 特性表、Schema RAG |
 | [基准测试详情](docs/benchmarks.md) | 版本演化、跨模型 EA 对比、Spider2 结果 |
 | [设计哲学与工程洞察](docs/philosophy.md) | 核心哲学、工程经验、开放问题 |

@@ -60,6 +60,46 @@ def test_readiness_profiles_have_distinct_gates(monkeypatch, tmp_path):
     assert readiness_payload("prod")["status"] == "ok"
 
 
+def test_poc_and_prod_reject_bundled_test_registry(monkeypatch, tmp_path):
+    from config import cfg
+    from forge.readiness import readiness_payload
+
+    test_registry_dir = tmp_path / "tests" / "datasets" / "large"
+    test_registry_dir.mkdir(parents=True)
+    schema = test_registry_dir / "schema.registry.json"
+    metrics = test_registry_dir / "metrics.registry.yaml"
+    disambiguations = test_registry_dir / "disambiguations.registry.yaml"
+    conventions = test_registry_dir / "field_conventions.registry.yaml"
+    schema.write_text('{"tables":{"orders":{"columns":{"id":{}}}}}', encoding="utf-8")
+    for path in (metrics, disambiguations, conventions):
+        path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(cfg, "REGISTRY_PATH", schema)
+    monkeypatch.setattr(cfg, "METRICS_PATH", metrics)
+    monkeypatch.setattr(cfg, "DISAMBIGUATIONS_PATH", disambiguations)
+    monkeypatch.setattr(cfg, "CONVENTIONS_PATH", conventions)
+    monkeypatch.setattr(cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+    monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+    monkeypatch.setattr(cfg, "AUTH_ADMIN_PASSWORD", "strong-password")
+    monkeypatch.setattr(cfg, "AUTH_COOKIE_SECURE", True)
+    monkeypatch.setattr(cfg, "LLM_API_KEY", "sk-test")
+    monkeypatch.setattr(cfg, "EXECUTION_ENABLED", True)
+    monkeypatch.setattr(cfg, "DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", True)
+    monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", False)
+    monkeypatch.setattr(cfg, "EXECUTION_MAX_ROWS", 200)
+    monkeypatch.setattr(cfg, "EXECUTION_TIMEOUT_SECONDS", 30)
+
+    poc_payload = readiness_payload("poc")
+    prod_payload = readiness_payload("prod")
+    dev_payload = readiness_payload("dev")
+
+    assert poc_payload["status"] == "fail"
+    assert prod_payload["status"] == "fail"
+    assert dev_payload["status"] == "warn"
+    assert next(c for c in poc_payload["checks"] if c["name"] == "registry")["status"] == "fail"
+
+
 def test_doctor_json_cli_does_not_emit_secrets(monkeypatch, tmp_path, capsys):
     from config import cfg
     from forge import cli
