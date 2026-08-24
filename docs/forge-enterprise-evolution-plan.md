@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与长期边界已确认；M0 Governance Contract Ready 已完成但 Runtime Coverage 仍为 0%；用户已调整近期顺序，W3 Web 产品骨架与可人工测试交互框架成为唯一主动下一工作包；M1A 顺延为 W3 后首个后端治理工作包，H5/H6/M1B–M7 暂停新增实现 · Last updated: 2026-08-24
+> 状态：产品方向与长期边界已确认；M0 Governance Contract Ready 已完成但 Runtime Coverage 仍为 0%；W3A Web Product Shell 隔离原型已部署 Atlas，等待用户逐页 IA/交互门禁；W3B 尚未批准，M1A 顺延为 W3 后首个后端治理工作包，H5/H6/M1B–M7 暂停新增实现 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -74,7 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | W2 Web 主体内容规则 | 已实施，待用户视觉确认 | 已审计 19 个模板并清理 Chat/Tasks/Registry/全局/登录页宣传与口号；H5 candidate 同步去除候选/Renderer 自述。静态回归和桌面候选通过，用户确认前不标记 verified。 |
-| W3 Web 产品骨架与交互框架 | W3A 实施中 | `REQ-2026-08-24-014`：先建立统一信息架构、Product Shell、任务/报告/数据资产/管理页面骨架和完整 UI 状态，使用户能够尽早人工测试；Interaction-first 但不得伪造后端成功或新建第二状态源 |
+| W3 Web 产品骨架与交互框架 | W3A 已部署，等待用户门禁 | `REQ-2026-08-24-014`：`821065f` 隔离 Product Shell 已在 Atlas `:18006` 覆盖工作台/任务/报告/数据资产/管理及关键状态；0 生产请求。用户通过前不进入 W3B |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
@@ -327,6 +327,14 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 ### W3.5 后端顺延边界
 
 M1A 不取消，但顺延为 W3 核心 Product Shell 稳定后的首个后端工作包。W3 不允许对真实跨用户/跨团队能力作已完成声明，也不能因前端优先而扩大默认允许 ACL。涉及企业多用户生产开放前，M1A/M1B 仍是硬阻断。
+
+### W3A 实施结果（2026-08-24）
+
+- `tools/web-product-shell-prototype/` 建立无 CDN、fixture-only 的桌面 Product Shell，覆盖六个一级区域、可寻址 Task Detail、SQL/Analysis/Report/Activity tabs、Report Library/Detail、数据资产 tabs 和管理分组。
+- 所有页面显示“交互原型/演示数据”；源码无生产网络请求。审批 dialog 绑定任务、数据源、范围、限制、完整 SQL 和检查结果；演示确认不会写生产 Store。
+- prototype tests `5 passed`、build/audit 通过；Python 全量 `564 passed / 24 skipped`（Web 定向 `19 passed`）；Pi typecheck/`103 passed`。Playwright 在 1440×900、1600×1000 本地与 Atlas 走通关键 route、dialog、fixture state、search、back/forward/reload，0 console error、0 横向溢出。
+- 固定 commit `821065f` 发布到 Atlas `/home/elazer/services/forge-previews/web-shell-821065f/`，`forge-web-shell-preview.service` 仅绑定 `192.168.8.10:18006`。生产 Jinja、Forge/Pi、Store 和 `d2b0fd9` checkout 未修改。
+- 当前等待用户逐页给出 `PASS / CHANGE / REMOVE`；W3B 的生产 route/API/feature flag 方案尚未批准。证据见 [`web-product-shell-w3a-evidence-2026-08-24.md`](web-product-shell-w3a-evidence-2026-08-24.md)。
 
 ## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
 

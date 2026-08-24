@@ -761,7 +761,7 @@ ReportRun / ReportRevision（不可变快照）
 ## REQ-2026-08-24-014：Web 产品骨架与可人工测试交互框架优先
 
 - **提出日期**：2026-08-24
-- **当前状态**：`w3a_active`
+- **当前状态**：`w3a_awaiting_user_gate`
 - **用户决策**：先从整体产品框架和 Web 前端页面开始，把信息架构、页面骨架、核心交互和可见状态搭到可用、可人工测试的程度；治理、成本等内在能力适当后排。原因是没有可操作的产品外壳，用户无法持续人工测试、指导产品走向或判断后端能力是否真正形成产品价值。
 
 ### 评估结论
@@ -834,3 +834,13 @@ ReportRun / ReportRevision（不可变快照）
 - W3A 成为唯一主动下一工作包；W3A 用户门禁通过后进入 W3B，随后 W3C。
 - M1A 不取消，顺延为 Product Shell 核心旅程稳定后的首个后端治理工作包；涉及真实跨用户/跨团队生产开放前仍必须完成。
 - H5 生产 R1、H6 runtime、M1B–M7 暂停新增实现，只保留已有 Contract、证据和 backlog。
+
+### W3A 实施结果
+
+- **当前状态**：`awaiting_user_gate`。隔离原型位于 `tools/web-product-shell-prototype/`，固定 commit `821065f`；生产 Jinja、Pi/Forge package、Task/Approval/Report/Registry Store 均未修改。
+- 一级信息架构覆盖工作台、新建任务、任务、报告、数据资产和管理；hash route 可深链接到 Task Detail、SQL、分析、报告和数据资产 tabs。
+- 固定 fixture 覆盖 `waiting_approval / needs_input / analyzing / rendering / completed / failed`，原型控制可额外查看 querying/offline；所有页面固定显示演示数据边界，源码不包含 `fetch/XMLHttpRequest/WebSocket`。
+- SQL 审批原型在最终确认中重复显示任务、数据源、范围、系统限制、完整 SQL、4 项检查和演示无副作用边界；确认按钮需显式勾选后才启用。
+- 自动验证：prototype tests `5 passed`、build、npm audit 0；Python 全量 `564 passed / 24 skipped`（Web 定向 `19 passed`）；Pi typecheck 与 `103 passed`。Playwright 在 1440×900 与 1600×1000 走通工作台、新建、搜索、Task Detail、审批 dialog、状态切换、back/forward/reload、报告库/详情、数据资产和管理；0 console error、0 横向溢出、0 生产请求。
+- Atlas 发布：`/home/elazer/services/forge-previews/web-shell-821065f/`，user service `forge-web-shell-preview.service` 仅绑定 `192.168.8.10:18006`；远端两个 viewport 复验通过。生产 Forge/Pi 与原报告预览服务保持 active，生产源码仍为干净 `d2b0fd9`。
+- 正式证据见 `docs/web-product-shell-w3a-evidence-2026-08-24.md`。在用户逐页给出 IA/交互门禁前，不进入 W3B，不把 fixture 行为接生产。
