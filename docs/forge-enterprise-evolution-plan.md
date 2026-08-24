@@ -77,6 +77,7 @@ GTM：Data-Team Led
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 实施中 | `REQ-2026-08-24-008` 已确认：依次关闭 PDF internal-path leak、same-page completion 可见性、Chart grain/critical-quality fail-closed；仅桌面端，P1 不自动扩围 |
+| H5 Evidence-bound Chart Storytelling | 待确认 | `REQ-2026-08-24-009`：专业报告多图叙事、现代 Chart Design System、结构化 Annotation 与 HTML 交互；先 Contract/双 fixture/跨媒介视觉候选，不以凑图数替代证据 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -431,6 +432,7 @@ H4 门禁：
 - 重复可见 dimension label fixture 不会静默生成前 N 行品类图；唯一 label fixture 保持 Chart，evidence refs 精确绑定所渲染数据。
 - 同一 Golden Journey 的物理不变量继续全 PASS，三个 P0 均通过视觉和自动断言；否则 H4 继续失败。
 - P1、移动端和 M1A 不在本工作包范围。
+- 用户在 H4 实施期间新增“专业报告多图、现代样式、交互与标注”方向，已评估为独立 `REQ-2026-08-24-009 / H5`。H4 只保留重复 label fail-closed，不在 P0 修复中仓促加入自由图表 DSL 或视觉大重写。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

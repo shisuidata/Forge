@@ -454,3 +454,46 @@ ID / 标题 / 日期 / 状态
 ### 决策
 
 用户于 2026-08-24 明确确认修复 Golden Journey P0。按 P0-A PDF leak → P0-B same-page completion → P0-C Chart grain/quality gate 的顺序进入唯一主动 Plan；完成后重跑同一桌面 Golden Journey。P1 继续保留在需求池，不自动扩大本轮范围。
+
+---
+
+## REQ-2026-08-24-009：专业报告的多图叙事、现代图表与证据绑定交互
+
+- **提出日期**：2026-08-24
+- **当前状态**：`assessed`
+- **原始需求**：专业报告目前过于模板化，图表数量少、样式不够现代、交互有限；图表需要有标注，让图更生动、更有业务价值。
+
+### 第一性原理评估
+
+- **需求成立，但“更多图表”不是独立价值目标**。一张图必须回答一个不同的决策问题；把同一组数据重复画成柱图、折线图和饼图只会制造视觉噪声与虚假丰富度。
+- **当前 P0 fail-closed 不能回退**。维度 grain、聚合、单位或 Evidence 不可靠时，宁可不画图；现代样式和动画不能掩盖错误数据。
+- **模型不能自由输出 HTML/CSS/脚本/颜色**。Pi/Skill 只能提交受 Schema 约束、Evidence-bound 的 Chart/Annotation proposal；Forge deterministic Renderer 决定布局、视觉 token、交互和 PDF/PPTX 降级。
+- **媒介需要分层**：HTML 可以支持 hover/focus tooltip、系列显隐、图表/明细切换、证据定位和有界筛选；PDF/PPTX 必须投影为静态、完整、可理解的注释，不能依赖 hover 才能读懂。
+- **标注必须有来源**：Top/Bottom、异常、拐点、目标线、同比差异和关键贡献可由确定性规则生成；业务解释标注必须引用 Analysis finding 和 QueryResult evidence，不能由 Renderer 创造结论。
+
+### 建议产品切片
+
+1. 定义 `ChartArtifact v2`：增加 `purpose/grain/encoding/series/transform/annotation/evidence/quality_status`，只支持有界类型和确定性变换。
+2. 引入“图表计划”而不是固定一个图：根据 QueryResult + Analysis 选择 1–4 个互补视图，例如排名、趋势、结构占比、差异/贡献；数据不支持时允许 0–1 个，不凑数量。
+3. 建立统一 Chart Design System：编辑式排版、业务友好单位、直接标签、克制配色、可访问对比度和低噪声网格；禁止 3D、装饰性渐变和无意义动画。
+4. HTML 增加渐进式交互，且键盘/ARIA 可用；默认首屏已经完整，不把核心结论藏在 tooltip。
+5. Annotation 与 finding/evidence 双向定位；技术报告记录 annotation rule、source rows 和 transform lineage。
+6. PDF/PPTX 从同一 ChartArtifact v2 确定性投影，保持数据、标注和结论一致；旧 Report revision 不重写。
+
+### 验收与反证
+
+- 每张图必须声明决策目的、grain、单位、变换和 Evidence；无法声明则拒绝生成。
+- 同一数据不得仅为增加数量重复成多种图型；每张图需有非重复问题和阅读结论。
+- HTML 交互在禁用 JS、键盘操作和打印时仍保留核心信息；PDF/PPTX 不丢关键 Annotation。
+- 图表值、标签、排序、Top-N/Other 聚合与 QueryResult 可复算一致；重复 label、截断结果、Critical Quality 必须失败关闭或显式降级。
+- 用至少两个真实场景证伪“固定模板”：横截面品类比较 + 时间趋势/多系列结构。单场景不能证明通用 Chart Planner。
+
+### 边界与建议
+
+- **优先级**：P1，高业务价值，但不应混入正在收口的 H4 P0 安全修复。
+- **建议顺序**：先完成 H4 并复验 fail-closed，再以 H5 先做 Contract/fixture/静态视觉候选；用户确认视觉和交互方向后实现 Renderer，不直接大改报告全栈。
+- **当前不做**：移动端；自由 Vega/Plotly/任意脚本注入；模型直接决定颜色/CSS；为凑图数自动补查数据库；原地修改已发布报告。
+
+### 待用户确认
+
+是否接受将该需求作为 H5 独立工作包：先提交 `ChartArtifact v2 + 两个真实 fixture + HTML/PDF/PPTX 视觉候选`，通过视觉门禁后再进入完整交互实现？
