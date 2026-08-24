@@ -183,8 +183,9 @@ ID / 标题 / 日期 / 状态
 
 - NAS SSH host `dev` 的部署仓库为 `~/services/forge-m4.1/source`，当前固定在 `3bd20a6`，工作树干净。
 - `forge-m41-api.service` 与 `forge-m41-pi.service` 当前均为 user systemd active；Forge 监听 NAS 内网地址，Pi 监听 loopback。
-- 本地 `main` 当前为 `af36001`，相对 NAS 增加企业演进/Governance Contract baseline、Web 任务 DAG/实时流和 Contract 评审修订。
-- Governance Contract 当前无生产调用方，部署后的可见行为变化主要是 `/chat` 右侧只读任务视图；不涉及数据库迁移或凭证修改。
+- 本地 `main` 当前为 `c660029`，相对 NAS 增加企业演进/Governance Contract baseline、Web 任务 DAG/实时流、Contract 评审修订和 M0.5 review-only 语义门禁。
+- 只读预检显示 NAS 当前无 `running` StageAttempt；仍有等待审批、待分析、待报告和 needs-input Task，重启不得推进或重放这些任务。
+- Governance Contract 与 M0.5 validator 当前无生产调用方，部署后的可见行为变化主要是 `/chat` 右侧只读任务视图；不涉及数据库迁移或凭证修改。
 
 ### 建议部署方案
 
