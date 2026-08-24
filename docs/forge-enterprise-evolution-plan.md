@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 R1 实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -74,6 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
+| H2 长文本语义化阅读体验 | R1 实施中，R2 已批准待视觉门禁 | `REQ-2026-08-24-006`：先完成 Chat 安全 Markdown 与语义投影并由用户确认视觉方向，再将同一层级映射到业务 Web/PDF/PPTX；技术报告仅做基础排版 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -299,6 +300,41 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - NAS 原兼容模型无 SQL 隔离 smoke：2 行 `33.292s`、107 行/3 列 `119.232s`，均生成合法 Artifact 和 progress phase；修复前同规模为 `229.106s` 成功与 `240.051s` timeout。
 - 验证：Python `550 passed / 24 skipped`；Pi `93 passed`、typecheck、npm audit 通过；Web 定向测试和 Playwright 通过；NAS `45fcc87` Forge/Pi health/readiness 正常。
 - 遗留风险：119s 仍是长响应；在真实 `analysis_artifact_gate`、场景 P95 和 rollback 通过前，不激活独立 Analysis Binding，不宣称延迟问题已被任意输入完全消除。
+
+## H2：对话与报告的长文本语义化阅读体验
+
+> Requirement：[`REQ-2026-08-24-006`](requirements-pool.md#req-2026-08-24-006对话与报告的长文本可读性和语义化强调) · 决策：`accepted_with_changes`
+
+### H2.1 共同设计与信任边界
+
+- Artifact 继续保存事实、建议、限制、优先级、置信度和证据关系；Renderer 只负责表示，不创造或重新分类业务结论。
+- 模型不能输出任意 HTML/CSS、脚本、颜色或组件类型。渠道只接受安全 Markdown 子集；业务强调色和 callout 由固定语义标签与 design token 决定。
+- 普通下划线不作为强调，避免与链接混淆；强调使用字重、斜体、inline code、层级标题、左边框、背景和明确标签。
+- Web、PDF 和 PPTX 必须保持同一信息优先级，但允许按媒介能力使用不同布局；技术报告只改善排版，不加入业务化结论组件。
+
+### H2.2 R1 Chat readability（当前实施切片）
+
+1. 完善 Channel Renderer 对 `AdvisoryArtifact` 和 `AnalysisArtifact` 的确定性投影：summary、findings、recommendations、assumptions、limitations、open questions 和 deliverables 不再被静默丢弃；使用固定标题和 blockquote 标签表达语义。
+2. 扩展 Web Chat 现有无依赖 Renderer，安全支持 H2/H3、strong、emphasis、inline code、http(s)/站内链接、ordered/unordered/nested list、fenced code 和连续 blockquote；原始 HTML/script 一律作为纯文本。
+3. 由 Web 将固定的“核心说明/注意/限制/待确认”等标签映射为 `info/success/warning/limitation` callout；模型不能自行指定颜色。
+4. 统一正文最大阅读宽度、行高、段距、列表缩进、代码换行和移动端密度；保留链接下划线、键盘可达性、外链 `noopener noreferrer` 与 reduced-motion。
+
+R1 门禁：截图对应的指标口径长文、分析长文、SQL code block、原始 HTML 注入、站内/外链接、390px 移动端与桌面端均有自动或 Playwright 验证；0 console/page error。R1 完成后先由用户确认视觉方向，再进入 R2，不在未经确认时同时重做所有报告媒介。
+
+### H2.3 R2 Report readability（已批准，等待 R1 视觉门禁）
+
+1. 业务 Web/PDF：同一确定性 HTML 使用 editorial hierarchy；Executive Summary、关键发现、建议、限制/风险和证据说明分别映射为固定组件，confidence/priority 使用文字+颜色双编码。
+2. PPTX：按内容长度拆页；摘要、发现、建议和限制使用不同版式及文字标签，避免整页同级 bullet，不裁掉 Artifact 内容。
+3. 技术报告：只改善 heading、code、table、line-height、打印和长字段换行，不使用业务化 callout。
+4. 保持 immutable Report Bundle、分享 ACL、PDF/PPTX 下载审计与 HTML/PDF 同源；不修改 SQL、查询、报告事实或 Artifact Contract。
+
+R2 门禁：HTML 与 PDF 视觉层级一致；PPTX 无文字溢出且信息不丢失；高对比度、打印、窄屏和长中英文内容通过；现有报告 idempotency、share scope、下载审计与 forbidden-content 门禁不回归。
+
+### H2.4 回滚与退出条件
+
+- R1 可独立回滚到旧安全文本 Renderer，不修改 Task/Artifact Store；R2 只影响新生成的不可变 Report revision，不原地改写已发布文件。
+- 如果固定语义字段无法表达所需层级、只能依靠关键词正则猜测，则暂停并重新评估版本化 Presentation Block Contract；本轮不提前新增通用 RichText DSL。
+- H2 不改变 Pi/Forge/Skill 职责、Runtime Governance Coverage、模型 Binding、数据库访问或审批边界。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

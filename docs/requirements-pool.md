@@ -272,7 +272,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-006：对话与报告的长文本可读性和语义化强调
 
 - **提出日期**：2026-08-24
-- **当前状态**：`assessed`
+- **当前状态**：`accepted_with_changes`
 - **原始需求**：像截图中的长文本，应通过加粗、下划线、斜体、强调色或 callout 提升阅读体验；不仅用于对话，也用于报告。
 
 ### 真实问题与目标结果
@@ -311,8 +311,12 @@ ID / 标题 / 日期 / 状态
 - 至少用截图对应的指标口径长文、分析长文、限制/歧义 callout、移动端、打印/PDF 和一份 PPTX 做视觉回归；同时测试 HTML/script 被当作纯文本、外链安全属性和既有 SQL code block 不回归。
 - **可证伪条件**：若视觉层级只能靠 Renderer 猜关键词，或 Web/PDF/PPTX 同一语义产生冲突表达，则暂停扩展并重新评估版本化 Presentation Block Contract，而不是继续堆正则。
 
-### 待用户确认
+### 用户确认
 
-1. “报告”是否确认包含业务 Web 报告、PDF 和 PPTX；技术报告只做基础排版一致性，不进行业务化 callout？
-2. 是否接受“普通下划线不作为强调；颜色与 callout 由结构化语义和设计系统决定，模型不能自由选择”的边界？
-3. 建议顺序为先 `R1 Chat`，确认视觉方向后再做 `R2 Web/PDF/PPTX`；是否按此顺序进入 Plan？
+- **确认日期**：2026-08-24
+- **决策**：`accepted_with_changes`。用户确认按建议边界实施：报告覆盖业务 Web、PDF 与 PPTX，技术报告只做基础排版；普通下划线不作为任意强调，颜色/callout 由结构化语义和 design token 决定；按 `R1 Chat → 视觉确认 → R2 Web/PDF/PPTX` 顺序推进。
+
+### 关联
+
+- **Plan**：`forge-enterprise-evolution-plan.md` H2。
+- **Architecture**：不改变职责边界；继续由渠道 Renderer 和确定性 Report Renderer 负责表示，Artifact/Pi/Forge 真相源不变。
