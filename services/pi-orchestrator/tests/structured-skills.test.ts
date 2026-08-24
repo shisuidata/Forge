@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
-import { PiStructuredSkillExecutor } from "../src/skill-executor.js";
+import { classifyStageFailure, PiStructuredSkillExecutor } from "../src/skill-executor.js";
 import {
   ArtifactSubmissionError,
   createAdvisorySubmissionTool,
@@ -143,33 +139,29 @@ test("Pi Skill executor captures the terminating structured tool result", async 
   );
 });
 
-test("managed Analysis fails closed without a capability-gated active binding", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-analysis-binding-"));
-  const databasePath = join(directory, "model-control.db");
-  const database = new DatabaseSync(databasePath);
-  database.exec(`
-    CREATE TABLE model_profile_revisions (
-      revision_id TEXT PRIMARY KEY, config_json TEXT NOT NULL,
-      validation_report_json TEXT NOT NULL
-    );
-    CREATE TABLE active_model_bindings (
-      scope TEXT PRIMARY KEY, binding_version INTEGER NOT NULL,
-      revision_id TEXT NOT NULL
-    );
-  `);
-  database.close();
+test("Provider failures are bounded and stop pointless Artifact correction", async () => {
+  assert.equal(classifyStageFailure("429 AccountQuotaExceeded"), "quota_exhausted");
+  assert.equal(classifyStageFailure("too many requests"), "rate_limited");
+  assert.equal(classifyStageFailure("401 unauthorized"), "authentication_failed");
+  assert.equal(classifyStageFailure("context length exceeded"), "context_limit");
+  assert.equal(classifyStageFailure("service unavailable"), "provider_unavailable");
+  assert.equal(classifyStageFailure("operation aborted"), "aborted");
+  assert.equal(classifyStageFailure("unexpected provider response"), "unknown_provider_error");
+  let promptCalls = 0;
   const executor = new PiStructuredSkillExecutor({
-    config: loadConfig({
-      PI_MODEL_CONTROL_DB_PATH: databasePath,
-      PI_MODEL_PROVIDER: "fallback-provider",
-      PI_MODEL_ID: "fallback-model",
-      PI_ORCHESTRATOR_AGENT_DIR: directory,
+    config: loadConfig({}),
+    sessionFactory: async () => ({
+      async prompt() { promptCalls += 1; },
+      async abort() {},
+      failureCategory: () => "quota_exhausted",
+      dispose() {},
     }),
   });
   await assert.rejects(
     () => executor.analyze(task(), { question: "分析", queryResults: [queryResultArtifact()] }),
-    /requires a capability-gated active model binding/,
+    /Model execution failed: quota_exhausted/,
   );
+  assert.equal(promptCalls, 1);
 });
 
 test("Pi Skill executor emits sparse model and Artifact progress without streaming content", async () => {
@@ -180,7 +172,9 @@ test("Pi Skill executor emits sparse model and Artifact progress without streami
       let listener: ((phase: "model_responding" | "artifact_submitted") => void) | undefined;
       return {
         subscribeProgress(next) { listener = next; return () => { listener = undefined; }; },
-        async prompt() {
+        async prompt(prompt) {
+          assert.match(prompt, /Markdown.*方法参考/);
+          assert.match(prompt, /findings 最多 6 条/);
           listener?.("model_responding");
           listener?.("model_responding");
           listener?.("artifact_submitted");

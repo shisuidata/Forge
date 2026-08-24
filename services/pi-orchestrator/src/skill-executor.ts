@@ -73,15 +73,37 @@ function renderReportMarkdown(payload: RenderedOutputPayload): string {
   return lines.join("\n");
 }
 
+export type StageFailureCategory =
+  | "quota_exhausted"
+  | "rate_limited"
+  | "authentication_failed"
+  | "context_limit"
+  | "provider_unavailable"
+  | "aborted"
+  | "unknown_provider_error";
+
 interface StageSession {
   prompt(text: string): Promise<void>;
   abort(): Promise<void>;
   subscribeProgress?(listener: (phase: StageExecutionProgress["phase"]) => void): () => void;
+  failureCategory?(): StageFailureCategory | null;
   dispose(): void;
 }
 
 export interface StageExecutionProgress {
   phase: "model_responding" | "artifact_submitted";
+}
+
+export function classifyStageFailure(message: string | undefined): StageFailureCategory | null {
+  if (message === undefined || message.trim().length === 0) return null;
+  const value = message.toLowerCase();
+  if (/accountquotaexceeded|insufficient[_ ]quota|quota.*(?:exhaust|exceed)|额度.*(?:耗尽|不足)/.test(value)) return "quota_exhausted";
+  if (/rate.?limit|too many requests|\b429\b/.test(value)) return "rate_limited";
+  if (/unauthori[sz]ed|invalid.*(?:api.?key|credential)|\b401\b|authentication/.test(value)) return "authentication_failed";
+  if (/context.*(?:length|limit|window)|maximum.*tokens|too many tokens/.test(value)) return "context_limit";
+  if (/abort|cancel/.test(value)) return "aborted";
+  if (/unavailable|overload|fetch failed|network|\b5\d\d\b/.test(value)) return "provider_unavailable";
+  return "unknown_provider_error";
 }
 
 export type StageSessionFactory = (options: {
@@ -241,6 +263,8 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
         prior_analysis: input.priorAnalysis ?? null,
         evidence_rule:
           "findings.evidence_refs 只能使用 rows 中给出的 evidence_ref；相关性不得表述为确定因果；不得使用‘可排除、已经排除、直接导致、证明了、确定原因、直接来源、必然导致’等过度确定措辞。缺少根因证据时保留 hypotheses/limitations/suggested_queries。",
+        artifact_submission_rule:
+          "Skill 文档中的 Markdown 输出格式仅是分析方法参考。不要先写 Markdown 或解释，直接调用 submit_analysis_artifact。findings 最多 6 条、hypotheses 最多 4 条、suggested_queries 最多 5 条；没有证据的内容放入 hypotheses 或 limitations。",
       }),
       skillName: "business-root-cause-analysis",
       tool: submission.tool,
@@ -422,14 +446,21 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
           `Organization: ${options.task.org_id}`,
           `Team: ${options.task.team_id}`,
           `必须调用唯一的 ${options.tool.name} 工具提交最终 Artifact；禁止只输出自由文本。`,
+          "Skill 中的 Markdown/表格输出示例只表示内容方法，不是本次输出格式；本次唯一输出契约是终止型 Artifact Tool。",
           "用户输入：",
           options.message,
         ].join("\n"),
       );
+      const firstFailure = session.failureCategory?.();
+      if (firstFailure) throw new SkillExecutionError(`Model execution failed: ${firstFailure}`);
       if (!options.isSubmitted() && !isAborted(options.signal)) {
         await session.prompt(
-          `上一次没有提交 Artifact。现在必须调用 ${options.tool.name}；不要解释，不要输出自由文本。`,
+          `上一次没有提交 Artifact。现在必须立即调用 ${options.tool.name}；不要解释，不要输出 Markdown 或自由文本。`,
         );
+        const correctionFailure = session.failureCategory?.();
+        if (correctionFailure) {
+          throw new SkillExecutionError(`Model execution failed: ${correctionFailure}`);
+        }
       }
     } finally {
       options.signal?.removeEventListener("abort", abort);
@@ -445,9 +476,6 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
   }): Promise<StageSession> {
     const modelStage = skillModelStage(options.skillName);
     const stageBinding = resolveStageModelBinding(this.#config, modelStage);
-    if (modelStage === "analysis" && this.#config.modelControlDbPath !== undefined && stageBinding === undefined) {
-      throw new SkillExecutionError("Analysis Stage requires a capability-gated active model binding");
-    }
     const provider = stageBinding?.provider ?? this.#config.piModelProvider;
     const modelId = stageBinding?.modelId ?? this.#config.piModelId;
     if (provider === undefined || modelId === undefined) {
@@ -499,6 +527,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
           listener("model_responding");
         }
       }),
+      failureCategory: () => classifyStageFailure(session.agent.state.errorMessage),
       dispose: () => session.dispose(),
     };
   }
