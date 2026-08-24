@@ -465,7 +465,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-009：专业报告的多图叙事、现代图表与证据绑定交互
 
 - **提出日期**：2026-08-24
-- **当前状态**：`r0_visual_gate_failed`
+- **当前状态**：`engine_bakeoff_active`
 - **原始需求**：专业报告目前过于模板化，图表数量少、样式不够现代、交互有限；图表需要有标注，让图更生动、更有业务价值。
 
 ### 第一性原理评估
@@ -516,6 +516,8 @@ R0 已完成并记录于 `docs/chart-storytelling-r0-evidence-2026-08-24.md`：C
 下一版 R0 必须删除报告内的候选宣传 Hero 和伪按钮式元信息；首屏直接呈现报告主题、数据范围/新鲜度、质量、执行摘要和第一项决策内容。图表必须提供即时可见的 tooltip、明确的 series 控制、图表/数据表切换和 Annotation → Evidence 操作反馈，不能依赖原生 SVG `<title>` 或让用户先滚动一整屏。
 
 用户进一步明确“产品不要重复造轮子”。因此当前手写 SVG/JavaScript Renderer 只能作为一次性 Contract harness，禁止演化为生产图表引擎。H5 修订版必须先做 library-first 选型门禁：优先比较 Apache ECharts、Vega/Vega-Lite 与 AntV G2；只有用户接受商业授权时才把 Highcharts/AG Charts 纳入最终候选。Forge 只保留不可替代的 `ChartArtifact v2 → allowlisted library spec` 薄适配、Evidence bridge、质量 Gate 和跨媒介一致性测试，不自研 tooltip、legend、zoom、selection、annotation geometry 或 chart layout。修订版再次通过用户门禁前，R1 生产 Skills/Prompt/Tool/Renderer 同版本切换仍未批准。
+
+用户已确认继续执行开源 engine bake-off。第一门只在隔离的开发工具包中，用相同的品类横截面和月度多系列 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2 的交互可发现性、Evidence event bridge、Annotation、SVG/静态导出、无障碍 fallback、bundle/加载成本和 CSP 风险；不把三个库接入生产 Pi package，不并行维护三个生产 Renderer。
 
 ---
 
