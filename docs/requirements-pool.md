@@ -272,7 +272,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-006：对话与报告的长文本可读性和语义化强调
 
 - **提出日期**：2026-08-24
-- **当前状态**：`implementing`
+- **当前状态**：`verified`
 - **原始需求**：像截图中的长文本，应通过加粗、下划线、斜体、强调色或 callout 提升阅读体验；不仅用于对话，也用于报告。
 
 ### 真实问题与目标结果
@@ -342,7 +342,11 @@ ID / 标题 / 日期 / 状态
 - **用户决策**：明确要求部署当前 R1/R2 到 NAS。
 - **部署方案**：沿用已验证的 Git bundle fast-forward；部署前确认无 running StageAttempt 并在线备份可变 SQLite；不读取或修改 Secret、Identity Map、Registry、数据库 URL/凭证；不重装未变化依赖；重启 Forge API/Pi 后验证 health/readiness、认证门禁和目标机隔离报告 HTML/PDF/PPTX exporter。
 - **回滚**：代码回滚到 NAS 当前 commit；状态库只在部署异常且确有必要时使用部署前备份，不自动推进、重放 SQL 或覆盖现有不可变报告。
-- **当前状态**：等待部署验证完成后恢复为 `verified`。
+- **部署结果**：部署前 NAS `caa8b69`、工作树干净、Forge/Pi active、running StageAttempt=0；10 个可变 SQLite 使用 online backup 保存到 `~/services/forge-m4.1/backups/readability-20260824T094102Z/`。
+- 未 push 远端；通过临时 Git bundle fast-forward 到 `9fca1ea`，bundle 已从本地/NAS `/tmp` 删除。依赖 manifests 未变化，未重装依赖，未读取或修改 Secret、Identity Map、Registry、数据库 URL/凭证。
+- Forge API/Pi 重启后 active，Forge health 与 Pi readiness 均为 `ok`；匿名 `/chat`=302、匿名 `/flow`=401；部署后 running StageAttempt=0、NAS 工作树干净。
+- NAS 使用 `/usr/bin/google-chrome` 完成无客户数据的隔离 ReportStore smoke：HTML `published`、PDF `ready`（468,786 bytes）、PPTX `ready`（42,333 bytes）；临时目录退出后自动删除，无 SQL/Task 重放。
+- **回滚点**：`caa8b69`；本次未触发回滚。当前需求恢复为 `verified`，认证后的 Chat/报告业务视觉可由用户继续人工观察。
 
 ### 关联
 
