@@ -455,7 +455,8 @@ R0 交付范围：
    - 时间趋势/多系列：支持趋势、目标线/拐点/异常标注和系列对比，时间 grain 连续可验证。
 3. 生成一个自包含 HTML 视觉候选，同一报告内只放回答不同决策问题的 2–4 张图；默认正文已完整，候选交互只做无副作用的 tooltip/focus、series toggle、table fallback 和 Evidence 定位演示。
 4. 从同一 fixture/Chart v2 候选确定性生成 PDF/PPTX 视觉候选；静态媒介保留关键 annotation、单位、来源和数据质量状态，不依赖 hover。
-5. 使用 Schema tests、确定性复算、浏览器 DOM/ARIA/console/print、PDF/PPTX 内容与视觉审查建立 R0 evidence pack；由用户确认视觉、图表价值和交互方向。
+5. 输出生产影响与迁移清单：`business-root-cause-analysis`、`data-analysis-report-writer`、Pi Structured Artifact Tool、`skill-executor` Prompt/约束、Skills package revision、Model compatibility、Renderer/Exporter 必须如何同版本切换；R0 只设计和验证 Contract，不修改已固定的生产 Skill/Prompt。
+6. 使用 Schema tests、确定性复算、浏览器 DOM/ARIA/console/print、PDF/PPTX 内容与视觉审查建立 R0 evidence pack；由用户确认视觉、图表价值和交互方向。
 
 R0 非目标与门禁：
 
@@ -463,7 +464,8 @@ R0 非目标与门禁：
 - 不让模型输出 HTML/CSS/script/颜色；Renderer 只消费结构化语义。
 - 不为凑数量重复同一数据；每张图必须声明非重复 `purpose`，并能从 fixture evidence 确定性复算。
 - 重复 label、截断结果、未知 unit/grain、Annotation 无 evidence、Top-N/Other 对不上原始总量时，Contract/fixture test 失败关闭。
-- 用户未通过 R0 视觉门禁前，不进入 R1 生产 Renderer 与完整交互实现。
+- 用户未通过 R0 视觉门禁前，不进入 R1 生产 Renderer、完整交互或 Skills/Prompt 修改。
+- R1 生产切换时，Analysis/Report Skills、Structured Tool Schema、`skill-executor`、Skills package revision、Chart Contract 和 Renderer 必须作为一个兼容矩阵门禁同步发布；任何一项仍是旧版本则失败关闭。Skill/Prompt 只输出结构化语义与 Evidence，不控制视觉 token、HTML/CSS/script 或颜色。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

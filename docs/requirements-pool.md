@@ -493,10 +493,18 @@ ID / 标题 / 日期 / 状态
 - 图表值、标签、排序、Top-N/Other 聚合与 QueryResult 可复算一致；重复 label、截断结果、Critical Quality 必须失败关闭或显式降级。
 - 用至少两个真实场景证伪“固定模板”：横截面品类比较 + 时间趋势/多系列结构。单场景不能证明通用 Chart Planner。
 
+### Skills 与 Prompt 同步边界
+
+- 当前生产 `business-root-cause-analysis` 与 `data-analysis-report-writer` Skills 仍固定在已发布 Skills package revision；Chart v1 主要由 Pi deterministic builder 从 QueryResult 生成，并不是现有报告 Skill 自由生成图表。
+- **R0 视觉候选阶段不修改生产 Skills/Prompt**：候选由固定 fixture + ChartArtifact v2 Contract + deterministic candidate renderer 生成，避免视觉尚未确认时让生产模型输出和 Artifact 漂移。
+- **R1 进入生产前必须同步修改并固定 revision**：分析 Skill 增加 chart-worthy finding、quality status 和 evidence-bound annotation candidate；报告 Skill/Tool 增加非重复 decision question、Chart Story Plan 与跨媒介叙事顺序；Pi Structured Artifact Tool、`skill-executor` 约束、Skills package revision、Compatibility Gate、负向 fixture 和 Renderer 必须同一版本门禁通过。
+- Prompt/Skill 只决定结构化语义和证据，不得控制 HTML/CSS/script、颜色或任意图表库参数；视觉与交互仍由 deterministic Renderer 负责。
+- 若 Skills package、Structured Tool Schema、Renderer 支持版本不一致，H5 Runtime 必须失败关闭，不能回退为自由文本猜测或静默使用旧 Chart v1 冒充 v2。
+
 ### 边界与建议
 
 - **优先级**：P1，高业务价值，但不应混入正在收口的 H4 P0 安全修复。
-- **建议顺序**：先完成 H4 并复验 fail-closed，再以 H5 先做 Contract/fixture/静态视觉候选；用户确认视觉和交互方向后实现 Renderer，不直接大改报告全栈。
+- **建议顺序**：先完成 H4 并复验 fail-closed，再以 H5 先做 Contract/fixture/静态视觉候选；用户确认视觉和交互方向后实现 Skills/Prompt/Structured Tool/Renderer 的同版本生产切换，不直接大改报告全栈。
 - **当前不做**：移动端；自由 Vega/Plotly/任意脚本注入；模型直接决定颜色/CSS；为凑图数自动补查数据库；原地修改已发布报告。
 
 ### 决策
