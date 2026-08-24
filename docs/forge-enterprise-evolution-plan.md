@@ -271,20 +271,24 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 
 ### H1.2 实施
 
-1. `pi.analysis` 必须使用 capability-gated ActiveModelBinding；候选为现有已验证 Revision，不创建或读取新 Secret，不影响 SQL Critical scopes。
-2. Analysis 独立 Revision 固定 provider/model/max output tokens；激活和 rollback 继续使用 Model Control CAS/Audit。
+1. Production Analysis Adapter 将 Skill 的 Markdown 输出示例解释为方法参考，明确要求模型直接调用唯一 `submit_analysis_artifact`，并限制 findings/hypotheses/suggested queries 的数量；不得先生成自由文本长文。
+2. Pi SDK session 的 Provider 错误即使 `prompt()` resolve 也必须映射为有界类别；quota/rate-limit/auth/provider/context/abort 不得误报为 Artifact omission，也不得触发无意义 correction。
 3. StageAttempt 以向后兼容可空字段记录 `deadline_at`、`progress_phase`、`first_model_activity_at`、`tool_submitted_at`；Pi SDK session event 只提升稀疏生命周期时间，不保存 streaming text/thinking。
 4. Web flow allowlist 只投影上述业务安全字段；浏览器本地计算 elapsed/remaining，60s 后显示“耗时较长但仍在安全窗口”，不伪造百分比或新增 heartbeat Event。
-5. timeout 继续回到 `analysis_retry`；不得自动重跑 SQL、自动切未验证模型或把长耗时误标为成功。
+5. 通用 Tool capability gate 不再作为 `pi.analysis` 的充分条件。只有真实 `submit_analysis_artifact` smoke 通过后才能激活独立 Binding；失败候选立即 rollback，不修改 SQL Critical scopes、Secret 或全局 catalog。
+6. timeout 继续回到 `analysis_retry`；不得自动重跑 SQL、自动切未验证模型或把长耗时误标为成功。
 
 ### H1.3 验收与回滚
 
+实施发现：`deepseek-official` 候选在 Pi 无可用 credential；`openai/deepseek-v4-flash` 与 bounded `ark-code-latest` 虽通过 generic Tool smoke，但真实 Analysis Artifact smoke 均未提交 Artifact。NAS 已完整恢复到 `e4e3cb0`、无 Analysis Binding、原 catalog 和健康服务。该证据否证 generic gate 的充分性，后续不得强行激活候选。
+
 - 旧 StageAttempt 缺少新字段仍可读取；SQLite user_version 不变化。
 - 稀疏 progress 更新不写 Prompt、Tool payload、模型正文、Secret 或 hidden CoT。
-- Analysis Binding 缺失/漂移/门禁失效时失败关闭；不再静默使用全局 fallback。
+- Provider 错误类别可验证且不披露原始响应；Artifact correction 只在模型正常结束但未调用 Tool 时执行一次。
 - Web 正确展示 running、slow、deadline、terminal；键盘/移动端/reduced-motion 无回归。
-- Python/Pi/typecheck/audit/Playwright/NAS health 通过；用下一条真实 Analysis 观察 Artifact 成功、耗时和绑定 revision，不自动执行额外 SQL。
-- 代码回滚不删除已有 attempt JSON 字段；模型 Binding 可通过既有 CAS rollback 恢复，失败时保持 `ready_for_analysis`，不放宽授权。
+- `analysis_artifact_gate` 未通过前保持现有兼容模型路径并固定 revision；不得激活 generic-gate-only Binding。两个候选失败与自动回滚必须保留评审证据。
+- Python/Pi/typecheck/audit/Playwright/NAS health 通过；用隔离、无 SQL 的真实 Analysis smoke 验证 Artifact、耗时和阶段元数据。
+- 代码回滚不删除已有 attempt JSON 字段；失败时保持 `ready_for_analysis`，不放宽授权。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

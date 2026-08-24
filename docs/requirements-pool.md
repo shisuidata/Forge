@@ -233,16 +233,23 @@ ID / 标题 / 日期 / 状态
 
 ### 评估与已确认方案
 
-1. **执行可靠性**：为 `pi.analysis` 激活已有、通过 capability gate 的独立 Model Revision；不修改 SQL Critical Binding，不新增凭证。候选必须支持终止型 Artifact Tool，并可一键 rollback。
-2. **有界输出**：Analysis 使用独立 Revision 的 `max_output_tokens`，不再继承全局 16384 Token fallback；不通过直接篡改全局 `models.json` 解决。
+1. **Artifact-first 适配**：生产 Analysis Adapter 明确覆盖 Skill 中面向人工阅读的 Markdown 输出示例，要求模型不要先写正文，直接把方法映射到唯一 `submit_analysis_artifact`；限制 finding/hypothesis/suggested-query 数量，减少无效长输出。
+2. **失败分类**：Pi SDK `prompt()` 的 Provider 失败可能只进入 session state 而不 reject；Adapter 必须提取有界 `quota/rate_limit/auth/provider/context/aborted/unknown` 类别，禁止把 Provider 错误误报成“未提交 Artifact”并继续无效 correction。
 3. **可观测性**：StageAttempt 增加兼容可空的 `deadline_at / progress_phase / first_model_activity_at / tool_submitted_at`，只记录时间与阶段，不记录 Prompt、模型正文或 hidden CoT。
 4. **真实进度体验**：Web 根据服务端 started/deadline 显示 elapsed、剩余安全窗口和慢响应提示；只展示业务阶段名，不伪造百分比、不新增 Task 状态或心跳事件流。
-5. **失败边界**：超时继续回到 `analysis_retry`，不重放 SQL；候选模型不可用时明确失败，不回退到未固定的全局模型。
+5. **Binding 门禁修正**：通用 Tool capability gate 不能证明复杂 Analysis Artifact Tool 可用。两个通用 gate 通过的候选在真实 Analysis smoke 中均未提交 Artifact，已自动回滚；在新增 `analysis_artifact_gate` 前不得激活独立 `pi.analysis` Binding，也不得把 generic gate 冒充场景门禁。
+6. **失败边界**：超时继续回到 `analysis_retry`，不重放 SQL；当前兼容路径继续固定实际 model revision，不自动切换候选。
 
 ### 用户确认
 
 - **确认日期**：2026-08-24
 - **决策**：用户在查看诊断后明确要求修复。
+
+### 实施发现
+
+- 首个 `deepseek-official/deepseek-v4-flash` 候选 generic capability gate 通过，但 Pi credential 不可用，未进入真实任务并回滚。
+- 第二个 `openai/deepseek-v4-flash` 和受限输出的 `volcengine-coding-plan/ark-code-latest` 均通过 generic Tool smoke，但真实 `submit_analysis_artifact` smoke 未提交 Artifact；所有 Binding、catalog 和 NAS 代码已恢复到部署前 `e4e3cb0`，服务健康、无 SQL/Task 重放。
+- 该结果否证“通用 Tool smoke 足以批准 Analysis Binding”，修复方向改为 Artifact-first adapter、Provider failure 分类、真实进度和场景专用 gate；不能为了满足计划而强行激活失败候选。
 
 ### 关联
 
