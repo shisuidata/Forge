@@ -2,9 +2,11 @@
 
 ## 1. Verdict
 
-**R0 Contract / 双场景 / HTML-PDF-PPTX 视觉候选：PASS，等待用户视觉与信息价值门禁。**
+**R0 Contract / 双场景 / 跨媒介自动化：PASS；用户视觉与交互可发现性门禁：FAIL。**
 
-这不是 H5 Runtime 批准：生产 `ChartArtifact v1`、Analysis/Report Skills、Structured Tool、Skills package revision、Renderer 和 NAS 主链均未替换。R0 只证明一套有界 ChartArtifact v2 可以从同源 Evidence 生成四个非重复决策视图，并在 HTML、PDF 和 PPTX 中保持关键结论。
+这不是 H5 Runtime 批准：生产 `ChartArtifact v1`、Analysis/Report Skills、Structured Tool、Skills package revision、Renderer 和 NAS 主链均未替换。R0 只证明一套有界 ChartArtifact v2 可以从同源 Evidence 生成四个非重复决策视图，并在 HTML、PDF 和 PPTX 中保持关键结论；它没有证明当前页面结构具备可接受的产品体验。
+
+用户审阅截图后明确指出：首屏深绿色“从图表堆砌，到决策叙事”区域没有任何报告意义，且看不到任何交互。该判断成立：候选把设计说明误当成产品报告 Hero，占据接近整屏；真实图表和 Evidence 操作在首屏以下，原生 SVG tooltip 又缺少即时反馈；底部元信息使用按钮外观却不可点击。自动化验证“控件能工作”不能推翻用户“控件不可发现”的失败结论。
 
 ## 2. 实现范围
 
@@ -113,7 +115,7 @@ R1 不能只替换 Renderer。以下组件必须作为一个发布单元固定 r
 
 ## 7. 用户门禁
 
-请用户分别判断：
+首轮用户门禁已判定 FAIL。修订版必须先完成：删除候选宣传 Hero/伪按钮元信息；首屏直达报告主题、数据范围与新鲜度、质量、执行摘要和第一项决策内容；使用可见 custom tooltip、明确 series 控制、图表/数据表切换与 Evidence drawer feedback。完成后再请用户分别判断：
 
 1. 四张图是否各自提供了不同且值得保留的决策信息；
 2. 视觉是否达到 Forge 专业报告的默认基线；

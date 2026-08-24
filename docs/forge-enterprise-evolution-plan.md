@@ -77,7 +77,7 @@ GTM：Data-Team Led
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
-| H5 Evidence-bound Chart Storytelling | R0 候选完成，待用户视觉门禁 | Contract、双正向 fixture、8 个负向 case、HTML/PDF/PPTX 候选与兼容矩阵已完成；R1 Skills/Prompt/Tool/Renderer 仍未批准 |
+| H5 Evidence-bound Chart Storytelling | R0 自动化通过、用户视觉门禁失败，修订中 | 首屏候选宣传 Hero 无决策价值且遮蔽交互；删除宣传壳，首屏直达报告摘要/第一决策，补 custom tooltip 和显式图表控制；R1 仍未批准 |
 | H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -444,7 +444,7 @@ H4 门禁：
 - NAS 已部署并保留回滚点 `~/services/forge-m4.1/backups/h4-p0-20260824T110913Z/`；隔离服务、override 和 tunnel 已清理，生产 health/readiness `ok`。完整证据见 [`golden-journey-p0-closure-2026-08-24.md`](golden-journey-p0-closure-2026-08-24.md)。
 - 剩余风险显式转入 P1/H5：当前 0 Chart 是正确的安全降级，不是理想专业报告体验。
 
-### H5：Evidence-bound Chart Storytelling（R0 候选完成，待用户视觉门禁）
+### H5：Evidence-bound Chart Storytelling（R0 自动化通过、用户视觉门禁失败，修订中）
 
 > Requirement：[`REQ-2026-08-24-009`](requirements-pool.md#req-2026-08-24-009专业报告的多图叙事现代图表与证据绑定交互) · 用户已确认第一门
 
@@ -477,6 +477,7 @@ R0 实际结果：
 - 完成自包含 HTML、5 页 PDF、5 页 16:9 PPTX 候选；HTML DOM/ARIA/交互/console/print PASS，PDF 无本地路径/header/footer 泄漏，PDF/PPTX 静态保留单位、Annotation、quality 和 Evidence。
 - 完成 Analysis/Report Skills、Structured Tool、`skill-executor`、Skills package、Contract、Renderer、Exporter 的 R1 同版本兼容矩阵。
 - 正式证据：[`chart-storytelling-r0-evidence-2026-08-24.md`](chart-storytelling-r0-evidence-2026-08-24.md)。R1 未自动批准，NAS 与生产 Skills/Prompt 未修改。
+- 用户视觉门禁反馈为 FAIL：首屏深绿色候选宣传 Hero 不承载报告决策内容，却占据接近整屏；交互位于首屏以下且缺少可发现反馈，元信息标签外观又误导为按钮。修订要求是删除宣传壳，首屏直接显示数据范围/质量/执行摘要/第一决策图，并把 tooltip、series 控制、table fallback 和 Evidence feedback 做成无需猜测的可见操作。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
