@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'" />
+  <title>品类组合与增长诊断 · Forge</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#report-content">跳到报告正文</a>
+  <header class="report-bar">
+    <a class="brand" href="#cover"><b>FORGE</b><span>报告</span></a>
+    <div class="report-state" id="report-state" aria-live="polite"><i></i>正在生成图表</div>
+    <nav aria-label="报告操作">
+      <a href="#decision-ranking">结论导航</a>
+      <button type="button" id="print-report">打印 / PDF</button>
+    </nav>
+  </header>
+
+  <main id="report-content">
+    <section class="report-intro" id="cover" data-slide="cover">
+      <div class="intro-copy">
+        <p class="kicker">经营复盘 · 2026 上半年</p>
+        <h1>品类组合与增长诊断</h1>
+        <p class="summary">销售并未形成单一品类垄断，六个品类覆盖 82.2%。四月短暂失速后，六月销售额达到阶段新高；4→6 月新增 174K，其中直营贡献 87K。</p>
+        <dl class="report-meta">
+          <div><dt>数据范围</dt><dd>2026-01—2026-06</dd></div>
+          <div><dt>数据新鲜度</dt><dd>截至 2026-06-30</dd></div>
+          <div><dt>数据质量</dt><dd><span class="quality-dot"></span>Ready · 未截断</dd></div>
+        </dl>
+      </div>
+      <aside class="executive-brief" aria-label="执行摘要">
+        <p>执行摘要</p>
+        <ol>
+          <li><b>不要单押第一名。</b><span>玩具礼品只领先运动户外 4.4%。</span></li>
+          <li><b>按六类配置核心资源。</b><span>第六类跨过 80% 经营覆盖线。</span></li>
+          <li><b>优先复盘直营动作。</b><span>直营贡献反转后新增量的 50%。</span></li>
+        </ol>
+      </aside>
+    </section>
+
+    <nav class="decision-index" aria-label="四项决策结论">
+      <a href="#decision-ranking"><span>01</span><b>头部差距</b><small>避免赢家错觉</small></a>
+      <a href="#decision-pareto"><span>02</span><b>经营覆盖</b><small>六类覆盖 82.2%</small></a>
+      <a href="#decision-trend"><span>03</span><b>目标偏差</b><small>四月失速、五月反转</small></a>
+      <a href="#decision-contribution"><span>04</span><b>增量来源</b><small>直营贡献 50%</small></a>
+    </nav>
+
+    <noscript>
+      <section class="no-script-note">
+        <b>图表交互当前不可用。</b>
+        核心结论和 Evidence 引用仍保留在每节右侧；请使用数据表或静态 PDF 查看完整数值。
+      </section>
+    </noscript>
+
+    <article class="story-section" id="decision-ranking" data-slide="ranking">
+      <header class="story-heading">
+        <div><span>01 · 品类排名</span><h2>头部接近，不应把第一名误读成绝对赢家</h2></div>
+        <p>决策问题：头部品类是否形成足够优势，值得单点押注？</p>
+      </header>
+      <div class="story-layout">
+        <section class="chart-panel">
+          <div class="chart-toolbar"><span>销售额 · CNY · 零基线</span><em>悬停查看数值 · 点击查看来源</em></div>
+          <div class="chart-host" id="chart-ranking" role="img" aria-label="品类销售额横向排名，第一名与第二名差距很小"></div>
+        </section>
+        <aside class="decision-note">
+          <p class="note-label">判断</p>
+          <strong>仅差 ¥31.8K</strong>
+          <h3>第一名只领先第二名 4.4%</h3>
+          <p>视觉重点放在差距而不是冠军色。建议以头部组合经营验证资源效率，而不是仅向玩具礼品倾斜。</p>
+          <div class="evidence-summary"><span>Evidence</span><code>qr_category_story#row:1–2</code></div>
+          <div class="note-actions"><button class="evidence-button" data-view="ranking">定位证据</button><button class="table-button" data-table="category">查看数据表</button></div>
+        </aside>
+      </div>
+    </article>
+
+    <article class="story-section" id="decision-pareto" data-slide="pareto">
+      <header class="story-heading">
+        <div><span>02 · 经营覆盖线</span><h2>经营六个品类，可以覆盖 82.2% 销售额</h2></div>
+        <p>决策问题：覆盖 80% 销售额需要经营多少品类？</p>
+      </header>
+      <div class="story-layout">
+        <section class="chart-panel">
+          <div class="chart-toolbar"><span>柱：销售额 · 线：累计贡献</span><em>图例可筛选 · 阈值静态可见</em></div>
+          <div class="chart-host" id="chart-pareto" role="img" aria-label="品类销售额与累计贡献帕累托图，第六类跨过百分之八十"></div>
+        </section>
+        <aside class="decision-note coral">
+          <p class="note-label">经营阈值</p>
+          <strong>6 类 / 82.2%</strong>
+          <h3>第六类跨过 80% 覆盖线</h3>
+          <p>前五类决定主要规模，第六类决定经营覆盖；尾部三类合计仅约 10%，应采用不同资源策略。</p>
+          <div class="evidence-summary"><span>Evidence</span><code>qr_category_story#row:1–6</code></div>
+          <div class="note-actions"><button class="evidence-button" data-view="pareto">定位证据</button><button class="table-button" data-table="category">查看数据表</button></div>
+        </aside>
+      </div>
+    </article>
+
+    <article class="story-section" id="decision-trend" data-slide="trend">
+      <header class="story-heading">
+        <div><span>03 · 目标偏差</span><h2>四月失速，五月完成反转</h2></div>
+        <p>决策问题：销售何时偏离目标，恢复是否持续？</p>
+      </header>
+      <div class="story-layout">
+        <section class="chart-panel">
+          <div class="chart-toolbar">
+            <span>月销售额 · CNY · Y 轴从 0 开始</span>
+            <div class="series-controls" aria-label="趋势系列控制">
+              <button data-series="实际" aria-pressed="true"><i class="actual"></i>实际</button>
+              <button data-series="目标" aria-pressed="true"><i class="target"></i>目标</button>
+            </div>
+          </div>
+          <div class="chart-host" id="chart-trend" role="img" aria-label="一月至六月实际销售额与目标，四月低于目标，五月和六月恢复"></div>
+        </section>
+        <aside class="decision-note coral">
+          <p class="note-label">偏差</p>
+          <strong>−6.4% → +9.1%</strong>
+          <h3>四月是唯一明显失速点</h3>
+          <p>五月重新超过目标，六月优势扩大。零基线避免夸大折线波动，异常值由标注而不是截断坐标强化。</p>
+          <div class="evidence-summary"><span>Evidence</span><code>qr_monthly_story#row:4,6</code></div>
+          <div class="note-actions"><button class="evidence-button" data-view="trend">定位证据</button><button class="table-button" data-table="monthly">查看数据表</button></div>
+        </aside>
+      </div>
+    </article>
+
+    <article class="story-section" id="decision-contribution" data-slide="contribution">
+      <header class="story-heading">
+        <div><span>04 · 增量贡献</span><h2>4→6 月新增 174K，直营贡献其中 50%</h2></div>
+        <p>决策问题：四月至六月的新增量分别来自哪些渠道？</p>
+      </header>
+      <div class="story-layout">
+        <section class="chart-panel">
+          <div class="chart-toolbar"><span>四月 baseline → 六月 comparison</span><em>柱长编码渠道新增量，不再展示存量结构</em></div>
+          <div class="chart-host" id="chart-contribution" role="img" aria-label="四月至六月各渠道销售新增量，直营八万七千、平台五万三千、门店三万四千"></div>
+        </section>
+        <aside class="decision-note">
+          <p class="note-label">增量拆解</p>
+          <strong>+¥87K / 50%</strong>
+          <h3>直营是反转后的最大增量来源</h3>
+          <p>三项渠道增量 87K + 53K + 34K = 174K，与总销售额变化严格对账。该图回答增量贡献，不再用存量面积暗示结论。</p>
+          <div class="reconcile"><span>直营 87K</span><span>平台 53K</span><span>门店 34K</span><b>= 174K</b></div>
+          <div class="evidence-summary"><span>Evidence</span><code>qr_monthly_story#row:4,6</code></div>
+          <div class="note-actions"><button class="evidence-button" data-view="contribution">定位证据</button><button class="table-button" data-table="contribution">查看增量明细</button></div>
+        </aside>
+      </div>
+    </article>
+
+    <footer class="report-footer">
+      <div><b>报告限制</b><p>仅使用唯一品类粒度、连续月粒度和未截断结果。当前数据支持描述差异与贡献，不支持因果判断。</p></div>
+    </footer>
+  </main>
+
+  <aside class="evidence-drawer" id="evidence-drawer" data-open="false" aria-live="polite">
+    <button class="drawer-close" aria-label="关闭 Evidence">×</button>
+    <p>数据来源</p>
+    <h2 id="evidence-label">选择图形或结论</h2>
+    <strong id="evidence-value"></strong>
+    <code id="evidence-refs"></code>
+    <small>引用定位到本报告使用的查询结果行。</small>
+  </aside>
+
+  <dialog id="data-dialog">
+    <form method="dialog"><button aria-label="关闭数据表">×</button></form>
+    <p class="kicker">数据表</p>
+    <h2 id="table-title">同源数据</h2>
+    <div class="table-scroll" id="table-content"></div>
+  </dialog>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

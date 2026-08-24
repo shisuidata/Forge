@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 R0 Contract/双 fixture/跨媒介视觉候选实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；W2 Web 主体内容规则已实施待视觉确认；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 ECharts focused candidate 已完成待视觉确认；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -73,11 +73,12 @@ GTM：Data-Team Led
 | M0.4 其余 Contract 草案 | 保留未开始 | 不阻塞 M1A；按 Coordination/Economics/Context/OAuth 的首次真实消费者 Just-in-Time 细化，避免当前过早冻结抽象 |
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
+| W2 Web 主体内容规则 | 已实施，待用户视觉确认 | 已审计 19 个模板并清理 Chat/Tasks/Registry/全局/登录页宣传与口号；H5 candidate 同步去除候选/Renderer 自述。静态回归和桌面候选通过，用户确认前不标记 verified。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
-| H5 Evidence-bound Chart Storytelling | Engine bake-off 完成，待确认 ECharts focused candidate | 三引擎严格 CSP/4 SVG/Evidence/static export 均通过；ECharts 在 bundle、延迟和 adapter 简洁度上胜出，Vega 留作治理参考，G2 停止；生产 R1 仍未批准 |
+| H5 Evidence-bound Chart Storytelling | ECharts focused candidate 完成，待用户视觉确认 | 4→6 月增量贡献改为 87K+53K+34K=174K；排名差距、零基线趋势、Pareto、allowlisted adapter、HTML/PDF/PPTX 门禁通过；period-delta Contract 缺口仍阻断生产 R1 |
 | H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -265,6 +266,25 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - 新消息、Presentation、Action 返回的 child Task 和最近任务恢复都会切换观察焦点；旧轮询通过 epoch 失效，不影响 Pi 执行。
 - 自动验证：Python `546 passed / 24 skipped`；Pi `88 passed`、TypeScript typecheck 通过；Web 定向测试 77 passed；桌面和 390px 移动端 Playwright 通过且 0 console/page error；网站构建和 `git diff --check` 通过。
 - 遗留边界：当前使用有界 polling；未来 PlanStep 超过 12 或出现大规模动态 Work Graph 时必须重新进入需求池评估布局与推送方案。
+
+## W2：Web 页面主体内容规则（跨切片门禁）
+
+> Requirement：[`REQ-2026-08-24-011`](requirements-pool.md#req-2026-08-24-011web-页面只呈现主体内容禁止宣传口号与营销文案) · 决策：`accepted`
+
+实施顺序：
+
+1. H5 ECharts focused candidate 先删除所有实验、宣传、营销和 Renderer 自我说明，只保留当前报告的标题、摘要、数据状态、决策内容、Evidence 与操作。
+2. 审计 `web/templates/` 的最终用户页面，区分业务主体、必要帮助与营销文案；输出命中清单，不靠宽泛关键词直接批量替换。
+3. 对确认命中项做小范围替换，保持路由、Task、Artifact、审批、身份和导航行为不变。
+4. 增加已拒绝短语的静态回归与桌面首屏视觉检查；开发文档、架构论证和明确开发工具不属于终端用户页面。
+5. 完成后回写命中项、未修改项及理由；在审计和视觉门禁完成前，状态不得标记为全站 `verified`。
+
+实施结果：
+
+- 已审计 `web/templates/` 19 个模板及 Web 暴露的 Architecture Atlas，命中与保留理由见 [`web-product-content-audit-2026-08-24.md`](web-product-content-audit-2026-08-24.md)。
+- 已清理 Chat slogan/营销空状态、Tasks integration/架构宣传、Registry 控制面 eyebrow、全局与登录页产品描述，以及 Architecture Atlas 中的产品主张；管理员技术状态、架构事实与审批/DDL 风险说明保留。
+- H5 candidate 删除“可信数据报告”、英文氛围标签和 Renderer/版本/候选说明；业务 Evidence 与报告限制保留。
+- `tests/test_web_product_content.py` 与相关 Web 定向测试共 76 passed；桌面 H5 candidate 0 browser errors。等待用户视觉确认后再标记 verified。
 
 ## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
 
@@ -480,7 +500,10 @@ R0 实际结果：
 - 用户视觉门禁反馈为 FAIL：首屏深绿色候选宣传 Hero 不承载报告决策内容，却占据接近整屏；交互位于首屏以下且缺少可发现反馈，元信息标签外观又误导为按钮。修订要求是删除宣传壳，首屏直接显示数据范围/质量/执行摘要/第一决策图，并把 tooltip、series 控制、table fallback 和 Evidence feedback 做成无需猜测的可见操作。
 - 用户明确要求“产品不要重复造轮子”。生产 Renderer 不继续扩展手写 SVG/JavaScript；图表 tooltip、legend、zoom/selection、annotation geometry、layout 与 SVG/canvas rendering 必须复用成熟 chart engine。Forge 自有代码只负责 ChartArtifact v2 的受控适配、Evidence/quality binding、设计 token 和跨媒介 Gate。正式实现前用同一双 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2；Highcharts/AG Charts 只有在商业授权成本被明确接受后才进入候选。生产最终只选一个默认 engine，不建设多引擎插件平台。
 - 用户已批准继续开源 engine bake-off。实现必须位于隔离开发工具包，不修改生产 Pi `package.json`、Skills/Prompt 或 Renderer；每个 engine 必须消费相同 normalized fixture、使用本地固定依赖而非 CDN，并生成可比较的桌面 HTML/截图/交互与构建体积证据。
-- Bake-off 已完成，正式证据见 [`chart-engine-bakeoff-2026-08-24.md`](chart-engine-bakeoff-2026-08-24.md)。初步选择 ECharts：按需 SVG bundle 约 193 kB gzip、warm median 58.5 ms；Vega-Lite 约 276 kB/85.3 ms 且需 CSP interpreter；G2 约 398 kB/368.5 ms。数字仅为同机相对证据。下一门先修正渠道图“存量结构不能自证增量贡献”的语义，再做 ECharts focused candidate；未获得用户确认不接生产 package。
+- Bake-off 已完成，正式证据见 [`chart-engine-bakeoff-2026-08-24.md`](chart-engine-bakeoff-2026-08-24.md)。初步选择 ECharts：按需 SVG bundle 约 193 kB gzip、warm median 58.5 ms；Vega-Lite 约 276 kB/85.3 ms 且需 CSP interpreter；G2 约 398 kB/368.5 ms。数字仅为同机相对证据。
+- 用户已确认继续 ECharts focused candidate。该门仍只修改隔离工具包：报告首屏直接进入摘要和第一决策图；渠道视图必须从存量堆叠图改为可复算的 4→6 月增量贡献拆解，标出总增量 174K、直营 87K/50% 和 Evidence；排名视图表达前两名差距，避免赢家错觉；ECharts Option 只能由 allowlisted semantic adapter 生成。完成 HTML tooltip/legend/Evidence/table、strict CSP、print/PDF/PPTX 静态一致性和桌面视觉审查后回写证据。生产 package、Skills/Prompt/Tool/Renderer 和 NAS 仍不得修改。
+- Focused candidate 已完成，正式证据见 [`chart-storytelling-echarts-focused-evidence-2026-08-24.md`](chart-storytelling-echarts-focused-evidence-2026-08-24.md)。4 SVG/0 Canvas、tooltip、series toggle、Evidence、table、no-JS 核心结论、5 页 PDF/PPTX、strict CSP 和零浏览器错误通过；首图在 1600×1000 的 y=585.8px 开始可见。候选同时遵守 W2，只呈现报告主体内容。
+- R1 新增阻断：ChartArtifact v2 当前无法完整声明 period-delta/output-grain。正式进入生产前必须扩展确定性 transform 和 semantic gate，并与 Skills/Tool/Compatibility/Renderer 同版本发布；不允许 focused adapter 的固定计算静默变成 Renderer 猜测。当前等待用户视觉与信息价值确认。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

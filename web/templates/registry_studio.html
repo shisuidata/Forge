@@ -2,7 +2,7 @@
 {% block title %}Registry Studio · Forge{% endblock %}
 {% block content %}
 <style>
-  .studio-hero{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:24px}
+  .studio-header{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:24px}
   .studio-meta{font-family:ui-monospace,monospace;font-size:12px;color:var(--text-muted);word-break:break-all}
   .studio-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
   .studio-tabs button{border:1px solid var(--border);background:var(--surface);padding:8px 14px;border-radius:999px;cursor:pointer;color:var(--text)}
@@ -14,8 +14,8 @@
   .studio-er-wrap{border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}.studio-er-toolbar{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--border)}.studio-er-toolbar button{padding:6px 10px}.studio-er-canvas{width:100%;height:68vh;cursor:grab}.studio-er-node{cursor:pointer}.studio-er-node.dimmed{opacity:.18}
   .studio-warning{padding:12px 14px;border-radius:10px;background:#fff7ed;color:#9a3412;margin-bottom:16px}
 </style>
-<div class="studio-hero">
-  <div><p class="eyebrow">CANONICAL SCHEMA CONTROL PLANE</p><h1>Registry Studio</h1><p>表格、DDL、ER 与 JSON 都是同一 Canonical Schema 的只读投影。</p></div>
+<div class="studio-header">
+  <div><h1>Registry Studio</h1><p>查看 Canonical Schema 的表格、DDL、ER 和 JSON 投影。</p></div>
   <div class="studio-meta">Binding v{{ active.version }}<br>{{ active.revision_id }}</div>
 </div>
 <div class="studio-warning">DDL 导入和结构编辑只会创建 Draft。发布更新 Registry Revision，不会连接数据库执行 DDL。</div>

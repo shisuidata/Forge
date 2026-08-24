@@ -465,7 +465,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-009：专业报告的多图叙事、现代图表与证据绑定交互
 
 - **提出日期**：2026-08-24
-- **当前状态**：`engine_bakeoff_ready_for_decision`
+- **当前状态**：`echarts_focused_candidate_awaiting_visual_confirmation`
 - **原始需求**：专业报告目前过于模板化，图表数量少、样式不够现代、交互有限；图表需要有标注，让图更生动、更有业务价值。
 
 ### 第一性原理评估
@@ -520,6 +520,10 @@ R0 已完成并记录于 `docs/chart-storytelling-r0-evidence-2026-08-24.md`：C
 用户已确认继续执行开源 engine bake-off。第一门只在隔离的开发工具包中，用相同的品类横截面和月度多系列 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2 的交互可发现性、Evidence event bridge、Annotation、SVG/静态导出、无障碍 fallback、bundle/加载成本和 CSP 风险；不把三个库接入生产 Pi package，不并行维护三个生产 Renderer。
 
 Bake-off 已完成，证据见 `docs/chart-engine-bakeoff-2026-08-24.md`。三者在严格 CSP 下均完成 4 SVG、tooltip/legend、datum → Evidence、table fallback 和静态 PDF；ECharts 在本轮拥有最小 engine bundle、最低渲染延迟和最直接的 Annotation/Evidence adapter。Vega-Lite 的声明式治理优势成立，但需要 CSP interpreter/AST、layer lineage 更复杂，且曾暴露 annotation layer 继承主数据导致重复 mark 的隐蔽风险；G2 bundle/渲染成本最高且无抵消优势。当前建议只让 ECharts 进入 focused visual candidate，Vega-Lite 作为治理参考，G2 停止；用户确认前仍不接生产 Runtime。
+
+用户已于 2026-08-24 确认继续 ECharts focused candidate。该门继续位于隔离工具包，不接生产 Runtime：删除 bake-off 实验室宣传与多引擎切换外壳，首屏直接呈现真实报告摘要和第一决策图；将第四张图从渠道存量结构改为四月至六月的**增量贡献拆解**，明确 baseline、总增量 174K、直营增量 87K/50% 及对应 Evidence；排名图增加前两名差距表达，不以单色高亮制造赢家错觉；抽出 allowlisted Chart Story → ECharts Option mapper，禁止 Artifact/模型注入自由 Option、formatter、颜色或脚本。HTML 必须保留 tooltip、series 控制、Evidence 和 table fallback，print/PDF/PPTX 必须静态自足。只有 focused candidate 再次通过用户视觉与信息价值门禁，才提出 R1 同版本生产切换。
+
+Focused candidate 已完成，证据见 `docs/chart-storytelling-echarts-focused-evidence-2026-08-24.md`。页面已按 `REQ-2026-08-24-011` 删除所有宣传/实验说明并首屏直达报告；4→6 月增量图严格复算 `87K + 53K + 34K = 174K`，直营占 50%；排名差距、零基线趋势、Pareto threshold、tooltip、series toggle、Evidence、table、无 JS 核心结论和 5 页 PDF/PPTX 均通过。当前阻断是用户视觉确认，以及 ChartArtifact v2 尚不能完整声明 period-delta/output-grain；该 Contract 缺口不得由 Renderer 猜测，必须在 R1 兼容矩阵中同步解决。
 
 ---
 
@@ -598,3 +602,53 @@ ReportRun / ReportRevision（不可变快照）
 ### 待用户确认
 
 是否接受把该能力作为独立 H6：第一门只做 `ReusableReportDefinition + JudgementCriteria + ReportRun Contract`、两个跨时间 fixture，以及报告页/报告库/更新向导桌面原型；通过心智与视觉门禁后，再实现手动“用最新数据更新”的生产链路？
+
+---
+
+## REQ-2026-08-24-011：Web 页面只呈现主体内容，禁止宣传口号与营销文案
+
+- **提出日期**：2026-08-24
+- **当前状态**：`implemented_pending_visual_confirmation`
+- **原始需求**：任何 Forge Web 页面都不应出现宣传 slogan、口号或带营销意味的内容；页面只需要把主体内容描述清楚。
+
+### 产品规则
+
+用户页面的文案分母只包含：
+
+- 当前任务、对象或报告的明确标题；
+- 数据范围、新鲜度、质量、状态和限制；
+- 业务事实、分析结论、Evidence 和可执行建议；
+- 用户下一步、审批风险、错误恢复和必要帮助；
+- 法律、安全、权限或数据质量所需的最小披露。
+
+以下内容禁止进入终端用户页面：
+
+- 品牌 slogan、价值主张、宣传 Hero、Campaign 标题；
+- “从 X 到 Y”“重新定义”“更智能/更可信/更专业”等营销式对仗或自我评价；
+- 用大面积首屏解释 Forge、候选方案、技术选型或产品价值；
+- 为营造气氛而存在、不能帮助用户理解当前任务或采取行动的文案；
+- 将开发门禁、engine bake-off、Contract revision 或 Renderer 说明混入业务报告正文。
+
+允许显示 Forge 产品名、页面功能名和准确的技术/状态标签，但这些标签不能扩写成宣传语。开发证据、选型说明和产品论证只保留在 `docs/`、测试证据或明确的管理员/开发工具中，不进入普通用户工作流。
+
+### 实施与门禁
+
+1. H5 ECharts focused candidate 立即移除候选宣传、英文氛围标签、技术边界 footer 和任何自我评价；只保留报告标题、执行摘要、决策问题、图表、Evidence、数据质量与操作。
+2. 对 `web/templates/` 做一次只读文案审计，列出疑似宣传/口号与其实际页面；不得仅修隔离候选后宣称全站合规。
+3. 对确认属于营销内容的生产文案做小范围确定性替换，不改变 Task、Artifact、审批、身份或导航逻辑；帮助文本只有在直接降低操作风险时保留。
+4. 增加静态回归：最终用户模板和候选不得出现已拒绝的宣传短语；但不能用宽泛关键词误杀真实业务报告中的“增长”“价值”等领域内容。
+5. 桌面视觉检查确认首屏主体内容立即可见，页面层级不依赖宣传 Hero 填充。
+
+### 边界
+
+- 本规则约束产品 Web 页面，不要求删除 README、架构文档、选型报告或管理员开发诊断中的必要说明。
+- 不把“去营销化”误解为删除执行摘要、业务判断或建议；只要这些内容由当前数据和 Evidence 支持，它们就是主体内容。
+- 不因此新增移动端工作或重写 design system。
+
+### 实施结果
+
+- 已审计 `web/templates/` 的 19 个模板、Web 暴露的 Architecture Atlas 和 H5 candidate，正式记录见 `docs/web-product-content-audit-2026-08-24.md`。
+- 已清理 `/chat` slogan 与营销式空状态、`/tasks` integration/架构宣传和口号标题、Registry Studio 控制面 eyebrow、全局/登录页 `AI SQL Agent` 描述、登录页“私有化部署”展示，以及 Architecture Atlas 中的产品主张；保留直接降低操作风险的 SQL 审批、DDL Draft、Binding/Revision 与架构事实等说明。
+- H5 focused candidate 同步删除“可信数据报告”、英文氛围标签、候选/Renderer/版本说明，Web 正文只保留报告内容、Evidence、质量、限制和操作。
+- 新增 `tests/test_web_product_content.py` 固定明确拒绝短语，定向 Web 测试 76 passed；H5 浏览器 gate 0 console/page error，首图在 1600×1000 首屏内开始可见。
+- 当前等待用户对去宣传后的实际页面视觉确认；确认前不宣称最终视觉门禁 `verified`。

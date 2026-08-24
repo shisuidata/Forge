@@ -15,14 +15,8 @@
   <div class="max-w-6xl mx-auto">
     <div class="flex items-start justify-between gap-6 mb-7">
       <div>
-        <div class="flex items-center gap-2 mb-2">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white">
-            <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span> INTEGRATION SPIKE
-          </span>
-          <span class="text-xs text-gray-400">Pi Control Plane → Forge Execution Plane</span>
-        </div>
-        <h2 class="text-2xl font-semibold tracking-tight text-gray-950">把任务推进过程放到台面上</h2>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Pi 负责推进 TaskRun，Forge 负责校验 SQL hash、审批身份、Registry 版本和只读执行。页面不允许编辑 SQL，确保审核内容就是实际执行内容。</p>
+        <h2 class="text-2xl font-semibold tracking-tight text-gray-950">数据任务</h2>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">创建任务、查看跨渠道状态，并审核需要执行的 SQL。页面不允许在审批后编辑 SQL，审核内容与实际执行内容保持一致。</p>
       </div>
       <div class="rounded-lg border px-3 py-2 text-xs font-medium {% if pi_enabled %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
         {% if pi_enabled %}Pi Runtime 已启用{% else %}Pi Runtime 未启用{% endif %}
@@ -34,7 +28,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span id="task-live-dot" class="h-2 w-2 rounded-full bg-emerald-500"></span>
-            <p class="text-[11px] font-semibold uppercase tracking-[.18em] text-gray-400">Cross-channel Task Inbox</p>
+            <p class="text-[11px] font-semibold tracking-[.18em] text-gray-400">跨渠道任务</p>
           </div>
           <h3 class="mt-1 font-semibold text-gray-900">实时任务监控</h3>
         </div>
