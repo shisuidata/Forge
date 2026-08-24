@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 R1 等待视觉确认；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 R1 视觉确认通过、R2 实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -74,7 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
-| H2 长文本语义化阅读体验 | R1 代码完成待用户视觉确认；R2 尚未开始 | `REQ-2026-08-24-006`：Chat 安全 Markdown、完整语义投影和移动导航已完成并通过自动/Playwright 验证；视觉确认后再映射到业务 Web/PDF/PPTX |
+| H2 长文本语义化阅读体验 | R1 视觉确认通过；R2 实施中 | `REQ-2026-08-24-006`：Chat 安全 Markdown、完整语义投影和移动导航已确认；当前将同一语义层级映射到业务 Web/PDF/PPTX，技术报告只做基础排版 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -327,9 +327,9 @@ R1 实施结果：
 - Web Chat 的无依赖安全 Markdown DOM renderer 与 editorial design token 已完成；HTTP(S)/站内链接白名单、外链安全属性、原始 HTML 纯文本和嵌套列表均通过 Playwright。
 - 390px 全局导航改为带 backdrop、Escape 和 ARIA 状态的抽屉；Chat 正文无横向溢出，桌面保留当前三栏+任务流布局。
 - 验证：Python `550 passed / 24 skipped`；Pi `94 passed`、typecheck、npm audit 通过；Web 定向 `16 passed`；桌面/移动 Playwright 0 console/page error、恶意 script 未执行。
-- 视觉候选保存在 `/tmp/forge-chat-readability-desktop.png` 与 `/tmp/forge-chat-readability-mobile.png`；当前停在用户视觉确认门禁，R2 未开始。
+- 视觉候选保存在 `/tmp/forge-chat-readability-desktop.png` 与 `/tmp/forge-chat-readability-mobile.png`；用户于 2026-08-24 确认 R1 视觉方向并要求继续 R2。
 
-### H2.3 R2 Report readability（已批准，等待 R1 视觉门禁）
+### H2.3 R2 Report readability（实施中）
 
 1. 业务 Web/PDF：同一确定性 HTML 使用 editorial hierarchy；Executive Summary、关键发现、建议、限制/风险和证据说明分别映射为固定组件，confidence/priority 使用文字+颜色双编码。
 2. PPTX：按内容长度拆页；摘要、发现、建议和限制使用不同版式及文字标签，避免整页同级 bullet，不裁掉 Artifact 内容。
