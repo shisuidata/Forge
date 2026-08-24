@@ -75,7 +75,7 @@ GTM：Data-Team Led
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
-| H3 Golden Journey 双验收 | 实施中 | `REQ-2026-08-24-007`：NAS loopback 隔离真实模型+只读测试数据主旅程；逐阶段物理 trace、桌面/移动 Playwright screenshot 和视觉模型评审；不写生产 Store |
+| H3 Golden Journey 双验收 | 实施中 | `REQ-2026-08-24-007`：NAS loopback 隔离真实模型+只读测试数据主旅程；逐阶段物理 trace、桌面 Playwright screenshot 和视觉模型评审；当前不以移动端作为门禁 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -379,7 +379,7 @@ Playwright 驱动并在每一步建立 checkpoint：
 4. 检查 QueryResult 表格、行数/截断说明和“开始分析”动作。
 5. 发起 Analysis，记录 progress、elapsed/deadline、Artifact 和结果可读性。
 6. 发起完整报告，检查 publication links、Web business/technical report、PDF/PPTX。
-7. 在桌面与 390px 捕获关键状态；移动端不重复执行 SQL，只重放同一只读 Presentation/Report projection。
+7. 以桌面端捕获所有关键状态；当前产品暂不考虑移动端，已采集的移动 projection 仅作非门禁诊断证据，不进入 finding 和修复范围。
 
 ### H3.3 物理验收
 
@@ -390,9 +390,9 @@ Playwright 驱动并在每一步建立 checkpoint：
 
 ### H3.4 视觉与交互验收
 
-- 每个 checkpoint 使用 Playwright 做 DOM/ARIA/action/focus/overflow/console/page-error 断言，并保存桌面截图；核心长文本/审批/结果/分析/报告增加 390px 截图。
-- 视觉模型逐图评估：信息层级、当前状态、下一步、风险/审批显著性、等待可信度、表格/SQL/长文阅读、错误恢复和响应式布局。
-- 后端成功但用户不清楚发生了什么、下一步不可发现、关键限制被淹没或移动端不可用，均判产品失败。
+- 每个 checkpoint 使用 Playwright 做 DOM/ARIA/action/focus/overflow/console/page-error 断言，并保存桌面截图。
+- 视觉模型逐图评估桌面端：信息层级、当前状态、下一步、风险/审批显著性、等待可信度、表格/SQL/长文阅读和错误恢复。
+- 后端成功但用户不清楚发生了什么、下一步不可发现或关键限制被淹没，均判产品失败。移动端当前不参与 Pass/Fail。
 
 ### H3.5 产物、门禁与退出
 

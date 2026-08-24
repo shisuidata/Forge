@@ -324,6 +324,7 @@ ID / 标题 / 日期 / 状态
 - 验证：Python `550 passed / 24 skipped`；Pi `94 passed`、TypeScript typecheck、npm audit 0 vulnerabilities；Web 定向 `16 passed`；桌面/390px Playwright 0 console/page error、无横向溢出，script fixture 未执行。
 - **视觉候选**：`/tmp/forge-chat-readability-desktop.png`、`/tmp/forge-chat-readability-mobile.png`。
 - **视觉确认**：用户于 2026-08-24 确认 R1 视觉方向并要求继续 R2。R1 门禁通过。
+- **后续范围修订**：用户在 Golden Journey 评审期间明确当前产品暂不考虑移动端页面。已实现的响应式能力保留，但不再作为当前产品验收门禁，不继续为移动端追加需求或修复。
 
 ### R2 实施与验证结果
 
@@ -388,7 +389,7 @@ ID / 标题 / 日期 / 状态
 2. **真实能力**：优先使用当前真实模型 runtime 的既有 secret reference，由进程环境引用但不读取/回显 Secret；真实执行 Skills、Forge Assurance、Compiler、SQL review、只读测试 SQL、Analysis 和 Report exporter。模型不可用时记录为真实失败，不用 deterministic fake 冒充通过；可另跑 deterministic control 以区分基础设施与模型问题。
 3. **一个 Golden Journey**：问题固定为测试 Registry 可复算且能产生查询、分析和报告的业务问题；Playwright 以明确 test principal 驱动一次 SQL approval。该批准只授权隔离测试数据上的一次只读 SQL，不代表生产授权。
 4. **逐阶段证据**：每个状态保存 screenshot、DOM/ARIA 摘要、Task/Event/Attempt/Artifact/QueryRun 有界快照和耗时；不得保存 Prompt、模型正文、hidden CoT、Secret、原始服务凭证或无关完整结果集。
-5. **视觉审查**：使用视觉模型逐张检查信息层级、下一步是否明确、风险/审批是否醒目、等待是否可理解、错误是否可恢复、表格/代码/长文本是否易读、桌面/390px 是否溢出；同时用 Playwright 断言 action、焦点、ARIA、console/page error 和响应式布局。
+5. **视觉审查**：使用视觉模型逐张检查桌面端的信息层级、下一步是否明确、风险/审批是否醒目、等待是否可理解、错误是否可恢复，以及表格/代码/长文本是否易读；同时用 Playwright 断言 action、焦点、ARIA、console/page error。移动端不属于当前验收范围。
 6. **物理链路审查**：验证同一 TaskRun 的 PlanStep、StageAttempt、QueryRun、SQL/Assurance hash、批准、执行次数、QueryResult evidence、Analysis/Report lineage 和 Publication 一致；重复点击不得重复执行 SQL，页面轮询不得推进状态。
 7. **结果产物**：输出逐阶段 Pass/Fail/Blocked 旅程报告、截图 contact sheet、状态时序、发现清单和 P0/P1/P2 修复建议。视觉不满意即记为产品失败，不能因后端状态成功而判通过。
 
@@ -409,6 +410,7 @@ ID / 标题 / 日期 / 状态
 
 - **确认日期**：2026-08-24
 - **决策**：`accepted_with_changes`。用户明确确认执行 Golden Journey，并接受以下有界授权：NAS loopback 临时隔离环境、现有模型 credential 引用、版本化只读测试数据库、独立状态库、test principal 自动批准并执行一次测试 SQL；不读取 Secret、不修改生产认证、不访问生产数据库、不写生产 Task/Audit Store。
+- **范围修订**：当前产品暂不考虑移动端页面。H3 只以桌面端作为产品 Pass/Fail 门禁；已采集的移动截图只保留为非门禁诊断证据，不进入 finding 优先级和修复范围。
 
 ### 关联
 
