@@ -1,0 +1,26 @@
+{
+  "name": "@forge/chart-engine-bakeoff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated library-first evaluation of chart engines for ChartArtifact v2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/*.test.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@antv/g-svg": "2.1.1",
+    "@antv/g2": "5.4.8",
+    "echarts": "6.1.0",
+    "vega": "6.4.0",
+    "vega-interpreter": "2.3.2",
+    "vega-lite": "6.4.3",
+    "vega-tooltip": "1.1.0"
+  },
+  "devDependencies": {
+    "vite": "8.2.2"
+  }
+}

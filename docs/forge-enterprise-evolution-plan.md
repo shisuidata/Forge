@@ -77,7 +77,7 @@ GTM：Data-Team Led
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
-| H5 Evidence-bound Chart Storytelling | 开源 engine bake-off 已激活 | 在隔离工具包中用双 fixture 比较 ECharts/Vega-Lite/AntV G2 的交互、Evidence bridge、Annotation、SVG/export、a11y fallback、bundle/CSP；不接生产 package，最终只选一个 engine；R1 仍未批准 |
+| H5 Evidence-bound Chart Storytelling | Engine bake-off 完成，待确认 ECharts focused candidate | 三引擎严格 CSP/4 SVG/Evidence/static export 均通过；ECharts 在 bundle、延迟和 adapter 简洁度上胜出，Vega 留作治理参考，G2 停止；生产 R1 仍未批准 |
 | H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -480,6 +480,7 @@ R0 实际结果：
 - 用户视觉门禁反馈为 FAIL：首屏深绿色候选宣传 Hero 不承载报告决策内容，却占据接近整屏；交互位于首屏以下且缺少可发现反馈，元信息标签外观又误导为按钮。修订要求是删除宣传壳，首屏直接显示数据范围/质量/执行摘要/第一决策图，并把 tooltip、series 控制、table fallback 和 Evidence feedback 做成无需猜测的可见操作。
 - 用户明确要求“产品不要重复造轮子”。生产 Renderer 不继续扩展手写 SVG/JavaScript；图表 tooltip、legend、zoom/selection、annotation geometry、layout 与 SVG/canvas rendering 必须复用成熟 chart engine。Forge 自有代码只负责 ChartArtifact v2 的受控适配、Evidence/quality binding、设计 token 和跨媒介 Gate。正式实现前用同一双 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2；Highcharts/AG Charts 只有在商业授权成本被明确接受后才进入候选。生产最终只选一个默认 engine，不建设多引擎插件平台。
 - 用户已批准继续开源 engine bake-off。实现必须位于隔离开发工具包，不修改生产 Pi `package.json`、Skills/Prompt 或 Renderer；每个 engine 必须消费相同 normalized fixture、使用本地固定依赖而非 CDN，并生成可比较的桌面 HTML/截图/交互与构建体积证据。
+- Bake-off 已完成，正式证据见 [`chart-engine-bakeoff-2026-08-24.md`](chart-engine-bakeoff-2026-08-24.md)。初步选择 ECharts：按需 SVG bundle 约 193 kB gzip、warm median 58.5 ms；Vega-Lite 约 276 kB/85.3 ms 且需 CSP interpreter；G2 约 398 kB/368.5 ms。数字仅为同机相对证据。下一门先修正渠道图“存量结构不能自证增量贡献”的语义，再做 ECharts focused candidate；未获得用户确认不接生产 package。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

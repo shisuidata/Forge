@@ -465,7 +465,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-009：专业报告的多图叙事、现代图表与证据绑定交互
 
 - **提出日期**：2026-08-24
-- **当前状态**：`engine_bakeoff_active`
+- **当前状态**：`engine_bakeoff_ready_for_decision`
 - **原始需求**：专业报告目前过于模板化，图表数量少、样式不够现代、交互有限；图表需要有标注，让图更生动、更有业务价值。
 
 ### 第一性原理评估
@@ -518,6 +518,8 @@ R0 已完成并记录于 `docs/chart-storytelling-r0-evidence-2026-08-24.md`：C
 用户进一步明确“产品不要重复造轮子”。因此当前手写 SVG/JavaScript Renderer 只能作为一次性 Contract harness，禁止演化为生产图表引擎。H5 修订版必须先做 library-first 选型门禁：优先比较 Apache ECharts、Vega/Vega-Lite 与 AntV G2；只有用户接受商业授权时才把 Highcharts/AG Charts 纳入最终候选。Forge 只保留不可替代的 `ChartArtifact v2 → allowlisted library spec` 薄适配、Evidence bridge、质量 Gate 和跨媒介一致性测试，不自研 tooltip、legend、zoom、selection、annotation geometry 或 chart layout。修订版再次通过用户门禁前，R1 生产 Skills/Prompt/Tool/Renderer 同版本切换仍未批准。
 
 用户已确认继续执行开源 engine bake-off。第一门只在隔离的开发工具包中，用相同的品类横截面和月度多系列 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2 的交互可发现性、Evidence event bridge、Annotation、SVG/静态导出、无障碍 fallback、bundle/加载成本和 CSP 风险；不把三个库接入生产 Pi package，不并行维护三个生产 Renderer。
+
+Bake-off 已完成，证据见 `docs/chart-engine-bakeoff-2026-08-24.md`。三者在严格 CSP 下均完成 4 SVG、tooltip/legend、datum → Evidence、table fallback 和静态 PDF；ECharts 在本轮拥有最小 engine bundle、最低渲染延迟和最直接的 Annotation/Evidence adapter。Vega-Lite 的声明式治理优势成立，但需要 CSP interpreter/AST、layer lineage 更复杂，且曾暴露 annotation layer 继承主数据导致重复 mark 的隐蔽风险；G2 bundle/渲染成本最高且无抵消优势。当前建议只让 ECharts 进入 focused visual candidate，Vega-Lite 作为治理参考，G2 停止；用户确认前仍不接生产 Runtime。
 
 ---
 

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'" />
+  <title>Forge · Chart Engine Bake-off</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header class="lab-bar">
+    <div class="lab-brand"><span>FORGE</span> / CHART ENGINE LAB</div>
+    <div class="build-state" id="build-state" aria-live="polite"><i></i>等待渲染</div>
+  </header>
+
+  <main>
+    <section class="decision-header">
+      <div>
+        <p class="kicker">LIBRARY-FIRST BAKE-OFF · SAME DATA · SAME QUESTIONS</p>
+        <h1>不再比较“能不能画”，<br />只比较谁更适合可信报告。</h1>
+        <p class="lede">三个成熟引擎消费同一份 normalized fixture。Forge 只负责 Evidence、质量门禁和设计语义，不实现图表几何、tooltip、legend 或缩放。</p>
+      </div>
+      <dl class="gate-summary">
+        <div><dt>候选引擎</dt><dd>3</dd></div>
+        <div><dt>决策视图</dt><dd>4</dd></div>
+        <div><dt>外部 CDN</dt><dd>0</dd></div>
+      </dl>
+    </section>
+
+    <section class="engine-switcher" aria-label="图表引擎选择">
+      <div class="engine-tabs" role="tablist">
+        <button role="tab" data-engine="echarts" aria-selected="true"><b>Apache ECharts</b><span>综合基线 · Apache 2.0</span></button>
+        <button role="tab" data-engine="vega" aria-selected="false"><b>Vega-Lite</b><span>声明式基线 · BSD-3</span></button>
+        <button role="tab" data-engine="g2" aria-selected="false"><b>AntV G2</b><span>Grammar 基线 · MIT</span></button>
+      </div>
+      <div class="engine-facts">
+        <div><span>当前引擎</span><strong id="engine-name">—</strong></div>
+        <div><span>Browser renderer</span><strong id="renderer-name">—</strong></div>
+        <div><span>首次渲染</span><strong id="render-time">—</strong></div>
+        <div><span>DOM 输出</span><strong id="render-output">—</strong></div>
+      </div>
+    </section>
+
+    <section class="report-summary">
+      <div>
+        <p class="kicker">OPERATING REVIEW · 2026 H1</p>
+        <h2>品类组合与增长诊断</h2>
+        <p>销售没有形成单一品类垄断；经营六个品类覆盖 82.2%。四月失速后，直营贡献了四月至六月 50% 的新增量。</p>
+      </div>
+      <div class="summary-metrics">
+        <article><span>总销售额</span><strong>¥4.74M</strong><small>10 个唯一品类</small></article>
+        <article><span>80% 覆盖线</span><strong>6 类</strong><small>资源配置边界</small></article>
+        <article><span>反转后增量</span><strong>¥174K</strong><small>直营贡献 87K</small></article>
+      </div>
+    </section>
+
+    <section class="interaction-guide">
+      <strong>请实际操作：</strong>
+      <span>悬停查看 tooltip</span>
+      <span>点击图例筛选</span>
+      <span>点击图形打开 Evidence</span>
+      <span>展开同源数据表</span>
+    </section>
+
+    <section class="chart-grid" aria-label="引擎渲染结果">
+      <article class="chart-card" data-chart="ranking">
+        <header><div><p>01 / RANKING</p><h3>头部品类接近，不应单点押注</h3><span>比较规模排序与头部差距</span></div><em>销售额 · CNY</em></header>
+        <div class="chart-host" id="chart-ranking" aria-label="品类销售额排名图"></div>
+        <footer><b>关键判断</b><span>第一名仅领先第二名 4.4%</span><button class="table-button" data-table="category">数据表</button></footer>
+      </article>
+
+      <article class="chart-card" data-chart="pareto">
+        <header><div><p>02 / CONTRIBUTION</p><h3>六个品类覆盖 82.2% 销售额</h3><span>识别经营覆盖线，而非重复排名</span></div><em>累计贡献 · %</em></header>
+        <div class="chart-host" id="chart-pareto" aria-label="品类累计贡献图"></div>
+        <footer class="coral"><b>决策阈值</b><span>第六类跨过 80% 覆盖线</span><button class="table-button" data-table="category">数据表</button></footer>
+      </article>
+
+      <article class="chart-card" data-chart="trend">
+        <header><div><p>03 / TREND</p><h3>四月失速，五月完成反转</h3><span>实际与目标同图，识别经营偏差</span></div><em>月销售额 · CNY</em></header>
+        <div class="chart-host" id="chart-trend" aria-label="实际与目标月度趋势图"></div>
+        <footer class="coral"><b>异常点</b><span>四月低于目标 6.4%</span><button class="table-button" data-table="monthly">数据表</button></footer>
+      </article>
+
+      <article class="chart-card" data-chart="mix">
+        <header><div><p>04 / COMPOSITION</p><h3>直营贡献反转后 50% 新增量</h3><span>拆解增长来源，不重复趋势结论</span></div><em>渠道结构 · CNY</em></header>
+        <div class="chart-host" id="chart-mix" aria-label="渠道销售额结构图"></div>
+        <footer><b>贡献拆解</b><span>四月至六月新增 174K，直营贡献 87K</span><button class="table-button" data-table="monthly">数据表</button></footer>
+      </article>
+    </section>
+
+    <section class="evaluation" aria-labelledby="evaluation-title">
+      <header><p class="kicker">SELECTION GATE</p><h2 id="evaluation-title">不凭印象选库</h2></header>
+      <div class="evaluation-grid">
+        <article><b>交互可发现性</b><span>tooltip、legend、点击反馈无需教学</span></article>
+        <article><b>Evidence bridge</b><span>datum click 可恢复可信 row refs</span></article>
+        <article><b>静态一致性</b><span>SVG/PNG 可投影 PDF 与 PPTX</span></article>
+        <article><b>治理边界</b><span>无需任意 formatter 或模型脚本</span></article>
+        <article><b>无障碍 fallback</b><span>ARIA + 同源数据表，不隐藏结论</span></article>
+        <article><b>运行成本</b><span>bundle、渲染时间、CSP 与维护复杂度</span></article>
+      </div>
+    </section>
+  </main>
+
+  <aside class="drawer" id="evidence-drawer" aria-live="polite" data-open="false">
+    <button class="drawer-close" aria-label="关闭 Evidence">×</button>
+    <p>EVIDENCE TRACE</p>
+    <h2 id="evidence-label">选择图形查看来源</h2>
+    <strong id="evidence-value"></strong>
+    <code id="evidence-refs"></code>
+    <small>同一个 datum event 必须回到 ChartArtifact 允许的 QueryResult rows。</small>
+  </aside>
+
+  <dialog id="data-dialog">
+    <form method="dialog"><button aria-label="关闭数据表">×</button></form>
+    <p class="kicker">TABLE FALLBACK</p>
+    <h2 id="table-title">同源数据</h2>
+    <div class="table-scroll" id="table-content"></div>
+  </dialog>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
