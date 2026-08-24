@@ -317,8 +317,8 @@ ReportRun（不可变证据快照）
 - Pi 编排 Definition Draft 确认、手动 rerun、等待输入和 Run 对比；不判断 SQL 是否仍兼容。
 - Forge 持有 SemanticQuerySpec 的查询契约、Registry Binding compatibility、Forge JSON/Compiler/Assurance 和 QueryReuseDecision；旧 SQL 只是 `CompiledQuerySnapshot`，不是未来执行授权。
 - Web 提供“保存为可复用报告 / 用最新数据更新 / 调整判断标准”、Definition Library 和 Run History，只投影 Pi/Forge 真相源。
-- 每次 Run 固定 definition/semantic/binding/criteria/skill/model/registry/policy/sql lineage。数据更新产生新 Run；标准更新先产生新 Definition/Criteria revision；历史 Report revision 永不原地重写。
-- 只有物理 binding 和所有当前 Gate 可证明兼容时才允许复用 compiled SQL，且仍重新校验当前 Authorization/Safety；Schema drift 时优先按 stable semantic ID rebind/recompile，语义冲突时失败关闭或重新规划并人工 review。
+- 每次 Run 固定 definition/semantic/binding/criteria/skill/model/registry/policy/sql lineage。`CompiledQuerySnapshot` 保存参数化 SQL、parameter schema、非敏感 bound parameter snapshot、dialect 与 hash；Secret parameter 只保留受控 SecretRef，不写入 Artifact 明文。数据更新产生新 Run；标准更新先产生新 Definition/Criteria revision；历史 Report revision 永不原地重写。
+- 只有物理 binding 和所有当前 Gate 可证明兼容时才允许复用 compiled SQL，且仍重新校验当前 Authorization/Safety；参数化 SQL 负责安全替换 literal 与复现，但不能处理 Schema drift。Schema drift 时优先按 stable semantic ID rebind/recompile，语义冲突时失败关闭或重新规划并人工 review。
 - 自动调度和免逐次审批需要独立 Budget/Owner/Policy/DelegatedMandate，不由“保存模板”隐式获得。
 
 ## 6. 查询审批与信任边界

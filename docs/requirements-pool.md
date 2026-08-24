@@ -551,7 +551,7 @@ ReportRun / ReportRevision（不可变快照）
 - `CompiledQuerySnapshot v1`：每次 Run 固定当时的 Forge JSON、参数化 SQL、bound parameters、dialect、SQL hash、Registry/Assurance/Policy revision 和审批；它用于复现，不是未来运行的唯一源。
 - `JudgementCriteria v1`：目标值、阈值、比较基线、方向、适用 scope、生效时间、Owner/approver 和 revision；禁止只有自然语言没有可计算字段。
 - `ReportRun v1`：`definition_revision + semantic_query_revision + binding_snapshot + compiled_query_snapshot + parameter_snapshot + task/query/report lineage + data_as_of + criteria_revision + outcome/diff`。
-- 若“带引号的 SQL”指参数化/带引用 SQL，则必须把 literal 与 SQL 分离保存，并引用 semantic/metric/binding ID；quoted identifier 只能解决方言和保留字，不能解决 Schema 漂移。该术语需用户进一步确认后再固化命名。
+- 用户确认这里指**参数化 SQL**：SQL 文本与 literal/bound parameters 分离保存。`CompiledQuerySnapshot` 必须同时固定 parameter schema、非敏感 parameter snapshot、dialect、SQL hash 和 semantic/metric/binding IDs；Secret parameter 只保存不可逆引用或受控 SecretRef，不进入 Artifact 明文。参数化 SQL 解决安全复现与参数更新，不解决 Schema 漂移；Schema 漂移仍由 SemanticQuerySpec + RegistryBindingSet 处理。
 
 ### 动态复用策略
 
