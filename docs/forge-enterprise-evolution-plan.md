@@ -74,7 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | W2 Web 主体内容规则 | 已实施，待用户视觉确认 | 已审计 19 个模板并清理 Chat/Tasks/Registry/全局/登录页宣传与口号；H5 candidate 同步去除候选/Renderer 自述。静态回归和桌面候选通过，用户确认前不标记 verified。 |
-| W3 Web 产品骨架与交互框架 | 已确认，W3A 待实施 | `REQ-2026-08-24-014`：先建立统一信息架构、Product Shell、任务/报告/数据资产/管理页面骨架和完整 UI 状态，使用户能够尽早人工测试；Interaction-first 但不得伪造后端成功或新建第二状态源 |
+| W3 Web 产品骨架与交互框架 | W3A 实施中 | `REQ-2026-08-24-014`：先建立统一信息架构、Product Shell、任务/报告/数据资产/管理页面骨架和完整 UI 状态，使用户能够尽早人工测试；Interaction-first 但不得伪造后端成功或新建第二状态源 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
@@ -763,7 +763,7 @@ W3A 产品地图 + 隔离高保真交互骨架 + Atlas 人工门禁
   → 根据第二团队或成本证据选择 M1B 或 M2
 ```
 
-W3A 是当前唯一主动下一工作包。H5 生产 R1、H6 runtime、M1B–M7 暂停新增实现；不因前端优先删除已有 Contract、测试或失败关闭边界。
+W3A 已获用户确认并进入隔离原型实施。H5 生产 R1、H6 runtime、M1B–M7 暂停新增实现；不因前端优先删除已有 Contract、测试或失败关闭边界。
 
 明确假设：
 
