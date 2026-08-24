@@ -176,7 +176,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-004：将 NAS Forge 部署更新到当前稳定代码
 
 - **提出日期**：2026-08-24
-- **当前状态**：`assessed`
+- **当前状态**：`implementing`
 - **原始需求**：将 NAS 上的 Forge 部署更新到最新代码，以便用户查看当前 Web Chat 和任务流情况。
 
 ### 当前环境与评估
@@ -201,7 +201,8 @@ ID / 标题 / 日期 / 状态
 - 不修改 NAS mode-600 env、Identity Map、模型凭证、数据库 URL 或 Registry 数据。
 - 不 push GitHub；若用户希望远端也同步，需要另行明确授权。
 
-### 等待确认
+### 用户确认与实施
 
-- **建议决策**：`accepted_with_changes`——按“Git bundle fast-forward + 状态备份 + 空闲检查 + health/Web smoke + 可回滚、不 push”方案部署。
-- **实施状态**：等待用户在看到本评估后确认，确认前只允许只读预检。
+- **确认日期**：2026-08-24
+- **决策**：`accepted_with_changes`——用户确认按“Git bundle fast-forward + 状态备份 + 空闲检查 + health/Web smoke + 可回滚、不 push”方案部署。
+- **实施状态**：进行中。
