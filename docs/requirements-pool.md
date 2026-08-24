@@ -205,4 +205,13 @@ ID / 标题 / 日期 / 状态
 
 - **确认日期**：2026-08-24
 - **决策**：`accepted_with_changes`——用户确认按“Git bundle fast-forward + 状态备份 + 空闲检查 + health/Web smoke + 可回滚、不 push”方案部署。
-- **实施状态**：进行中。
+- **实施状态**：代码已部署，等待用户完成认证后的 `/chat` 视觉与交互确认。
+
+### 部署结果（2026-08-24）
+
+- 部署前 NAS 为 `3bd20a6`、工作树干净、Forge/Pi active、`running` StageAttempt 为 0；7 个可变 SQLite Store 使用 online backup 写入 NAS mode-700 目录 `~/services/forge-m4.1/backups/deploy-20260824T074830Z/`，配置只记录文件名/mode/size，不复制或读取 Secret 内容。
+- 未 push GitHub；通过临时 Git bundle 将 NAS `main` fast-forward 到 `e4e3cb0`，bundle 随后从 NAS `/tmp` 删除。依赖 manifest 未变化，没有重装依赖或修改 env、Identity Map、Registry、数据库 URL/凭证。
+- `forge-m41-api.service`、`forge-m41-pi.service` 重启后均 active；Forge `/health`、Pi live/readiness 均为 `ok`。
+- NAS 是固定内网 HTTP 的 dev profile：Forge dev readiness 为 `warn`，唯一原因是 `AUTH_COOKIE_SECURE=false`；这是当前无 HTTPS 的内网部署所需设置。prod profile 会对此返回 fail，不能把该 NAS 状态声明为合格公网生产部署。
+- 匿名 smoke：`/ → /chat`，`/chat` 与 `/tasks` 跳转登录，`/login` 200，未认证 `/flow` 返回 401。未使用、读取或回显管理员密码；认证后的 DAG/实时流由用户登录后完成最终视觉确认。
+- 回滚点保持 `3bd20a6`；本次未发生回滚，等待审批/分析/报告的既有 Task 未被推进或重放。
