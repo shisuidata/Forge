@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 待确认；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 R0 Contract/双 fixture/跨媒介视觉候选实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -77,7 +77,7 @@ GTM：Data-Team Led
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
-| H5 Evidence-bound Chart Storytelling | 待确认 | `REQ-2026-08-24-009`：专业报告多图叙事、现代 Chart Design System、结构化 Annotation 与 HTML 交互；先 Contract/双 fixture/跨媒介视觉候选，不以凑图数替代证据 |
+| H5 Evidence-bound Chart Storytelling | R0 实施中 | `REQ-2026-08-24-009` 已确认：先完成 ChartArtifact v2 Contract、横截面/时间趋势双 fixture、HTML/PDF/PPTX 视觉候选；用户视觉确认前不接生产 Runtime |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -441,7 +441,29 @@ H4 门禁：
 - NAS Chrome 146 实际 PDF 内容扫描不含 `file://`、`/home/`、`forge-m4.1`、`index.html` 或默认日期 header；不是只检查 command/file size。
 - 同一真实 Golden Journey 在独立 Store 和 mode-0400 datasource 重跑完成：Task 262.399s，Query 107 rows/31ms，4/4 Attempt succeeded，1 approval/1 execution，重复 Web message HTTP 200 且 QueryRun count=1；PDF/PPTX ready，0 ChartArtifact，same-page completion 可见。
 - NAS 已部署并保留回滚点 `~/services/forge-m4.1/backups/h4-p0-20260824T110913Z/`；隔离服务、override 和 tunnel 已清理，生产 health/readiness `ok`。完整证据见 [`golden-journey-p0-closure-2026-08-24.md`](golden-journey-p0-closure-2026-08-24.md)。
-- 剩余风险显式转入 P1/H5：当前 0 Chart 是正确的安全降级，不是理想专业报告体验。H5 未确认前不加入多图 DSL、交互或 Annotation Runtime。
+- 剩余风险显式转入 P1/H5：当前 0 Chart 是正确的安全降级，不是理想专业报告体验。
+
+### H5：Evidence-bound Chart Storytelling（R0 实施中）
+
+> Requirement：[`REQ-2026-08-24-009`](requirements-pool.md#req-2026-08-24-009专业报告的多图叙事现代图表与证据绑定交互) · 用户已确认第一门
+
+R0 交付范围：
+
+1. 定义独立 `ChartArtifact v2` JSON Schema 与 TypeScript Contract，不修改生产 v1 Artifact consumer。固定 `purpose/grain/unit/encoding/series/transform/annotations/evidence_refs/quality_status`，拒绝 HTML/CSS/script、任意颜色和无 Evidence annotation。
+2. 建立两个版本化真实 fixture：
+   - 横截面品类比较：支持排名、贡献/结构与 Top-N/Other，可复算且 label 唯一；
+   - 时间趋势/多系列：支持趋势、目标线/拐点/异常标注和系列对比，时间 grain 连续可验证。
+3. 生成一个自包含 HTML 视觉候选，同一报告内只放回答不同决策问题的 2–4 张图；默认正文已完整，候选交互只做无副作用的 tooltip/focus、series toggle、table fallback 和 Evidence 定位演示。
+4. 从同一 fixture/Chart v2 候选确定性生成 PDF/PPTX 视觉候选；静态媒介保留关键 annotation、单位、来源和数据质量状态，不依赖 hover。
+5. 使用 Schema tests、确定性复算、浏览器 DOM/ARIA/console/print、PDF/PPTX 内容与视觉审查建立 R0 evidence pack；由用户确认视觉、图表价值和交互方向。
+
+R0 非目标与门禁：
+
+- 不替换 `buildChartPayload` v1，不修改当前生产报告 revision，不部署候选到 NAS 生产主链。
+- 不让模型输出 HTML/CSS/script/颜色；Renderer 只消费结构化语义。
+- 不为凑数量重复同一数据；每张图必须声明非重复 `purpose`，并能从 fixture evidence 确定性复算。
+- 重复 label、截断结果、未知 unit/grain、Annotation 无 evidence、Top-N/Other 对不上原始总量时，Contract/fixture test 失败关闭。
+- 用户未通过 R0 视觉门禁前，不进入 R1 生产 Renderer 与完整交互实现。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
