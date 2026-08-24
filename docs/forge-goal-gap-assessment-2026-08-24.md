@@ -1,6 +1,8 @@
 # Forge 目标差距重评估（2026-08-24）
 
 > 评估对象：当前本地 `929e8d4`、Atlas 生产基线 `d2b0fd9`、M0–M7 唯一主动计划。百分比只表示对已定义目标的阶段估计，不是准确度、可靠性或商业成功率。
+>
+> **后续优先级修订**：本评估最初建议 M1A 作为下一工作包；用户随后确认没有稳定产品骨架就无法持续人工测试和指导方向。根据 `REQ-2026-08-24-014`，当前先执行 W3 Web Product Shell，M1A 顺延为 W3 后首个后端治理工作包。长期差距判断不变。
 
 ## 1. 先区分两个目标
 
@@ -41,21 +43,25 @@
 3. **也不应直接扩张到通用 Agent 平台。** Governance、Economics 和第二消费者尚未成立；现在扩张只会放大职责和交付债务。
 4. **可复用报告仍是最有价值的产品深化方向之一，但不能用旧 SQL/旧 Prompt 重放实现。** H6 必须建立在 M1A 的 Principal/Mandate 和 Forge compatibility decision 之上。
 
-## 4. 建议的下一阶段顺序
+## 4. 用户确认后的下一阶段顺序
 
-### P0：提出并单独批准 M1A（下一主动工作包）
+### P0：W3A 产品地图与高保真交互骨架
 
-只做 Service Identity、PrincipalContext、task-scoped DelegatedMandate、默认拒绝和 QueryRun lineage；不顺带做完整 RBAC、OAuth、Economics 或报告 Renderer。目标是把 Runtime Governance Coverage 从 0% 提升到一个有真实垂直切片支持的可测值。
+先定义工作台、新建任务、任务列表/详情、报告、数据资产和管理的信息架构，在隔离原型中覆盖完整桌面旅程和所有关键状态，发布 Atlas 供逐页人工门禁。原型允许明确标记的 fixture，不连接生产副作用。
 
-### P1：关闭一个真实用户闭环，而不是继续扩页面
+### P1：W3B/W3C 生产 Product Shell
 
-M1A 通过后，选择一个已有 Golden Journey 重跑：Web Human → Pi Service → Forge → SQL Approval → Report，证明身份篡改、过期/跨 Task mandate、空 ACL、重复事件全部失败关闭。验收仍同时检查产品结果，不只看后端。
+将用户通过的骨架接入现有 Pi/Forge/Report 真相源，打通可寻址的任务详情与报告库；再收口数据资产和管理入口。每个按钮必须真实可用或明确禁用，不建立第二套任务状态。
 
-### P2：H6 最小可复用报告切片
+### P2：M1A 运行时治理
+
+Product Shell 稳定后，只做 Service Identity、PrincipalContext、task-scoped DelegatedMandate、默认拒绝和 QueryRun lineage；不顺带做完整 RBAC、OAuth、Economics 或报告 Renderer。随后重跑 Web Human → Pi Service → Forge → SQL Approval → Report 的治理 Golden Journey。
+
+### P3：H6 最小可复用报告切片
 
 只实现 Definition/Criteria/Run Contract、手动“用最新数据更新”、两个时间点 fixture 和不可变 Run history。不做自动调度、不继承旧审批、不做免审批 SQL 重放。
 
-### P3：再决定 M1B 与 Economics 的先后
+### P4：再决定 M1B 与 Economics 的先后
 
 若出现第二个真实团队/Workspace，优先 M1B Membership/Policy/多 Binding；若模型与人工审核成本已经成为交付阻力，先做 M2 最小 Usage Ledger。不得同时全面开工。
 

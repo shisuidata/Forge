@@ -754,4 +754,83 @@ ReportRun / ReportRevision（不可变快照）
 - 访问地址：`http://192.168.8.10:18005/`。Atlas browser gate 再次通过；三个文件 SHA-256 与本地构建完全一致。
 - 生产 `forge-m41-api.service` 与 `forge-m41-pi.service` 保持 active，`~/services/forge-m4.1/source` 仍为干净的 `d2b0fd9`，未重启、未覆盖。生产 readiness 仍只有已知 `secure_cookie` fail：当前为内网 HTTP，未在本次预览部署中修改 HTTPS/Auth 配置。
 - 回滚/删除只需停止并 disable `forge-report-preview.service`，删除 `current` symlink、独立 revision 目录和该 user unit；不涉及 Forge 状态恢复。
-- 目标差距正式重评估见 `docs/forge-goal-gap-assessment-2026-08-24.md`：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%；下一建议工作包是单独批准 M1A，而不是继续扩大报告微调或平台边界。
+- 目标差距正式重评估见 `docs/forge-goal-gap-assessment-2026-08-24.md`：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%；当时建议下一工作包为 M1A，后续已被用户确认的 `REQ-2026-08-24-014` 调整为先完成 Web 产品骨架，M1A 顺延为首个后端治理工作包。
+
+---
+
+## REQ-2026-08-24-014：Web 产品骨架与可人工测试交互框架优先
+
+- **提出日期**：2026-08-24
+- **当前状态**：`accepted`
+- **用户决策**：先从整体产品框架和 Web 前端页面开始，把信息架构、页面骨架、核心交互和可见状态搭到可用、可人工测试的程度；治理、成本等内在能力适当后排。原因是没有可操作的产品外壳，用户无法持续人工测试、指导产品走向或判断后端能力是否真正形成产品价值。
+
+### 评估结论
+
+方向成立，但采用 **Interaction-first、Contract-backed**，不是“先做一套假前端”：
+
+- Web 可以先于完整后端展示产品结构和所有关键状态，但不得建立第二套 Task/Artifact/Approval 真相源；
+- 已实现能力连接真实接口；未实现能力必须显示明确状态、限制或“尚未开放”，不能提供会伪造成功的按钮；
+- 演示数据只允许存在于隔离 R0 原型并清楚标注，不得混入生产 Store、Audit 或真实任务；
+- 先搭骨架不等于冻结领域 Contract。页面状态必须从现有 Task、Artifact、QueryRun、Report 和 Registry 概念投影，避免后端完成后推翻全部交互。
+
+### 当前 Web 审计反证
+
+- 20 个 Jinja 模板虽然共享 `base.html`，但 `/chat`、`/tasks`、管理后台和报告使用多套视觉语法，缺少统一产品框架；
+- 左侧导航平铺约 16 个入口，把最终用户工作流、Registry、内部 Pipeline、Memory、架构图和系统设置混在同一层级；
+- `/admin/dashboard` 是系统健康概览，不是用户工作台；任务创建、任务监控、对话、报告和审计之间缺少清晰的信息架构；
+- `/tasks` 同页堆叠创建、事件、SQL、结果、分析和报告，缺少可寻址 Task Detail；报告有 detail/share API，但没有用户可发现的 Report Library；
+- Tailwind/Marked 依赖 CDN，页面级内联 CSS/JS 较多，设计 token、组件状态和交互反馈不统一；
+- 当前页面可以运行，但还不能作为稳定的产品测试框架。
+
+### W3 目标信息架构
+
+主导航只保留用户能够理解的产品对象：
+
+1. **工作台**：等待处理、进行中任务、最近报告、系统阻断；
+2. **新建任务**：对话式提出问题、补充目标和选择交付物；
+3. **任务**：Task inbox、筛选、Task Detail、计划、审批、结果、分析、报告和活动；
+4. **报告**：Report Library、Report Detail、下载/分享；Reusable Definition 在 H6 前显示为未开放，不伪造；
+5. **数据资产**：结构、指标、语义规则、Registry Draft/Revision；
+6. **管理**：团队、审计、模型/渠道/数据库和系统设置。Pipeline、Memory、Architecture 等开发/诊断入口不再占据主导航第一层。
+
+已有 URL 优先兼容，通过导航分组和新聚合页面逐步迁移，不立即删除旧路由。
+
+### W3 分门实施
+
+#### W3A：产品地图与高保真交互骨架
+
+- 输出页面地图、对象关系、路由兼容矩阵、关键用户旅程和每页状态/动作清单；
+- 建立隔离、桌面优先的高保真 Web shell 原型，覆盖工作台、新建任务、任务列表/详情、SQL 审批、查询结果、分析、报告、数据资产和管理框架；
+- 原型允许使用固定 fixture，但页面必须显式标记“演示数据”，副作用按钮不得连接生产；
+- 建立本地 design tokens、排版、表单、按钮、表格、状态、空/loading/error/forbidden、drawer/dialog、callout 与 Evidence 交互规范；不使用 CDN，不使用 slogan 或营销 Hero；
+- 部署到 Atlas 独立预览端口，由用户进行逐页人工门禁。用户确认 IA 和交互方向前，不大范围改写生产模板。
+
+#### W3B：生产 Product Shell 与核心旅程
+
+- 将通过门禁的 shell 接入 Jinja/Web，统一本地资源、主导航、页面头、Workspace/身份上下文、内容宽度、反馈和可访问性；
+- 新增可寻址 Task Detail 和 Report Library projection，连接现有 Pi/Forge/Report 真相源；
+- 打通“新建任务 → 查看计划 → 补充信息/审批 SQL → 查看结果/分析/报告 → 回到任务/报告列表”的桌面 Golden Path；
+- 每个可见按钮必须真实可用或明确 disabled+原因；刷新、后退和深链接不丢失当前对象；
+- 生产切换使用单一 feature flag 和明确回滚点，不长期维护两套 Product Shell。
+
+#### W3C：数据资产与管理信息架构收口
+
+- 将 Schema、Metrics、Semantic、Staging、Registry Studio 收口到“数据资产”二级导航；
+- 将 Team、Audit、Model、Channel、Database、System 收口到“管理”；
+- Legacy Pipeline、Session、Memory 与 Architecture 作为诊断入口，不再与日常任务并列；
+- 本阶段只重组入口和交互，不顺带实现 M1B、M2、M3 或通用 Memory Service。
+
+### 人工与自动验收
+
+- 桌面端至少覆盖 1440×900 和 1600×1000；当前不把移动端加入 Pass/Fail；
+- 用户无需知道 Pi、Forge JSON、Artifact type 或内部 stage code，也能找到当前任务、风险、下一步和最终报告；
+- 从任意主页面最多两次导航到达新建任务、等待审批、失败任务和最近报告；
+- 所有页面具备 loading、empty、ready、partial、needs_input、waiting_approval、failed、forbidden/offline 中适用状态；
+- Playwright 验证导航、键盘/focus、深链接、刷新恢复、dialog/drawer、无死按钮、0 console/page error 和无横向溢出；
+- 人工门禁优先判断：产品结构是否容易理解、下一步是否明显、状态是否可信、页面之间是否像同一个产品。自动测试通过不能替代用户判断。
+
+### 优先级调整
+
+- W3A 成为唯一主动下一工作包；W3A 用户门禁通过后进入 W3B，随后 W3C。
+- M1A 不取消，顺延为 Product Shell 核心旅程稳定后的首个后端治理工作包；涉及真实跨用户/跨团队生产开放前仍必须完成。
+- H5 生产 R1、H6 runtime、M1B–M7 暂停新增实现，只保留已有 Contract、证据和 backlog。

@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；W2 Web 主体内容规则已实施；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 Editorial Report revision 暂定保留且已发布 Atlas 隔离预览；阶段重评估完成，运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与长期边界已确认；M0 Governance Contract Ready 已完成但 Runtime Coverage 仍为 0%；用户已调整近期顺序，W3 Web 产品骨架与可人工测试交互框架成为唯一主动下一工作包；M1A 顺延为 W3 后首个后端治理工作包，H5/H6/M1B–M7 暂停新增实现 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -8,7 +8,7 @@
 
 ## 0. 摘要与硬约束
 
-采用“近期详、远期粗”的门禁式路线：先收口计划与 Contract，再分三步完成企业治理基础；随后建设成本账本、多人决策、平台 Assurance，最后以第二场景决定 Context/Memory 和更广 AI Infra 的边界。
+采用“近期详、远期粗”的门禁式路线。M0 已完成 Contract 收口；当前根据用户人工测试需求，先建设不复制后端真相源的 Web 产品骨架和关键交互，再进入 M1A 运行时治理。随后才考虑多 Binding、成本账本、多人决策和平台 Assurance，最后以第二场景决定 Context/Memory 和更广 AI Infra 的边界。
 
 全程保持以下硬约束：
 
@@ -74,6 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | W2 Web 主体内容规则 | 已实施，待用户视觉确认 | 已审计 19 个模板并清理 Chat/Tasks/Registry/全局/登录页宣传与口号；H5 candidate 同步去除候选/Renderer 自述。静态回归和桌面候选通过，用户确认前不标记 verified。 |
+| W3 Web 产品骨架与交互框架 | 已确认，W3A 待实施 | `REQ-2026-08-24-014`：先建立统一信息架构、Product Shell、任务/报告/数据资产/管理页面骨架和完整 UI 状态，使用户能够尽早人工测试；Interaction-first 但不得伪造后端成功或新建第二状态源 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
@@ -286,6 +287,46 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - 已清理 Chat slogan/营销空状态、Tasks integration/架构宣传、Registry 控制面 eyebrow、全局与登录页产品描述，以及 Architecture Atlas 中的产品主张；管理员技术状态、架构事实与审批/DDL 风险说明保留。
 - H5 candidate 删除“可信数据报告”、英文氛围标签和 Renderer/版本/候选说明；业务 Evidence 与报告限制保留。
 - `tests/test_web_product_content.py` 与相关 Web 定向测试共 76 passed；桌面 H5 candidate 0 browser errors。等待用户视觉确认后再标记 verified。
+
+## W3：Web 产品骨架与可人工测试交互框架（当前唯一主动方向）
+
+> Requirement：[`REQ-2026-08-24-014`](requirements-pool.md#req-2026-08-24-014web-产品骨架与可人工测试交互框架优先) · 决策：`accepted`
+
+### W3.1 Problem 与原则
+
+当前 20 个 Jinja 模板具备零散能力，但导航平铺最终用户、管理和开发入口，Chat、Tasks、Admin、Report 使用多套视觉语法；Dashboard 偏系统健康，Task 没有可寻址详情，Report 没有 Library。用户无法通过稳定产品框架持续人工测试和指导方向。
+
+采用 `Interaction-first, Contract-backed`：Web 可以先搭完整页面骨架和状态，但 Task、Artifact、QueryRun、Approval、Report 与 Registry 继续使用原真相源；演示数据只进入隔离原型并明确标记；生产中的按钮必须真实可用或 disabled 并说明原因。
+
+### W3.2 目标信息架构
+
+- **工作台**：待处理、进行中任务、最近报告、阻断状态；
+- **新建任务**：对话提出问题、补充目标和选择交付物；
+- **任务**：Task inbox 与可寻址 Detail，组织计划、补充输入、SQL 审批、结果、分析、报告和活动；
+- **报告**：Library、Detail、下载/分享；H6 前不伪造 Reusable Definition；
+- **数据资产**：Schema、Metrics、Semantic、Staging、Registry Draft/Revision；
+- **管理**：Team、Audit、Model、Channel、Database、System；Pipeline/Session/Memory/Architecture 降为诊断入口。
+
+现有 URL 尽量保持兼容；通过聚合页和分组导航迁移，不立即删除旧路由。
+
+### W3.3 分门顺序
+
+1. **W3A 产品地图与高保真骨架**：按 [`web-product-shell-plan-2026-08-24.md`](web-product-shell-plan-2026-08-24.md) 的页面/对象/路由矩阵、关键旅程、状态与动作清单，构建无 CDN 的桌面隔离原型，覆盖全部主页面和 waiting/failed/empty 等关键状态；发布 Atlas 独立预览，由用户逐页门禁。
+2. **W3B 生产 Shell 与核心旅程**：通过门禁后才改生产 `base.html` 与本地静态资源；新增 Task Detail 和 Report Library projection；打通新建任务→计划→补充/审批→结果→分析→报告→列表的真实桌面路径；使用单一 feature flag 和回滚点。
+3. **W3C 数据资产与管理收口**：重组二级导航和入口，保留现有领域真相源；不顺带建设 M1B、M2、M3 或通用 Memory。
+
+### W3.4 验收门禁
+
+- 1440×900 与 1600×1000 桌面优先；移动端不参与当前 Pass/Fail；
+- 用户无需理解 Pi、Forge JSON、Artifact 或 stage code，即可找到任务状态、风险、下一步和报告；
+- 从任意主页面最多两次导航到达新建任务、等待审批、失败任务和最近报告；
+- 所有页面覆盖适用的 loading、empty、ready、partial、needs_input、waiting_approval、failed、forbidden/offline；
+- 无死按钮；真实与演示数据不会混淆；后退、刷新、深链接和焦点行为可预测；
+- Playwright 检查导航、键盘、dialog/drawer、0 console error 和无横向溢出；用户人工判断信息架构、下一步可发现性和产品一致性，自动测试不能替代视觉/交互门禁。
+
+### W3.5 后端顺延边界
+
+M1A 不取消，但顺延为 W3 核心 Product Shell 稳定后的首个后端工作包。W3 不允许对真实跨用户/跨团队能力作已完成声明，也不能因前端优先而扩大默认允许 ACL。涉及企业多用户生产开放前，M1A/M1B 仍是硬阻断。
 
 ## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
 
@@ -708,9 +749,21 @@ Observed Cost / Outcome
 | Memory 抽象过早 | 第二场景、第二消费者和对比实验作为前置门禁 |
 | 平台愿景拖慢现有产品 | 每阶段必须通过真实数据任务垂直切片，不做无消费者基础设施 |
 
-## 15. 实施顺序与首个工作包
+## 15. 当前实施顺序
 
-本计划确认后的首个工作包只执行 **M0.1–M0.3**：先更新计划状态和基线，再定义 Governance 内核与 Action Catalog；不修改 Task API、数据库 Schema、授权行为或 OAuth Runtime。完成 Contract 评审后，再分别批准 M1A、M1B、M1C，避免一次性身份重构和大范围回归。
+M0.1–M0.5 已完成 Contract Ready。用户在阶段重评估后明确将可人工测试的产品外壳置于下一优先级，当前顺序调整为：
+
+```text
+W3A 产品地图 + 隔离高保真交互骨架 + Atlas 人工门禁
+  → W3B 生产 Product Shell + 真实 Golden Path
+  → W3C 数据资产/管理入口收口
+  → M1A Runtime Identity / Delegation / Default Deny
+  → 真实治理 Golden Journey
+  → H6 最小可复用报告切片
+  → 根据第二团队或成本证据选择 M1B 或 M2
+```
+
+W3A 是当前唯一主动下一工作包。H5 生产 R1、H6 runtime、M1B–M7 暂停新增实现；不因前端优先删除已有 Contract、测试或失败关闭边界。
 
 明确假设：
 
