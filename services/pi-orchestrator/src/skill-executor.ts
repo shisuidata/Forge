@@ -451,15 +451,19 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
           options.message,
         ].join("\n"),
       );
-      const firstFailure = session.failureCategory?.();
-      if (firstFailure) throw new SkillExecutionError(`Model execution failed: ${firstFailure}`);
+      if (!options.isSubmitted()) {
+        const firstFailure = session.failureCategory?.();
+        if (firstFailure) throw new SkillExecutionError(`Model execution failed: ${firstFailure}`);
+      }
       if (!options.isSubmitted() && !isAborted(options.signal)) {
         await session.prompt(
           `上一次没有提交 Artifact。现在必须立即调用 ${options.tool.name}；不要解释，不要输出 Markdown 或自由文本。`,
         );
-        const correctionFailure = session.failureCategory?.();
-        if (correctionFailure) {
-          throw new SkillExecutionError(`Model execution failed: ${correctionFailure}`);
+        if (!options.isSubmitted()) {
+          const correctionFailure = session.failureCategory?.();
+          if (correctionFailure) {
+            throw new SkillExecutionError(`Model execution failed: ${correctionFailure}`);
+          }
         }
       }
     } finally {

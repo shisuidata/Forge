@@ -181,6 +181,7 @@ test("Pi Skill executor emits sparse model and Artifact progress without streami
           await invoke(tool, validAnalysis);
         },
         async abort() {},
+        failureCategory: () => "provider_unavailable",
         dispose() {},
       };
     },
