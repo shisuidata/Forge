@@ -266,3 +266,53 @@ ID / 标题 / 日期 / 状态
 - **Plan**：`forge-enterprise-evolution-plan.md` H1。
 - **NAS backup**：`~/services/forge-m4.1/backups/h1-analysis-v2-20260824T083911Z/`。
 - **UI 验收图**：本地 `/tmp/forge-analysis-progress.png`。
+
+---
+
+## REQ-2026-08-24-006：对话与报告的长文本可读性和语义化强调
+
+- **提出日期**：2026-08-24
+- **当前状态**：`assessed`
+- **原始需求**：像截图中的长文本，应通过加粗、下划线、斜体、强调色或 callout 提升阅读体验；不仅用于对话，也用于报告。
+
+### 真实问题与目标结果
+
+当前 Web Chat 将知识回答压成“summary + 同级 bullet”，浏览器 Markdown renderer 只支持链接、一级列表和代码块：`**强调**`、标题、编号/嵌套列表、inline code 与 blockquote 都不会形成视觉层级。截图中的默认口径、适用场景、歧义、字段和澄清要求因此混在同一阅读平面。
+
+业务报告虽然已有固定章节，但 executive summary、结论、建议和限制仍主要依赖同质卡片/列表；PPTX 也以普通大段 bullet 为主。目标不是“让模型自由装饰文本”，而是让用户能快速扫描：定义、事实、结论、风险/歧义、限制、建议和下一步在所有输出渠道中有稳定层级。
+
+### 两个子需求
+
+1. **对话长文本**：支持安全、受限的富文本层级，包括 H2/H3、加粗、斜体、inline code、链接、编号/嵌套列表、引用，以及 `info / success / warning / limitation` 语义 callout；改善行宽、段距、列表缩进和移动端排版。
+2. **业务报告长文本**：Web 报告与 PDF 使用同一语义化视觉系统；executive summary、关键发现、建议、限制/风险、证据说明映射为固定组件和强调色。PPTX 至少保持相同的信息优先级与风险/建议区分，不退化为整页同级长 bullet。
+
+### 评估
+
+- **用户价值**：高。直接降低指标口径、分析结论和报告的扫描成本，也减少重要歧义与限制被漏读的风险。
+- **架构一致性**：Renderer 负责渠道表示，Artifact 保持事实与语义真相；Web/PDF/PPTX 不应各自发明结论或改变证据边界。
+- **安全与可信边界**：不得允许模型输出任意 HTML、CSS、颜色或脚本。Markdown 只实现安全子集，使用 DOM `textContent`/属性白名单生成节点；callout 和强调色由服务端/Renderer 根据结构化语义决定。
+- **可访问性**：普通下划线容易与链接混淆，因此不建议作为任意强调方式；下划线只保留给链接。强调使用字重、斜体、左边框、背景和可读标签，并验证对比度、键盘、打印及 reduced-motion。
+- **现有复用**：Chat 可扩展现有无依赖 `renderMarkdown`；报告可复用 `RenderedOutputArtifact / AdvisoryArtifact / AnalysisArtifact` 已有 `summary/findings/recommendations/limitations/open_questions/confidence/priority`，以及 `_business_html` 的确定性投影和 PDF 打印链路。
+- **关键缺口**：截图中的知识回答目前只投影 advisory 的 summary/findings，忽略 recommendations、assumptions、limitations、open questions 与 deliverables；仅补 CSS 无法恢复这些语义。需要先完善 Renderer 映射，再做样式。
+- **复杂度**：中。Chat 安全 Markdown 与语义投影约为一个垂直切片；Web/PDF 报告可共用 HTML；PPTX 需独立验证分页、溢出和字体，不应假设 CSS 自动同步。
+
+### 备选方案
+
+1. **允许模型直接输出 HTML/颜色**：表达自由，但存在注入、品牌漂移、可访问性和跨渠道不一致，拒绝。
+2. **仅增强 Markdown 语法和 CSS**：改动小，但 Artifact 中已有的限制、建议等语义仍会丢失，且 callout 只能靠文本约定猜测，不足。
+3. **语义块优先 + 安全 Markdown 子集**：Renderer 将既有结构化字段投影为固定章节/callout；字段内部再支持安全 inline Markdown。兼顾可信、可读和跨渠道一致，建议采纳。
+4. **立即新增通用 RichText Artifact DSL**：长期最完整，但当前只有 Web Chat 与 Report 两个消费者，过早冻结新 DSL；本轮不建议。
+
+### 建议方案与验收边界
+
+- 采用方案 3，分成同一需求下两个可独立验收的切片：`R1 Chat readability`、`R2 Report readability`。
+- 第一轮不新增任意 HTML，也不让模型选择颜色；不使用普通下划线强调。
+- Chat 先完整投影 advisory/analysis 的语义字段，并实现安全 Markdown 子集与 callout 组件；报告再复用同一 design token 和语义映射到 Web/PDF，最后验证 PPTX。
+- 至少用截图对应的指标口径长文、分析长文、限制/歧义 callout、移动端、打印/PDF 和一份 PPTX 做视觉回归；同时测试 HTML/script 被当作纯文本、外链安全属性和既有 SQL code block 不回归。
+- **可证伪条件**：若视觉层级只能靠 Renderer 猜关键词，或 Web/PDF/PPTX 同一语义产生冲突表达，则暂停扩展并重新评估版本化 Presentation Block Contract，而不是继续堆正则。
+
+### 待用户确认
+
+1. “报告”是否确认包含业务 Web 报告、PDF 和 PPTX；技术报告只做基础排版一致性，不进行业务化 callout？
+2. 是否接受“普通下划线不作为强调；颜色与 callout 由结构化语义和设计系统决定，模型不能自由选择”的边界？
+3. 建议顺序为先 `R1 Chat`，确认视觉方向后再做 `R2 Web/PDF/PPTX`；是否按此顺序进入 Plan？
