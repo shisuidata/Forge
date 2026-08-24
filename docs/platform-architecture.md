@@ -291,6 +291,36 @@ needs_input / incomplete / cancelled / failed / expired
 
 Artifact 采用 Schema-on-Read，并通过 `schema_version` 保证向后兼容。原始 Artifact 不原地覆盖；修改和重跑产生新版本，保留来源关系。
 
+### 5.2 可复用报告与语义查询资产
+
+跨天/月更新的报告不把旧 SQL 或 Prompt 当复用真相源。目标对象分为：
+
+```text
+ReusableReportDefinition（版本化方法）
+  ├── SemanticQuerySpec（稳定 metric/dimension/grain/filter/time/relationship ID）
+  ├── RegistryBindingSet（semantic ID → 当前物理 Schema）
+  ├── JudgementCriteria（版本化目标/阈值/基线）
+  ├── Chart Story / Skill / Delivery policy
+  └── Parameters
+             ↓ Pi 创建新 TaskRun
+Forge QueryReuseDecision
+  ├── reuse_compiled_sql
+  ├── rebind_and_recompile
+  ├── replan_from_semantics
+  └── blocked_needs_input
+             ↓ Assurance + 必要审批
+ReportRun（不可变证据快照）
+```
+
+职责边界：
+
+- Pi 编排 Definition Draft 确认、手动 rerun、等待输入和 Run 对比；不判断 SQL 是否仍兼容。
+- Forge 持有 SemanticQuerySpec 的查询契约、Registry Binding compatibility、Forge JSON/Compiler/Assurance 和 QueryReuseDecision；旧 SQL 只是 `CompiledQuerySnapshot`，不是未来执行授权。
+- Web 提供“保存为可复用报告 / 用最新数据更新 / 调整判断标准”、Definition Library 和 Run History，只投影 Pi/Forge 真相源。
+- 每次 Run 固定 definition/semantic/binding/criteria/skill/model/registry/policy/sql lineage。数据更新产生新 Run；标准更新先产生新 Definition/Criteria revision；历史 Report revision 永不原地重写。
+- 只有物理 binding 和所有当前 Gate 可证明兼容时才允许复用 compiled SQL，且仍重新校验当前 Authorization/Safety；Schema drift 时优先按 stable semantic ID rebind/recompile，语义冲突时失败关闭或重新规划并人工 review。
+- 自动调度和免逐次审批需要独立 Budget/Owner/Policy/DelegatedMandate，不由“保存模板”隐式获得。
+
 ## 6. 查询审批与信任边界
 
 查询执行必须满足：

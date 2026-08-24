@@ -510,3 +510,81 @@ ID / 标题 / 日期 / 状态
 ### 决策
 
 用户于 2026-08-24 明确确认 H5 图表叙事方案。H5 第一门只实施 `ChartArtifact v2 Contract + 横截面/时间趋势两个真实 fixture + HTML/PDF/PPTX 视觉候选`；候选必须先由用户做视觉与信息价值确认，未经确认不进入完整交互 Runtime、不替换生产 ChartArtifact v1、不部署到生产报告主链。
+
+---
+
+## REQ-2026-08-24-010：将一次性报告保存为可复用分析定义并持续更新
+
+- **提出日期**：2026-08-24
+- **当前状态**：`assessed`
+- **原始需求**：报告、图表和分析应抽象成可复用方案；数天或数月后数据变化时，用户可以从现有报告核心内容重新取数，并更新判断标准，需要明确的产品入口和功能。
+
+### 第一性原理结论
+
+这不应实现为“修改旧报告”或“复制一份 Prompt”，而应拆成两个对象：
+
+```text
+ReusableReportDefinition（可演进、版本化）
+        ↓ 每次运行
+ReportRun / ReportRevision（不可变快照）
+```
+
+- **Definition 是方法资产**：目标、Audience、Owner、参数、指标、grain、Datasource/Registry binding、判断标准、Chart Story、Skills/Model policy、交付渠道与更新策略。
+- **Run 是证据快照**：固定 TaskRun、QueryRun、审批、数据时间、Registry/Skill/Model/Policy revision、Analysis、Chart、Report 和 Export；历史 Run 永不原地改写。
+- “更新数据”创建新 Run；“更新判断标准/目标线/阈值”先创建 Definition 新 revision，展示 diff 并确认，再运行。不能让新标准悄悄重解释历史报告。
+
+### 建议产品入口
+
+1. **报告页主操作**：
+   - `保存为可复用报告`：从当前不可变 Report Bundle 提取 Definition Draft，用户确认名称、Owner、参数和判断标准；
+   - `用最新数据更新`：基于当前 Definition revision 创建新 TaskRun，显示数据范围、变化的 Registry/标准和审批点；
+   - `调整判断标准`：进入版本化 Criteria editor，展示前后 diff，不直接改当前 Report。
+2. **可复用报告库**：显示 Definition、Owner、状态、最近数据时间、最近结论、Definition revision、Run history 和下一建议更新时间；支持暂停/归档，不删除历史 Evidence。
+3. **更新向导**：选择时间范围/参数 → 检查数据源与 Registry drift → 预览指标/标准/Chart Story → SQL review/授权 → 新 Run → 与上一 Run 做差异摘要。
+4. **历史对比**：新旧 Run 的数据、判断标准、结论、Annotation 和质量状态分别比较；区分“数据变化导致结论变化”与“标准变化导致结论变化”。
+
+### Contract 建议
+
+- `ReusableReportDefinition v1`：`definition_id/revision/title/purpose/audience/owner/parameters/metric_refs/grain/semantic_query/criteria/chart_story/skill_policy/delivery_policy/bindings/status`。
+- `SemanticQuerySpec v1`：保存稳定语义 ID，而不是只保存物理表列名：`intent/metrics/dimensions/grain/filters/time_semantics/relationships/order/limit/parameters/expected_shape`；可包含已通过 Forge Assurance 的 Forge JSON semantic plan，但不能把模型自由文本或旧 Prompt 当查询真相源。
+- `RegistryBindingSet v1`：记录 semantic ID → 当前 datasource/table/column/relationship 的物理绑定、Registry revision、binding status 与兼容性；表结构变化后可重新绑定。
+- `CompiledQuerySnapshot v1`：每次 Run 固定当时的 Forge JSON、参数化 SQL、bound parameters、dialect、SQL hash、Registry/Assurance/Policy revision 和审批；它用于复现，不是未来运行的唯一源。
+- `JudgementCriteria v1`：目标值、阈值、比较基线、方向、适用 scope、生效时间、Owner/approver 和 revision；禁止只有自然语言没有可计算字段。
+- `ReportRun v1`：`definition_revision + semantic_query_revision + binding_snapshot + compiled_query_snapshot + parameter_snapshot + task/query/report lineage + data_as_of + criteria_revision + outcome/diff`。
+- 若“带引号的 SQL”指参数化/带引用 SQL，则必须把 literal 与 SQL 分离保存，并引用 semantic/metric/binding ID；quoted identifier 只能解决方言和保留字，不能解决 Schema 漂移。该术语需用户进一步确认后再固化命名。
+
+### 动态复用策略
+
+产品不能把“复用旧 SQL 还是重新生成”交给模型自由判断，而应由 Forge deterministic compatibility planner 输出一种可审计策略：
+
+1. `reuse_compiled_sql`：Datasource/dialect、Registry 物理 binding、字段类型、关系、Policy 和 SQL Assurance 仍兼容，且只有已声明 parameter 变化；旧 SQL 仍需重新过当前 Safety/Authorization，旧审批不自动延续。
+2. `rebind_and_recompile`：SemanticQuerySpec 未变，但表/字段物理 binding 发生可证明的 rename/move/type-compatible drift；基于 stable semantic ID 重新绑定并确定性编译新 SQL，再 Assurance/审批。
+3. `replan_from_semantics`：指标、关系、grain 或当前 Registry 无法直接重绑；使用原 SemanticQuerySpec + 当前 Registry 生成新的不可信 Forge JSON candidate，再进入完整 Assurance 和人工 review。
+4. `blocked_needs_input`：Semantic ID 缺失、多个 binding 冲突、标准含义改变或结果 shape 不兼容；失败关闭并要求用户/数据团队确认，不能猜。
+
+每次选择必须生成 `QueryReuseDecision`：记录候选策略、兼容性 diagnostics、旧/新 Registry diff、实际 SQL 是否变化、是否需要审批和最终责任人。SQL reuse 是优化，不是产品真相；SemanticQuerySpec 才是跨 Schema 演进的主要复用资产。
+
+### 职责与安全边界
+
+- Pi 创建/调度 ReportRun，维护等待、恢复和对比流程；Forge 继续独立准备、Assure、审批和执行查询；Web 只提供 Definition/Run projection 和操作入口。
+- Skills/Prompt 版本必须固定在 Definition 或 Run；升级 Skill 形成可见 migration proposal，不静默改变同一 Definition 的分析方法。
+- 数据源、Registry、指标、ACL、判断标准或 Chart Contract 漂移时必须提示并失败关闭或要求新 revision；不得用旧审批执行新 SQL。
+- 定时运行属于后续切片。v1 先支持手动“用最新数据更新”；自动计划需要 Owner、Budget、通知、失败策略和有界授权，不能默认自动执行高风险副作用。
+
+### 验收与反证
+
+- 同一 Definition 连续运行两次，产生两个不可变 ReportRun，旧 URL/PDF/PPTX 和 Evidence hash 不变。
+- 只更新数据时 criteria revision 不变；只更新标准时 data snapshot 不冒充变化来源；UI 明确区分两类 diff。
+- Schema/Registry/Skill/Criteria 漂移均不能静默复用旧 Query approval。
+- 用户能从报告页在 3 个动作内发起更新，并在报告库看到 Definition 与 Run history；失败可恢复，不重复执行 SQL。
+- 若第二个真实报告场景无法复用同一 Definition Contract，或用户不能理解 Definition/Run 区别，应停止抽象，不建设通用模板平台。
+
+### 建议顺序与边界
+
+- **优先级**：P1，商业价值高。这会把一次性 AI 报告升级为组织可持续使用的“分析产品”。
+- **建议顺序**：H5 R0 视觉门禁完成后，先做 H6 Contract/双场景/入口原型；用户确认 Definition/Run 心智后，再实现手动 rerun。自动调度和免逐次审批不进入第一版。
+- **不做**：原地修改旧 Report revision；保存自由 Prompt 当模板；静默升级 Skill/标准；后台自动重放 SQL；移动端。
+
+### 待用户确认
+
+是否接受把该能力作为独立 H6：第一门只做 `ReusableReportDefinition + JudgementCriteria + ReportRun Contract`、两个跨时间 fixture，以及报告页/报告库/更新向导桌面原型；通过心智与视觉门禁后，再实现手动“用最新数据更新”的生产链路？

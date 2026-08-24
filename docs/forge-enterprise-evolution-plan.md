@@ -78,6 +78,7 @@ GTM：Data-Team Led
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
 | H5 Evidence-bound Chart Storytelling | R0 实施中 | `REQ-2026-08-24-009` 已确认：先完成 ChartArtifact v2 Contract、横截面/时间趋势双 fixture、HTML/PDF/PPTX 视觉候选；用户视觉确认前不接生产 Runtime |
+| H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -466,6 +467,8 @@ R0 非目标与门禁：
 - 重复 label、截断结果、未知 unit/grain、Annotation 无 evidence、Top-N/Other 对不上原始总量时，Contract/fixture test 失败关闭。
 - 用户未通过 R0 视觉门禁前，不进入 R1 生产 Renderer、完整交互或 Skills/Prompt 修改。
 - R1 生产切换时，Analysis/Report Skills、Structured Tool Schema、`skill-executor`、Skills package revision、Chart Contract 和 Renderer 必须作为一个兼容矩阵门禁同步发布；任何一项仍是旧版本则失败关闭。Skill/Prompt 只输出结构化语义与 Evidence，不控制视觉 token、HTML/CSS/script 或颜色。
+- 用户在 R0 评审期间提出“报告跨时间复用、更新数据与判断标准”的长期入口，已评估为独立 `REQ-2026-08-24-010 / H6`。H5 Chart Contract 可成为 Definition 的一个依赖，但 H5 不顺带建设 Definition Store、Scheduler 或 rerun 状态机。
+- H6 的复用真相源必须是 `SemanticQuerySpec + stable semantic IDs + RegistryBindingSet`，不是旧 SQL 或旧 Prompt。每个 Run 仍保存 CompiledQuerySnapshot 供复现；Forge compatibility planner 确定性选择 `reuse_compiled_sql / rebind_and_recompile / replan_from_semantics / blocked_needs_input`，模型不得自由决定绕过 Assurance/审批。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
