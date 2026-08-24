@@ -425,7 +425,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-008：关闭 Golden Journey 的 P0 可信交付缺陷
 
 - **提出日期**：2026-08-24
-- **当前状态**：`accepted`
+- **当前状态**：`verified`
 - **来源**：`REQ-2026-08-24-007` Golden Journey 正式评审。
 - **原始需求**：完整物理链路虽成功，但当前产品仍可能交付泄漏内部路径的 PDF、误导性 Chart，以及在真实同页操作中看不到报告完成卡片；必须在扩展 edge journey 前关闭。
 
@@ -451,9 +451,14 @@ ID / 标题 / 日期 / 状态
 - **不做**：当前不处理移动端；不改变 Pi/Forge 边界；不修改生产认证/数据库；不直接编辑已发布不可变报告；不因测试数据异常而美化/隐藏原始 QueryResult。
 - **可证伪门禁**：真实 NAS PDF 不含 `file://`/`/home/`/浏览器默认 header；same-page 长 Analysis→Report→Publication 无刷新可见；重复可见维度的 Chart fixture 被聚合、加 key 或拒绝，绝不静默画前 N 行。
 
-### 决策
+### 决策与结果
 
-用户于 2026-08-24 明确确认修复 Golden Journey P0。按 P0-A PDF leak → P0-B same-page completion → P0-C Chart grain/quality gate 的顺序进入唯一主动 Plan；完成后重跑同一桌面 Golden Journey。P1 继续保留在需求池，不自动扩大本轮范围。
+用户于 2026-08-24 明确确认修复 Golden Journey P0。已按 P0-A PDF leak → P0-B same-page completion → P0-C Chart grain/quality gate 的顺序完成并部署；P1 继续保留在需求池，没有自动扩大本轮范围。
+
+- Python `553 passed / 24 skipped`；Pi `96 passed`；typecheck、npm audit、桌面 Playwright 和实际 NAS Chrome PDF 内容扫描均通过。
+- 同一 Golden Journey 重跑 262.399s 完成，1 次审批/1 次执行，重复消息未创建第二个 QueryRun；Report/PDF/PPTX ready，数据源保持 mode `0400` 且无 WAL/SHM。
+- Report running 与 Publication complete 同页可见；PDF 不再包含 `file://`/`/home/`/默认 header；重复品类 label 使 ChartArtifact fail-closed 为 0，不再发布误导图。
+- 正式证据：[`golden-journey-p0-closure-2026-08-24.md`](golden-journey-p0-closure-2026-08-24.md)。
 
 ---
 

@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 已完成且产品验收 FAIL；H4 Golden Journey P0 修复实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 待确认；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -76,7 +76,7 @@ GTM：Data-Team Led
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
-| H4 Golden Journey P0 Closure | 实施中 | `REQ-2026-08-24-008` 已确认：依次关闭 PDF internal-path leak、same-page completion 可见性、Chart grain/critical-quality fail-closed；仅桌面端，P1 不自动扩围 |
+| H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
 | H5 Evidence-bound Chart Storytelling | 待确认 | `REQ-2026-08-24-009`：专业报告多图叙事、现代 Chart Design System、结构化 Annotation 与 HTML 交互；先 Contract/双 fixture/跨媒介视觉候选，不以凑图数替代证据 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -413,7 +413,7 @@ Playwright 驱动并在每一步建立 checkpoint：
 - P1 包括 decision-readiness、SQL review 修改需求路径、结果单位/异常、主进度可读、长卡片 action、报告风险前置和 PPTX 封面截断。完整证据见 [`golden-journey-acceptance-2026-08-24.md`](golden-journey-acceptance-2026-08-24.md)。
 - 隔离服务已停止，临时 service/channel keys 删除；生产 Forge/Pi health/readiness 正常。P0 修复已登记 `REQ-2026-08-24-008`。
 
-### H4：Golden Journey P0 Closure（实施中）
+### H4：Golden Journey P0 Closure（已完成）
 
 > Requirement：[`REQ-2026-08-24-008`](requirements-pool.md#req-2026-08-24-008关闭-golden-journey-的-p0-可信交付缺陷) · 用户已确认
 
@@ -433,6 +433,15 @@ H4 门禁：
 - 同一 Golden Journey 的物理不变量继续全 PASS，三个 P0 均通过视觉和自动断言；否则 H4 继续失败。
 - P1、移动端和 M1A 不在本工作包范围。
 - 用户在 H4 实施期间新增“专业报告多图、现代样式、交互与标注”方向，已评估为独立 `REQ-2026-08-24-009 / H5`。H4 只保留重复 label fail-closed，不在 P0 修复中仓促加入自由图表 DSL 或视觉大重写。
+
+### H4 实施结果（2026-08-24）
+
+- `b5e4884`：PDF exporter 关闭 Chrome 默认 header/footer；Chat/Flow 固定 viewport ownership 和独立 scroll；Chart builder 要求 unique visible grain，固定 10-point evidence projection，Report Renderer 对 legacy unsafe Chart 再次 fail-closed。
+- 自动验证：Python `553 passed / 24 skipped`；Pi `96 passed`；TypeScript、npm audit、targeted report/Web tests 和桌面 Playwright 通过。桌面 80 条 Flow event 下 body 高度保持 1000px，Report/Publication 同页可见，0 console/page error。
+- NAS Chrome 146 实际 PDF 内容扫描不含 `file://`、`/home/`、`forge-m4.1`、`index.html` 或默认日期 header；不是只检查 command/file size。
+- 同一真实 Golden Journey 在独立 Store 和 mode-0400 datasource 重跑完成：Task 262.399s，Query 107 rows/31ms，4/4 Attempt succeeded，1 approval/1 execution，重复 Web message HTTP 200 且 QueryRun count=1；PDF/PPTX ready，0 ChartArtifact，same-page completion 可见。
+- NAS 已部署并保留回滚点 `~/services/forge-m4.1/backups/h4-p0-20260824T110913Z/`；隔离服务、override 和 tunnel 已清理，生产 health/readiness `ok`。完整证据见 [`golden-journey-p0-closure-2026-08-24.md`](golden-journey-p0-closure-2026-08-24.md)。
+- 剩余风险显式转入 P1/H5：当前 0 Chart 是正确的安全降级，不是理想专业报告体验。H5 未确认前不加入多图 DSL、交互或 Annotation Runtime。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
