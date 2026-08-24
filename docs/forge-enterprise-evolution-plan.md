@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 Golden Journey 实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -75,6 +75,7 @@ GTM：Data-Team Led
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
+| H3 Golden Journey 双验收 | 实施中 | `REQ-2026-08-24-007`：NAS loopback 隔离真实模型+只读测试数据主旅程；逐阶段物理 trace、桌面/移动 Playwright screenshot 和视觉模型评审；不写生产 Store |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -354,6 +355,51 @@ R2 实施结果：
 - 用户已确认将 H2 部署到 NAS：沿用 Git bundle fast-forward、running Attempt 空闲检查、SQLite online backup、API/Pi restart 和目标机隔离 exporter smoke；不得读取/修改 Secret、Identity Map、Registry 或数据库连接，不重放 SQL。
 - 部署结果：NAS 从 `caa8b69` fast-forward 到 `9fca1ea`；10 个 SQLite online backup 位于 `~/services/forge-m4.1/backups/readability-20260824T094102Z/`；Forge/Pi active、health/readiness ok、匿名 Chat/flow 门禁正确、running Attempt=0。
 - 目标机 `/usr/bin/google-chrome` 隔离报告 smoke 返回 HTML published、PDF ready（468,786 bytes）、PPTX ready（42,333 bytes）；临时输入和产物自动删除。未 push、未改依赖/Secret/Identity/Registry/数据库配置，回滚点保留 `caa8b69`。
+
+## H3：完整问数 Golden Journey 的物理与视觉双验收
+
+> Requirement：[`REQ-2026-08-24-007`](requirements-pool.md#req-2026-08-24-007完整问数旅程的物理链路与逐阶段视觉验收) · 决策：`accepted_with_changes`
+
+### H3.1 隔离拓扑与授权
+
+- 在 NAS loopback 临时目录启动当前代码的独立 Web、Pi、Forge 状态与 Report Store；复用版本化只读测试数据库和当前模型 credential reference，但不读取/回显 Secret。
+- 生产 Forge/Pi/Web、认证配置、Task/Query/Audit/Report Store 保持不变；临时 Web 可关闭认证，但只监听 loopback 并经 SSH tunnel 供本地 Playwright 访问。
+- test principal 只在本旅程批准一次测试数据 SQL；不得访问生产数据库、修改 Registry、写生产 Store 或执行写 SQL。测试结束停止临时服务并保留去敏证据包。
+- 若任一状态介质、端口、service key、datasource 或 model context 不能证明隔离，立即停止，不靠事后清理正式审计记录补救。
+
+### H3.2 Golden Journey
+
+固定问题：`统计不同品类的销售额，分析主要差异，并生成完整报告。`
+
+Playwright 驱动并在每一步建立 checkpoint：
+
+1. 提交问题并观察初始计划/实时流。
+2. 到达 SQL Review，检查 SQL、风险文案、审批 action 和 DAG。
+3. 以 test principal 批准一次；验证 hash 绑定、只读执行和重复 action 幂等。
+4. 检查 QueryResult 表格、行数/截断说明和“开始分析”动作。
+5. 发起 Analysis，记录 progress、elapsed/deadline、Artifact 和结果可读性。
+6. 发起完整报告，检查 publication links、Web business/technical report、PDF/PPTX。
+7. 在桌面与 390px 捕获关键状态；移动端不重复执行 SQL，只重放同一只读 Presentation/Report projection。
+
+### H3.3 物理验收
+
+- 同一 `task_run_id` 的 ExecutionPlan、PlanStep、TaskEvent、StageAttempt、Artifact 顺序与最终状态一致。
+- QueryRun、SQL/Assurance hash、批准主体、执行次数、QueryResult、Evidence、Analysis、Report Bundle 和 Publication lineage 可组合回放。
+- SQL 只读且仅执行一次；重复批准/轮询不重复执行；Web/Playwright 不直接推进 Pi Store。
+- Stage latency、无事件窗口、timeout/retry、Provider failure 和 exporter status 有界记录；不保存 Prompt、模型正文、hidden CoT、Secret 或无关完整结果集。
+
+### H3.4 视觉与交互验收
+
+- 每个 checkpoint 使用 Playwright 做 DOM/ARIA/action/focus/overflow/console/page-error 断言，并保存桌面截图；核心长文本/审批/结果/分析/报告增加 390px 截图。
+- 视觉模型逐图评估：信息层级、当前状态、下一步、风险/审批显著性、等待可信度、表格/SQL/长文阅读、错误恢复和响应式布局。
+- 后端成功但用户不清楚发生了什么、下一步不可发现、关键限制被淹没或移动端不可用，均判产品失败。
+
+### H3.5 产物、门禁与退出
+
+- 输出一份版本化 acceptance report：逐阶段 `Pass/Fail/Blocked`、物理时序、视觉评审、P0/P1/P2 findings、截图 contact sheet、重现步骤和剩余风险。
+- 主旅程不允许通过测试脚本跳过产品 action、篡改状态、注入 Artifact 或直接调用后续 Stage 冒充用户流程。
+- 真实模型失败按失败记录；可用 deterministic control 定位基础设施，但不能替代最终结果。
+- 本工作包只跑一次有界主旅程。needs-input、取消/拒绝、timeout/retry edge journeys 根据本次发现重新进入需求池，不在 H3 内无限扩张。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

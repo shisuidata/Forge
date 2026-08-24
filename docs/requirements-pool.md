@@ -359,7 +359,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-007：完整问数旅程的物理链路与逐阶段视觉验收
 
 - **提出日期**：2026-08-24
-- **当前状态**：`assessed`
+- **当前状态**：`accepted_with_changes`
 - **原始需求**：不能只验证局部 fixture 或物理执行；需要跑通一个完整问数流程，同时从前端逐步检查每个环节是否符合预期、是否能让用户满意，并实际使用视觉能力和自动化测试能力。
 
 ### 问题确认
@@ -405,6 +405,12 @@ ID / 标题 / 日期 / 状态
 
 建议 `accepted_with_changes`：先执行一条隔离但真实的 NAS Golden Journey，逐阶段做物理与视觉双验收；发现问题先进入需求池，不在测试脚本里掩盖。主链稳定后再提出 edge-journey 工作包。
 
-### 待用户确认
+### 用户确认
 
-是否确认以下有界授权：允许在 NAS loopback 临时隔离环境中，使用现有模型 credential **引用**、版本化只读测试数据库和独立状态库，以 test principal 自动批准并执行一次测试 SQL，完成一次真实问数→分析→报告旅程；不读取 Secret、不修改生产认证、不访问生产数据库、不写生产 Task/Audit Store？
+- **确认日期**：2026-08-24
+- **决策**：`accepted_with_changes`。用户明确确认执行 Golden Journey，并接受以下有界授权：NAS loopback 临时隔离环境、现有模型 credential 引用、版本化只读测试数据库、独立状态库、test principal 自动批准并执行一次测试 SQL；不读取 Secret、不修改生产认证、不访问生产数据库、不写生产 Task/Audit Store。
+
+### 关联
+
+- **Plan**：`forge-enterprise-evolution-plan.md` H3。
+- **Architecture**：不改变 Pi/Forge/渠道职责；测试环境只验证现有 Contract、状态和 Renderer，不成为第二套生产状态机。
