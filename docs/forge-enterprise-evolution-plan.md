@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 R1 实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 R1 等待视觉确认；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -74,7 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
-| H2 长文本语义化阅读体验 | R1 实施中，R2 已批准待视觉门禁 | `REQ-2026-08-24-006`：先完成 Chat 安全 Markdown 与语义投影并由用户确认视觉方向，再将同一层级映射到业务 Web/PDF/PPTX；技术报告仅做基础排版 |
+| H2 长文本语义化阅读体验 | R1 代码完成待用户视觉确认；R2 尚未开始 | `REQ-2026-08-24-006`：Chat 安全 Markdown、完整语义投影和移动导航已完成并通过自动/Playwright 验证；视觉确认后再映射到业务 Web/PDF/PPTX |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -320,6 +320,14 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 4. 统一正文最大阅读宽度、行高、段距、列表缩进、代码换行和移动端密度；保留链接下划线、键盘可达性、外链 `noopener noreferrer` 与 reduced-motion。
 
 R1 门禁：截图对应的指标口径长文、分析长文、SQL code block、原始 HTML 注入、站内/外链接、390px 移动端与桌面端均有自动或 Playwright 验证；0 console/page error。R1 完成后先由用户确认视觉方向，再进入 R2，不在未经确认时同时重做所有报告媒介。
+
+R1 实施结果：
+
+- Channel Renderer 完整投影 Advisory/Analysis 已有结构化语义；字段内容被收敛为 inline 表示，只有 Renderer 固定标签能形成 block-level callout。
+- Web Chat 的无依赖安全 Markdown DOM renderer 与 editorial design token 已完成；HTTP(S)/站内链接白名单、外链安全属性、原始 HTML 纯文本和嵌套列表均通过 Playwright。
+- 390px 全局导航改为带 backdrop、Escape 和 ARIA 状态的抽屉；Chat 正文无横向溢出，桌面保留当前三栏+任务流布局。
+- 验证：Python `550 passed / 24 skipped`；Pi `94 passed`、typecheck、npm audit 通过；Web 定向 `16 passed`；桌面/移动 Playwright 0 console/page error、恶意 script 未执行。
+- 视觉候选保存在 `/tmp/forge-chat-readability-desktop.png` 与 `/tmp/forge-chat-readability-mobile.png`；当前停在用户视觉确认门禁，R2 未开始。
 
 ### H2.3 R2 Report readability（已批准，等待 R1 视觉门禁）
 

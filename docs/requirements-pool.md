@@ -272,7 +272,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-006：对话与报告的长文本可读性和语义化强调
 
 - **提出日期**：2026-08-24
-- **当前状态**：`accepted_with_changes`
+- **当前状态**：`implementing`
 - **原始需求**：像截图中的长文本，应通过加粗、下划线、斜体、强调色或 callout 提升阅读体验；不仅用于对话，也用于报告。
 
 ### 真实问题与目标结果
@@ -316,7 +316,17 @@ ID / 标题 / 日期 / 状态
 - **确认日期**：2026-08-24
 - **决策**：`accepted_with_changes`。用户确认按建议边界实施：报告覆盖业务 Web、PDF 与 PPTX，技术报告只做基础排版；普通下划线不作为任意强调，颜色/callout 由结构化语义和 design token 决定；按 `R1 Chat → 视觉确认 → R2 Web/PDF/PPTX` 顺序推进。
 
+### R1 实施状态（等待用户视觉确认）
+
+- Channel Renderer 已完整投影 Advisory 的 summary、findings、recommendations、assumptions、limitations、open questions 和 deliverables；Analysis 的方法、结论和限制使用同一层级，技术字段自动进入 inline code，结构化字段不能注入 block-level callout。
+- Web Chat 无新增依赖地支持安全 H2/H3、strong、emphasis、inline/fenced code、站内/HTTP(S) 链接、ordered/unordered/nested list 和固定标签 callout；所有节点通过 DOM `textContent`/安全属性创建，任意 HTML/script 作为纯文本。
+- 全局移动导航改为可关闭抽屉，390px Chat 不再被固定侧栏挤压；链接是唯一普通下划线，callout 使用 `info/warning/limitation/success` design token。
+- 验证：Python `550 passed / 24 skipped`；Pi `94 passed`、TypeScript typecheck、npm audit 0 vulnerabilities；Web 定向 `16 passed`；桌面/390px Playwright 0 console/page error、无横向溢出，script fixture 未执行。
+- **视觉候选**：`/tmp/forge-chat-readability-desktop.png`、`/tmp/forge-chat-readability-mobile.png`。
+- **当前门禁**：R1 代码完成，等待用户确认视觉方向；R2 Web/PDF/PPTX 尚未开始，不把 R1 自动视为整个需求 verified。
+
 ### 关联
 
 - **Plan**：`forge-enterprise-evolution-plan.md` H2。
+- **实现**：`7a88c70`。
 - **Architecture**：不改变职责边界；继续由渠道 Renderer 和确定性 Report Renderer 负责表示，Artifact/Pi/Forge 真相源不变。
