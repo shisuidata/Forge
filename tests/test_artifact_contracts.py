@@ -264,6 +264,7 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "clarification_artifact",
         "execution_plan_artifact",
         "chart_artifact",
+        "chart_artifact_v2",
         "technical_report_artifact",
         "report_bundle_artifact",
         "publication_artifact",

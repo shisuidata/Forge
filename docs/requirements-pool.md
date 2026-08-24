@@ -465,7 +465,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-009：专业报告的多图叙事、现代图表与证据绑定交互
 
 - **提出日期**：2026-08-24
-- **当前状态**：`accepted`
+- **当前状态**：`r0_ready_for_visual_gate`
 - **原始需求**：专业报告目前过于模板化，图表数量少、样式不够现代、交互有限；图表需要有标注，让图更生动、更有业务价值。
 
 ### 第一性原理评估
@@ -510,6 +510,8 @@ ID / 标题 / 日期 / 状态
 ### 决策
 
 用户于 2026-08-24 明确确认 H5 图表叙事方案。H5 第一门只实施 `ChartArtifact v2 Contract + 横截面/时间趋势两个真实 fixture + HTML/PDF/PPTX 视觉候选`；候选必须先由用户做视觉与信息价值确认，未经确认不进入完整交互 Runtime、不替换生产 ChartArtifact v1、不部署到生产报告主链。
+
+R0 已完成并记录于 `docs/chart-storytelling-r0-evidence-2026-08-24.md`：ChartArtifact v2 Python/TypeScript Contract 与 QueryResult semantic gate、双正向 fixture、8 个负向 fail-closed case、自包含 HTML、5 页 PDF 和 5 页 PPTX 候选均通过自动化与人工视觉检查。当前只等待用户判断信息价值、视觉基线、Evidence 干扰程度和媒介分层；R1 生产 Skills/Prompt/Tool/Renderer 同版本切换仍未批准。
 
 ---
 

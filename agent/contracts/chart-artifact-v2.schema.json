@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/chart-artifact-v2.schema.json",
+  "title": "ChartArtifactV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_id", "artifact_type", "schema_version", "task_run_id", "producer", "created_at", "payload"],
+  "properties": {
+    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+    "artifact_type": {"const": "chart"},
+    "schema_version": {"const": 2},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "producer": {"const": "pi-chart-story-planner"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "payload": {"$ref": "#/$defs/payload"}
+  },
+  "$defs": {
+    "safeText": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^<>]+$"},
+    "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,127}$"},
+    "evidenceRef": {"type": "string", "pattern": "^qr_[A-Za-z0-9_-]+#row:[1-9][0-9]*$"},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "diagnostics"],
+      "properties": {
+        "status": {"enum": ["ready", "degraded", "blocked"]},
+        "diagnostics": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/safeText"}}
+      }
+    },
+    "grain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key_fields", "display_field", "unique"],
+      "properties": {
+        "key_fields": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": {"$ref": "#/$defs/field"}},
+        "display_field": {"$ref": "#/$defs/field"},
+        "unique": {"const": true},
+        "time_grain": {"enum": ["day", "week", "month", "quarter", "year"]}
+      }
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "symbol", "format"],
+      "properties": {
+        "kind": {"enum": ["currency", "number", "percent", "duration"]},
+        "label": {"$ref": "#/$defs/safeText"},
+        "symbol": {"type": "string", "maxLength": 12, "pattern": "^[^<>]*$"},
+        "format": {"enum": ["integer", "decimal_1", "decimal_2", "compact", "percent_1"]}
+      }
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "type"],
+      "properties": {
+        "field": {"$ref": "#/$defs/field"},
+        "type": {"enum": ["nominal", "ordinal", "quantitative", "temporal"]}
+      }
+    },
+    "encoding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": {"$ref": "#/$defs/channel"},
+        "y": {"$ref": "#/$defs/channel"},
+        "color": {"$ref": "#/$defs/channel"},
+        "order": {"$ref": "#/$defs/channel"},
+        "total": {"$ref": "#/$defs/channel"}
+      }
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["series_id", "label", "field", "evidence_refs"],
+      "properties": {
+        "series_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+        "label": {"$ref": "#/$defs/safeText"},
+        "field": {"$ref": "#/$defs/field"},
+        "evidence_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/evidenceRef"}}
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["sort", "top_n", "aggregate", "cumulative_share"]},
+        "field": {"$ref": "#/$defs/field"},
+        "direction": {"enum": ["ascending", "descending"]},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+        "remainder_label": {"$ref": "#/$defs/safeText"},
+        "group_by": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": {"$ref": "#/$defs/field"}},
+        "operation": {"enum": ["sum", "average", "count", "min", "max"]},
+        "output_field": {"$ref": "#/$defs/field"}
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotation_id", "type", "label", "target", "evidence_refs"],
+      "properties": {
+        "annotation_id": {"type": "string", "pattern": "^ann_[A-Za-z0-9_-]+$"},
+        "type": {"enum": ["callout", "highlight", "reference_line", "range"]},
+        "label": {"$ref": "#/$defs/safeText"},
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "datum_key": {"$ref": "#/$defs/safeText"},
+            "series_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+            "value": {"type": "number"}
+          },
+          "minProperties": 1
+        },
+        "finding_ref": {"type": "string", "pattern": "^finding_[A-Za-z0-9_-]+$"},
+        "evidence_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/evidenceRef"}}
+      }
+    },
+    "interactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tooltip", "series_toggle", "table_toggle", "evidence_link"],
+      "properties": {
+        "tooltip": {"type": "boolean"},
+        "series_toggle": {"type": "boolean"},
+        "table_toggle": {"type": "boolean"},
+        "evidence_link": {"type": "boolean"}
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chart_id", "chart_type", "title", "purpose", "decision_question", "data_ref", "quality_status", "grain", "unit", "encoding", "series", "transforms", "annotations", "interactions", "evidence_refs", "alt_text"],
+      "properties": {
+        "chart_id": {"type": "string", "pattern": "^chart_[A-Za-z0-9_-]+$"},
+        "chart_type": {"enum": ["horizontal_bar", "line", "stacked_area", "pareto", "dot_plot", "table"]},
+        "title": {"$ref": "#/$defs/safeText"},
+        "purpose": {"enum": ["ranking", "trend", "composition", "contribution", "variance", "relationship"]},
+        "decision_question": {"$ref": "#/$defs/safeText"},
+        "data_ref": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
+        "quality_status": {"$ref": "#/$defs/quality"},
+        "grain": {"$ref": "#/$defs/grain"},
+        "unit": {"$ref": "#/$defs/unit"},
+        "encoding": {"$ref": "#/$defs/encoding"},
+        "series": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"$ref": "#/$defs/series"}},
+        "transforms": {"type": "array", "maxItems": 6, "items": {"$ref": "#/$defs/transform"}},
+        "annotations": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/annotation"}},
+        "interactions": {"$ref": "#/$defs/interactions"},
+        "evidence_refs": {"type": "array", "minItems": 1, "maxItems": 200, "uniqueItems": true, "items": {"$ref": "#/$defs/evidenceRef"}},
+        "alt_text": {"$ref": "#/$defs/safeText"}
+      }
+    }
+  }
+}

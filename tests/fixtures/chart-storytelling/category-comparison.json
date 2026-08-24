@@ -1,0 +1,108 @@
+{
+  "scenario_id": "category_portfolio",
+  "title": "品类组合：增长集中在哪里",
+  "query_result": {
+    "artifact_id": "ar_query_category_story",
+    "query_run_id": "qr_category_story",
+    "columns": ["category_name", "sales_amount", "order_count"],
+    "rows": [
+      ["玩具礼品", 753200, 1436],
+      ["运动户外", 721400, 1368],
+      ["家居家电", 697100, 1302],
+      ["食品饮料", 680200, 1291],
+      ["汽车配件", 629400, 1148],
+      ["美妆个护", 420600, 812],
+      ["母婴用品", 366500, 701],
+      ["图书文具", 178200, 392],
+      ["电子产品", 176100, 318],
+      ["服装鞋帽", 122000, 267]
+    ],
+    "row_count": 10,
+    "truncated": false
+  },
+  "charts": [
+    {
+      "artifact_id": "ar_chart_category_rank",
+      "artifact_type": "chart",
+      "schema_version": 2,
+      "task_run_id": "tr_chart_story_category",
+      "producer": "pi-chart-story-planner",
+      "created_at": "2026-08-24T00:00:00Z",
+      "payload": {
+        "chart_id": "chart_category_rank",
+        "chart_type": "horizontal_bar",
+        "title": "头部品类领先，但没有单一绝对赢家",
+        "purpose": "ranking",
+        "decision_question": "哪些品类贡献了最高销售额，头尾差距多大？",
+        "data_ref": "ar_query_category_story",
+        "quality_status": {"status": "ready", "diagnostics": []},
+        "grain": {"key_fields": ["category_name"], "display_field": "category_name", "unique": true},
+        "unit": {"kind": "currency", "label": "人民币", "symbol": "¥", "format": "compact"},
+        "encoding": {
+          "x": {"field": "sales_amount", "type": "quantitative"},
+          "y": {"field": "category_name", "type": "nominal"},
+          "order": {"field": "sales_amount", "type": "quantitative"}
+        },
+        "series": [{
+          "series_id": "sales",
+          "label": "销售额",
+          "field": "sales_amount",
+          "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2", "qr_category_story#row:3", "qr_category_story#row:4", "qr_category_story#row:5", "qr_category_story#row:6", "qr_category_story#row:7", "qr_category_story#row:8", "qr_category_story#row:9", "qr_category_story#row:10"]
+        }],
+        "transforms": [
+          {"type": "sort", "field": "sales_amount", "direction": "descending"},
+          {"type": "top_n", "field": "sales_amount", "limit": 7, "remainder_label": "其他 3 类"}
+        ],
+        "annotations": [
+          {"annotation_id": "ann_category_top", "type": "callout", "label": "玩具礼品排名第一，但仅比运动户外高 4.4%", "target": {"datum_key": "玩具礼品", "series_id": "sales"}, "finding_ref": "finding_category_rank", "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2"]},
+          {"annotation_id": "ann_category_tail", "type": "range", "label": "尾部三类合计仅占 10.0%", "target": {"datum_key": "其他 3 类"}, "finding_ref": "finding_category_tail", "evidence_refs": ["qr_category_story#row:8", "qr_category_story#row:9", "qr_category_story#row:10"]}
+        ],
+        "interactions": {"tooltip": true, "series_toggle": false, "table_toggle": true, "evidence_link": true},
+        "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2", "qr_category_story#row:3", "qr_category_story#row:4", "qr_category_story#row:5", "qr_category_story#row:6", "qr_category_story#row:7", "qr_category_story#row:8", "qr_category_story#row:9", "qr_category_story#row:10"],
+        "alt_text": "十个品类按销售额降序排列，玩具礼品最高，服装鞋帽最低。"
+      }
+    },
+    {
+      "artifact_id": "ar_chart_category_pareto",
+      "artifact_type": "chart",
+      "schema_version": 2,
+      "task_run_id": "tr_chart_story_category",
+      "producer": "pi-chart-story-planner",
+      "created_at": "2026-08-24T00:00:00Z",
+      "payload": {
+        "chart_id": "chart_category_pareto",
+        "chart_type": "pareto",
+        "title": "前六个品类贡献 82.2%，资源应分层配置",
+        "purpose": "contribution",
+        "decision_question": "销售额集中度有多高，覆盖 80% 需要经营多少品类？",
+        "data_ref": "ar_query_category_story",
+        "quality_status": {"status": "ready", "diagnostics": []},
+        "grain": {"key_fields": ["category_name"], "display_field": "category_name", "unique": true},
+        "unit": {"kind": "percent", "label": "累计销售额贡献", "symbol": "%", "format": "percent_1"},
+        "encoding": {
+          "x": {"field": "category_name", "type": "ordinal"},
+          "y": {"field": "cumulative_share", "type": "quantitative"},
+          "order": {"field": "sales_amount", "type": "quantitative"}
+        },
+        "series": [{
+          "series_id": "cumulative",
+          "label": "累计贡献",
+          "field": "cumulative_share",
+          "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2", "qr_category_story#row:3", "qr_category_story#row:4", "qr_category_story#row:5", "qr_category_story#row:6", "qr_category_story#row:7", "qr_category_story#row:8", "qr_category_story#row:9", "qr_category_story#row:10"]
+        }],
+        "transforms": [
+          {"type": "sort", "field": "sales_amount", "direction": "descending"},
+          {"type": "cumulative_share", "field": "sales_amount", "output_field": "cumulative_share"}
+        ],
+        "annotations": [
+          {"annotation_id": "ann_category_80", "type": "reference_line", "label": "80% 经营覆盖线", "target": {"value": 0.8, "series_id": "cumulative"}, "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2", "qr_category_story#row:3", "qr_category_story#row:4", "qr_category_story#row:5", "qr_category_story#row:6"]},
+          {"annotation_id": "ann_category_six", "type": "highlight", "label": "第六个品类跨过 80% 阈值", "target": {"datum_key": "美妆个护", "series_id": "cumulative"}, "finding_ref": "finding_category_concentration", "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2", "qr_category_story#row:3", "qr_category_story#row:4", "qr_category_story#row:5", "qr_category_story#row:6"]}
+        ],
+        "interactions": {"tooltip": true, "series_toggle": false, "table_toggle": true, "evidence_link": true},
+        "evidence_refs": ["qr_category_story#row:1", "qr_category_story#row:2", "qr_category_story#row:3", "qr_category_story#row:4", "qr_category_story#row:5", "qr_category_story#row:6", "qr_category_story#row:7", "qr_category_story#row:8", "qr_category_story#row:9", "qr_category_story#row:10"],
+        "alt_text": "累计销售额贡献曲线在第六个品类超过百分之八十。"
+      }
+    }
+  ],
+  "expected": {"total_sales": 4744700, "top_three_share": 0.4577, "top_six_share": 0.8224, "tail_three_share": 0.1004}
+}

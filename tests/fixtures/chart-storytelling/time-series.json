@@ -1,0 +1,95 @@
+{
+  "scenario_id": "monthly_growth",
+  "title": "月度增长：拐点来自哪里",
+  "query_result": {
+    "artifact_id": "ar_query_monthly_story",
+    "query_run_id": "qr_monthly_story",
+    "columns": ["month", "direct_sales", "marketplace_sales", "retail_sales", "total_sales", "target_sales"],
+    "rows": [
+      ["2026-01", 310000, 220000, 180000, 710000, 700000],
+      ["2026-02", 328000, 230000, 186000, 744000, 720000],
+      ["2026-03", 342000, 236000, 191000, 769000, 750000],
+      ["2026-04", 315000, 218000, 188000, 721000, 770000],
+      ["2026-05", 368000, 249000, 205000, 822000, 790000],
+      ["2026-06", 402000, 271000, 222000, 895000, 820000]
+    ],
+    "row_count": 6,
+    "truncated": false
+  },
+  "charts": [
+    {
+      "artifact_id": "ar_chart_monthly_trend",
+      "artifact_type": "chart",
+      "schema_version": 2,
+      "task_run_id": "tr_chart_story_monthly",
+      "producer": "pi-chart-story-planner",
+      "created_at": "2026-08-24T00:00:00Z",
+      "payload": {
+        "chart_id": "chart_monthly_trend",
+        "chart_type": "line",
+        "title": "四月跌破目标，五月完成反转",
+        "purpose": "trend",
+        "decision_question": "总体销售趋势何时偏离目标，恢复是否持续？",
+        "data_ref": "ar_query_monthly_story",
+        "quality_status": {"status": "ready", "diagnostics": []},
+        "grain": {"key_fields": ["month"], "display_field": "month", "unique": true, "time_grain": "month"},
+        "unit": {"kind": "currency", "label": "人民币", "symbol": "¥", "format": "compact"},
+        "encoding": {
+          "x": {"field": "month", "type": "temporal"},
+          "y": {"field": "total_sales", "type": "quantitative"},
+          "color": {"field": "series_id", "type": "nominal"}
+        },
+        "series": [
+          {"series_id": "actual", "label": "实际销售额", "field": "total_sales", "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"]},
+          {"series_id": "target", "label": "经营目标", "field": "target_sales", "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"]}
+        ],
+        "transforms": [{"type": "sort", "field": "month", "direction": "ascending"}],
+        "annotations": [
+          {"annotation_id": "ann_april_gap", "type": "callout", "label": "四月较目标低 6.4%，是唯一明显失速点", "target": {"datum_key": "2026-04", "series_id": "actual"}, "finding_ref": "finding_april_gap", "evidence_refs": ["qr_monthly_story#row:4"]},
+          {"annotation_id": "ann_june_high", "type": "highlight", "label": "六月创阶段新高，较目标高 9.1%", "target": {"datum_key": "2026-06", "series_id": "actual"}, "finding_ref": "finding_june_high", "evidence_refs": ["qr_monthly_story#row:6"]}
+        ],
+        "interactions": {"tooltip": true, "series_toggle": true, "table_toggle": true, "evidence_link": true},
+        "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"],
+        "alt_text": "一月至六月实际销售额与经营目标折线，四月低于目标，五月和六月快速恢复。"
+      }
+    },
+    {
+      "artifact_id": "ar_chart_monthly_mix",
+      "artifact_type": "chart",
+      "schema_version": 2,
+      "task_run_id": "tr_chart_story_monthly",
+      "producer": "pi-chart-story-planner",
+      "created_at": "2026-08-24T00:00:00Z",
+      "payload": {
+        "chart_id": "chart_monthly_mix",
+        "chart_type": "stacked_area",
+        "title": "直营渠道贡献了反转后的主要增量",
+        "purpose": "composition",
+        "decision_question": "五月和六月的增长由哪些渠道贡献？",
+        "data_ref": "ar_query_monthly_story",
+        "quality_status": {"status": "ready", "diagnostics": []},
+        "grain": {"key_fields": ["month"], "display_field": "month", "unique": true, "time_grain": "month"},
+        "unit": {"kind": "currency", "label": "人民币", "symbol": "¥", "format": "compact"},
+        "encoding": {
+          "x": {"field": "month", "type": "temporal"},
+          "y": {"field": "channel_sales", "type": "quantitative"},
+          "color": {"field": "series_id", "type": "nominal"},
+          "total": {"field": "total_sales", "type": "quantitative"}
+        },
+        "series": [
+          {"series_id": "direct", "label": "直营", "field": "direct_sales", "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"]},
+          {"series_id": "marketplace", "label": "平台", "field": "marketplace_sales", "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"]},
+          {"series_id": "retail", "label": "门店", "field": "retail_sales", "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"]}
+        ],
+        "transforms": [{"type": "sort", "field": "month", "direction": "ascending"}],
+        "annotations": [
+          {"annotation_id": "ann_direct_recovery", "type": "range", "label": "四月至六月新增 174K，其中直营贡献 87K，占 50%", "target": {"datum_key": "2026-04..2026-06", "series_id": "direct"}, "finding_ref": "finding_direct_recovery", "evidence_refs": ["qr_monthly_story#row:4", "qr_monthly_story#row:6"]}
+        ],
+        "interactions": {"tooltip": true, "series_toggle": true, "table_toggle": true, "evidence_link": true},
+        "evidence_refs": ["qr_monthly_story#row:1", "qr_monthly_story#row:2", "qr_monthly_story#row:3", "qr_monthly_story#row:4", "qr_monthly_story#row:5", "qr_monthly_story#row:6"],
+        "alt_text": "一月至六月直营、平台和门店销售额堆叠面积图，五月和六月增长主要来自直营。"
+      }
+    }
+  ],
+  "expected": {"april_gap_ratio": -0.0636, "june_above_target_ratio": 0.0915, "april_to_june_growth": 174000, "direct_growth": 87000, "direct_growth_share": 0.5}
+}

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "model_markup",
+      "fixture": "category-comparison.json",
+      "chart_index": 0,
+      "target": "chart",
+      "path": ["title"],
+      "value": "<script>alert(1)</script>",
+      "expected_pattern": "unsafe|markup"
+    },
+    {
+      "case_id": "model_free_color",
+      "fixture": "category-comparison.json",
+      "chart_index": 0,
+      "target": "chart",
+      "path": ["color"],
+      "value": "#ff0000",
+      "expected_pattern": "unsupported field"
+    },
+    {
+      "case_id": "annotation_without_evidence",
+      "fixture": "category-comparison.json",
+      "chart_index": 0,
+      "target": "chart",
+      "path": ["annotations", 0, "evidence_refs"],
+      "value": [],
+      "expected_pattern": "annotation lineage"
+    },
+    {
+      "case_id": "duplicate_visible_grain",
+      "fixture": "category-comparison.json",
+      "chart_index": 0,
+      "target": "query",
+      "path": ["rows", 1, 0],
+      "value": "玩具礼品",
+      "expected_pattern": "unique chart grain|labels"
+    },
+    {
+      "case_id": "truncated_result",
+      "fixture": "category-comparison.json",
+      "chart_index": 0,
+      "target": "query",
+      "path": ["truncated"],
+      "value": true,
+      "expected_pattern": "truncated"
+    },
+    {
+      "case_id": "unknown_unit",
+      "fixture": "category-comparison.json",
+      "chart_index": 0,
+      "target": "chart",
+      "path": ["unit", "kind"],
+      "value": "unknown",
+      "expected_pattern": "unit is invalid"
+    },
+    {
+      "case_id": "discontinuous_month",
+      "fixture": "time-series.json",
+      "chart_index": 0,
+      "target": "query",
+      "path": ["rows", 3, 0],
+      "value": "2026-07",
+      "expected_pattern": "continuous and ordered"
+    },
+    {
+      "case_id": "stack_total_mismatch",
+      "fixture": "time-series.json",
+      "chart_index": 1,
+      "target": "query",
+      "path": ["rows", 0, 1],
+      "value": 260001,
+      "expected_pattern": "reconcile"
+    }
+  ]
+}

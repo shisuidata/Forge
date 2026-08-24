@@ -19,6 +19,7 @@ _CONTRACT_FILES = {
     "clarification_artifact": "clarification-artifact.schema.json",
     "execution_plan_artifact": "execution-plan-artifact.schema.json",
     "chart_artifact": "chart-artifact.schema.json",
+    "chart_artifact_v2": "chart-artifact-v2.schema.json",
     "technical_report_artifact": "technical-report-artifact.schema.json",
     "report_bundle_artifact": "report-bundle-artifact.schema.json",
     "publication_artifact": "publication-artifact.schema.json",
