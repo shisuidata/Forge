@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1 已完成；H2 R1 视觉确认通过、R2 实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -74,7 +74,7 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
-| H2 长文本语义化阅读体验 | R1 视觉确认通过；R2 实施中 | `REQ-2026-08-24-006`：Chat 安全 Markdown、完整语义投影和移动导航已确认；当前将同一语义层级映射到业务 Web/PDF/PPTX，技术报告只做基础排版 |
+| H2 长文本语义化阅读体验 | 已完成 | `REQ-2026-08-24-006`：Chat 安全语义格式、移动导航、业务 Web/PDF editorial hierarchy、分页 PPTX 与技术报告基础排版均完成；Python 551、Pi 94、Playwright/PPTX 验证通过 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -337,6 +337,14 @@ R1 实施结果：
 4. 保持 immutable Report Bundle、分享 ACL、PDF/PPTX 下载审计与 HTML/PDF 同源；不修改 SQL、查询、报告事实或 Artifact Contract。
 
 R2 门禁：HTML 与 PDF 视觉层级一致；PPTX 无文字溢出且信息不丢失；高对比度、打印、窄屏和长中英文内容通过；现有报告 idempotency、share scope、下载审计与 forbidden-content 门禁不回归。
+
+R2 实施结果：
+
+- 业务 HTML/PDF 使用同一确定性 editorial design：Executive Summary、方法、confidence/evidence 发现卡、图表/明细、priority 行动卡、下一步和 limitation 风险区；所有业务内容继续从 Artifact escape 后投影。
+- Print CSS 使用 A4 色彩、section/card 分页和重复表头；Playwright Chromium 实际生成 424KB PDF。技术报告只改善基础 typography、code/table 和长字段换行。
+- PPTX 改为固定 16:9 语义版式并按 3 cards/page 和有界字符片段分页；长内容测试确认 300 字发现、220 字报告标题、180 字图表标题未丢失，单 shape 文本不超过 160 字；Quick Look 封面验证通过。
+- 自动验证：Python `551 passed / 24 skipped`；Pi `94 passed`、typecheck、npm audit 通过；报告专项 `7 passed`；桌面/390px/print/technical Playwright 0 console/page error、0 横向溢出。
+- 本地未安装系统级 Chrome/Chromium 命令，因此 ReportStore subprocess PDF exporter 留到部署 smoke；同一 Chromium print engine 的 PDF 已由 Playwright验证。NAS 未在本工作包自动部署。
 
 ### H2.4 回滚与退出条件
 

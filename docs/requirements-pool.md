@@ -272,7 +272,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-006：对话与报告的长文本可读性和语义化强调
 
 - **提出日期**：2026-08-24
-- **当前状态**：`implementing`
+- **当前状态**：`verified`
 - **原始需求**：像截图中的长文本，应通过加粗、下划线、斜体、强调色或 callout 提升阅读体验；不仅用于对话，也用于报告。
 
 ### 真实问题与目标结果
@@ -323,10 +323,21 @@ ID / 标题 / 日期 / 状态
 - 全局移动导航改为可关闭抽屉，390px Chat 不再被固定侧栏挤压；链接是唯一普通下划线，callout 使用 `info/warning/limitation/success` design token。
 - 验证：Python `550 passed / 24 skipped`；Pi `94 passed`、TypeScript typecheck、npm audit 0 vulnerabilities；Web 定向 `16 passed`；桌面/390px Playwright 0 console/page error、无横向溢出，script fixture 未执行。
 - **视觉候选**：`/tmp/forge-chat-readability-desktop.png`、`/tmp/forge-chat-readability-mobile.png`。
-- **视觉确认**：用户于 2026-08-24 确认 R1 视觉方向并要求继续 R2。R1 门禁通过；R2 Web/PDF/PPTX 进入实施，整个需求仍未 verified。
+- **视觉确认**：用户于 2026-08-24 确认 R1 视觉方向并要求继续 R2。R1 门禁通过。
+
+### R2 实施与验证结果
+
+- 业务 Web 报告采用确定性 editorial hierarchy：深色 Executive Summary、方法范围、编号发现卡、confidence/evidence 标签、图表、数据表、priority 建议卡、下一步和 limitation 风险区；模型仍不能输出任意 HTML/CSS 或改写证据。
+- PDF 与 Web 使用同一 HTML/CSS，增加 A4 print color、可分页 section/card/table 规则和重复表头；Playwright 实际生成 `424KB` A4 PDF，toolbar 在打印媒介隐藏。
+- PPTX 使用固定 16:9 design token；摘要、方法、发现、图表、建议、限制和下一步各自分页。长标题、图表标题和正文按有界片段拆页，测试确认 300 字发现及 220/180 字标题内容未丢失，单 text shape 不超过 160 字；confidence/priority 使用文字与颜色双编码。
+- 技术报告只改善 heading、SQL/code、table、长字段换行、移动和打印排版，没有加入业务化 callout。
+- 安全与兼容：HTML 全字段 escape；恶意 `<img onerror>` 作为文本；Report Bundle、分享 ACL、下载审计、idempotency、forbidden reasoning 和文件 mode 未改变。已发布不可变报告不会被原地重写，新样式只用于新生成 revision。
+- 验证：Python `551 passed / 24 skipped`；Pi `94 passed`、TypeScript typecheck、npm audit 0 vulnerabilities；报告专项 `7 passed`；Web/移动/print/technical Playwright 0 console/page error、0 横向溢出；PPTX 构建和 Quick Look 封面通过。
+- 视觉与产物：`/tmp/forge-report-readability-desktop.png`、`/tmp/forge-report-readability-mobile.png`、`/tmp/forge-report-readability-print.png`、`/tmp/forge-report-technical.png`、`/tmp/forge-report-readability.pdf`、`/tmp/forge-report-readability/artifacts/rp_visual001/v1/report.pptx`。
+- **剩余部署边界**：本地无系统级 `google-chrome/chromium` 命令，ReportStore 内置 PDF subprocess 未在本机直接执行；已用同一 Chromium print engine 的 Playwright 生成并验证 PDF。NAS 部署和目标机 exporter smoke 不属于本需求的本地实现验证，需在部署工作包中单独确认。
 
 ### 关联
 
 - **Plan**：`forge-enterprise-evolution-plan.md` H2。
-- **实现**：`7a88c70`。
+- **实现**：R1 `7a88c70`；R2 `06ccb0d`。
 - **Architecture**：不改变职责边界；继续由渠道 Renderer 和确定性 Report Renderer 负责表示，Artifact/Pi/Forge 真相源不变。
