@@ -176,7 +176,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-004：将 NAS Forge 部署更新到当前稳定代码
 
 - **提出日期**：2026-08-24
-- **当前状态**：`implementing`
+- **当前状态**：`verified`
 - **原始需求**：将 NAS 上的 Forge 部署更新到最新代码，以便用户查看当前 Web Chat 和任务流情况。
 
 ### 当前环境与评估
@@ -205,7 +205,7 @@ ID / 标题 / 日期 / 状态
 
 - **确认日期**：2026-08-24
 - **决策**：`accepted_with_changes`——用户确认按“Git bundle fast-forward + 状态备份 + 空闲检查 + health/Web smoke + 可回滚、不 push”方案部署。
-- **实施状态**：代码已部署，等待用户完成认证后的 `/chat` 视觉与交互确认。
+- **实施状态**：已完成。用户已通过认证后的 `/chat` 发起并观察真实任务；部署链路、DAG 与实时流可用。观察中发现的 Analysis 延迟作为独立 `REQ-2026-08-24-005` 处理，不回滚本部署需求。
 
 ### 部署结果（2026-08-24）
 
@@ -215,3 +215,36 @@ ID / 标题 / 日期 / 状态
 - NAS 是固定内网 HTTP 的 dev profile：Forge dev readiness 为 `warn`，唯一原因是 `AUTH_COOKIE_SECURE=false`；这是当前无 HTTPS 的内网部署所需设置。prod profile 会对此返回 fail，不能把该 NAS 状态声明为合格公网生产部署。
 - 匿名 smoke：`/ → /chat`，`/chat` 与 `/tasks` 跳转登录，`/login` 200，未认证 `/flow` 返回 401。未使用、读取或回显管理员密码；认证后的 DAG/实时流由用户登录后完成最终视觉确认。
 - 回滚点保持 `3bd20a6`；本次未发生回滚，等待审批/分析/报告的既有 Task 未被推进或重放。
+
+---
+
+## REQ-2026-08-24-005：修复 Analysis Stage 临界超时与“假死”体验
+
+- **提出日期**：2026-08-24
+- **当前状态**：`implementing`
+- **原始需求**：NAS 最新 Web 任务在分析阶段长时间没有变化，看起来一直卡在同一个位置；用户确认修复。
+
+### 诊断证据
+
+- 最新 Task 的 `business_root_cause_analysis` 用时 `229.106s` 后成功，距离 `240s` Stage timeout 仅约 11 秒；前一条同输入任务在 `240.051s` 超时。
+- 当前 revision `sha256:f6f3…` 最近五次 Analysis 为：124s 成功、229s 成功、240s 超时、两次约 29s 未提交 Artifact；此前 revision 多为 43–136s。
+- 两次慢任务输入相同，仅 107 行/3 列、QueryResult JSON 约 4.2KB；不是数据库或结果集过大。检查期间 Provider 连接持续接收数据，Pi/Forge 进程与 SQLite 正常。
+- 直接原因是 Analysis 没有独立 ActiveModelBinding，回退到全局 `volcengine-coding-plan/ark-code-latest`；模型 Tool submission 延迟不稳定。UI 在 `attempt_started` 与终态之间没有可见 elapsed/deadline，因而表现为假死。
+
+### 评估与已确认方案
+
+1. **执行可靠性**：为 `pi.analysis` 激活已有、通过 capability gate 的独立 Model Revision；不修改 SQL Critical Binding，不新增凭证。候选必须支持终止型 Artifact Tool，并可一键 rollback。
+2. **有界输出**：Analysis 使用独立 Revision 的 `max_output_tokens`，不再继承全局 16384 Token fallback；不通过直接篡改全局 `models.json` 解决。
+3. **可观测性**：StageAttempt 增加兼容可空的 `deadline_at / progress_phase / first_model_activity_at / tool_submitted_at`，只记录时间与阶段，不记录 Prompt、模型正文或 hidden CoT。
+4. **真实进度体验**：Web 根据服务端 started/deadline 显示 elapsed、剩余安全窗口和慢响应提示；只展示业务阶段名，不伪造百分比、不新增 Task 状态或心跳事件流。
+5. **失败边界**：超时继续回到 `analysis_retry`，不重放 SQL；候选模型不可用时明确失败，不回退到未固定的全局模型。
+
+### 用户确认
+
+- **确认日期**：2026-08-24
+- **决策**：用户在查看诊断后明确要求修复。
+
+### 关联
+
+- **Plan**：`forge-enterprise-evolution-plan.md` H1。
+- **实现/验证**：进行中。

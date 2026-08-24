@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1 已完成；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1 已完成；H1 Analysis 延迟修复中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -73,6 +73,7 @@ GTM：Data-Team Led
 | M0.4 其余 Contract 草案 | 保留未开始 | 不阻塞 M1A；按 Coordination/Economics/Context/OAuth 的首次真实消费者 Just-in-Time 细化，避免当前过早冻结抽象 |
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
+| H1 Analysis 延迟与进度修复 | 实施中 | `REQ-2026-08-24-005`：独立 capability-gated Analysis Binding、有界输出、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；不改变 SQL、审批或 Task 真相源 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -259,6 +260,31 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - 新消息、Presentation、Action 返回的 child Task 和最近任务恢复都会切换观察焦点；旧轮询通过 epoch 失效，不影响 Pi 执行。
 - 自动验证：Python `546 passed / 24 skipped`；Pi `88 passed`、TypeScript typecheck 通过；Web 定向测试 77 passed；桌面和 390px 移动端 Playwright 通过且 0 console/page error；网站构建和 `git diff --check` 通过。
 - 遗留边界：当前使用有界 polling；未来 PlanStep 超过 12 或出现大规模动态 Work Graph 时必须重新进入需求池评估布局与推送方案。
+
+## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
+
+> Requirement：[`REQ-2026-08-24-005`](requirements-pool.md#req-2026-08-24-005修复-analysis-stage-临界超时与假死体验) · 决策：`accepted_with_changes`
+
+### H1.1 Problem 与边界
+
+同一 107 行 QueryResult 在当前全局 fallback model revision 上出现 229s 成功、240s 超时和未提交 Artifact，已接近 240s Stage deadline；Web 在一次模型调用期间没有真实 elapsed/deadline，因此用户无法区分“仍在生成”和“已经失联”。本切片只修 Analysis 模型固定、输出边界和观测体验，不修改 SQL、审批、QueryRun、Governance PEP 或 Task 状态机。
+
+### H1.2 实施
+
+1. `pi.analysis` 必须使用 capability-gated ActiveModelBinding；候选为现有已验证 Revision，不创建或读取新 Secret，不影响 SQL Critical scopes。
+2. Analysis 独立 Revision 固定 provider/model/max output tokens；激活和 rollback 继续使用 Model Control CAS/Audit。
+3. StageAttempt 以向后兼容可空字段记录 `deadline_at`、`progress_phase`、`first_model_activity_at`、`tool_submitted_at`；Pi SDK session event 只提升稀疏生命周期时间，不保存 streaming text/thinking。
+4. Web flow allowlist 只投影上述业务安全字段；浏览器本地计算 elapsed/remaining，60s 后显示“耗时较长但仍在安全窗口”，不伪造百分比或新增 heartbeat Event。
+5. timeout 继续回到 `analysis_retry`；不得自动重跑 SQL、自动切未验证模型或把长耗时误标为成功。
+
+### H1.3 验收与回滚
+
+- 旧 StageAttempt 缺少新字段仍可读取；SQLite user_version 不变化。
+- 稀疏 progress 更新不写 Prompt、Tool payload、模型正文、Secret 或 hidden CoT。
+- Analysis Binding 缺失/漂移/门禁失效时失败关闭；不再静默使用全局 fallback。
+- Web 正确展示 running、slow、deadline、terminal；键盘/移动端/reduced-motion 无回归。
+- Python/Pi/typecheck/audit/Playwright/NAS health 通过；用下一条真实 Analysis 观察 Artifact 成功、耗时和绑定 revision，不自动执行额外 SQL。
+- 代码回滚不删除已有 attempt JSON 字段；模型 Binding 可通过既有 CAS rollback 恢复，失败时保持 `ready_for_analysis`，不放宽授权。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
