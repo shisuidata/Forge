@@ -100,6 +100,50 @@ def test_report_store_builds_immutable_html_and_pptx(tmp_path: Path):
     assert ("pptx", "succeeded") in attempts
 
 
+def test_pdf_export_disables_browser_headers_and_internal_path_footer(monkeypatch, tmp_path: Path):
+    from types import SimpleNamespace
+
+    store = ReportStore(str(tmp_path / "reports.db"), str(tmp_path / "artifacts"))
+    report_dir = tmp_path / "artifacts" / "rp_demo001" / "v1"
+    report_dir.mkdir(parents=True)
+    (report_dir / "index.html").write_text("<title>Internal title</title><p>Report</p>")
+    captured: list[str] = []
+
+    monkeypatch.setattr("forge.reporting.shutil.which", lambda name: "/usr/bin/google-chrome" if name == "google-chrome" else None)
+
+    def fake_run(command, **_kwargs):
+        captured.extend(command)
+        output = next(item.split("=", 1)[1] for item in command if item.startswith("--print-to-pdf="))
+        Path(output).write_bytes(b"%PDF-1.4\n%%EOF\n")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("forge.reporting.subprocess.run", fake_run)
+    assert store._build_pdf(report_dir) == "ready"
+    assert "--no-pdf-header-footer" in captured
+    assert "--print-to-pdf-no-header" not in captured
+    assert captured[-1].startswith("file://")
+
+
+def test_report_projection_suppresses_chart_when_visible_labels_do_not_match_row_grain(tmp_path: Path):
+    from pptx import Presentation
+
+    source = _source()
+    source["report_id"] = "rp_duplicate001"
+    source["task_run_id"] = "tr_duplicate001"
+    source["bundle_hash"] = "sha256:" + "d" * 64
+    source["query_result"]["rows"] = [["华东", 120], ["华东", 80], ["华南", 60]]
+    store = ReportStore(str(tmp_path / "reports.db"), str(tmp_path / "artifacts"))
+    store.create(source)
+    assert store.build("rp_duplicate001")["pptx_status"] == "ready"
+
+    report_html = store.file("rp_duplicate001", "index.html").read_text()
+    assert "<svg" not in report_html
+    assert "各地区销售额</h2>" not in report_html
+    deck = Presentation(store.file("rp_duplicate001", "report.pptx"))
+    slide_texts = ["\n".join(shape.text for shape in slide.shapes if hasattr(shape, "text")) for slide in deck.slides]
+    assert all("DATA VIEW" not in text for text in slide_texts)
+
+
 def test_report_projection_escapes_html_and_paginates_long_pptx_content(tmp_path: Path):
     from pptx import Presentation
 

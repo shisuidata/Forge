@@ -65,6 +65,8 @@ function stringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && item.length > 0);
 }
 
+const chartPointLimit = 10;
+
 export function validateChartPayload(value: unknown): string | undefined {
   if (!record(value)) return "chart payload must be an object";
   if (typeof value.chart_id !== "string" || !/^chart_[A-Za-z0-9_-]+$/.test(value.chart_id)) return "chart_id is invalid";
@@ -73,7 +75,7 @@ export function validateChartPayload(value: unknown): string | undefined {
   if (typeof value.data_ref !== "string" || !/^ar_[A-Za-z0-9_-]+$/.test(value.data_ref)) return "chart data_ref is invalid";
   if (typeof value.dimension !== "string" || value.dimension.length === 0) return "chart dimension is required";
   if (!stringArray(value.measures) || value.measures.length === 0) return "chart measures are required";
-  if (!stringArray(value.evidence_refs)) return "chart evidence_refs are required";
+  if (!stringArray(value.evidence_refs) || value.evidence_refs.length === 0) return "chart evidence_refs are required";
   if (typeof value.alt_text !== "string" || value.alt_text.length === 0) return "chart alt_text is required";
   return undefined;
 }
@@ -148,24 +150,28 @@ export function buildChartPayload(
   title = "查询结果概览",
 ): ChartPayload | undefined {
   if (queryResult.payload.rows.length === 0 || queryResult.payload.columns.length < 2) return undefined;
-  const sample = queryResult.payload.rows.slice(0, 100);
-  const dimensionIndex = queryResult.payload.columns.findIndex((_column, index) =>
-    sample.some((row) => typeof row[index] === "string"),
-  );
+  const rows = queryResult.payload.rows;
+  const projectedRows = rows.slice(0, chartPointLimit);
+  const dimensionIndex = queryResult.payload.columns.findIndex((_column, index) => {
+    const labels = rows.map((row) => row[index]);
+    return labels.every((label) => typeof label === "string" && label.length > 0) &&
+      new Set(labels).size === labels.length;
+  });
+  if (dimensionIndex < 0) return undefined;
   const measureIndexes = queryResult.payload.columns
     .map((_column, index) => index)
-    .filter((index) => sample.some((row) => numeric(row[index])))
+    .filter((index) => index !== dimensionIndex && projectedRows.every((row) => numeric(row[index])))
     .slice(0, 3);
-  if (dimensionIndex < 0 || measureIndexes.length === 0) return undefined;
+  if (measureIndexes.length === 0) return undefined;
   const queryRunId = queryResult.payload.query_run_id;
   return {
     chart_id: `chart_${createHash("sha256").update(`${queryResult.artifact_id}:${dimensionIndex}:${measureIndexes.join(",")}`).digest("hex").slice(0, 24)}`,
-    chart_type: sample.every((row) => row[dimensionIndex] === null || dateLike(row[dimensionIndex])) ? "line" : "bar",
+    chart_type: projectedRows.every((row) => dateLike(row[dimensionIndex])) ? "line" : "bar",
     title,
     data_ref: queryResult.artifact_id,
     dimension: queryResult.payload.columns[dimensionIndex] as string,
     measures: measureIndexes.map((index) => queryResult.payload.columns[index] as string),
-    evidence_refs: sample.map((_row, index) => `${queryRunId}#row:${index + 1}`),
+    evidence_refs: projectedRows.map((_row, index) => `${queryRunId}#row:${index + 1}`),
     alt_text: `${title}：按${String(queryResult.payload.columns[dimensionIndex])}展示${measureIndexes.map((index) => queryResult.payload.columns[index]).join("、")}`,
   };
 }

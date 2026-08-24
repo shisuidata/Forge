@@ -962,6 +962,10 @@ class TestAdminPages:
         assert 'id="task-flow-panel"' in resp.text
         assert 'id="flow-dag"' in resp.text
         assert 'id="flow-stream"' in resp.text
+        assert "height: calc(100dvh - 4.1rem)" in resp.text
+        assert "min-h-0 min-w-0 flex-1 flex-col overflow-hidden" in resp.text
+        assert "function revealTaskCard(card)" in resp.text
+        assert "card.append(stripe, body); revealTaskCard(card);" in resp.text
         assert "/api/chat" not in resp.text
 
     async def test_chat_and_task_monitor_have_separate_navigation(self, client: AsyncClient):

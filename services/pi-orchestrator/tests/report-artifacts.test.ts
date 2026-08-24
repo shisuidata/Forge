@@ -18,14 +18,47 @@ const queryResult = {
   },
 } as Artifact<QueryResultPayload>;
 
-test("chart builder deterministically binds chart encoding to QueryResult evidence", () => {
-  const first = buildChartPayload(queryResult);
-  const second = buildChartPayload(queryResult);
+test("chart builder deterministically binds the rendered point limit to QueryResult evidence", () => {
+  const rows = Array.from({ length: 12 }, (_unused, index) => [`地区${index + 1}`, 120 - index]);
+  const bounded = {
+    ...queryResult,
+    payload: { ...queryResult.payload, rows, row_count: rows.length },
+  } as Artifact<QueryResultPayload>;
+  const first = buildChartPayload(bounded);
+  const second = buildChartPayload(bounded);
   assert.deepEqual(first, second);
   assert.equal(first?.chart_type, "bar");
   assert.equal(first?.dimension, "region");
   assert.deepEqual(first?.measures, ["sales"]);
-  assert.deepEqual(first?.evidence_refs, ["qr_demo#row:1", "qr_demo#row:2"]);
+  assert.deepEqual(first?.evidence_refs, Array.from({ length: 10 }, (_unused, index) => `qr_demo#row:${index + 1}`));
+});
+
+test("chart builder fails closed when the visible dimension labels do not identify the row grain", () => {
+  const repeatedLabels = {
+    ...queryResult,
+    payload: {
+      ...queryResult.payload,
+      columns: ["category_name", "sales"],
+      rows: [["食品", 120], ["食品", 80], ["家电", 60]],
+      row_count: 3,
+    },
+  } as Artifact<QueryResultPayload>;
+  assert.equal(buildChartPayload(repeatedLabels), undefined);
+});
+
+test("chart builder may use a stable unique string key instead of a repeated display label", () => {
+  const stableKey = {
+    ...queryResult,
+    payload: {
+      ...queryResult.payload,
+      columns: ["category_name", "category_key", "sales"],
+      rows: [["食品", "cat-01", 120], ["食品", "cat-02", 80], ["家电", "cat-03", 60]],
+      row_count: 3,
+    },
+  } as Artifact<QueryResultPayload>;
+  const chart = buildChartPayload(stableKey);
+  assert.equal(chart?.dimension, "category_key");
+  assert.deepEqual(chart?.measures, ["sales"]);
 });
 
 test("technical report contract rejects hidden reasoning and secret transcript", () => {

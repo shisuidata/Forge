@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import math
 import os
 import secrets
 import shutil
@@ -61,23 +62,39 @@ def _atomic_write(path: Path, data: bytes) -> None:
             pass
 
 
-def _svg_chart(chart: dict[str, Any], query: dict[str, Any]) -> str:
+def _chart_points(
+    chart: dict[str, Any], query: dict[str, Any], limit: int = 10
+) -> list[tuple[str, float]]:
     columns = query.get("columns") or []
-    rows = (query.get("rows") or [])[:12]
+    all_rows = query.get("rows") or []
     dimension = chart.get("dimension")
     measures = chart.get("measures") or []
     if dimension not in columns or not measures or measures[0] not in columns:
-        return ""
+        return []
     di, mi = columns.index(dimension), columns.index(measures[0])
+    labels: list[str] = []
     points: list[tuple[str, float]] = []
-    for row in rows:
-        if not isinstance(row, list) or max(di, mi) >= len(row):
+    for index, row in enumerate(all_rows):
+        if not isinstance(row, list) or max(di, mi) >= len(row) or not isinstance(row[di], str) or not row[di]:
+            return []
+        label = row[di]
+        labels.append(label)
+        if index >= limit:
             continue
         try:
             value = float(row[mi])
         except (TypeError, ValueError):
-            continue
-        points.append((str(row[di]), value))
+            return []
+        if not math.isfinite(value):
+            return []
+        points.append((label, value))
+    if len(set(labels)) != len(labels):
+        return []
+    return points
+
+
+def _svg_chart(chart: dict[str, Any], query: dict[str, Any]) -> str:
+    points = _chart_points(chart, query)
     if not points:
         return ""
     width, height, pad = 820, 320, 46
@@ -148,11 +165,15 @@ def _business_html(source: dict[str, Any]) -> str:
         f'<li><span>{index:02d}</span>{html.escape(_safe_text(item))}</li>'
         for index, item in enumerate(method.get("approach_steps") or [], 1)
     )
-    chart_html = "".join(
-        f'<section class="report-section chart"><div class="section-heading"><p>DATA VIEW</p>'
-        f'<h2>{html.escape(_safe_text(chart.get("title")))}</h2></div>{_svg_chart(chart, query)}</section>'
-        for chart in charts
-    )
+    chart_sections = []
+    for chart in charts:
+        svg = _svg_chart(chart, query)
+        if svg:
+            chart_sections.append(
+                f'<section class="report-section chart"><div class="section-heading"><p>DATA VIEW</p>'
+                f'<h2>{html.escape(_safe_text(chart.get("title")))}</h2></div>{svg}</section>'
+            )
+    chart_html = "".join(chart_sections)
     table_columns = query.get("columns") or []
     table_rows = (query.get("rows") or [])[:20]
     head = "".join(f"<th>{html.escape(str(column))}</th>" for column in table_columns)
@@ -354,7 +375,15 @@ class ReportStore:
         if chrome is None:
             return "failed"
         target = (report_dir / "report.pdf").resolve()
-        command = [chrome, "--headless", "--disable-gpu", "--no-sandbox", f"--print-to-pdf={target}", (report_dir / "index.html").resolve().as_uri()]
+        command = [
+            chrome,
+            "--headless",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={target}",
+            (report_dir / "index.html").resolve().as_uri(),
+        ]
         result = subprocess.run(command, capture_output=True, timeout=90, check=False)
         if result.returncode != 0 or not target.exists():
             return "failed"
@@ -506,18 +535,8 @@ class ReportStore:
         card_slides("FINDINGS", "关键发现", finding_records)
 
         query = source.get("query_result") or {}
-        columns, rows = query.get("columns") or [], (query.get("rows") or [])[:10]
         for chart in source.get("charts") or []:
-            dimension, measures = chart.get("dimension"), chart.get("measures") or []
-            if dimension not in columns or not measures or measures[0] not in columns:
-                continue
-            di, mi = columns.index(dimension), columns.index(measures[0])
-            points = []
-            for row in rows:
-                try:
-                    points.append((str(row[di]), max(0.0, float(row[mi]))))
-                except (TypeError, ValueError, IndexError):
-                    pass
+            points = [(label, max(0.0, value)) for label, value in _chart_points(chart, query)]
             if not points:
                 continue
             chart_title = _safe_text(chart.get("title"))
