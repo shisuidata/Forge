@@ -402,8 +402,10 @@ test("confirmed metric Artifact is required before query readiness", async () =>
 test("QueryResult flows through evidence-bound analysis and report Artifacts", async () => {
   let analysisArtifactId = "";
   const memoryWrites: Array<Record<string, unknown>> = [];
+  const attempts = new InMemoryStageAttemptStore();
   const app = new OrchestratorApplication({
     config: loadConfig({}),
+    attempts,
     forgeClient: {
       async createQueryRun(input) {
         return { ...response(), task_run_id: input.taskRunId };
@@ -451,8 +453,10 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
       async reviewMetric() {
         throw new Error("not used");
       },
-      async analyze(_task, input) {
+      async analyze(_task, input, _signal, _revision, onProgress) {
         assert.equal(input.queryResults[0]?.artifact_type, "query_result");
+        onProgress?.({ phase: "model_responding" });
+        onProgress?.({ phase: "artifact_submitted" });
         return {
           status: "complete",
           method_summary: { objective: "定位转化异常", dimensions: ["channel"], comparison_baseline: "渠道对比", approach_steps: ["比较各渠道转化率"] },
@@ -525,6 +529,13 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
   const analyzed = await app.analyzeTask(created.task.task_run_id, {});
   assert.equal(analyzed.task.status, "ready_for_report");
   assert.equal(analyzed.artifact.artifact_type, "analysis");
+  const analysisAttempt = attempts.list(created.task.task_run_id).find(
+    (attempt) => attempt.stage === "business_root_cause_analysis",
+  );
+  assert.equal(analysisAttempt?.progress_phase, "artifact_submitted");
+  assert.ok(analysisAttempt?.deadline_at);
+  assert.ok(analysisAttempt?.first_model_activity_at);
+  assert.ok(analysisAttempt?.tool_submitted_at);
 
   const reported = await app.renderReport(created.task.task_run_id, {
     audience: "业务负责人",

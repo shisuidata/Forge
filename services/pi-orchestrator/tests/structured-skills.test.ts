@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -26,6 +30,41 @@ const validMetric = {
   boundary_conditions: ["退款订单是否排除待确认"],
   open_questions: ["退款订单是否排除？"],
 };
+
+const validAnalysis = {
+  status: "complete" as const,
+  method_summary: {
+    objective: "解释结果",
+    dimensions: ["channel"],
+    comparison_baseline: "渠道对比",
+    approach_steps: ["核验结果"],
+  },
+  summary: "移动端为 6.9%。",
+  findings: [{
+    statement: "移动端转化率为 6.9%。",
+    evidence_refs: ["qr_demo_001#row:1"],
+    confidence: "high" as const,
+  }],
+  hypotheses: [], recommendations: [], limitations: [], suggested_queries: [],
+};
+
+function queryResultArtifact() {
+  return {
+    artifact_id: "ar_query_progress_001",
+    artifact_type: "query_result" as const,
+    schema_version: 1 as const,
+    task_run_id: "tr_demo",
+    producer: "forge",
+    created_at: "2026-08-21T00:00:00Z",
+    payload: {
+      query_run_id: "qr_demo_001", sql_hash: `sha256:${"a".repeat(64)}`,
+      columns: ["channel", "conversion_rate"], rows: [["mobile", 0.069]],
+      row_count: 1, truncated: false, dialect: "postgresql" as const,
+      registry_version: "registry-v1", execution_ms: 2,
+      executed_at: "2026-08-21T00:00:00Z",
+    },
+  };
+}
 
 const validClarification = {
   status: "needs_input" as const,
@@ -102,6 +141,64 @@ test("Pi Skill executor captures the terminating structured tool result", async 
     ),
     validClarification,
   );
+});
+
+test("managed Analysis fails closed without a capability-gated active binding", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-analysis-binding-"));
+  const databasePath = join(directory, "model-control.db");
+  const database = new DatabaseSync(databasePath);
+  database.exec(`
+    CREATE TABLE model_profile_revisions (
+      revision_id TEXT PRIMARY KEY, config_json TEXT NOT NULL,
+      validation_report_json TEXT NOT NULL
+    );
+    CREATE TABLE active_model_bindings (
+      scope TEXT PRIMARY KEY, binding_version INTEGER NOT NULL,
+      revision_id TEXT NOT NULL
+    );
+  `);
+  database.close();
+  const executor = new PiStructuredSkillExecutor({
+    config: loadConfig({
+      PI_MODEL_CONTROL_DB_PATH: databasePath,
+      PI_MODEL_PROVIDER: "fallback-provider",
+      PI_MODEL_ID: "fallback-model",
+      PI_ORCHESTRATOR_AGENT_DIR: directory,
+    }),
+  });
+  await assert.rejects(
+    () => executor.analyze(task(), { question: "分析", queryResults: [queryResultArtifact()] }),
+    /requires a capability-gated active model binding/,
+  );
+});
+
+test("Pi Skill executor emits sparse model and Artifact progress without streaming content", async () => {
+  const phases: string[] = [];
+  const executor = new PiStructuredSkillExecutor({
+    config: loadConfig({}),
+    sessionFactory: async ({ tool }) => {
+      let listener: ((phase: "model_responding" | "artifact_submitted") => void) | undefined;
+      return {
+        subscribeProgress(next) { listener = next; return () => { listener = undefined; }; },
+        async prompt() {
+          listener?.("model_responding");
+          listener?.("model_responding");
+          listener?.("artifact_submitted");
+          await invoke(tool, validAnalysis);
+        },
+        async abort() {},
+        dispose() {},
+      };
+    },
+  });
+  await executor.analyze(
+    task(),
+    { question: "分析", queryResults: [queryResultArtifact()] },
+    undefined,
+    undefined,
+    (progress) => phases.push(progress.phase),
+  );
+  assert.deepEqual(phases, ["model_responding", "artifact_submitted"]);
 });
 
 test("Pi Skill executor runs metric review through its dedicated Artifact Tool", async () => {

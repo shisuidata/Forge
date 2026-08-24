@@ -76,7 +76,12 @@ function renderReportMarkdown(payload: RenderedOutputPayload): string {
 interface StageSession {
   prompt(text: string): Promise<void>;
   abort(): Promise<void>;
+  subscribeProgress?(listener: (phase: StageExecutionProgress["phase"]) => void): () => void;
   dispose(): void;
+}
+
+export interface StageExecutionProgress {
+  phase: "model_responding" | "artifact_submitted";
 }
 
 export type StageSessionFactory = (options: {
@@ -120,6 +125,7 @@ export interface StructuredSkillExecutionPort {
     input: AnalysisSkillInput,
     signal?: AbortSignal,
     expectedModelRevision?: string | null,
+    onProgress?: (progress: StageExecutionProgress) => void,
   ): Promise<AnalysisPayload>;
   advise?(
     task: TaskRun,
@@ -205,6 +211,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     input: AnalysisSkillInput,
     signal?: AbortSignal,
     expectedModelRevision?: string | null,
+    onProgress?: (progress: StageExecutionProgress) => void,
   ): Promise<AnalysisPayload> {
     if (input.queryResults.length === 0) {
       throw new SkillExecutionError("Analysis requires at least one QueryResultArtifact");
@@ -240,6 +247,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       isSubmitted: () => submission.getSubmitted() !== undefined,
       ...(signal === undefined ? {} : { signal }),
       ...(expectedModelRevision === undefined ? {} : { expectedModelRevision }),
+      ...(onProgress === undefined ? {} : { onProgress }),
     });
     const payload = submission.getSubmitted();
     if (payload === undefined) {
@@ -370,6 +378,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     isSubmitted: () => boolean;
     signal?: AbortSignal;
     expectedModelRevision?: string | null;
+    onProgress?: (progress: StageExecutionProgress) => void;
   }): Promise<void> {
     if (options.message.trim().length === 0) {
       throw new SkillExecutionError("Skill input must not be empty");
@@ -388,8 +397,20 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
         : { expectedModelRevision: options.expectedModelRevision }),
     });
     const abort = () => void session.abort();
+    let progressRank = 0;
+    const unsubscribeProgress = session.subscribeProgress?.((phase) => {
+      const rank = phase === "artifact_submitted" ? 2 : 1;
+      if (rank <= progressRank) return;
+      progressRank = rank;
+      try {
+        options.onProgress?.({ phase });
+      } catch {
+        // Progress telemetry must never change the business Stage result.
+      }
+    });
     if (isAborted(options.signal)) {
       await session.abort();
+      unsubscribeProgress?.();
       session.dispose();
       throw new SkillExecutionError("Skill execution aborted");
     }
@@ -412,6 +433,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       }
     } finally {
       options.signal?.removeEventListener("abort", abort);
+      unsubscribeProgress?.();
       session.dispose();
     }
   }
@@ -421,7 +443,11 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     tool: ToolDefinition;
     expectedModelRevision?: string | null;
   }): Promise<StageSession> {
-    const stageBinding = resolveStageModelBinding(this.#config, skillModelStage(options.skillName));
+    const modelStage = skillModelStage(options.skillName);
+    const stageBinding = resolveStageModelBinding(this.#config, modelStage);
+    if (modelStage === "analysis" && this.#config.modelControlDbPath !== undefined && stageBinding === undefined) {
+      throw new SkillExecutionError("Analysis Stage requires a capability-gated active model binding");
+    }
     const provider = stageBinding?.provider ?? this.#config.piModelProvider;
     const modelId = stageBinding?.modelId ?? this.#config.piModelId;
     if (provider === undefined || modelId === undefined) {
@@ -463,7 +489,18 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
       tools: [options.tool.name],
       customTools: [options.tool],
     });
-    return session;
+    return {
+      prompt: (text) => session.prompt(text),
+      abort: () => session.abort(),
+      subscribeProgress: (listener) => session.subscribe((event) => {
+        if (event.type === "tool_execution_start") {
+          listener("artifact_submitted");
+        } else if (event.type === "message_update") {
+          listener("model_responding");
+        }
+      }),
+      dispose: () => session.dispose(),
+    };
   }
 
   async #getRuntime(expectedRevision?: string | null): Promise<ModelRuntime> {

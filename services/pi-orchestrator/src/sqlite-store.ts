@@ -24,6 +24,7 @@ import {
 import {
   type StageAttempt,
   type StageAttemptStatus,
+  type StageProgressPhase,
   type StageAttemptStore,
   type StartStageAttemptInput,
 } from "./stage-attempts.js";
@@ -66,6 +67,10 @@ function changed(result: StatementResultingChanges): number {
 function normalizeStageAttempt(attempt: StageAttempt): StageAttempt {
   return {
     ...attempt,
+    deadline_at: attempt.deadline_at ?? null,
+    progress_phase: attempt.progress_phase ?? "waiting_for_model",
+    first_model_activity_at: attempt.first_model_activity_at ?? null,
+    tool_submitted_at: attempt.tool_submitted_at ?? null,
     model_revision: attempt.model_revision ?? null,
     skill_policy_version: attempt.skill_policy_version ?? 0,
   };
@@ -368,6 +373,11 @@ class SqliteStageAttemptStore implements StageAttemptStore {
     if (!Number.isInteger(input.leaseMs) || input.leaseMs < 1) {
       throw new TaskStateError("Stage attempt lease must be a positive integer");
     }
+    if (input.timeoutMs !== undefined && (
+      !Number.isInteger(input.timeoutMs) || input.timeoutMs < 1 || input.timeoutMs >= input.leaseMs
+    )) {
+      throw new TaskStateError("Stage timeout must be positive and shorter than its lease");
+    }
     const ownsTransaction = !this.database.isTransaction;
     if (ownsTransaction) this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -400,10 +410,16 @@ class SqliteStageAttemptStore implements StageAttemptStore {
         running_status: input.runningStatus,
         retry_status: input.retryStatus,
         lease_expires_at: new Date(now.getTime() + input.leaseMs).toISOString(),
+        deadline_at: input.timeoutMs === undefined
+          ? null
+          : new Date(now.getTime() + input.timeoutMs).toISOString(),
         started_at: now.toISOString(),
         updated_at: now.toISOString(),
         finished_at: null,
         error: null,
+        progress_phase: "waiting_for_model",
+        first_model_activity_at: null,
+        tool_submitted_at: null,
         model_revision: input.modelRevision ?? null,
         skill_policy_version: input.skillPolicyVersion ?? 0,
       };
@@ -468,6 +484,38 @@ class SqliteStageAttemptStore implements StageAttemptStore {
     return rows.map((row) =>
       structuredClone(normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, "StageAttempt"))),
     );
+  }
+
+  markProgress(
+    attemptId: string,
+    phase: Exclude<StageProgressPhase, "waiting_for_model">,
+  ): StageAttempt {
+    const attempt = this.get(attemptId);
+    if (attempt === undefined) throw new TaskStateError(`StageAttempt not found: ${attemptId}`);
+    const order: Record<StageProgressPhase, number> = {
+      waiting_for_model: 0,
+      model_responding: 1,
+      artifact_submitted: 2,
+    };
+    if (attempt.status !== "running" || order[phase] <= order[attempt.progress_phase]) {
+      return attempt;
+    }
+    const now = new Date().toISOString();
+    const updated: StageAttempt = {
+      ...attempt,
+      progress_phase: phase,
+      updated_at: now,
+      first_model_activity_at: attempt.first_model_activity_at ?? now,
+      tool_submitted_at: phase === "artifact_submitted" ? now : attempt.tool_submitted_at,
+    };
+    const result = this.database
+      .prepare(
+        `UPDATE stage_attempts SET updated_at = ?, data_json = ?
+         WHERE attempt_id = ? AND status = 'running'`,
+      )
+      .run(now, JSON.stringify(updated), attemptId);
+    if (changed(result) !== 1) return this.get(attemptId) ?? attempt;
+    return structuredClone(updated);
   }
 
   finish(

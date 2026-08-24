@@ -200,6 +200,7 @@ const flowStreamChevron = document.getElementById('flow-stream-chevron');
 let observedFlowTaskId = null;
 let flowPollEpoch = 0;
 let flowLastEventSequence = 0;
+let flowRunningAttempt = null;
 const renderedFlowEvents = new Set();
 
 function randomId(prefix) {
@@ -242,6 +243,14 @@ const flowTaskLabels = {
   ready_for_report: '准备报告', rendering: '报告生成中', completed: '已完成',
   needs_input: '等待补充', incomplete: '需要补查', cancelled: '已取消', failed: '失败', expired: '已过期',
 };
+const flowStageLabels = {
+  query_prepare: '准备可信查询', query_execution: '执行只读查询',
+  business_root_cause_analysis: '证据分析', supplemental_analysis: '补查分析',
+  data_analysis_report: '生成业务报告', requirement_clarification: '澄清业务需求',
+};
+const flowProgressLabels = {
+  waiting_for_model: '等待模型响应', model_responding: '模型持续响应', artifact_submitted: '正在校验分析结果',
+};
 const flowEventLabels = {
   'task.created': '任务已创建', 'task.status_changed': '任务状态已推进',
   'plan.created': '执行计划已建立', 'plan.revised': '执行计划已更新',
@@ -276,6 +285,7 @@ function resetTaskFlow() {
   flowHeading.textContent = '等待任务';
   flowPlanMeta.textContent = '等待计划';
   flowTaskStatus.textContent = '等待';
+  flowRunningAttempt = null;
   flowCurrentAttempt.textContent = '等待阶段执行';
   flowLiveDot.className = 'h-2 w-2 rounded-full bg-gray-300';
   flowContent.classList.add('hidden');
@@ -360,6 +370,40 @@ function appendFlowEvent(event) {
   row.append(rail, copy); flowStream.append(row);
 }
 
+function formatFlowDuration(milliseconds) {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function flowStageLabel(stage) {
+  return flowStageLabels[stage] || '专业任务阶段';
+}
+
+function updateFlowAttemptClock() {
+  const attempt = flowRunningAttempt;
+  if (!attempt || attempt.status !== 'running') return;
+  const startedAt = Date.parse(attempt.started_at);
+  if (!Number.isFinite(startedAt)) return;
+  const now = Date.now();
+  const elapsed = now - startedAt;
+  const parts = [
+    flowStageLabel(attempt.stage),
+    flowProgressLabels[attempt.progress_phase] || '正在执行',
+    `已用 ${formatFlowDuration(elapsed)}`,
+  ];
+  const deadlineAt = Date.parse(attempt.deadline_at || '');
+  if (Number.isFinite(deadlineAt)) {
+    parts.push(deadlineAt > now
+      ? `剩余安全窗口 ${formatFlowDuration(deadlineAt - now)}`
+      : '正在按超时策略安全收口');
+  }
+  if (elapsed >= 60_000 && (!Number.isFinite(deadlineAt) || deadlineAt > now)) {
+    parts.push('耗时较长，但任务仍在运行');
+  }
+  flowCurrentAttempt.textContent = parts.join(' · ');
+}
+
 function renderTaskFlow(data) {
   flowEmpty.classList.add('hidden'); flowContent.classList.remove('hidden');
   const taskStatus = data.task?.status || 'unknown';
@@ -373,7 +417,20 @@ function renderTaskFlow(data) {
   renderFlowDag(plan);
   const attempts = Array.isArray(data.attempts) ? data.attempts : [];
   const currentAttempt = [...attempts].reverse().find((item) => item.status === 'running') || attempts.at(-1);
-  flowCurrentAttempt.textContent = currentAttempt ? `${currentAttempt.stage} · ${currentAttempt.status}` : (data.task?.current_stage || '等待阶段执行');
+  flowRunningAttempt = currentAttempt?.status === 'running' ? currentAttempt : null;
+  if (flowRunningAttempt) {
+    updateFlowAttemptClock();
+  } else if (currentAttempt) {
+    const startedAt = Date.parse(currentAttempt.started_at);
+    const finishedAt = Date.parse(currentAttempt.finished_at || currentAttempt.updated_at);
+    const duration = Number.isFinite(startedAt) && Number.isFinite(finishedAt)
+      ? ` · 用时 ${formatFlowDuration(finishedAt - startedAt)}`
+      : '';
+    const status = {succeeded: '已完成', failed: '失败', timed_out: '超时', interrupted: '已中断'}[currentAttempt.status] || currentAttempt.status;
+    flowCurrentAttempt.textContent = `${flowStageLabel(currentAttempt.stage)} · ${status}${duration}`;
+  } else {
+    flowCurrentAttempt.textContent = data.task?.current_stage ? flowStageLabel(data.task.current_stage) : '等待阶段执行';
+  }
   (data.events || []).sort((a, b) => a.sequence - b.sequence).forEach(appendFlowEvent);
   flowLastEventSequence = Math.max(flowLastEventSequence, Number(data.last_event_sequence || 0));
 }
@@ -381,7 +438,7 @@ function renderTaskFlow(data) {
 function observeTaskFlow(taskRunId) {
   if (!/^tr_[A-Za-z0-9_-]+$/.test(taskRunId)) return;
   if (observedFlowTaskId === taskRunId) return;
-  observedFlowTaskId = taskRunId; flowLastEventSequence = 0; renderedFlowEvents.clear();
+  observedFlowTaskId = taskRunId; flowLastEventSequence = 0; flowRunningAttempt = null; renderedFlowEvents.clear();
   flowStream.replaceChildren(flowStreamEmpty); flowStreamEmpty.classList.remove('hidden');
   flowEmpty.classList.add('hidden'); flowContent.classList.remove('hidden'); flowHeading.textContent = '正在读取任务';
   const epoch = ++flowPollEpoch;
@@ -589,6 +646,7 @@ flowStreamToggle.addEventListener('click', () => {
   flowStreamChevron.textContent = expanded ? '展开' : '收起';
 });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setFlowPanelOpen(false); });
+window.setInterval(updateFlowAttemptClock, 1000);
 currentConversation();
 if (PI_ENABLED) {
   void loadRecentTasks();

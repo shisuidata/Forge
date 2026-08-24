@@ -30,7 +30,7 @@ import {
   PiStructuredSkillExecutor,
   type StructuredSkillExecutionPort,
 } from "./skill-executor.js";
-import type { StageAttempt, StageAttemptStore } from "./stage-attempts.js";
+import type { StageAttempt, StageAttemptStore, StageProgressPhase } from "./stage-attempts.js";
 import type {
   AdvisoryPayload,
   AnalysisPayload,
@@ -1447,6 +1447,7 @@ export class OrchestratorApplication {
         { question, queryResults, priorAnalysis },
         stageExecution.signal,
         attempt?.model_revision,
+        (progress) => this.#markAttemptProgress(attempt, progress.phase),
       );
       if (stageExecution.timedOut()) throw new Error("Supplemental Analysis Stage timed out");
       const allowedEvidenceRefs = new Set(
@@ -1558,6 +1559,7 @@ export class OrchestratorApplication {
         { question, queryResults: [queryResult] },
         stageExecution.signal,
         attempt?.model_revision,
+        (progress) => this.#markAttemptProgress(attempt, progress.phase),
       );
       if (stageExecution.timedOut()) throw new Error("Analysis Stage timed out");
       const allowedEvidenceRefs = new Set(
@@ -1911,6 +1913,7 @@ export class OrchestratorApplication {
       runningStatus: task.status,
       retryStatus,
       leaseMs: this.#stageLeaseMs,
+      timeoutMs: this.#stageTimeoutMs,
       modelRevision,
       skillPolicyVersion: this.#skillPolicies.get(task.org_id, task.team_id)?.version ?? 0,
     });
@@ -1918,9 +1921,19 @@ export class OrchestratorApplication {
       attempt_id: attempt.attempt_id,
       stage,
       attempt_number: attempt.attempt_number,
+      deadline_at: attempt.deadline_at,
       lease_expires_at: attempt.lease_expires_at,
+      progress_phase: attempt.progress_phase,
     });
     return attempt;
+  }
+
+  #markAttemptProgress(
+    attempt: StageAttempt | undefined,
+    phase: Exclude<StageProgressPhase, "waiting_for_model">,
+  ): void {
+    if (attempt === undefined || this.#attempts === undefined) return;
+    this.#attempts.markProgress(attempt.attempt_id, phase);
   }
 
   #finishAttempt(

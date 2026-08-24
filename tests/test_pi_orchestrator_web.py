@@ -443,7 +443,9 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
             return 200, {"attempts": [{
                 "attempt_id": "sa_001", "task_run_id": "tr_web_chat_001", "stage": "analysis",
                 "status": "running", "attempt_number": 1, "started_at": "2026-08-24T08:00:03Z",
-                "updated_at": "2026-08-24T08:00:03Z", "finished_at": None,
+                "updated_at": "2026-08-24T08:00:04Z", "finished_at": None,
+                "deadline_at": "2026-08-24T08:04:03Z", "progress_phase": "model_responding",
+                "first_model_activity_at": "2026-08-24T08:00:04Z", "tool_submitted_at": None,
                 "error": "must not leak", "model_revision": "must-not-leak",
             }]}
         raise AssertionError(path)
@@ -461,11 +463,24 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
         "sequence": 4, "event_type": "stage.attempt_started",
         "created_at": "2026-08-24T08:00:03Z",
     }]
-    assert body["attempts"][0]["status"] == "running"
+    assert body["attempts"][0] == {
+        "attempt_id": "sa_001", "stage": "analysis", "status": "running",
+        "attempt_number": 1, "started_at": "2026-08-24T08:00:03Z",
+        "updated_at": "2026-08-24T08:00:04Z", "finished_at": None,
+        "deadline_at": "2026-08-24T08:04:03Z", "progress_phase": "model_responding",
+        "first_model_activity_at": "2026-08-24T08:00:04Z", "tool_submitted_at": None,
+    }
     serialized = json.dumps(body)
     assert "must not leak" not in serialized
     assert "model_revision" not in serialized
     assert "prompt" not in serialized
+
+    page = await client.get("/chat")
+    assert page.status_code == 200
+    assert "剩余安全窗口" in page.text
+    assert "耗时较长，但任务仍在运行" in page.text
+    assert "window.setInterval(updateFlowAttemptClock, 1000)" in page.text
+    assert "flowStageLabels" in page.text
 
 
 @pytest.mark.asyncio

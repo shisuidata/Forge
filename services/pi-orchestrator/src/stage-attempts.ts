@@ -12,6 +12,13 @@ export const STAGE_ATTEMPT_STATUSES = [
 
 export type StageAttemptStatus = (typeof STAGE_ATTEMPT_STATUSES)[number];
 
+export const STAGE_PROGRESS_PHASES = [
+  "waiting_for_model",
+  "model_responding",
+  "artifact_submitted",
+] as const;
+export type StageProgressPhase = (typeof STAGE_PROGRESS_PHASES)[number];
+
 export interface StageAttempt {
   attempt_id: string;
   task_run_id: string;
@@ -22,10 +29,14 @@ export interface StageAttempt {
   running_status: TaskStatus;
   retry_status: TaskStatus;
   lease_expires_at: string;
+  deadline_at: string | null;
   started_at: string;
   updated_at: string;
   finished_at: string | null;
   error: string | null;
+  progress_phase: StageProgressPhase;
+  first_model_activity_at: string | null;
+  tool_submitted_at: string | null;
   model_revision: string | null;
   skill_policy_version: number;
 }
@@ -37,6 +48,7 @@ export interface StartStageAttemptInput {
   runningStatus: TaskStatus;
   retryStatus: TaskStatus;
   leaseMs: number;
+  timeoutMs?: number;
   modelRevision?: string | null;
   skillPolicyVersion?: number;
 }
@@ -46,6 +58,7 @@ export interface StageAttemptStore {
   get(attemptId: string): StageAttempt | undefined;
   findByIdempotencyKey(taskRunId: string, idempotencyKey: string): StageAttempt | undefined;
   list(taskRunId: string): StageAttempt[];
+  markProgress(attemptId: string, phase: Exclude<StageProgressPhase, "waiting_for_model">): StageAttempt;
   finish(
     attemptId: string,
     status: Exclude<StageAttemptStatus, "running" | "interrupted">,
@@ -57,6 +70,11 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
   readonly #attempts = new Map<string, StageAttempt[]>();
 
   start(input: StartStageAttemptInput): StageAttempt {
+    if (input.timeoutMs !== undefined && (
+      !Number.isInteger(input.timeoutMs) || input.timeoutMs < 1 || input.timeoutMs >= input.leaseMs
+    )) {
+      throw new TaskStateError("Stage timeout must be positive and shorter than its lease");
+    }
     const attempts = this.#attempts.get(input.taskRunId) ?? [];
     const existing = attempts.find(
       (attempt) => attempt.idempotency_key === input.idempotencyKey,
@@ -76,10 +94,16 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
       running_status: input.runningStatus,
       retry_status: input.retryStatus,
       lease_expires_at: new Date(now.getTime() + input.leaseMs).toISOString(),
+      deadline_at: input.timeoutMs === undefined
+        ? null
+        : new Date(now.getTime() + input.timeoutMs).toISOString(),
       started_at: now.toISOString(),
       updated_at: now.toISOString(),
       finished_at: null,
       error: null,
+      progress_phase: "waiting_for_model",
+      first_model_activity_at: null,
+      tool_submitted_at: null,
       model_revision: input.modelRevision ?? null,
       skill_policy_version: input.skillPolicyVersion ?? 0,
     };
@@ -105,6 +129,37 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
 
   list(taskRunId: string): StageAttempt[] {
     return (this.#attempts.get(taskRunId) ?? []).map((attempt) => structuredClone(attempt));
+  }
+
+  markProgress(
+    attemptId: string,
+    phase: Exclude<StageProgressPhase, "waiting_for_model">,
+  ): StageAttempt {
+    const order: Record<StageProgressPhase, number> = {
+      waiting_for_model: 0,
+      model_responding: 1,
+      artifact_submitted: 2,
+    };
+    for (const attempts of this.#attempts.values()) {
+      const index = attempts.findIndex((attempt) => attempt.attempt_id === attemptId);
+      if (index < 0) continue;
+      const attempt = attempts[index];
+      if (attempt === undefined) continue;
+      if (attempt.status !== "running" || order[phase] <= order[attempt.progress_phase]) {
+        return structuredClone(attempt);
+      }
+      const now = new Date().toISOString();
+      const updated: StageAttempt = {
+        ...attempt,
+        progress_phase: phase,
+        updated_at: now,
+        first_model_activity_at: attempt.first_model_activity_at ?? now,
+        tool_submitted_at: phase === "artifact_submitted" ? now : attempt.tool_submitted_at,
+      };
+      attempts[index] = updated;
+      return structuredClone(updated);
+    }
+    throw new TaskStateError(`StageAttempt not found: ${attemptId}`);
   }
 
   finish(

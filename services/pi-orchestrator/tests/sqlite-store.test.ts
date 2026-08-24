@@ -312,7 +312,15 @@ test("active lease and one-running-attempt constraint fail closed", async () => 
     runningStatus: "analyzing",
     retryStatus: "ready_for_analysis",
     leaseMs: 60_000,
+    timeoutMs: 45_000,
   });
+  assert.ok(attempt.deadline_at);
+  const responding = state.attempts.markProgress(attempt.attempt_id, "model_responding");
+  assert.equal(responding.progress_phase, "model_responding");
+  assert.ok(responding.first_model_activity_at);
+  const submitted = state.attempts.markProgress(attempt.attempt_id, "artifact_submitted");
+  assert.equal(submitted.progress_phase, "artifact_submitted");
+  assert.ok(submitted.tool_submitted_at);
   assert.deepEqual(state.reconcileExpiredAttempts(), []);
   assert.throws(
     () =>
@@ -327,6 +335,7 @@ test("active lease and one-running-attempt constraint fail closed", async () => 
     /already has a running StageAttempt/,
   );
   assert.equal(state.attempts.finish(attempt.attempt_id, "succeeded").status, "succeeded");
+  assert.equal(state.attempts.list(task.task_run_id)[0]?.progress_phase, "artifact_submitted");
   assert.equal(state.attempts.list(task.task_run_id).length, 1);
   state.close();
 });

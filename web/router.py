@@ -465,6 +465,24 @@ def _bounded_web_stage_attempts(attempts: object) -> list[dict]:
             "started_at": str(attempt["started_at"])[:64],
             "updated_at": str(attempt["updated_at"])[:64],
             "finished_at": str(attempt["finished_at"])[:64] if isinstance(attempt.get("finished_at"), str) else None,
+            "deadline_at": str(attempt["deadline_at"])[:64] if isinstance(attempt.get("deadline_at"), str) else None,
+            "progress_phase": (
+                str(attempt["progress_phase"])[:32]
+                if attempt.get("progress_phase") in {
+                    "waiting_for_model", "model_responding", "artifact_submitted"
+                }
+                else None
+            ),
+            "first_model_activity_at": (
+                str(attempt["first_model_activity_at"])[:64]
+                if isinstance(attempt.get("first_model_activity_at"), str)
+                else None
+            ),
+            "tool_submitted_at": (
+                str(attempt["tool_submitted_at"])[:64]
+                if isinstance(attempt.get("tool_submitted_at"), str)
+                else None
+            ),
         })
     return bounded
 
