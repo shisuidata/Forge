@@ -481,6 +481,10 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
     assert "耗时较长，但任务仍在运行" in page.text
     assert "window.setInterval(updateFlowAttemptClock, 1000)" in page.text
     assert "flowStageLabels" in page.text
+    assert "safeMarkdownHref" in page.text
+    assert "blockquote[data-tone=\"warning\"]" in page.text
+    assert "noopener noreferrer" in page.text
+    assert "app-nav-toggle" in page.text
 
 
 @pytest.mark.asyncio

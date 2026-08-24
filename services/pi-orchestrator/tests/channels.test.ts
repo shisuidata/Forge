@@ -212,6 +212,40 @@ test("channel knowledge answer is bound to Forge context evidence without a Quer
   state.close();
 });
 
+test("channel renderer preserves advisory semantics as readable safe Markdown", () => {
+  const presentation = renderChannelPresentation({
+    task: task("completed"),
+    events: [],
+    artifacts: [{
+      artifact_id: "art_advisory", task_run_id: "tr_channel_001", artifact_type: "advisory",
+      schema_version: "1.0.0", producer: "metric-definition-reviewer",
+      created_at: "2026-08-21T00:00:00.000Z",
+      payload: {
+        status: "complete", skill_name: "metric-definition-reviewer", title: "销售额口径说明",
+        summary: "默认使用已支付订单金额。",
+        findings: [{
+          statement: "默认业务口径：使用 dwd_order_detail.total_amount。",
+          evidence_refs: [], confidence: "high",
+        }],
+        recommendations: [{ action: "先确认退款口径", rationale: "不同报表可能不一致", priority: "high" }],
+        assumptions: ["当前问题指订单支付口径"], limitations: ["未覆盖退款后净额"],
+        open_questions: ["是否扣除退款？"],
+        deliverables: [{ name: "字段说明", content: "requires_clarification 为 true 时先澄清。" }],
+      },
+    } as unknown as Artifact],
+  });
+
+  assert.match(presentation.markdown, /^## 核心说明/m);
+  assert.match(presentation.markdown, /## 关键要点/);
+  assert.match(presentation.markdown, /\*\*默认业务口径\*\*：使用 `dwd_order_detail\.total_amount`/);
+  assert.match(presentation.markdown, /## 建议行动/);
+  assert.match(presentation.markdown, /> \*\*前提假设\*\*/);
+  assert.match(presentation.markdown, /> \*\*限制\*\*/);
+  assert.match(presentation.markdown, /> \*\*待确认\*\*/);
+  assert.match(presentation.markdown, /## 字段说明/);
+  assert.doesNotMatch(presentation.markdown, /ctx_|TaskRun|sha256/);
+});
+
 test("channel renderer hides reasoning, internal lineage, raw errors, and stage names", () => {
   const failed = renderChannelPresentation({
     task: task("failed"),

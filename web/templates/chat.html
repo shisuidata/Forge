@@ -18,16 +18,40 @@
       var(--chat-paper);
   }
   .chat-message { animation: chat-rise .28s cubic-bezier(.2,.8,.2,1) both; }
-  .chat-card-shadow { box-shadow: 0 18px 45px rgba(23,32,29,.08); }
+  .chat-card-shadow { background: #fffefa; box-shadow: 0 18px 45px rgba(23,32,29,.08); }
   .chat-action { transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
   .chat-action:hover { transform: translateY(-1px); box-shadow: 0 7px 18px rgba(23,32,29,.12); }
   .chat-dot { animation: chat-pulse 1.2s infinite ease-in-out; }
   .chat-dot:nth-child(2) { animation-delay: .16s; }
   .chat-dot:nth-child(3) { animation-delay: .32s; }
-  .chat-prose pre { background: #111a17; color: #d9eee5; border-radius: 12px; padding: 14px 16px; overflow-x: auto; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .chat-prose p + p { margin-top: .65rem; }
-  .chat-prose ul { list-style: disc; padding-left: 1.25rem; margin: .55rem 0; }
-  .chat-prose a { color: #12634a; text-decoration: underline; text-underline-offset: 3px; }
+  .chat-prose { max-width: 68ch; color: #37443f; font-size: .9rem; line-height: 1.78; overflow-wrap: anywhere; }
+  .chat-prose > :first-child { margin-top: 0; }
+  .chat-prose > :last-child { margin-bottom: 0; }
+  .chat-prose h2 { margin: 1.55rem 0 .55rem; padding-top: .2rem; color: var(--chat-ink); font-family: ui-serif, Georgia, serif; font-size: 1.05rem; font-weight: 700; letter-spacing: -.012em; }
+  .chat-prose h3 { margin: 1.2rem 0 .45rem; color: #28453b; font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .chat-prose p { margin: .55rem 0; }
+  .chat-prose strong { color: #183f32; font-weight: 700; }
+  .chat-prose em { color: #66736e; font-family: ui-serif, Georgia, serif; }
+  .chat-prose code:not(pre code) { border: 1px solid #dce4df; border-radius: .35rem; background: #f1f5f2; padding: .08rem .32rem; color: #285a49; font: .82em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .chat-prose pre { margin: .85rem 0; border: 1px solid rgba(201,239,120,.14); border-radius: 12px; background: #111a17; padding: 14px 16px; overflow-x: auto; color: #d9eee5; box-shadow: inset 0 1px rgba(255,255,255,.04); font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .chat-prose pre code { white-space: pre; }
+  .chat-prose ul, .chat-prose ol { margin: .65rem 0; padding-left: 1.35rem; }
+  .chat-prose ul { list-style: disc; }
+  .chat-prose ol { list-style: decimal; }
+  .chat-prose ul ul { list-style: circle; }
+  .chat-prose li { padding-left: .18rem; }
+  .chat-prose li + li { margin-top: .42rem; }
+  .chat-prose li::marker { color: #3d7a65; font-weight: 700; }
+  .chat-prose blockquote { position: relative; margin: 1rem 0; border: 1px solid #cfe0d8; border-left: 4px solid #397a63; border-radius: 0 12px 12px 0; background: #f1f8f4; padding: .72rem .9rem .78rem 1rem; color: #385148; }
+  .chat-prose blockquote[data-tone="success"] { border-color: #b9dbc9; border-left-color: #16805a; background: #edf9f2; }
+  .chat-prose blockquote[data-tone="warning"] { border-color: #ead5a4; border-left-color: #c17a17; background: #fff9e9; color: #674b20; }
+  .chat-prose blockquote[data-tone="limitation"] { border-color: #e7c6bd; border-left-color: #bd5b43; background: #fff4f1; color: #694136; }
+  .chat-prose blockquote > :first-child { margin-top: 0; }
+  .chat-prose blockquote > p:first-child strong { color: inherit; font-size: .72rem; letter-spacing: .08em; }
+  .chat-prose blockquote ul, .chat-prose blockquote ol { margin-bottom: .1rem; }
+  .chat-prose a { color: #12634a; font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .chat-prose a:hover { color: #0b4936; text-decoration-thickness: 2px; }
+  @media (max-width: 639px) { .chat-prose { max-width: none; font-size: .875rem; line-height: 1.72; } .chat-prose h2 { margin-top: 1.3rem; } .chat-prose blockquote { padding-right: .75rem; } }
   .flow-panel { width: 22rem; background: rgba(250,249,245,.96); border-left: 1px solid var(--chat-line); }
   .flow-dag-canvas { position: relative; min-height: 7rem; }
   .flow-dag-edge { fill: none; stroke: rgba(25,77,58,.2); stroke-width: 1.5; }
@@ -49,7 +73,7 @@
   @media (prefers-reduced-motion: reduce) { .chat-message, .chat-dot, .flow-stream-row { animation: none; } .chat-action, .flow-panel, .flow-node { transition: none; } }
 </style>
 
-<div class="chat-shell -m-6 flex min-h-[calc(100vh-4.1rem)] overflow-hidden text-[var(--chat-ink)]">
+<div class="chat-shell -mx-4 -my-6 flex min-h-[calc(100vh-3.9rem)] overflow-hidden text-[var(--chat-ink)] md:-mx-8 md:min-h-[calc(100vh-4.1rem)]">
   <aside class="hidden w-64 shrink-0 border-r border-[var(--chat-line)] bg-white/65 p-4 backdrop-blur lg:flex lg:flex-col">
     <button id="new-conversation" type="button" class="chat-action flex items-center justify-between rounded-xl bg-[var(--chat-ink)] px-4 py-3 text-left text-sm font-semibold text-white">
       <span>新对话</span><span class="text-[var(--chat-lime)]">＋</span>
@@ -71,7 +95,7 @@
           <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--chat-moss)] font-serif text-lg font-bold text-[var(--chat-lime)]">F</div>
           <div>
             <p class="font-serif text-base font-semibold tracking-tight">Forge Data Desk</p>
-            <p class="text-[11px] text-gray-500">对话、查询、分析与报告，共用同一条可信任务链</p>
+            <p class="hidden text-[11px] text-gray-500 sm:block">对话、查询、分析与报告，共用同一条可信任务链</p>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -80,7 +104,7 @@
           </button>
           <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium {% if pi_enabled %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
             <span class="h-1.5 w-1.5 rounded-full {% if pi_enabled %}bg-emerald-500{% else %}bg-amber-500{% endif %}"></span>
-            {% if pi_enabled %}可信运行时在线{% else %}运行时未启用{% endif %}
+            <span class="hidden sm:inline">{% if pi_enabled %}可信运行时在线{% else %}运行时未启用{% endif %}</span><span class="sm:hidden">{% if pi_enabled %}在线{% else %}离线{% endif %}</span>
           </span>
         </div>
       </div>
@@ -463,37 +487,94 @@ function observeTaskFlow(taskRunId) {
   })();
 }
 
+function safeMarkdownHref(value) {
+  if (/^\/(?!\/)[^\s]*$/.test(value)) return value;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch { return null; }
+}
 function appendInline(parent, text) {
-  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g;
+  const tokenPattern = /(`[^`\n]+`|\[[^\]\n]+\]\([^\s)]+\)|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g;
   let cursor = 0; let match;
-  while ((match = linkPattern.exec(text)) !== null) {
+  while ((match = tokenPattern.exec(text)) !== null) {
     if (match.index > cursor) parent.append(document.createTextNode(text.slice(cursor, match.index)));
-    const link = document.createElement('a'); link.textContent = match[1]; link.href = match[2];
-    if (match[2].startsWith('http')) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
-    parent.append(link); cursor = match.index + match[0].length;
+    const token = match[0];
+    if (token.startsWith('`')) {
+      parent.append(textNode('code', token.slice(1, -1)));
+    } else if (token.startsWith('[')) {
+      const parts = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/); const href = safeMarkdownHref(parts?.[2] || '');
+      if (parts && href) {
+        const link = textNode('a', parts[1]); link.href = href;
+        if (href.startsWith('http')) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+        parent.append(link);
+      } else parent.append(document.createTextNode(token));
+    } else if (token.startsWith('**')) {
+      const strong = document.createElement('strong'); appendInline(strong, token.slice(2, -2)); parent.append(strong);
+    } else {
+      const emphasis = document.createElement('em'); appendInline(emphasis, token.slice(1, -1)); parent.append(emphasis);
+    }
+    cursor = match.index + token.length;
   }
   if (cursor < text.length) parent.append(document.createTextNode(text.slice(cursor)));
 }
+function listLine(raw) {
+  const match = raw.match(/^(\s*)([-*]|\d+\.)\s+(.+)$/);
+  return match ? {indent: match[1].replaceAll('\t', '  ').length, ordered: /\d/.test(match[2][0]), number: Number.parseInt(match[2], 10) || 1, text: match[3]} : null;
+}
+function renderList(lines, start, baseIndent) {
+  const first = listLine(lines[start]); const list = document.createElement(first?.ordered ? 'ol' : 'ul');
+  if (first?.ordered && first.number !== 1) list.start = first.number;
+  let index = start; let lastItem = null;
+  while (index < lines.length) {
+    const current = listLine(lines[index]);
+    if (!current || current.indent < baseIndent || (current.indent === baseIndent && current.ordered !== first?.ordered)) break;
+    if (current.indent > baseIndent) {
+      if (!lastItem) break;
+      const nested = renderList(lines, index, current.indent); lastItem.append(nested.node); index = nested.next; continue;
+    }
+    const item = document.createElement('li'); appendInline(item, current.text); list.append(item); lastItem = item; index += 1;
+  }
+  return {node: list, next: index};
+}
+function calloutTone(lines) {
+  const label = String(lines[0] || '').replaceAll('*', '').replaceAll('`', '').trim();
+  if (['限制', '分析限制'].includes(label)) return 'limitation';
+  if (['注意', '风险', '待确认'].includes(label)) return 'warning';
+  if (['核心结论', '结论'].includes(label)) return 'success';
+  return 'info';
+}
 function renderMarkdown(container, markdown) {
   container.replaceChildren();
-  const lines = String(markdown || '').split('\n'); let code = null; let list = null;
-  for (const raw of lines) {
+  const lines = String(markdown || '').replaceAll('\r\n', '\n').split('\n');
+  let index = 0;
+  while (index < lines.length) {
+    const raw = lines[index];
+    if (!raw.trim()) { index += 1; continue; }
     if (raw.startsWith('```')) {
-      if (code) { container.append(code); code = null; } else { code = document.createElement('pre'); code.append(document.createElement('code')); }
-      list = null; continue;
+      const language = raw.slice(3).trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+      const chunks = []; index += 1;
+      while (index < lines.length && !lines[index].startsWith('```')) { chunks.push(lines[index]); index += 1; }
+      if (index < lines.length) index += 1;
+      const pre = document.createElement('pre'); const code = textNode('code', chunks.join('\n'));
+      if (language) code.className = `language-${language}`;
+      pre.append(code); container.append(pre); continue;
     }
-    if (code) { code.firstChild.append(document.createTextNode(`${raw}\n`)); continue; }
-    if (/^[-*] /.test(raw)) {
-      if (!list) { list = document.createElement('ul'); container.append(list); }
-      const item = document.createElement('li'); appendInline(item, raw.slice(2)); list.append(item); continue;
+    const heading = raw.match(/^(#{2,3})\s+(.+)$/);
+    if (heading) { const node = document.createElement(heading[1].length === 2 ? 'h2' : 'h3'); appendInline(node, heading[2]); container.append(node); index += 1; continue; }
+    if (/^>\s?/.test(raw)) {
+      const quoted = [];
+      while (index < lines.length && /^>\s?/.test(lines[index])) { quoted.push(lines[index].replace(/^>\s?/, '')); index += 1; }
+      const callout = document.createElement('blockquote'); callout.dataset.tone = calloutTone(quoted); renderMarkdown(callout, quoted.join('\n')); container.append(callout); continue;
     }
-    list = null;
-    if (!raw.trim()) continue;
-    const paragraph = document.createElement('p');
-    const cleaned = raw.replace(/^#{1,4}\s+/, '').replace(/^>\s?/, '');
-    appendInline(paragraph, cleaned); container.append(paragraph);
+    const list = listLine(raw);
+    if (list) { const rendered = renderList(lines, index, list.indent); container.append(rendered.node); index = rendered.next; continue; }
+    const paragraphLines = [raw.trim()]; index += 1;
+    while (index < lines.length && lines[index].trim() && !lines[index].startsWith('```') && !/^(#{2,3})\s+/.test(lines[index]) && !/^>\s?/.test(lines[index]) && !listLine(lines[index])) {
+      paragraphLines.push(lines[index].trim()); index += 1;
+    }
+    const paragraph = document.createElement('p'); appendInline(paragraph, paragraphLines.join(' ')); container.append(paragraph);
   }
-  if (code) container.append(code);
 }
 function userMessage(text) {
   showMessages();
@@ -519,7 +600,7 @@ function renderPresentation(presentation) {
   const accent = {error: 'bg-red-500', query_review: 'bg-amber-400', needs_input: 'bg-orange-400', analysis: 'bg-blue-500', report: 'bg-emerald-500', query_result: 'bg-teal-500'}[kind] || 'bg-[var(--chat-lime)]';
   card.replaceChildren();
   const stripe = document.createElement('div'); stripe.className = `h-1 ${accent}`;
-  const body = document.createElement('div'); body.className = 'p-5';
+  const body = document.createElement('div'); body.className = 'p-4 sm:p-5';
   const eyebrow = textNode('p', kind === 'progress' ? 'WORKING' : kind.replaceAll('_', ' ').toUpperCase(), 'text-[10px] font-bold tracking-[.18em] text-gray-400');
   const title = textNode('h3', presentation.title || 'Forge', 'mt-1 font-serif text-lg font-semibold text-gray-950');
   const prose = document.createElement('div'); prose.className = 'chat-prose mt-3 text-sm leading-6 text-gray-700'; renderMarkdown(prose, presentation.markdown || '');

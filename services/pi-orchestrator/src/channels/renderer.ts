@@ -36,6 +36,42 @@ function safeOptionalBusinessText(value: unknown): string | undefined {
   return visible.length > 0 ? visible : undefined;
 }
 
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    : [];
+}
+
+function inlineBusinessText(value: unknown): string | undefined {
+  const visible = safeOptionalBusinessText(value);
+  return visible === undefined
+    ? undefined
+    : visible.replace(/\s*\n\s*/g, " ").replace(/^(?=>|#{1,6}\s|[-*]\s|\d+\.\s)/, "\u200b");
+}
+
+function readableBusinessText(value: unknown): string | undefined {
+  const text = inlineBusinessText(value);
+  if (text === undefined) return undefined;
+  const codeStyled = text
+    .split(/(`[^`\n]+`|https?:\/\/[^\s]+|\[[^\]\n]+\]\([^)\n]+\))/)
+    .map((part) => /^`|^https?:\/\/|^\[/.test(part) ? part : part.replace(
+      /\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*)+\b/g,
+      (token) => `\`${token}\``,
+    ))
+    .join("");
+  const label = codeStyled.match(/^([^\n：:]{2,24})([：:])\s*(.+)$/);
+  return label === null ? codeStyled : `**${label[1]}**${label[2]}${label[3]}`;
+}
+
+function markdownCallout(label: string, items: string[]): string | undefined {
+  if (items.length === 0) return undefined;
+  return [`> **${label}**`, ...items.map((item) => `> - ${item}`)].join("\n");
+}
+
+function confidenceSuffix(value: unknown): string {
+  return value === "low" ? " *（低置信）*" : value === "medium" ? " *（中等置信）*" : "";
+}
+
 function action(
   taskRunId: string,
   type: ChannelAction["type"],
@@ -199,23 +235,46 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
 
   const advisory = latestArtifact(input.artifacts, "advisory");
   if (input.task.status === "completed" && advisory !== undefined) {
-    const findings = Array.isArray(advisory.payload.findings)
-      ? advisory.payload.findings
-          .map((finding) => {
-            if (typeof finding !== "object" || finding === null || typeof finding.statement !== "string") {
-              return undefined;
-            }
-            const statement = safeOptionalBusinessText(finding.statement);
-            return statement === undefined ? undefined : `- ${statement}`;
-          })
-          .filter((item): item is string => item !== undefined)
-      : [];
-    const summary = safeBusinessText(advisory.payload.summary, "知识回答已完成。");
+    const findings = records(advisory.payload.findings)
+      .map((finding) => {
+        const statement = readableBusinessText(finding.statement);
+        return statement === undefined ? undefined : `- ${statement}${confidenceSuffix(finding.confidence)}`;
+      })
+      .filter((item): item is string => item !== undefined);
+    const recommendations = records(advisory.payload.recommendations)
+      .map((item) => {
+        const actionText = inlineBusinessText(item.action);
+        const rationale = readableBusinessText(item.rationale);
+        return actionText === undefined ? undefined : `- **${actionText}**${rationale === undefined ? "" : ` — ${rationale}`}`;
+      })
+      .filter((item): item is string => item !== undefined);
+    const assumptions = strings(advisory.payload.assumptions)
+      .map(readableBusinessText).filter((item): item is string => item !== undefined);
+    const limitations = strings(advisory.payload.limitations)
+      .map(readableBusinessText).filter((item): item is string => item !== undefined);
+    const openQuestions = strings(advisory.payload.open_questions)
+      .map(readableBusinessText).filter((item): item is string => item !== undefined);
+    const deliverables = records(advisory.payload.deliverables)
+      .map((item) => {
+        const name = inlineBusinessText(item.name);
+        const content = readableBusinessText(item.content);
+        return name === undefined || content === undefined ? undefined : `## ${name}\n${content}`;
+      })
+      .filter((item): item is string => item !== undefined);
+    const sections = [
+      `## 核心说明\n${readableBusinessText(advisory.payload.summary) ?? "知识回答已完成。"}`,
+      findings.length === 0 ? undefined : `## 关键要点\n${findings.join("\n")}`,
+      recommendations.length === 0 ? undefined : `## 建议行动\n${recommendations.join("\n")}`,
+      ...deliverables,
+      markdownCallout("前提假设", assumptions),
+      markdownCallout("限制", limitations),
+      markdownCallout("待确认", openQuestions),
+    ].filter((item): item is string => item !== undefined);
     return {
       ...common,
       kind: "report",
       title: safeBusinessText(advisory.payload.title, "Forge 回答"),
-      markdown: [summary, findings.length > 0 ? `\n${findings.join("\n")}` : ""].join(""),
+      markdown: sections.join("\n\n"),
       fields: [],
       table: null,
       actions: [],
@@ -272,7 +331,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     const findingText = findings
       .map((finding) =>
         typeof finding === "object" && finding !== null
-          ? safeOptionalBusinessText(finding.statement)
+          ? readableBusinessText(finding.statement)
           : undefined,
       )
       .filter((item): item is string => item !== undefined)
@@ -297,7 +356,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       ...approachSteps.map((item, index) => `${index + 1}. ${item}`),
     ].filter((item): item is string => item !== undefined).join("\n");
     const limitations = strings(analysis.payload.limitations)
-      .map((item) => safeOptionalBusinessText(item))
+      .map(readableBusinessText)
       .filter((item): item is string => item !== undefined);
     const suggestedQueries = Array.isArray(analysis.payload.suggested_queries)
       ? analysis.payload.suggested_queries
@@ -326,9 +385,9 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       kind: "analysis",
       title: input.task.status === "incomplete" ? "分析需要补查" : "分析完成",
       markdown: [
-        methodText.length > 0 ? `**分析思路**\n${methodText}` : undefined,
-        `**分析结论**\n${findingText || safeBusinessText(analysis.payload.summary, "分析已完成。")}`,
-        limitations.length > 0 ? `**分析限制**\n${limitations.map((item) => `- ${item}`).join("\n")}` : undefined,
+        methodText.length > 0 ? `## 分析思路\n${methodText}` : undefined,
+        `## 分析结论\n${findingText || readableBusinessText(analysis.payload.summary) || "分析已完成。"}`,
+        markdownCallout("分析限制", limitations),
       ].filter((item): item is string => item !== undefined).join("\n\n"),
       fields: [],
       table: null,
