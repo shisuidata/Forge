@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 已完成且产品验收 FAIL；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；H3 已完成且产品验收 FAIL；H4 Golden Journey P0 修复实施中；运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -75,7 +75,8 @@ GTM：Data-Team Led
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
-| H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0，修复需单独批准 `REQ-2026-08-24-008` |
+| H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
+| H4 Golden Journey P0 Closure | 实施中 | `REQ-2026-08-24-008` 已确认：依次关闭 PDF internal-path leak、same-page completion 可见性、Chart grain/critical-quality fail-closed；仅桌面端，P1 不自动扩围 |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
@@ -409,7 +410,27 @@ Playwright 驱动并在每一步建立 checkpoint：
 - Playwright 保存桌面逐阶段 screenshot，DOM/ARIA/focus/overflow/console/page-error 自动断言通过；视觉模型逐图评审。用户后续明确当前不考虑移动端，移动证据不参与 Verdict。
 - 正式 verdict：**Physical chain PASS / Trusted product outcome FAIL**。P0 为：①真实 PDF footer 泄漏内部 `file:///home/...` 路径；②长 Analysis 底部 action 后 same-page Report/Publication 主区空白，刷新后才可见；③ Chart builder 未验证 grain/重复 label，报告可生成误导性品类图。
 - P1 包括 decision-readiness、SQL review 修改需求路径、结果单位/异常、主进度可读、长卡片 action、报告风险前置和 PPTX 封面截断。完整证据见 [`golden-journey-acceptance-2026-08-24.md`](golden-journey-acceptance-2026-08-24.md)。
-- 隔离服务已停止，临时 service/channel keys 删除；生产 Forge/Pi health/readiness 正常。P0 修复已登记 `REQ-2026-08-24-008`，未获用户批准前不进入代码。
+- 隔离服务已停止，临时 service/channel keys 删除；生产 Forge/Pi health/readiness 正常。P0 修复已登记 `REQ-2026-08-24-008`。
+
+### H4：Golden Journey P0 Closure（实施中）
+
+> Requirement：[`REQ-2026-08-24-008`](requirements-pool.md#req-2026-08-24-008关闭-golden-journey-的-p0-可信交付缺陷) · 用户已确认
+
+实施顺序与职责：
+
+1. **P0-A PDF leak（Forge deterministic exporter）**：关闭 Chrome 默认页眉页脚；新增实际 PDF 内容负向回归，拒绝 `file://`、`/home/` 和浏览器默认标题/日期，不改写已发布 Report revision。
+2. **P0-B same-page completion（Web projection）**：把桌面 Chat/Flow 约束在 viewport-bounded layout，主 feed 与 Task Flow 独立滚动；长 Analysis 底部 action 被 focus/click 后，短 progress/publication replacement 必须回到可见锚点。Web 只修 projection，不推进或复制 Task 状态。
+3. **P0-C Chart grain（Pi deterministic Chart builder + Report projection）**：Chart 生成前验证可见 dimension label 的 grain；重复 label 只能使用稳定 key、确定性聚合或拒绝。若无法证明安全聚合，本轮优先 fail-closed 抑制 Chart，不让模型或 Renderer猜业务口径。Chart evidence refs 必须与实际投影一致。
+4. 分别运行最小单元/合约/Playwright 回归，再运行 Python/Pi/TypeScript/report exporter 相关套件。
+5. 部署前建立 NAS 回滚点；部署后使用独立 Store、只读 datasource 和 test principal 重跑同一桌面 Golden Journey。只修改新 Report revision；不读取 Secret、不改生产认证或数据库。
+
+H4 门禁：
+
+- 实际目标 exporter PDF 不含默认 header/footer、`file://`、`/home/` 或内部 report path。
+- 桌面同页 `long Analysis → focus/click Report → progress → publication` 无刷新可见，且 0 console/page error；新页面恢复仍保持正确。
+- 重复可见 dimension label fixture 不会静默生成前 N 行品类图；唯一 label fixture 保持 Chart，evidence refs 精确绑定所渲染数据。
+- 同一 Golden Journey 的物理不变量继续全 PASS，三个 P0 均通过视觉和自动断言；否则 H4 继续失败。
+- P1、移动端和 M1A 不在本工作包范围。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 

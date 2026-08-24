@@ -425,7 +425,7 @@ ID / 标题 / 日期 / 状态
 ## REQ-2026-08-24-008：关闭 Golden Journey 的 P0 可信交付缺陷
 
 - **提出日期**：2026-08-24
-- **当前状态**：`assessed`
+- **当前状态**：`accepted`
 - **来源**：`REQ-2026-08-24-007` Golden Journey 正式评审。
 - **原始需求**：完整物理链路虽成功，但当前产品仍可能交付泄漏内部路径的 PDF、误导性 Chart，以及在真实同页操作中看不到报告完成卡片；必须在扩展 edge journey 前关闭。
 
@@ -451,6 +451,6 @@ ID / 标题 / 日期 / 状态
 - **不做**：当前不处理移动端；不改变 Pi/Forge 边界；不修改生产认证/数据库；不直接编辑已发布不可变报告；不因测试数据异常而美化/隐藏原始 QueryResult。
 - **可证伪门禁**：真实 NAS PDF 不含 `file://`/`/home/`/浏览器默认 header；same-page 长 Analysis→Report→Publication 无刷新可见；重复可见维度的 Chart fixture 被聚合、加 key 或拒绝，绝不静默画前 N 行。
 
-### 待用户确认
+### 决策
 
-是否接受按上述三项 P0 顺序进入修复 Plan，并在完成后重跑**同一桌面 Golden Journey**；P1 先保留在需求池，不自动扩大本轮范围？
+用户于 2026-08-24 明确确认修复 Golden Journey P0。按 P0-A PDF leak → P0-B same-page completion → P0-C Chart grain/quality gate 的顺序进入唯一主动 Plan；完成后重跑同一桌面 Golden Journey。P1 继续保留在需求池，不自动扩大本轮范围。
