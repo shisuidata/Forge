@@ -730,7 +730,7 @@ ReportRun / ReportRevision（不可变快照）
 ## REQ-2026-08-24-013：Atlas 隔离报告预览部署与阶段差距重评估
 
 - **提出日期**：2026-08-24
-- **当前状态**：`accepted`
+- **当前状态**：`completed`
 - **需求**：将当前 Editorial Report 候选部署到 Atlas，随后基于唯一主动计划和长期目标重新评估已完成能力、剩余差距与下一步。
 
 ### 部署边界
@@ -745,3 +745,13 @@ ReportRun / ReportRevision（不可变快照）
 - 以“概率机器在不拥有最终责任能力时安全参与组织认知、决策与行动”为长期问题，检查 Governance、Coordination、Economics、Assurance 是否形成真实闭环。
 - 区分已验证、仅 Contract-ready、仅候选、未开始和被阻断，不能用代码量或测试数量替代产品完成度。
 - 给出当前目标完成度的分项估计、关键证据、最大反证、下一阶段优先级与明确不做项。
+
+### 实施结果
+
+- 当前 Editorial candidate 固定到本地 commit `929e8d4`；candidate `6 passed`，build/audit、4 SVG/0 Canvas、tooltip、legend toggle、数据来源定位、3 行增量表、no-JS、5 页 PDF、5 页 PPTX 和 0 browser error 通过。完整仓库回归为 Python `564 passed / 24 skipped`、Pi `103 passed`、typecheck 与 audit 通过。
+- Atlas 的 `atlas:22` 入口在 SSH banner 阶段超时；使用同一主机的现有 LAN 管理入口 `ssh dev`（`192.168.8.10`）完成发布。未读取 Secret。
+- 静态文件发布在 `/home/elazer/services/forge-previews/editorial-929e8d4/`，`current` symlink 指向该不可写 revision；systemd user service `forge-report-preview.service` 仅绑定 `192.168.8.10:18005`。
+- 访问地址：`http://192.168.8.10:18005/`。Atlas browser gate 再次通过；三个文件 SHA-256 与本地构建完全一致。
+- 生产 `forge-m41-api.service` 与 `forge-m41-pi.service` 保持 active，`~/services/forge-m4.1/source` 仍为干净的 `d2b0fd9`，未重启、未覆盖。生产 readiness 仍只有已知 `secure_cookie` fail：当前为内网 HTTP，未在本次预览部署中修改 HTTPS/Auth 配置。
+- 回滚/删除只需停止并 disable `forge-report-preview.service`，删除 `current` symlink、独立 revision 目录和该 user unit；不涉及 Forge 状态恢复。
+- 目标差距正式重评估见 `docs/forge-goal-gap-assessment-2026-08-24.md`：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%；下一建议工作包是单独批准 M1A，而不是继续扩大报告微调或平台边界。

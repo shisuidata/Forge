@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.1
 
-> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；W2 Web 主体内容规则已实施；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 Editorial Report revision 暂定保留，Atlas 隔离预览部署中；运行时 M1 尚未批准 · Last updated: 2026-08-24
+> 状态：产品方向与计划已确认；M0 Governance 内核与 Contract Review 已通过，M0.4 保留未开始且不阻塞；W1/H1/H2 已完成并部署；W2 Web 主体内容规则已实施；H3 产品验收 FAIL 后，H4 已关闭三个 P0 并通过复验；H5 Editorial Report revision 暂定保留且已发布 Atlas 隔离预览；阶段重评估完成，运行时 M1 尚未批准 · Last updated: 2026-08-24
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
 >
@@ -79,7 +79,7 @@ GTM：Data-Team Led
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
 | H5 Evidence-bound Chart Storytelling | Editorial revision 暂定保留，生产 R1 未批准 | 已改为连续报告并建立受控强调规范；用户要求先保留当前形态，后续再做视觉与语言精修。Atlas 只发布隔离静态预览，不等于接入生产 Renderer |
-| D1 Atlas 隔离报告预览 | 部署中 | `REQ-2026-08-24-013`：固定构建产物发布到独立只读目录；不覆盖生产源码、不重启 Forge/Pi、不读取 Secret；部署后进行阶段差距重评估 |
+| D1 Atlas 隔离报告预览 | 已完成 | `REQ-2026-08-24-013`：`929e8d4` 固定构建物独立发布到 `192.168.8.10:18005`；生产源码仍为干净 `d2b0fd9`，Forge/Pi 未重启；阶段差距重评估完成 |
 | H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
 | M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -509,6 +509,8 @@ R0 实际结果：
 - Inline 强调固定为版本化语义 token：strong=证据化结论/数字，emphasis=术语/假设，superseded=有 revision lineage 的旧标准，underline=仅链接/Evidence，code=标识符，mark=少量待审定义；Callout 仅 `info/decision/warning/limitation`，不得由模型提供 HTML/CSS/class/color。
 - 用户补充“内容专业不等于术语密度”：正文必须优先用准确普通中文，按观察→有限判断→限制→待补证据组织；内部 `Evidence/Revision/Ready/baseline/comparison` 不占据业务正文，不能用语气、粗体或 Callout 制造确定性。
 - 用户决定当前 Editorial revision 先暂定保留、后续迭代。该决定不是完整视觉 PASS，也不批准生产 R1。当前按 `REQ-2026-08-24-013` 只将固定构建物部署为 Atlas 独立预览，然后重评估总体目标差距。
+- Atlas 隔离预览已完成：`/home/elazer/services/forge-previews/editorial-929e8d4/` 为不可写固定构建物，`forge-report-preview.service` 仅绑定 LAN `192.168.8.10:18005`；远端 browser gate 通过，生产 Forge/Pi active、源码仍为干净 `d2b0fd9`。生产 readiness 保留已知的内网 HTTP `secure_cookie` fail，本次未改认证或 HTTPS。
+- 阶段重评估见 [`forge-goal-gap-assessment-2026-08-24.md`](forge-goal-gap-assessment-2026-08-24.md)：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%。当前首要差距不是图表视觉，而是 Runtime Governance Coverage=0；下一建议工作包仍是单独批准 M1A。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
