@@ -1,0 +1,7 @@
+docs:
+  - path: docs/current-project-state.md
+    type: PRD
+    precedence: 0
+  - path: docs/product-projection-contracts.md
+    type: SPEC
+    precedence: 1
