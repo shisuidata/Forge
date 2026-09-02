@@ -8,6 +8,10 @@ from pathlib import Path
 import re
 from typing import Any
 
+from sqlglot import exp, parse_one
+from sqlglot.errors import SqlglotError
+from sqlglot.optimizer.qualify import qualify
+
 from config import cfg
 from forge.compiler import compile_query, validate_query_contract
 from forge.executor import validate_readonly_sql
@@ -18,9 +22,10 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v6"
+ASSURANCE_REVISION = "query-assurance-v7"
 POLICY_REVISION = "convention-policy-v9"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
+QUERY_CANDIDATE_REVISION = "query-candidate-v1"
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,8 @@ class QueryAssuranceReport:
     gates: tuple[GateResult, ...]
     sql: str | None = None
     sql_hash: str | None = None
+    input_kind: str = "forge_json"
+    candidate_revision: str = QUERY_CANDIDATE_REVISION
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -151,8 +158,124 @@ def assure_query(
         gates=tuple(gates),
         sql=sql,
         sql_hash="sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest(),
+        input_kind="forge_json",
     )
 
+
+def assure_direct_sql(
+    sql: str,
+    *,
+    dialect: str,
+    allowed_tables: list[str] | None = None,
+    producer_revision: str = "external",
+) -> QueryAssuranceReport:
+    """Validate a Direct SQL candidate against read-only and Registry policy."""
+    gates: list[GateResult] = []
+    try:
+        registry, registry_revision = _load_registry()
+    except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError) as exc:
+        gates.append(GateResult(
+            "registry_acl", "failed", "unavailable",
+            ("Registry 不可用或格式错误。",),
+        ))
+        raise QueryAssuranceError(
+            _failed_report(
+                gates, "unavailable", producer_revision, input_kind="direct_sql"
+            )
+        ) from exc
+
+    try:
+        validate_readonly_sql(sql)
+        gates.append(GateResult("sql_safety", "passed", ASSURANCE_REVISION))
+    except ValueError as exc:
+        gates.append(GateResult("sql_safety", "failed", ASSURANCE_REVISION, (str(exc),)))
+        raise QueryAssuranceError(
+            _failed_report(
+                gates, registry_revision, producer_revision, input_kind="direct_sql"
+            )
+        ) from exc
+
+    read_dialect = _sqlglot_dialect(dialect)
+    try:
+        expression = parse_one(sql, read=read_dialect)
+        gates.append(GateResult("sql_parse", "passed", ASSURANCE_REVISION))
+    except SqlglotError as exc:
+        gates.append(GateResult(
+            "sql_parse", "failed", ASSURANCE_REVISION,
+            ("SQL 无法按所选 dialect 解析。",),
+        ))
+        raise QueryAssuranceError(
+            _failed_report(
+                gates, registry_revision, producer_revision, input_kind="direct_sql"
+            )
+        ) from exc
+
+    scoped_registry = _scope_registry(registry, allowed_tables)
+    registry_tables = scoped_registry.get("tables", scoped_registry)
+    cte_names = {cte.alias_or_name for cte in expression.find_all(exp.CTE)}
+    physical_tables = {
+        table.name
+        for table in expression.find_all(exp.Table)
+        if table.name not in cte_names
+    }
+    if not physical_tables.issubset(registry_tables):
+        gates.append(GateResult(
+            "registry_acl", "failed", registry_revision,
+            ("Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。",),
+        ))
+        raise QueryAssuranceError(
+            _failed_report(
+                gates, registry_revision, producer_revision, input_kind="direct_sql"
+            )
+        )
+
+    schema = {
+        table_name: {
+            column_name: "UNKNOWN"
+            for column_name in table_info.get("columns", {})
+        }
+        for table_name, table_info in registry_tables.items()
+        if isinstance(table_info, dict)
+    }
+    try:
+        qualify(
+            expression.copy(),
+            dialect=read_dialect,
+            schema=schema,
+            identify=False,
+            validate_qualify_columns=True,
+        )
+        gates.append(GateResult("registry_acl", "passed", registry_revision))
+    except SqlglotError as exc:
+        gates.append(GateResult(
+            "registry_acl", "failed", registry_revision,
+            ("Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。",),
+        ))
+        raise QueryAssuranceError(
+            _failed_report(
+                gates, registry_revision, producer_revision, input_kind="direct_sql"
+            )
+        ) from exc
+
+    return QueryAssuranceReport(
+        status="passed",
+        assurance_revision=ASSURANCE_REVISION,
+        policy_revision=POLICY_REVISION,
+        registry_revision=registry_revision,
+        model_revision=producer_revision,
+        gates=tuple(gates),
+        sql=sql,
+        sql_hash="sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest(),
+        input_kind="direct_sql",
+    )
+
+
+def _sqlglot_dialect(dialect: str) -> str | None:
+    if dialect == "auto":
+        return None
+    if dialect == "postgresql":
+        return "postgres"
+    return dialect
 
 def _query_nodes(query: dict) -> list[dict]:
     nodes = [query]
@@ -498,7 +621,11 @@ def _collect_field_refs(value: Any, key: str | None = None) -> set[str]:
 
 
 def _failed_report(
-    gates: list[GateResult], registry_revision: str, model_revision: str
+    gates: list[GateResult],
+    registry_revision: str,
+    model_revision: str,
+    *,
+    input_kind: str = "forge_json",
 ) -> QueryAssuranceReport:
     return QueryAssuranceReport(
         status="failed",
@@ -507,4 +634,5 @@ def _failed_report(
         registry_revision=registry_revision,
         model_revision=model_revision,
         gates=tuple(gates),
+        input_kind=input_kind,
     )

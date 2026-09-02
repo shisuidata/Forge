@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
@@ -33,6 +33,7 @@ class CreateQueryRunRequest(BaseModel):
     user_id: str
     question: str
     dialect: Optional[str] = None
+    candidate: Optional[dict[str, Any]] = None
 
 
 class ApproveQueryRunRequest(BaseModel):
@@ -76,6 +77,8 @@ def _review_payload(run: dict) -> dict:
         "question": run["question"],
         "user_id": run["user_id"],
         "datasource_id": run["datasource_id"],
+        "input_kind": run["input_kind"],
+        "candidate_revision": run["candidate_revision"],
         "forge_json": run["forge_json"],
         "sql": run["sql"],
         "sql_hash": run["sql_hash"],
@@ -100,6 +103,8 @@ def _result_payload(run: dict) -> dict:
         "task_run_id": run["task_run_id"],
         "status": run["status"],
         "sql_hash": run["sql_hash"],
+        "input_kind": run["input_kind"],
+        "candidate_revision": run["candidate_revision"],
         "dialect": run["dialect"],
         "registry_version": run["registry_version"],
         "assurance_report_hash": run["assurance_report_hash"],
@@ -134,6 +139,7 @@ async def create_internal_query_run(
             question=req.question,
             dialect=req.dialect,
             idempotency_key=idempotency_key,
+            candidate=req.candidate,
         )
         return _review_payload(run)
     except QueryRunError as exc:

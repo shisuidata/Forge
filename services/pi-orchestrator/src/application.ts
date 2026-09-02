@@ -29,6 +29,7 @@ import {
   ForgeQueryRunClient,
   type ContextSearchResult,
   type ReportPublication,
+  type QueryCandidateInput,
   type QueryRunReview,
   type QueryRunResult,
 } from "./forge/query-run-client.js";
@@ -84,6 +85,7 @@ export interface ForgeQueryRunPort {
       userId: string;
       question: string;
       dialect?: ForgeDialect;
+      candidate?: QueryCandidateInput;
       idempotencyKey: string;
     },
     signal?: AbortSignal,
@@ -1029,7 +1031,12 @@ export class OrchestratorApplication {
 
   async prepareQuery(
     taskRunId: string,
-    input: { question: string; dialect?: ForgeDialect; idempotencyKey?: string },
+    input: {
+      question: string;
+      dialect?: ForgeDialect;
+      candidate?: QueryCandidateInput;
+      idempotencyKey?: string;
+    },
     signal?: AbortSignal,
   ): Promise<{ task: TaskRun; result: QueryRunReview; events: TaskEvent[] }> {
     let task = this.#tasks.get(taskRunId);
@@ -1069,6 +1076,7 @@ export class OrchestratorApplication {
           question: input.question,
           idempotencyKey: `${stageTask.task_run_id}:prepare`,
           ...(input.dialect === undefined ? {} : { dialect: input.dialect }),
+          ...(input.candidate === undefined ? {} : { candidate: input.candidate }),
         },
         stageExecution.signal,
       );
@@ -1102,6 +1110,8 @@ export class OrchestratorApplication {
           query_run_id: result.query_run_id,
           sql: result.sql,
           sql_hash: result.sql_hash,
+          input_kind: result.input_kind,
+          candidate_revision: result.candidate_revision,
           forge_json: result.forge_json,
           dialect: result.dialect,
           registry_version: result.registry_version,

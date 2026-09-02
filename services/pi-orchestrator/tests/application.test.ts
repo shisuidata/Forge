@@ -26,6 +26,8 @@ function response(
     query_run_id: "qr_demo_001",
     task_run_id: "tr_placeholder",
     datasource_id: "demo",
+    input_kind: "forge_json",
+    candidate_revision: "query-candidate-v1",
     sql_hash: SQL_HASH,
     registry_version: "sha256:registry",
     assurance_report: { status: "passed" },
@@ -63,6 +65,8 @@ function createApplication(result: QueryRunReview) {
         task_run_id: "tr_placeholder",
         status: "completed",
         sql_hash: input.sqlHash,
+        input_kind: "forge_json",
+        candidate_revision: "query-candidate-v1",
         dialect: "postgresql",
         registry_version: "sha256:registry",
         assurance_report: { status: "passed" },
@@ -140,6 +144,44 @@ test("Pi application owns TaskRun progression and emits a review event", async (
     attempts.list(created.task.task_run_id).map((attempt) => [attempt.stage, attempt.status]),
     [["query_prepare", "succeeded"]],
   );
+});
+
+
+test("Pi forwards Direct SQL candidates and records their review identity", async () => {
+  const directReview = response({
+    input_kind: "direct_sql",
+    forge_json: null,
+    sql: "SELECT 7 AS n",
+  });
+  const { application, calls } = createApplication(directReview);
+  const created = application.createTask({
+    org_id: "org_demo",
+    team_id: "team_growth",
+    user_id: "trusted-user",
+    channel: "api",
+    intent: "query_prepare",
+    message: "返回数字 7",
+  });
+  const candidate = {
+    kind: "direct_sql" as const,
+    sql: "SELECT 7 AS n",
+    producer_revision: "external-agent-r1",
+  };
+
+  const prepared = await application.prepareQuery(created.task.task_run_id, {
+    question: "返回数字 7",
+    dialect: "sqlite",
+    candidate,
+  });
+
+  assert.deepEqual(calls[0]?.candidate, candidate);
+  const review = prepared.events.find(
+    (event) => event.event_type === "query.review_requested",
+  );
+  assert.equal(review?.payload.input_kind, "direct_sql");
+  assert.equal(review?.payload.candidate_revision, "query-candidate-v1");
+  assert.equal(review?.payload.forge_json, null);
+  assert.equal(review?.payload.can_execute, false);
 });
 
 
@@ -416,6 +458,8 @@ test("QueryResult flows through evidence-bound analysis and report Artifacts", a
           task_run_id: "tr_placeholder",
           status: "completed",
           sql_hash: input.sqlHash,
+          input_kind: "forge_json",
+          candidate_revision: "query-candidate-v1",
           dialect: "postgresql",
           registry_version: "sha256:registry",
           assurance_report: { status: "passed" },
@@ -569,6 +613,8 @@ test("incomplete analysis pauses with suggested queries and cannot render", asyn
           task_run_id: "tr_placeholder",
           status: "completed",
           sql_hash: input.sqlHash,
+          input_kind: "forge_json",
+          candidate_revision: "query-candidate-v1",
           dialect: "postgresql",
           registry_version: "sha256:registry",
           assurance_report: { status: "passed" },
@@ -657,6 +703,8 @@ test("one approved supplemental child QueryRun can resume parent analysis", asyn
           task_run_id: "tr_placeholder",
           status: "completed",
           sql_hash: input.sqlHash,
+          input_kind: "forge_json",
+          candidate_revision: "query-candidate-v1",
           dialect: "postgresql",
           registry_version: "registry-v1",
           assurance_report: { status: "passed" },

@@ -8,6 +8,7 @@ import { parseChannelEvent, type ChannelIdentity } from "./channels/contracts.js
 import { ChannelIdentityError, ChannelIdentityResolver } from "./channels/identity.js";
 import { loadConfig, type OrchestratorConfig } from "./config.js";
 import { FORGE_DIALECTS, type ForgeDialect } from "./forge/client.js";
+import type { QueryCandidateInput } from "./forge/query-run-client.js";
 import { inspectRuntime } from "./runtime.js";
 import {
   ADVISORY_SKILL_NAMES,
@@ -33,6 +34,57 @@ const AUTHORIZED_SKILLS = new Set<string>(AUTHORIZED_SKILL_NAMES);
 const ADVISORY_SKILLS = new Set<string>(ADVISORY_SKILL_NAMES);
 
 class RequestError extends Error {}
+
+function parseQueryCandidate(value: unknown): QueryCandidateInput | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new RequestError("candidate must be an object");
+  }
+  const candidate = value as Record<string, unknown>;
+  const producerRevision = candidate.producer_revision;
+  if (
+    producerRevision !== undefined &&
+    (typeof producerRevision !== "string" || producerRevision.trim().length === 0)
+  ) {
+    throw new RequestError("candidate producer_revision must be a non-empty string");
+  }
+  if (candidate.kind === "direct_sql") {
+    if (Object.keys(candidate).some((key) => !["kind", "sql", "producer_revision"].includes(key))) {
+      throw new RequestError("direct_sql candidate has unsupported fields");
+    }
+    if (typeof candidate.sql !== "string" || candidate.sql.trim().length === 0) {
+      throw new RequestError("direct_sql candidate requires non-empty sql");
+    }
+    return {
+      kind: "direct_sql",
+      sql: candidate.sql,
+      ...(producerRevision === undefined ? {} : { producer_revision: producerRevision }),
+    };
+  }
+  if (candidate.kind === "forge_json") {
+    if (
+      Object.keys(candidate).some(
+        (key) => !["kind", "forge_json", "producer_revision"].includes(key),
+      )
+    ) {
+      throw new RequestError("forge_json candidate has unsupported fields");
+    }
+    if (
+      typeof candidate.forge_json !== "object" ||
+      candidate.forge_json === null ||
+      Array.isArray(candidate.forge_json)
+    ) {
+      throw new RequestError("forge_json candidate requires an object payload");
+    }
+    return {
+      kind: "forge_json",
+      forge_json: candidate.forge_json as Record<string, unknown>,
+      ...(producerRevision === undefined ? {} : { producer_revision: producerRevision }),
+    };
+  }
+  throw new RequestError("candidate kind must be direct_sql or forge_json");
+}
+
 class ChannelAuthenticationError extends Error {}
 class AdminAuthenticationError extends Error {}
 
@@ -786,11 +838,14 @@ export function createOrchestratorServer(
         const input: {
           question: string;
           dialect?: ForgeDialect;
+          candidate?: QueryCandidateInput;
           idempotencyKey?: string;
         } = {
           question: requireString(body, "question"),
         };
         if (typeof dialectValue === "string") input.dialect = dialectValue as ForgeDialect;
+        const candidate = parseQueryCandidate(body.candidate);
+        if (candidate !== undefined) input.candidate = candidate;
         if (typeof body.idempotency_key === "string") {
           input.idempotencyKey = body.idempotency_key;
         }

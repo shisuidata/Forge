@@ -28,6 +28,7 @@ def query_run_env(tmp_path, monkeypatch):
             "status": "needs_review",
             "question": question,
             "user_id": user_id,
+            "input_kind": "forge_json",
             "forge_json": {"scan": "synthetic", "select": ["n"]},
             "sql": sql,
             "dialect": dialect or "sqlite",
@@ -40,6 +41,8 @@ def query_run_env(tmp_path, monkeypatch):
                 "gates": [],
                 "sql": sql,
                 "sql_hash": "sha256:" + __import__("hashlib").sha256(sql.encode()).hexdigest(),
+                "input_kind": "forge_json",
+                "candidate_revision": "query-candidate-v1",
             },
             "review_required": True,
             "can_execute": False,
@@ -423,3 +426,115 @@ async def test_cancelled_query_run_cannot_execute(client: AsyncClient, query_run
               "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert approval.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_direct_sql_candidate_uses_same_review_and_approval_chain(
+    client: AsyncClient, query_run_env
+):
+    created_response = await client.post(
+        "/api/internal/query-runs",
+        headers={
+            **query_run_env,
+            "Idempotency-Key": "create-direct-sql",
+        },
+        json={
+            "task_run_id": "tr_direct_001",
+            "org_id": "org_demo",
+            "team_id": "team_growth",
+            "user_id": "user_123",
+            "question": "返回两个数字",
+            "dialect": "sqlite",
+            "candidate": {
+                "kind": "direct_sql",
+                "sql": "SELECT 7 AS n UNION ALL SELECT 8",
+                "producer_revision": "external-agent-r1",
+            },
+        },
+    )
+
+    assert created_response.status_code == 200
+    created = created_response.json()
+    assert created["status"] == "needs_review"
+    assert created["input_kind"] == "direct_sql"
+    assert created["candidate_revision"] == "query-candidate-v1"
+    assert created["forge_json"] is None
+    assert created["review_required"] is True
+    assert created["can_execute"] is False
+    assert created["assurance_report"]["input_kind"] == "direct_sql"
+    assert "rows" not in created
+
+    approved = await client.post(
+        f"/api/internal/query-runs/{created['query_run_id']}/approve",
+        headers={
+            "X-Pi-Service-Key": "pi-service-secret",
+            "Idempotency-Key": "approve-direct-sql",
+        },
+        json={
+            "approver_user_id": "user_123",
+            "sql_hash": created["sql_hash"],
+            "assurance_report_hash": created["assurance_report_hash"],
+        },
+    )
+
+    assert approved.status_code == 200
+    result = approved.json()
+    assert result["status"] == "completed"
+    assert result["input_kind"] == "direct_sql"
+    assert result["candidate_revision"] == "query-candidate-v1"
+    assert result["sql_hash"] == created["sql_hash"]
+    assert result["rows"] == [[7], [8]]
+
+
+@pytest.mark.asyncio
+async def test_direct_sql_mutation_fails_before_review(client: AsyncClient, query_run_env):
+    response = await client.post(
+        "/api/internal/query-runs",
+        headers={
+            **query_run_env,
+            "Idempotency-Key": "create-direct-mutation",
+        },
+        json={
+            "task_run_id": "tr_direct_mutation",
+            "org_id": "org_demo",
+            "team_id": "team_growth",
+            "user_id": "user_123",
+            "question": "删除数据",
+            "dialect": "sqlite",
+            "candidate": {"kind": "direct_sql", "sql": "DELETE FROM orders"},
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert data["input_kind"] == "direct_sql"
+    assert data["sql"] is None
+    assert data["sql_hash"] is None
+    assert data["review_required"] is False
+    assert data["assurance_report"]["gates"][-1]["gate"] == "sql_safety"
+
+
+@pytest.mark.asyncio
+async def test_invalid_query_candidate_contract_is_rejected(
+    client: AsyncClient, query_run_env
+):
+    response = await client.post(
+        "/api/internal/query-runs",
+        headers={
+            **query_run_env,
+            "Idempotency-Key": "create-invalid-candidate",
+        },
+        json={
+            "task_run_id": "tr_invalid_candidate",
+            "org_id": "org_demo",
+            "team_id": "team_growth",
+            "user_id": "user_123",
+            "question": "查询数据",
+            "dialect": "sqlite",
+            "candidate": {"kind": "direct_sql"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"status": "error", "error": "Invalid query candidate"}

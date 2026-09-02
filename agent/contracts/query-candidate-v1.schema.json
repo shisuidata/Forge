@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/query-candidate-v1.schema.json",
+  "title": "QueryCandidateV1",
+  "description": "A query candidate submitted to Forge assurance before QueryRun review and execution.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sql"],
+      "properties": {
+        "kind": {"const": "direct_sql"},
+        "sql": {"type": "string", "minLength": 1, "maxLength": 100000},
+        "producer_revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "forge_json"],
+      "properties": {
+        "kind": {"const": "forge_json"},
+        "forge_json": {"type": "object"},
+        "producer_revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    }
+  ]
+}

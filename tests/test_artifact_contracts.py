@@ -280,11 +280,40 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "datasource_binding_v1",
         "registry_binding_v1",
         "governance_action_catalog_v1",
+        "query_candidate_v1",
         "product_projection_v1",
     )
     for name in contract_names():
         schema = load_contract(name)
         validator_for(schema).check_schema(schema)
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        {"kind": "direct_sql", "sql": "SELECT 1"},
+        {
+            "kind": "forge_json",
+            "forge_json": {"scan": "orders", "select": ["orders.id"]},
+            "producer_revision": "agent-r1",
+        },
+    ],
+)
+def test_query_candidate_contract_accepts_both_input_kinds(candidate: dict) -> None:
+    validate_contract("query_candidate_v1", candidate)
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        {"kind": "direct_sql"},
+        {"kind": "forge_json", "forge_json": "not-an-object"},
+        {"kind": "direct_sql", "sql": "SELECT 1", "forge_json": {}},
+    ],
+)
+def test_query_candidate_contract_rejects_ambiguous_shapes(candidate: dict) -> None:
+    with pytest.raises(ValidationError):
+        validate_contract("query_candidate_v1", candidate)
 
 
 def test_valid_instances_satisfy_contracts(valid_instances: dict[str, dict]) -> None:

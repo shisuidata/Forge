@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 import aiosqlite
+from jsonschema import ValidationError
+
+from agent.contracts import validate_contract
 
 from config import cfg
 
@@ -28,6 +31,8 @@ CREATE TABLE IF NOT EXISTS query_runs (
     user_id                 TEXT NOT NULL,
     datasource_id           TEXT NOT NULL,
     question                TEXT NOT NULL,
+    input_kind              TEXT NOT NULL DEFAULT 'forge_json',
+    candidate_revision      TEXT NOT NULL DEFAULT 'query-candidate-v1',
     status                  TEXT NOT NULL,
     forge_json              TEXT,
     sql                     TEXT,
@@ -91,6 +96,8 @@ async def _ensure_schema() -> None:
             cursor = await db.execute("PRAGMA table_info(query_runs)")
             columns = {row[1] for row in await cursor.fetchall()}
             migrations = {
+                "input_kind": "TEXT NOT NULL DEFAULT 'forge_json'",
+                "candidate_revision": "TEXT NOT NULL DEFAULT 'query-candidate-v1'",
                 "assurance_report": "TEXT",
                 "assurance_report_hash": "TEXT",
                 "assurance_revision": "TEXT",
@@ -175,6 +182,60 @@ async def _get_by_create_key(key: str) -> dict[str, Any] | None:
         return _decode_row(row) if row else None
 
 
+
+def _prepare_supplied_candidate(
+    user_id: str,
+    question: str,
+    dialect: str | None,
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    from agent.agent import resolve_dialect
+    from agent.tenant import tenants
+    from forge.assurance import QueryAssuranceError, assure_direct_sql, assure_query
+
+    resolved_dialect = resolve_dialect(dialect)
+    allowed_tables = tenants.get_allowed_tables_for_user(user_id)
+    input_kind = candidate["kind"]
+    producer_revision = str(candidate.get("producer_revision") or "external")
+    forge_json = candidate.get("forge_json") if input_kind == "forge_json" else None
+    try:
+        if input_kind == "direct_sql":
+            assurance = assure_direct_sql(
+                candidate["sql"],
+                dialect=resolved_dialect,
+                allowed_tables=allowed_tables,
+                producer_revision=producer_revision,
+            )
+        else:
+            assurance = assure_query(
+                forge_json,
+                question,
+                dialect=resolved_dialect,
+                allowed_tables=allowed_tables,
+                model_revision=producer_revision,
+            )
+    except QueryAssuranceError as exc:
+        return {
+            "status": "error",
+            "input_kind": input_kind,
+            "forge_json": forge_json,
+            "sql": None,
+            "dialect": resolved_dialect,
+            "assurance_report": exc.report.to_dict(),
+            "error": str(exc),
+        }
+
+    return {
+        "status": "needs_review",
+        "input_kind": input_kind,
+        "forge_json": forge_json,
+        "sql": assurance.sql,
+        "dialect": resolved_dialect,
+        "assurance_report": assurance.to_dict(),
+        "error": "",
+    }
+
+
 async def create_query_run(
     *,
     task_run_id: str,
@@ -184,6 +245,7 @@ async def create_query_run(
     question: str,
     dialect: str | None,
     idempotency_key: str,
+    candidate: dict[str, Any] | None = None,
     prepare_fn: Callable[[str, str, str | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if not idempotency_key:
@@ -194,11 +256,19 @@ async def create_query_run(
             raise QueryRunError("Idempotency-Key is already bound to another task")
         return existing
 
-    if prepare_fn is None:
-        from agent.agent import prepare_query as prepare_fn
-
     registry_version_before = current_registry_version()
-    prepared = await asyncio.to_thread(prepare_fn, user_id, question, dialect)
+    if candidate is None:
+        if prepare_fn is None:
+            from agent.agent import prepare_query as prepare_fn
+        prepared = await asyncio.to_thread(prepare_fn, user_id, question, dialect)
+    else:
+        try:
+            validate_contract("query_candidate_v1", candidate)
+        except ValidationError as exc:
+            raise QueryRunError("Invalid query candidate", status_code=400) from exc
+        prepared = await asyncio.to_thread(
+            _prepare_supplied_candidate, user_id, question, dialect, candidate
+        )
     registry_version_after = current_registry_version()
     status_map = {
         "needs_review": "needs_review",
@@ -212,6 +282,7 @@ async def create_query_run(
     ttl = max(1, int(cfg.QUERY_RUN_REVIEW_TTL_SECONDS))
     expires_at = now + timedelta(seconds=ttl)
     query_run_id = "qr_" + uuid.uuid4().hex
+    input_kind = str(prepared.get("input_kind") or "forge_json")
     forge_json = prepared.get("forge_json")
     assurance_report = prepared.get("assurance_report")
     if status == "needs_review" and registry_version_before != registry_version_after:
@@ -224,12 +295,16 @@ async def create_query_run(
         error = "Query assurance report is required for review"
     elif status == "needs_review" and (
         assurance_report.get("status") != "passed"
+        or assurance_report.get("input_kind") != input_kind
+        or assurance_report.get("candidate_revision") != "query-candidate-v1"
         or assurance_report.get("sql") != sql
         or assurance_report.get("sql_hash") != _sql_hash(sql or "")
+        or (input_kind == "forge_json" and not isinstance(forge_json, dict))
+        or (input_kind == "direct_sql" and forge_json is not None)
     ):
         status = "failed"
         sql = None
-        error = "Query assurance report does not match the prepared SQL"
+        error = "Query assurance report does not match the prepared candidate"
     else:
         error = prepared.get("error") or (
             prepared.get("text") if status != "needs_review" else None
@@ -245,12 +320,13 @@ async def create_query_run(
                 """
                 INSERT INTO query_runs (
                     query_run_id, task_run_id, org_id, team_id, user_id,
-                    datasource_id, question, status, forge_json, sql, sql_hash,
+                    datasource_id, question, input_kind, candidate_revision,
+                    status, forge_json, sql, sql_hash,
                     dialect, registry_version, assurance_report,
                     assurance_report_hash, assurance_revision, policy_revision,
                     model_revision, assurance_registry_revision,
                     create_idempotency_key, expires_at, error, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     query_run_id,
@@ -260,6 +336,9 @@ async def create_query_run(
                     user_id,
                     cfg.DATASOURCE_ID,
                     question,
+                    input_kind,
+                    assurance_report.get("candidate_revision", "query-candidate-v1")
+                    if isinstance(assurance_report, dict) else "query-candidate-v1",
                     status,
                     json.dumps(forge_json, ensure_ascii=False) if forge_json is not None else None,
                     sql,

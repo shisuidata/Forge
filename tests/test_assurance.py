@@ -5,7 +5,7 @@ import json
 import pytest
 
 from config import cfg
-from forge.assurance import QueryAssuranceError, assure_query
+from forge.assurance import QueryAssuranceError, assure_direct_sql, assure_query
 
 
 @pytest.fixture
@@ -294,3 +294,68 @@ def test_assurance_enforces_table_acl_server_side(assurance_registry):
             dialect="sqlite",
             allowed_tables=["orders"],
         )
+
+
+def test_direct_sql_assurance_returns_same_hash_bound_report(assurance_registry):
+    sql = "SELECT orders.id, orders.total_amount FROM orders"
+
+    report = assure_direct_sql(
+        sql,
+        dialect="sqlite",
+        allowed_tables=["orders"],
+        producer_revision="external-agent-r1",
+    )
+
+    assert report.status == "passed"
+    assert report.input_kind == "direct_sql"
+    assert report.candidate_revision == "query-candidate-v1"
+    assert report.sql == sql
+    assert report.sql_hash.startswith("sha256:")
+    assert [gate.gate for gate in report.gates] == [
+        "sql_safety", "sql_parse", "registry_acl",
+    ]
+
+
+def test_direct_sql_and_forge_json_share_assurance_identity(assurance_registry):
+    forge_report = assure_query(
+        {"scan": "orders", "select": ["orders.id", "orders.total_amount"]},
+        "查询订单 ID 和总额",
+        dialect="sqlite",
+        allowed_tables=["orders"],
+    )
+
+    direct_report = assure_direct_sql(
+        forge_report.sql,
+        dialect="sqlite",
+        allowed_tables=["orders"],
+    )
+
+    assert forge_report.input_kind == "forge_json"
+    assert direct_report.input_kind == "direct_sql"
+    assert direct_report.sql_hash == forge_report.sql_hash
+    assert direct_report.assurance_revision == forge_report.assurance_revision
+    assert direct_report.policy_revision == forge_report.policy_revision
+    assert direct_report.registry_revision == forge_report.registry_revision
+    assert direct_report.candidate_revision == forge_report.candidate_revision
+
+
+def test_direct_sql_assurance_rejects_mutation(assurance_registry):
+    with pytest.raises(QueryAssuranceError, match="只允许执行只读") as caught:
+        assure_direct_sql("DELETE FROM orders", dialect="sqlite")
+
+    assert caught.value.report.input_kind == "direct_sql"
+    assert caught.value.report.gates[-1].gate == "sql_safety"
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT users.id FROM users",
+        "SELECT orders.secret_unknown FROM orders",
+    ],
+)
+def test_direct_sql_assurance_enforces_registry_scope(assurance_registry, sql):
+    with pytest.raises(QueryAssuranceError, match="未授权或不存在") as caught:
+        assure_direct_sql(sql, dialect="sqlite", allowed_tables=["orders"])
+
+    assert caught.value.report.gates[-1].gate == "registry_acl"

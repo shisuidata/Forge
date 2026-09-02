@@ -80,7 +80,7 @@ def _remaining_call_budget(deadline: float) -> float:
     return remaining
 
 
-def _compile_dialect(dialect_override: str | None = None) -> str:
+def resolve_dialect(dialect_override: str | None = None) -> str:
     """Resolve cfg.SQL_DIALECT, including auto-detection from DATABASE_URL."""
     dialect = (dialect_override or getattr(cfg, "SQL_DIALECT", "sqlite") or "sqlite").lower()
     if dialect not in _ALLOWED_DIALECTS:
@@ -137,7 +137,7 @@ def _prepare_query(
         "retrieval_trace": None,
     }
     try:
-        resolved_dialect = _compile_dialect(dialect)
+        resolved_dialect = resolve_dialect(dialect)
         payload["dialect"] = resolved_dialect
     except Exception as exc:
         payload["error"] = str(exc)
@@ -442,7 +442,7 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                 assurance = assure_query(
                     forge_json,
                     effective_text,
-                    dialect=_compile_dialect(),
+                    dialect=resolve_dialect(),
                     allowed_tables=_allowed_tables,
                     model_revision=result.get("model_revision", model_snapshot.revision),
                 )

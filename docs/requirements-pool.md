@@ -1458,3 +1458,11 @@ Forge 已形成 Registry、Compiler、Assurance、只读执行、QueryRun、Appr
 - **确认日期**：2026-09-03
 - **决策**：`accepted_with_changes`。用户选择“企业可信数据平台 + 开源影响力增长”，并确认以“所有 Data Agent 共用的可信执行边界”作为近期切入口。
 - **计划边界**：批准产品定位与主动计划重排；不自动批准真实客户接入、生产凭证、通用 Connector、非 SQL Action、完整企业权限系统或新的独立 Runtime 服务。
+
+### R0.1 实施证据（2026-09-03）
+
+- 新增共享 `query-candidate-v1` JSON Schema：`direct_sql` 与 `forge_json` 是互斥输入，均可记录 producer revision。
+- Direct SQL 不转换为 Forge JSON；它在服务端通过只读、SQL 解析、Registry/ACL 和字段校验后，与 Forge JSON 进入同一 QueryRun 审批、执行及 hash/revision lineage。
+- QueryRun 和 Pi 事件持久传递 `input_kind`、candidate revision；相同 SQL 的两条路径共享 SQL hash、assurance/policy/registry/candidate revision，输入来源仍可区分。
+- 非只读 SQL、未授权表、未知字段、歧义或附加字段候选均失败关闭；既有自然语言 → Forge JSON 路径保持兼容。
+- 验证：Python 全套 `612 passed / 28 skipped`；Pi `118 passed`；TypeScript typecheck 通过。该证据只关闭 R0.1，不代表 R0 Golden Path 或外部采用门禁已通过。

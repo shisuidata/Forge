@@ -1,6 +1,10 @@
 import type { ForgeDialect } from "./client.js";
 import { ForgeClientError } from "./client.js";
 
+export type QueryCandidateInput =
+  | { kind: "direct_sql"; sql: string; producer_revision?: string }
+  | { kind: "forge_json"; forge_json: Record<string, unknown>; producer_revision?: string };
+
 export interface QueryRunReview {
   query_run_id: string;
   task_run_id: string;
@@ -8,6 +12,8 @@ export interface QueryRunReview {
   question: string;
   user_id: string;
   datasource_id: string;
+  input_kind: QueryCandidateInput["kind"];
+  candidate_revision: "query-candidate-v1";
   forge_json: Record<string, unknown> | null;
   sql: string | null;
   sql_hash: string | null;
@@ -69,6 +75,8 @@ export interface QueryRunResult {
   task_run_id: string;
   status: "completed";
   sql_hash: string;
+  input_kind: QueryCandidateInput["kind"];
+  candidate_revision: "query-candidate-v1";
   dialect: string;
   registry_version: string;
   assurance_report_hash: string;
@@ -111,6 +119,7 @@ export class ForgeQueryRunClient {
       userId: string;
       question: string;
       dialect?: ForgeDialect;
+      candidate?: QueryCandidateInput;
       idempotencyKey: string;
     },
     signal?: AbortSignal,
@@ -125,6 +134,7 @@ export class ForgeQueryRunClient {
         user_id: input.userId,
         question: input.question,
         dialect: input.dialect,
+        candidate: input.candidate,
       },
       input.idempotencyKey,
       signal,
@@ -326,6 +336,8 @@ export class ForgeQueryRunClient {
       "question",
       "user_id",
       "datasource_id",
+      "input_kind",
+      "candidate_revision",
       "dialect",
       "registry_version",
       "expires_at",
@@ -335,6 +347,13 @@ export class ForgeQueryRunClient {
         throw new ForgeClientError(`Invalid QueryRun review field: ${field}`);
       }
     }
+    if (
+      !new Set(["direct_sql", "forge_json"]).has(body.input_kind as string) ||
+      body.candidate_revision !== "query-candidate-v1"
+    ) {
+      throw new ForgeClientError("Forge review response has an invalid query candidate identity");
+    }
+    if (body.forge_json !== null) asRecord(body.forge_json);
     if (body.status === "needs_review") {
       if (
         typeof body.sql !== "string" ||
@@ -345,7 +364,8 @@ export class ForgeQueryRunClient {
         typeof body.model_revision !== "string" ||
         typeof body.assurance_registry_revision !== "string" ||
         body.assurance_report === null ||
-        body.forge_json === null
+        (body.input_kind === "forge_json" && body.forge_json === null) ||
+        (body.input_kind === "direct_sql" && body.forge_json !== null)
       ) {
         throw new ForgeClientError("Reviewable QueryRun is missing SQL evidence");
       }
@@ -364,7 +384,9 @@ export class ForgeQueryRunClient {
     if (
       typeof body.sql_hash !== "string" ||
       typeof body.assurance_report_hash !== "string" ||
-      typeof body.truncated !== "boolean"
+      typeof body.truncated !== "boolean" ||
+      !new Set(["direct_sql", "forge_json"]).has(body.input_kind as string) ||
+      body.candidate_revision !== "query-candidate-v1"
     ) {
       throw new ForgeClientError("Completed QueryRun has invalid execution evidence");
     }

@@ -104,7 +104,7 @@ GTM：Open-source Developer First
 | N2 产品设计与路线重建 | 方向已形成；短期顺序由 REQ-017 修订 | `REQ-2026-08-25-016`：三产品面与对象模型保留；不再由 fixture W3A 主导近期实施 |
 | SP0–SP5 短期 Product Spine | 两个 Atlas P0 已验证，等待用户继续复验 | `REQ-2026-08-25-019`：Table 已存在于 Pi Presentation/Product Projection，Web Conversation Renderer 未消费。统一复用 `renderPresentation` 后，真实 107 行任务显示 2 列、20 行有界预览、总行数与截断提示；最终 candidate `product-spine-6a23e71276e5` 以 `product-pages.js?v=2` 强制缓存刷新。性能 P0 保持通过 |
 | F0–F2 完整未来 Product Shell | 闪烁 P0 已修复，待用户 Atlas 确认 | `REQ-2026-08-25-022`：Sidebar 语义 fingerprint 排除易变 projection metadata；相同轮询 no-op，真实变化保留 scroll 后更新，失败保留最后有效状态；candidate `product-spine-beb59d1a56f7` |
-| R0 Open-source Trust Runtime | 当前开始 | `REQ-2026-09-03-025`：以 Evaluate/Enforce/Explain 收敛外部开发者入口；Direct SQL 一等输入；Golden Path 与开源采用证据优先 |
+| R0 Open-source Trust Runtime | R0.1 已完成，当前进入 R0.2 | `REQ-2026-09-03-025`：`query-candidate-v1` 已统一 Direct SQL/Forge JSON 候选，复用同一 QueryRun 审批/执行链与 hash/revision lineage；下一步收敛 Evaluate 的 Exact Result、Regression 与 Failure Taxonomy |
 | S0–S4 真实用户短期产品闭环 | 已被 R0 吸收为历史验证路线 | `REQ-2026-08-25-023`：Design Partner、Enterprise Reference 与 Thin Founder Sandbox 的证据分工继续有效，但不再是唯一主动计划 |
 | W3 Web 产品骨架与交互框架 | 已吸收进 SP3–SP5 | `REQ-2026-08-24-014`：`821065f` 隔离 Product Shell 已证明页面骨架，但错误移除了连续 Chat；“分析工作台”修订也被判定过窄。先以 N1 北极星重建产品地图，确认后再修订原型；W3B 不进入 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
@@ -1055,13 +1055,15 @@ Observed Cost / Outcome
 M0.1–M0.5、N1/N2、SP0–SP5 与 Benchmark v2 已形成可复用工程资产；Atlas 人工复验保留为历史验收债务，但不再阻塞 R0。当前只推进开源 Trust Runtime 产品切割：
 
 ```text
-R0.1 Unified Input Contract：Direct SQL / Forge JSON
-  → R0.2 Evaluate：Exact Result / Regression / Failure Taxonomy
+R0.1 Unified Input Contract：Direct SQL / Forge JSON（已完成）
+  → R0.2 Evaluate：Exact Result / Regression / Failure Taxonomy（当前）
   → R0.3 Enforce：Policy / Assurance / Read-only / Approval
   → R0.4 Explain：Evidence / Lineage / Limitations
   → R0.5 Public Golden Path：README / Quickstart / CLI-API / Dashboard
   → R0.6 External Adoption Evidence
 ```
+
+R0.1 关闭证据：共享 JSON Schema `query-candidate-v1` 定义互斥的 `direct_sql` / `forge_json` 输入；Python 与 Pi 均传递并校验该契约。Direct SQL 通过 `sqlglot` 解析与限定，执行只读、Registry/ACL 和字段校验；两类输入持久化 `input_kind` 与 candidate revision，并进入同一 QueryRun 审批、执行和 SQL/Assurance hash 绑定链。相同 SQL 的两条路径共享 assurance/policy/registry/candidate revision 和 SQL hash，来源身份保持可追溯。Python 全套 `612 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 通过；R0 外部采用门禁仍未通过。
 
 R0 未通过前，不恢复 M1A、G1、Q1、H6 或更广企业平台实现。Atlas candidate 可在不扩张产品范围的前提下单独复验；不得因产品切割删除已有 Contract、测试、审计或失败关闭边界。
 

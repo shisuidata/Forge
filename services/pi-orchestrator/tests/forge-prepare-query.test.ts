@@ -196,6 +196,8 @@ test("Pi tool creates a persisted QueryRun with identity from TaskRun", async (c
       question: "查询订单 ID",
       user_id: "trusted-user",
       datasource_id: "demo",
+      input_kind: "forge_json",
+      candidate_revision: "query-candidate-v1",
       forge_json: { scan: "orders", select: ["orders.id"] },
       sql: "SELECT orders.id FROM orders",
       sql_hash: "sha256:reviewed",

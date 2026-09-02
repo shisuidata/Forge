@@ -434,6 +434,11 @@ test("Task API returns ordered events and a non-executable review request", asyn
     config,
     forgeClient: {
       async createQueryRun(input) {
+        assert.deepEqual(input.candidate, {
+          kind: "direct_sql",
+          sql: "SELECT 7 AS n",
+          producer_revision: "external-agent-r1",
+        });
         return {
           query_run_id: "qr_demo_001",
           task_run_id: input.taskRunId,
@@ -441,8 +446,10 @@ test("Task API returns ordered events and a non-executable review request", asyn
           question: input.question,
           user_id: input.userId,
           datasource_id: "demo",
-          forge_json: { scan: "orders", select: ["orders.id"] },
-          sql: "SELECT orders.id FROM orders",
+          input_kind: "direct_sql",
+          candidate_revision: "query-candidate-v1",
+          forge_json: null,
+          sql: "SELECT 7 AS n",
           sql_hash: SQL_HASH,
           dialect: input.dialect ?? "sqlite",
           registry_version: "sha256:registry",
@@ -464,6 +471,8 @@ test("Task API returns ordered events and a non-executable review request", asyn
           task_run_id: "tr_demo",
           status: "completed",
           sql_hash: input.sqlHash,
+          input_kind: "direct_sql",
+          candidate_revision: "query-candidate-v1",
           dialect: "sqlite",
           registry_version: "sha256:registry",
           assurance_report: { status: "passed" },
@@ -504,12 +513,33 @@ test("Task API returns ordered events and a non-executable review request", asyn
   assert.equal(createResponse.status, 201);
   const created = (await createResponse.json()) as { task: { task_run_id: string } };
 
+  const invalidCandidateResponse = await fetch(
+    `${baseUrl}/v1/tasks/${created.task.task_run_id}/prepare-query`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        question: "返回数字 7",
+        candidate: { kind: "direct_sql", sql: "SELECT 7 AS n", forge_json: {} },
+      }),
+    },
+  );
+  assert.equal(invalidCandidateResponse.status, 400);
+
   const prepareResponse = await fetch(
     `${baseUrl}/v1/tasks/${created.task.task_run_id}/prepare-query`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ question: "查询订单 ID", dialect: "postgresql" }),
+      body: JSON.stringify({
+        question: "返回数字 7",
+        dialect: "postgresql",
+        candidate: {
+          kind: "direct_sql",
+          sql: "SELECT 7 AS n",
+          producer_revision: "external-agent-r1",
+        },
+      }),
     },
   );
   assert.equal(prepareResponse.status, 200);
@@ -524,6 +554,7 @@ test("Task API returns ordered events and a non-executable review request", asyn
   );
   assert.equal(prepared.events.at(-1)?.event_type, "query.review_requested");
   assert.equal(prepared.events.at(-1)?.payload.can_execute, false);
+  assert.equal(prepared.events.at(-1)?.payload.input_kind, "direct_sql");
 
   const approvalResponse = await fetch(
     `${baseUrl}/v1/tasks/${created.task.task_run_id}/approve-query`,
