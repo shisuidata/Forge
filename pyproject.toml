@@ -5,6 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "forge"
 version = "0.1.0"
+description = "Trustworthy AI-assisted data querying with constrained candidates, deterministic SQL compilation, and execution guardrails."
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
     "jsonschema>=4.0",
@@ -37,6 +40,11 @@ dev = [
 
 [project.scripts]
 forge = "forge.cli:main"
+
+[project.urls]
+Repository = "https://github.com/shisuidata/Forge"
+Issues = "https://github.com/shisuidata/Forge/issues"
+Documentation = "https://github.com/shisuidata/Forge/tree/main/docs"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,40 +1,33 @@
 # Forge
 
-> **面向数据团队建设、供人和企业 Agent 共同使用的可信数据运行时与数据任务平台。**
-> 结构化查询是当前首个高价值验证切片；Forge 不承诺开放世界 100% 正确，而是通过语义、来源、权限、Evidence 和确定性执行减少静默错误。当前可用于设计型客户 PoC，不建议无约束规模化铺开。
+[![CI](https://github.com/shisuidata/Forge/actions/workflows/ci.yml/badge.svg)](https://github.com/shisuidata/Forge/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-[English README](README_EN.md)
+> **面向 Data Agent 的开源可信数据运行时：让 AI 辅助的数据查询可约束、可审核、可执行、可追溯。**
 
-> 使用 OMP 继续开发：从根目录启动，OMP 会读取 [`AGENTS.md`](AGENTS.md)；当前阶段和门禁以 [`docs/current-project-state.md`](docs/current-project-state.md) 为第一入口。
+Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束的 Forge JSON 候选，通过 Registry、确定性 SQL 编译、只读与权限校验、人工审核、Evidence 和 Audit 降低静默错误。它不是只把自然语言转成 SQL 的 wrapper，也不把“模型生成了 SQL”等同于“查询可信”。
 
----
+[English README](README_EN.md) · [贡献指南](CONTRIBUTING.md) · [文档索引](docs/README.md)
 
-## 它解决什么问题
+## 30 秒理解 Forge
 
-Forge 不是再做一个 SQL 生成器，而是 AI 参与数据查询时的可信中间层：既能独立提供问数消息面板和管理面板，也能作为开放组件嵌入其他 Agent。
+| 普通 Text-to-SQL 路径 | Forge 当前路径 |
+|---|---|
+| 模型直接生成并执行开放 SQL | 候选先进入受约束、可拒绝的保障流程 |
+| Prompt 同时承担语义、语法和安全 | Registry 管语义，编译器管转换，运行时管校验与执行 |
+| 失败通常只有“SQL 报错” | 保留输入类型、SQL hash、版本、失败阶段和 Evidence |
+| 结果正确性依赖单次模型表现 | 用可复现 benchmark 和 regression 迭代，不承诺开放世界 100% 正确 |
 
-| 不可信环节 | 举例 | Forge 的答案 |
-|---|---|---|
-| **口径不可信** | "复购率"的分母是谁？ | ✅ Registry 语义层 |
-| **生成不可信** | `INNER JOIN` 替代 `LEFT JOIN`；`NOT IN` 遇 NULL 静默返错 | ✅ DSL 约束 + 编译器 |
-| **执行不可信** | 用户不知道 AI 实际执行了什么 SQL | ✅ 审核、只读账号、超时、行数上限 |
-| **追溯不可信** | 错一次下次还错，无法回放 | ✅ audit、feedback、failure triage |
-| **能力边界不可信** | 日期序列填充、同比计算等算法型问题 | ❌ 诚实标注，超出能力边界 |
+**当前已有的核心能力：**
 
-**核心主张**：可信问数要把业务口径、生成、执行、追溯和兼容证据串成闭环，而不是靠更好的 prompt 碰运气。
+- Forge JSON 受约束中间表示与确定性 SQL 编译；
+- Direct SQL / Forge JSON 统一候选、QueryRun 审核和执行链；
+- Registry 结构与语义约束、关系和粒度校验；
+- 只读 SQL、字段/表范围、审批 hash、超时和结果上限；
+- SQLite、PostgreSQL、MySQL 的自动化兼容性检查；
+- 可回放的准确率 Benchmark、Exact Result 比较和失败诊断。
 
-### 当前推荐基线
-
-large 40 题业务查询基准，火山方舟 Coding Plan `ark-code-latest`，Method AI，每题 3 次生成：
-
-| 指标 | 结果 |
-|---|---:|
-| Case EA(any) | **100.0%**（40/40） |
-| Case EA(all) | **100.0%**（40/40） |
-| Run ACC | **100.0%**（120/120） |
-| 生成/编译失败率 | **0.0%**（120/120） |
-
-该结果只证明当前模型、Provider、Registry、代码版本和 40 题数据集的组合，不代表任意陌生 Schema 都是 100%。详见 [2026-07-13 测试报告](docs/test-report-2026-07-13.md) 和 [基准测试](docs/benchmarks.md)。
+> **项目状态：early-stage，actively iterating。** 当前适合评估、贡献和带人工审核/只读账号的受控部署，不代表功能完备、开放世界准确或大规模高可用。最新完整 500-case BIRD 运行中，Forge EA 为 **45.4%**，Direct SQL 为 **56.4%**；历史 Spider2-Lite SQLite 子集 EA 仍为 **9.2%**。这些结果受数据集、模型、Provider、Prompt、Registry 与运行配置约束，不能外推为普遍能力。详见 [当前项目状态](docs/current-project-state.md) 与 [Benchmark 边界](docs/benchmarks.md)。
 
 ---
 
@@ -142,16 +135,15 @@ flowchart LR
 
 ## 当前状态
 
-| 指标 | 值 |
+| 信号 | 当前边界 |
 |---|---|
-| EA（large schema, Ark Coding Plan, Method AI） | **100.0% Case EA / 100.0% Run ACC** |
-| Case EA(all)（large schema, Ark Coding Plan, Method AI） | **100.0%** |
-| 上一交付基线（DeepSeek V4 Pro, Method AF） | **97.5% Run ACC** |
-| 自动化测试 | compiler / API / executor / compatibility / docs 等，数量以当前 CI 为准 |
-| Spider2-Lite 编译成功率 | **97.6%** |
-| Spider2-Lite EA | **9.2%** |
+| BIRD 500-case 完整运行 | Forge EA **45.4%**；Direct SQL EA **56.4%** |
+| 历史自有 40 题回归集 | 用于域内回归，不作为陌生 Schema 泛化证明 |
+| Python CI | 完整 `pytest`，并覆盖 SQLite / PostgreSQL / MySQL compatibility smoke |
+| Pi Orchestrator | TypeScript typecheck 与 Node test 可在本地独立运行 |
+| Spider2-Lite SQLite | 编译成功率 **97.6%**；EA **9.2%** |
 
-详见 [基准测试详情](docs/benchmarks.md)。
+不同数据集、模型、Provider、Prompt、Registry、重试策略和评价器的结果不可直接横向比较。详见 [基准测试详情](docs/benchmarks.md)。
 
 ### 已落地功能
 
@@ -277,9 +269,13 @@ tests/
 
 ---
 
+## 参与维护
+
+贡献入口与复现要求见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。[`shisuidata/Forge`](https://github.com/shisuidata/Forge) 是项目主仓库；仓库历史中出现的 [`rockythink`](https://github.com/rockythink) 与 [`shisuidata`](https://github.com/shisuidata) 标识属于同一维护者/团队上下文。
+
 ## License
 
-MIT
+Forge 使用 [Apache License 2.0](LICENSE)。
 
 ## 官网
 

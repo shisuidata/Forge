@@ -719,7 +719,7 @@ M4.1 内网 Web 暴露决定：
 
 M4.1 内网 Web 部署结果：
 
-- Web 只监听 `192.168.8.10:18001`，访问地址为 `http://192.168.8.10:18001/tasks`；匿名请求返回 302 登录跳转。
+- Web 只监听 `preview.internal.invalid:18001`，访问地址为 `http://preview.internal.invalid:18001/tasks`；匿名请求返回 302 登录跳转。
 - Pi `127.0.0.1:14310` 与确定性测试模型 `127.0.0.1:18002` 继续只监听 loopback，Pi readiness 返回 200。
 - Forge Web 认证和 Pi Web 代理已开启；独立随机管理员密码只保存在 NAS mode 600 `config/forge.env`，未回显或提交。
 - Pi 由 enabled user systemd unit 常驻，`Linger=yes`、`Restart=on-failure`、当前 `active`；机器重启或用户退出后仍由 systemd 管理。持久状态在 SQLite，模型 Session 只在 Stage 执行时按需创建，不是常驻对话进程。

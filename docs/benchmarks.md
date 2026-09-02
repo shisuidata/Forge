@@ -50,7 +50,7 @@ NAS 上共有三轮完整 72-call 运行。最新页面 run hbr_c99bb3d506f54a25
 
 后续公共基准标准：完整 500 题 Mini-Dev、11 个数据库、每题一次生成，以 Official EA 为主指标；102 道 challenging 全集作为难题切片。重复 3 次只报告 Mean EA、Pass@3、Consistent@3 等稳定性指标，不再把 Pass@3 命名为 Case EA。未完成完整 500 题前，页面和文档必须保持“诊断子集”标识。
 
-Accuracy Lab：http://192.168.8.10:18001/admin/benchmark。
+Accuracy Lab：http://preview.internal.invalid:18001/admin/benchmark。
 
 ---
 

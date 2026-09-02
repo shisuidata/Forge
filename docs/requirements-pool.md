@@ -758,9 +758,9 @@ ReportRun / ReportRevision（不可变快照）
 ### 实施结果
 
 - 当前 Editorial candidate 固定到本地 commit `929e8d4`；candidate `6 passed`，build/audit、4 SVG/0 Canvas、tooltip、legend toggle、数据来源定位、3 行增量表、no-JS、5 页 PDF、5 页 PPTX 和 0 browser error 通过。完整仓库回归为 Python `564 passed / 24 skipped`、Pi `103 passed`、typecheck 与 audit 通过。
-- Atlas 的 `atlas:22` 入口在 SSH banner 阶段超时；使用同一主机的现有 LAN 管理入口 `ssh dev`（`192.168.8.10`）完成发布。未读取 Secret。
-- 静态文件发布在 `/home/elazer/services/forge-previews/editorial-929e8d4/`，`current` symlink 指向该不可写 revision；systemd user service `forge-report-preview.service` 仅绑定 `192.168.8.10:18005`。
-- 访问地址：`http://192.168.8.10:18005/`。Atlas browser gate 再次通过；三个文件 SHA-256 与本地构建完全一致。
+- Atlas 的 `primary SSH entry` 入口在 SSH banner 阶段超时；使用同一主机的现有 LAN 管理入口 `internal operations entry`（`preview.internal.invalid`）完成发布。未读取 Secret。
+- 静态文件发布在 `/srv/forge/previews/editorial-929e8d4/`，`current` symlink 指向该不可写 revision；systemd user service `forge-report-preview.service` 仅绑定 `preview.internal.invalid:18005`。
+- 访问地址：`http://preview.internal.invalid:18005/`。Atlas browser gate 再次通过；三个文件 SHA-256 与本地构建完全一致。
 - 生产 `forge-m41-api.service` 与 `forge-m41-pi.service` 保持 active，`~/services/forge-m4.1/source` 仍为干净的 `d2b0fd9`，未重启、未覆盖。生产 readiness 仍只有已知 `secure_cookie` fail：当前为内网 HTTP，未在本次预览部署中修改 HTTPS/Auth 配置。
 - 回滚/删除只需停止并 disable `forge-report-preview.service`，删除 `current` symlink、独立 revision 目录和该 user unit；不涉及 Forge 状态恢复。
 - 目标差距正式重评估见 `docs/forge-goal-gap-assessment-2026-08-24.md`：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%；当时建议下一工作包为 M1A，后续已被用户确认的 `REQ-2026-08-24-014` 调整为先完成 Web 产品骨架，M1A 顺延为首个后端治理工作包。
@@ -853,7 +853,7 @@ ReportRun / ReportRevision（不可变快照）
 - 固定 fixture 覆盖 `waiting_approval / needs_input / analyzing / rendering / completed / failed`，原型控制可额外查看 querying/offline；所有页面固定显示演示数据边界，源码不包含 `fetch/XMLHttpRequest/WebSocket`。
 - SQL 审批原型在最终确认中重复显示任务、数据源、范围、系统限制、完整 SQL、4 项检查和演示无副作用边界；确认按钮需显式勾选后才启用。
 - 自动验证：prototype tests `5 passed`、build、npm audit 0；Python 全量 `564 passed / 24 skipped`（Web 定向 `19 passed`）；Pi typecheck 与 `103 passed`。Playwright 在 1440×900 与 1600×1000 走通工作台、新建、搜索、Task Detail、审批 dialog、状态切换、back/forward/reload、报告库/详情、数据资产和管理；0 console error、0 横向溢出、0 生产请求。
-- Atlas 发布：`/home/elazer/services/forge-previews/web-shell-821065f/`，user service `forge-web-shell-preview.service` 仅绑定 `192.168.8.10:18006`；远端两个 viewport 复验通过。生产 Forge/Pi 与原报告预览服务保持 active，生产源码仍为干净 `d2b0fd9`。
+- Atlas 发布：`/srv/forge/previews/web-shell-821065f/`，user service `forge-web-shell-preview.service` 仅绑定 `preview.internal.invalid:18006`；远端两个 viewport 复验通过。生产 Forge/Pi 与原报告预览服务保持 active，生产源码仍为干净 `d2b0fd9`。
 - 正式证据见 `docs/web-product-shell-w3a-evidence-2026-08-24.md`。在用户逐页给出 IA/交互门禁前，不进入 W3B，不把 fixture 行为接生产。
 
 ### 用户门禁反馈：Chat 与既有产品定位未被正确投影
@@ -1046,7 +1046,7 @@ SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
 
 ### SP5 Human Golden Gate + Atlas Candidate（自动门禁已通过）
 
-- Candidate 固定为 `product-spine-5dcd4715941a`，URL 为 `http://192.168.8.10:18007/`；Pi/QueryRun/Report/Registry/Artifact 状态独立，测试 SQLite 为 candidate 内 mode `0400` 副本，认证已开启，生产 Forge/Pi 保持 active。
+- Candidate 固定为 `product-spine-5dcd4715941a`，URL 为 `http://preview.internal.invalid:18007/`；Pi/QueryRun/Report/Registry/Artifact 状态独立，测试 SQLite 为 candidate 内 mode `0400` 副本，认证已开启，生产 Forge/Pi 保持 active。
 - 固定渠道指标问题在最终 candidate 配置下连续 3 次完成 Conversation → SQL Review → 单次只读执行 → Analysis → Report → Report Library；每次均为 1 个 QueryRun、1 个 `query.completed`、4 个 succeeded StageAttempt，PDF/PPTX ready。
 - 重复消息返回原任务；过期重复批准返回 409 且不重放 SQL。等待审批与完成态通过 restart recovery；Pi offline 时 Workspace 返回 partial，Report/Data 继续可读。
 - Live Gate 修复 insecure-HTTP ID、瞬时 ready 轮询、同源 HTTP Report URL、空 Attempt error、长 SQL Grid overflow 和完成态历史审核误标权限；复杂查询 Assurance 拒绝与 Analysis `incomplete` 作为 fail-closed 反证保留。
@@ -1064,7 +1064,7 @@ SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
 - **根因**：`agent.contracts.validate_contract` 每次校验都重新执行 `validator_for + check_schema + validator construction`。Product BFF 对 100 条 Task 和 20–50 份 Report 逐项校验，把单次页面读取放大为数十秒；Pi 直连同批读取仅 `44.4–55.9 ms`，不是 SQLite Projection 或网络瓶颈。
 - **修复**：按 Contract name 缓存已检查、可复用的 jsonschema validator；Schema、语义、scope、redaction、Evidence 和 Assurance 行为不变。增加 100 Task + 50 Report 的页面批量校验预算回归测试。
 - **真实复验**：修复前 Workspace `15,727 ms`、Conversations `20,970 ms`、Tasks `28,985 ms`，Reports/Data 并发超过 `30 s`；修复后稳定 API 分别为 `258.8 / 134.1 / 87.0 / 54.5 / 103.2 ms`。六个真实页面严格等待 DOM 内容替换后的完成时间为 `83.7–586.9 ms`，DOM ready 为 `17.7–53.5 ms`；0 console/page error、0 横向溢出。
-- **候选**：性能修复源码 revision `product-spine-d0aa8c9e3a0e` 已在原隔离状态与只读数据边界上切换至稳定 URL `http://192.168.8.10:18007/`；生产 Forge/Pi 未替换。契约/BFF/Shell 定向回归 `41 passed`。
+- **候选**：性能修复源码 revision `product-spine-d0aa8c9e3a0e` 已在原隔离状态与只读数据边界上切换至稳定 URL `http://preview.internal.invalid:18007/`；生产 Forge/Pi 未替换。契约/BFF/Shell 定向回归 `41 passed`。
 - **剩余门禁**：自动性能门禁已通过，等待用户重新体验；用户未确认前，SP5 仍不标记为最终接受。
 
 ## REQ-2026-08-25-019：Conversation 查询结果缺少数据表
@@ -1078,7 +1078,7 @@ SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
 - **根因**：Pi Channel Renderer 和 Conversation/Task Product Projection 均已携带 `presentation.table`；丢失发生在 `web/static/product/product-pages.js`。`renderConversation()` 只调用 `renderMarkdown()` 并单独渲染 fields，没有复用 Task Detail 已使用的 `renderPresentation()`，因此 Table 和 truncated notice 被 DOM 层静默丢弃。
 - **修复**：Conversation entry 统一复用 `renderPresentation()`，删除重复 fields 渲染；不改变 QueryResult、Projection Contract、行列边界、scope 或 Evidence lineage。
 - **真实复验**：新建真实 Conversation `web_conv_66e18f83b37539de3637d8699df5b422`，Task `tr_c0c65389a9a344e9b711cfa68909f6eb` 经 SQL 审核和一次只读执行后返回 107 行。Conversation DOM 显示 `category_name / total_sales` 两列、20 行有界预览、“共 107 行”和“结果已截断”；0 横向溢出。
-- **候选**：最终源码/缓存版本 `product-spine-6a23e71276e5` 已发布到稳定 URL `http://192.168.8.10:18007/`，Product 页面统一引用 `product-pages.js?v=2`，避免浏览器继续使用缺陷脚本；继续复用原隔离状态和 mode `0400` 只读数据，生产 Forge/Pi 未替换。浏览器行为回归从失败转为通过，页面/缓存契约 `11 passed`，JS syntax PASS。
+- **候选**：最终源码/缓存版本 `product-spine-6a23e71276e5` 已发布到稳定 URL `http://preview.internal.invalid:18007/`，Product 页面统一引用 `product-pages.js?v=2`，避免浏览器继续使用缺陷脚本；继续复用原隔离状态和 mode `0400` 只读数据，生产 Forge/Pi 未替换。浏览器行为回归从失败转为通过，页面/缓存契约 `11 passed`，JS syntax PASS。
 - **剩余门禁**：自动 Table 门禁通过，等待用户重新体验；SP5 仍不标记为最终接受。
 
 ## REQ-2026-08-25-020：按未来产品方向补全前端产品面
@@ -1119,7 +1119,7 @@ SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
   - 交付接真实 Report Library/PDF/PPTX，治理接真实 Query Approval/Audit，数据资产接 Schema/Metric/Semantic/Registry/Staging/Knowledge，管理接 Team/Model/Skill/Channel/Database/Readiness；
   - 未实现能力统一显示 `available / partial / planned / blocked`、依赖阶段和不可用原因；Agent execute、Credential、通用 Decision、Policy PEP、Quality、Outcome、Reusable Definition 均未被伪装为可用；
   - 增加默认 Workspace 上下文、全局 Search 入口、待办 Inbox、Evidence Drawer/Diff Viewer 产品边界，以及统一 404/403/offline 页面。
-- **候选与验证**：`product-spine-2ceffbcf1600` 已发布到 `http://192.168.8.10:18007/`，继续复用隔离状态和只读测试数据，生产 Forge/Pi 未替换。23 个有效/状态 Route、404 产品页、1440×900/1600×1000/390px、移动 8 项导航、现有 107 行 QueryResult Table 主链均通过；有效页面 0 console/page error、0 横向溢出。定向 `17 passed` + 浏览器行为 `1 passed`，JS syntax PASS。
+- **候选与验证**：`product-spine-2ceffbcf1600` 已发布到 `http://preview.internal.invalid:18007/`，继续复用隔离状态和只读测试数据，生产 Forge/Pi 未替换。23 个有效/状态 Route、404 产品页、1440×900/1600×1000/390px、移动 8 项导航、现有 107 行 QueryResult Table 主链均通过；有效页面 0 console/page error、0 横向溢出。定向 `17 passed` + 浏览器行为 `1 passed`，JS syntax PASS。
 - **剩余门禁**：完整未来 Product Shell 自动门禁 PASS，等待用户 Atlas `PASS / CHANGE / REMOVE`；前端完成不改变 Runtime Governance Coverage=0%。
 
 ## REQ-2026-08-25-021：Product Chat 缺少任务状态侧边栏
@@ -1328,7 +1328,7 @@ Forge 已有可信查询纵向切片和完整 Product Shell，但当前路线把
 - 当前 12 题均来自官方 challenging 记录，字段逐项核对无改写；但它只覆盖 challenging 的 12/102 和数据库的 2/11。原“Gold 可执行且非空”的选择说明不足以解释同两库另 6 道同样合格题为何未入选，已撤销并降级为固定诊断样本，不作为代表性或 leaderboard-comparable split。
 - 结构层来自官方 `dev_tables.json` 与每表 `database_description/*.csv`；语义层来自每题 Oracle `evidence`；答案来自官方 Gold SQL。页面可查看完整问题、Evidence、结构/字段说明、Gold SQL/结果、Forge SQL/Forge JSON/结果和 Direct SQL/结果。
 - 双臂共享 ark-code-latest、问题、结构层、Oracle Evidence 和 SQLite database；路径专属系统提示和 Forge 编译修复预算不同。评分仅比较同库执行结果，不比较 SQL 文本。
-- NAS 生产部署：`ssh dev` / `192.168.8.10`，最终源码 commit `f2e3755`，`forge-m41-api.service` 与 `forge-m41-pi.service` active；备份点 `~/services/forge-m4.1/backups/accuracy-bird-20260825T191348Z/`。Accuracy Lab 地址：`http://192.168.8.10:18001/admin/benchmark`，保持既有认证门禁。
+- NAS 生产部署：`internal operations entry` / `preview.internal.invalid`，最终源码 commit `f2e3755`，`forge-m41-api.service` 与 `forge-m41-pi.service` active；备份点 `~/services/forge-m4.1/backups/accuracy-bird-20260825T191348Z/`。Accuracy Lab 地址：`http://preview.internal.invalid:18001/admin/benchmark`，保持既有认证门禁。
 - NAS 真实 run：`hbr_9a78d73cc64642709b03d4dc8aef978a`，72/72 调用、12/12 双臂用例完成，147 条持久实时日志。此前本机 run 只作开发诊断，不再作为部署验收结论。
 - **EA 标准修订**：主判定严格复刻 BIRD 官方逻辑：set(gold_result_tuples) == set(predicted_result_tuples)。结果值与 tuple 列顺序精确比较；忽略行顺序和重复 multiplicity；不做数值误差、大小写或空白归一化。Execution Success 与延迟单列。
 - 旧比较器使用 0.1% 相对误差、0.005 绝对误差与文本归一化，导致 72 次观测中的 11 个假阳性；旧的 Forge 30.56% / Direct 33.33% 与 Case EA 结论作废。

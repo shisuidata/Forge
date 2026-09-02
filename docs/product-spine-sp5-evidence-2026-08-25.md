@@ -2,7 +2,7 @@
 
 > Requirement：[`REQ-2026-08-25-017`](requirements-pool.md#req-2026-08-25-017短期-product-spine-底层优先实施计划)<br>
 > 原始 Candidate：`product-spine-5dcd4715941a`；性能修复：`product-spine-d0aa8c9e3a0e`；Table 最终修复：`product-spine-6a23e71276e5`
-> URL：`http://192.168.8.10:18007/`<br>
+> URL：`http://preview.internal.invalid:18007/`<br>
 > 自动化/真实链路结论：**PASS**<br>
 > 用户 Atlas 门禁：**CHANGE 已修复，等待复验**
 
@@ -25,7 +25,7 @@ Conversation
 
 - Pi state、QueryRun DB、Report DB、Registry copy、Artifact Store 与候选源码均位于独立 candidate root；
 - 测试数据源复制到 candidate 内，SHA-256 为 `5dff83ed45ee54df6319a04c98408159b31e1572643d936ecb0125f083d32b5b`，mode `0400`，无 WAL/SHM；
-- API 为 `192.168.8.10:18007`，Pi 只监听 `127.0.0.1:14311`；
+- API 为 `preview.internal.invalid:18007`，Pi 只监听 `127.0.0.1:14311`；
 - Web 正式认证已开启，匿名访问 `/workspace` 返回 302；
 - 未读取、回显或复制 Secret；未修改生产 Registry、Identity Map、数据库凭证或状态库；
 - `forge-m41-api.service`、`forge-m41-pi.service` 与候选两个 service 最终均为 active。
@@ -137,7 +137,7 @@ SP5 自动化与真实集成门禁通过，Product Spine 已具备可持续人�
 
 下一步：
 
-1. 用户访问 `http://192.168.8.10:18007/`，按页面和真实 Journey 给出 `PASS / CHANGE / REMOVE`；
+1. 用户访问 `http://preview.internal.invalid:18007/`，按页面和真实 Journey 给出 `PASS / CHANGE / REMOVE`；
 2. 将用户反馈按 P0/P1/P2 写回需求池；
 3. 用户门禁通过后，再根据真实最大阻力选择 M1A、G1、Q1、H6 或 Product UX P1；
 4. 未经新批准，不并行开放 Agent Runtime、多人治理、Economics、Reusable Report 或 H5 生产 Renderer。
@@ -171,7 +171,7 @@ SP5 自动化与真实集成门禁通过，Product Spine 已具备可持续人�
 
 严格渲染完成以各页 skeleton/“正在读取”内容被真实 DOM 数据替换为准，不以 HTTP response header 到达冒充页面完成。六页均为 0 console/page error、0 横向溢出。
 
-性能修复源码发布为 `product-spine-d0aa8c9e3a0e`，URL 仍为 `http://192.168.8.10:18007/`。它复用原 candidate 的独立 Pi/QueryRun/Report/Registry/Artifact 状态与 mode `0400` 只读测试数据，只切换 API source root；生产 Forge/Pi 未替换。契约、Governance、Product BFF 与 Shell 定向回归 `41 passed`。
+性能修复源码发布为 `product-spine-d0aa8c9e3a0e`，URL 仍为 `http://preview.internal.invalid:18007/`。它复用原 candidate 的独立 Pi/QueryRun/Report/Registry/Artifact 状态与 mode `0400` 只读测试数据，只切换 API source root；生产 Forge/Pi 未替换。契约、Governance、Product BFF 与 Shell 定向回归 `41 passed`。
 
 自动性能门禁结论为 **PASS**；用户 Atlas 复验仍为 **PENDING**。
 

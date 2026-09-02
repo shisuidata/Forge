@@ -112,7 +112,7 @@ GTM：Open-source Developer First
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
 | H5 Evidence-bound Chart Storytelling | Editorial revision 暂定保留，生产 R1 未批准 | 已改为连续报告并建立受控强调规范；用户要求先保留当前形态，后续再做视觉与语言精修。Atlas 只发布隔离静态预览，不等于接入生产 Renderer |
-| D1 Atlas 隔离报告预览 | 已完成 | `REQ-2026-08-24-013`：`929e8d4` 固定构建物独立发布到 `192.168.8.10:18005`；生产源码仍为干净 `d2b0fd9`，Forge/Pi 未重启；阶段差距重评估完成 |
+| D1 Atlas 隔离报告预览 | 已完成 | `REQ-2026-08-24-013`：`929e8d4` 固定构建物独立发布到 `preview.internal.invalid:18005`；生产源码仍为干净 `d2b0fd9`，Forge/Pi 未重启；阶段差距重评估完成 |
 | H6 Reusable Report Definitions | 延后 | `REQ-2026-08-25-023`：不属于“随时问真实业务数据 → 可信答案 → 语义复用”的首个短期闭环；S4 通过后按真实重复交付需求重评 |
 | M1A–M1C | 延后，未批准 | M0 Contract 已允许提出 M1A，但当前先验证 Human/Data-Team 产品闭环；S4 通过后再决定 Runtime Trust Foundation 与单一 Agent Consumer |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
@@ -626,7 +626,7 @@ M1A 不取消，但顺延为 W3 核心 Product Shell 稳定后的首个后端工
 - `tools/web-product-shell-prototype/` 建立无 CDN、fixture-only 的桌面 Product Shell，覆盖六个一级区域、可寻址 Task Detail、SQL/Analysis/Report/Activity tabs、Report Library/Detail、数据资产 tabs 和管理分组。
 - 所有页面显示“交互原型/演示数据”；源码无生产网络请求。审批 dialog 绑定任务、数据源、范围、限制、完整 SQL 和检查结果；演示确认不会写生产 Store。
 - prototype tests `5 passed`、build/audit 通过；Python 全量 `564 passed / 24 skipped`（Web 定向 `19 passed`）；Pi typecheck/`103 passed`。Playwright 在 1440×900、1600×1000 本地与 Atlas 走通关键 route、dialog、fixture state、search、back/forward/reload，0 console error、0 横向溢出。
-- 固定 commit `821065f` 发布到 Atlas `/home/elazer/services/forge-previews/web-shell-821065f/`，`forge-web-shell-preview.service` 仅绑定 `192.168.8.10:18006`。生产 Jinja、Forge/Pi、Store 和 `d2b0fd9` checkout 未修改。
+- 固定 commit `821065f` 发布到 Atlas `/srv/forge/previews/web-shell-821065f/`，`forge-web-shell-preview.service` 仅绑定 `preview.internal.invalid:18006`。生产 Jinja、Forge/Pi、Store 和 `d2b0fd9` checkout 未修改。
 - 用户门禁已给出 `CHANGE`：连续 Chat 不应被一次性创建表单替代；同时“分析工作台”不足以概括产品。当前先复核 2026-08-21 至 2026-08-24 的产品对话，重新确认 Conversation、Task、Artifact、Decision、Governance 与 Agent-facing Runtime 的产品投影。新的 IA 未确认前不修改生产 route/API，不进入 W3B。原型自动证据见 [`web-product-shell-w3a-evidence-2026-08-24.md`](web-product-shell-w3a-evidence-2026-08-24.md)。
 
 ## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
@@ -851,7 +851,7 @@ R0 实际结果：
 - Inline 强调固定为版本化语义 token：strong=证据化结论/数字，emphasis=术语/假设，superseded=有 revision lineage 的旧标准，underline=仅链接/Evidence，code=标识符，mark=少量待审定义；Callout 仅 `info/decision/warning/limitation`，不得由模型提供 HTML/CSS/class/color。
 - 用户补充“内容专业不等于术语密度”：正文必须优先用准确普通中文，按观察→有限判断→限制→待补证据组织；内部 `Evidence/Revision/Ready/baseline/comparison` 不占据业务正文，不能用语气、粗体或 Callout 制造确定性。
 - 用户决定当前 Editorial revision 先暂定保留、后续迭代。该决定不是完整视觉 PASS，也不批准生产 R1。当前按 `REQ-2026-08-24-013` 只将固定构建物部署为 Atlas 独立预览，然后重评估总体目标差距。
-- Atlas 隔离预览已完成：`/home/elazer/services/forge-previews/editorial-929e8d4/` 为不可写固定构建物，`forge-report-preview.service` 仅绑定 LAN `192.168.8.10:18005`；远端 browser gate 通过，生产 Forge/Pi active、源码仍为干净 `d2b0fd9`。生产 readiness 保留已知的内网 HTTP `secure_cookie` fail，本次未改认证或 HTTPS。
+- Atlas 隔离预览已完成：`/srv/forge/previews/editorial-929e8d4/` 为不可写固定构建物，`forge-report-preview.service` 仅绑定 LAN `preview.internal.invalid:18005`；远端 browser gate 通过，生产 Forge/Pi active、源码仍为干净 `d2b0fd9`。生产 readiness 保留已知的内网 HTTP `secure_cookie` fail，本次未改认证或 HTTPS。
 - 阶段重评估见 [`forge-goal-gap-assessment-2026-08-24.md`](forge-goal-gap-assessment-2026-08-24.md)：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%。当前首要差距不是图表视觉，而是 Runtime Governance Coverage=0；下一建议工作包仍是单独批准 M1A。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）

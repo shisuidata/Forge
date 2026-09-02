@@ -10,10 +10,10 @@ W3A 只验证产品地图、桌面 Product Shell、页面关系、状态语言�
 
 - Source: `tools/web-product-shell-prototype/`
 - Commit: `821065f`
-- Atlas: `http://192.168.8.10:18006/`
-- Remote revision: `/home/elazer/services/forge-previews/web-shell-821065f/`
+- Atlas: `http://preview.internal.invalid:18006/`
+- Remote revision: `/srv/forge/previews/web-shell-821065f/`
 - Service: `forge-web-shell-preview.service`
-- Binding: LAN only `192.168.8.10:18006`
+- Binding: LAN only `preview.internal.invalid:18006`
 
 ## Product map
 

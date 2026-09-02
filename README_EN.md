@@ -1,38 +1,33 @@
 # Forge
 
-> ⚠️ **Early stage, actively iterating.** Shows clear improvement over direct SQL generation on enterprise daily query scenarios; still a large gap on Spider2-Lite academic benchmark (dominated by algorithm-heavy complex queries).
+[![CI](https://github.com/shisuidata/Forge/actions/workflows/ci.yml/badge.svg)](https://github.com/shisuidata/Forge/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
----
+> **Open-source infrastructure for trustworthy AI-assisted data querying: constrained, reviewable, executable, and auditable.**
 
-> **A trusted AI data-query layer for teams that cannot accept unreliable AI answers.**
+Forge sits between an upstream agent and a database. It accepts Direct SQL or constrained Forge JSON candidates, then applies Registry context, deterministic SQL compilation, read-only and scope checks, human review, Evidence, and Audit. It is not a thin Text-to-SQL wrapper, and it does not treat “the model produced SQL” as proof that a query is trustworthy.
 
-Natural language in, Registry-backed Forge JSON, reviewable deterministic SQL out.
+[中文文档](README.md) · [Contributing](CONTRIBUTING.md) · [Documentation index](docs/README.md)
 
-[中文文档](README.md)
+## Forge in 30 seconds
 
----
+| A typical Text-to-SQL path | Forge today |
+|---|---|
+| A model emits and may execute open-ended SQL | A candidate enters a bounded, rejectable assurance path |
+| The prompt owns semantics, syntax, and safety | Registry owns semantics, the compiler owns translation, and runtime gates own execution |
+| Failures collapse into a SQL error | Input kind, SQL hash, revisions, failure stage, Evidence, and Audit remain inspectable |
+| Correctness depends on one model response | Reproducible benchmarks and regressions guide development; open-world 100% accuracy is not claimed |
 
-## Forge vs Direct SQL Generation
+**Working core available today:**
 
-Head-to-head comparison on 40 proprietary test cases vs "let the LLM write SQL directly" (LLM Judge 0–10, 5-run average per case):
+- constrained Forge JSON intermediate representation and deterministic SQL compilation;
+- a shared candidate, QueryRun review, and execution path for Direct SQL and Forge JSON;
+- Registry-backed schema and semantic constraints, relationship checks, and grain checks;
+- read-only SQL, table/column scope, approval hashes, timeouts, and result limits;
+- automated compatibility checks for SQLite, PostgreSQL, and MySQL;
+- replayable accuracy benchmarks, exact-result comparison, and bounded failure diagnostics.
 
-| Query Type | Direct SQL | **Forge** | Δ |
-|---|---|---|---|
-| Multi-table JOIN + agg | 8.53 | **8.73** | +0.20 |
-| Complex filter | 9.00 | **9.25** | +0.25 |
-| GROUP BY + HAVING | 8.60 | **8.80** | +0.20 |
-| Ranking & TopN | 8.36 | **9.00** | +0.64 |
-| Window aggregation | 8.40 | **8.75** | +0.35 |
-| Time navigation | 8.40 | **9.00** | +0.60 |
-| ANTI/SEMI JOIN | 7.80 | **8.60** | **+0.80** |
-| Complex composite | 7.60 | **8.00** | +0.40 |
-| **Overall** | **8.38** | **8.82** | **+0.44** |
-
-**Forge outperforms direct SQL generation in every category with no regressions anywhere.**
-
-The largest gap is ANTI/SEMI JOIN (+0.80): direct SQL models frequently produce `NOT IN`, which silently returns wrong results when the subquery contains NULLs. Forge's `anti` join primitive eliminates this error class at the root.
-
-> **Spider2-Lite EA (9.2%) is low because that benchmark is dominated by algorithm-heavy queries** (date series generation, period-over-period comparisons, statistical modeling) — not Forge's design target. See [Benchmark Results](#benchmark-results).
+> **Project status: early-stage and actively maintained.** Forge is suitable for evaluation, contribution, and controlled deployments with human review and read-only database credentials. It is not feature-complete or HA-ready. In the latest complete 500-case BIRD run, Forge reached **45.4% EA** versus **56.4%** for Direct SQL; the historical Spider2-Lite SQLite subset remains at **9.2% EA**. Results are specific to the dataset, model, provider, prompt, Registry, and run configuration—not a universal performance claim. See [Current project state](docs/current-project-state.md) and [Benchmark boundaries](docs/benchmarks.md).
 
 ---
 
@@ -582,9 +577,25 @@ tests/
 ## Current Scores
 
 | Benchmark | Cases | Metric | Score |
-|---|---|---|---|
-| Proprietary (Method J) | 40 | LLM Judge | **8.65 / 10** |
-| Proprietary (Method J+Sem) | 40 | LLM Judge | **8.82 / 10** |
-| Proprietary (MiniMax, EA) | 40 | Execution Accuracy | **65.0%** |
+|---|---:|---|---:|
+| BIRD complete run | 500 | Forge Execution Accuracy | **45.4%** |
+| BIRD complete run | 500 | Direct SQL Execution Accuracy | **56.4%** |
+| Historical proprietary Method J | 40 | LLM Judge | **8.65 / 10** |
+| Historical proprietary Method J+Sem | 40 | LLM Judge | **8.82 / 10** |
+| Historical proprietary MiniMax run | 40 | Execution Accuracy | **65.0%** |
 | Spider2-Lite SQLite | 123 | Execution Accuracy | **9.2%** |
 | Spider2-Lite SQLite | 123 | Compile success rate | **97.6%** |
+
+These rows are retained as versioned evidence, not as directly comparable scores. Dataset, case selection, model, provider, prompt, Registry, retry policy, evaluator, and metric must match before two runs are compared.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, testing, benchmark, pull request, and security guidance.
+
+## Maintainer context
+
+[`shisuidata/Forge`](https://github.com/shisuidata/Forge) is the canonical repository. The [`rockythink`](https://github.com/rockythink) and [`shisuidata`](https://github.com/shisuidata) identities appearing in project history refer to the same maintainer/team context.
+
+## License
+
+Forge is licensed under the [Apache License 2.0](LICENSE).

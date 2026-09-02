@@ -231,7 +231,7 @@
 
 <!-- 04 实现部署 -->
 <section class="sheet" id="implementation">
-  <header class="head"><div class="no">06 · 当前实现与部署拓扑</div><h1>代码模块、服务进程与端口</h1><p>当前 M4.1 环境运行在 NAS Ubuntu；Web 对内网开放，Pi、模型和数据库保持隔离。</p></header><div class="stamp">DEV NAS · 192.168.8.10</div>
+  <header class="head"><div class="no">06 · 当前实现与部署拓扑</div><h1>代码模块、服务进程与端口</h1><p>当前 M4.1 环境运行在 NAS Ubuntu；Web 对内网开放，Pi、模型和数据库保持隔离。</p></header><div class="stamp">DEV NAS · preview.internal.invalid</div>
 
   <div class="group main" style="left:54px;top:158px;width:460px;height:570px"><h2>Pi Orchestrator 服务<small>services/pi-orchestrator · Node 22</small></h2>
     <div class="cols" style="grid-template-columns:1fr 1fr">
@@ -246,7 +246,7 @@
       <div><div class="card"><h3>web/router.py</h3><p>Web 页面、设置、任务代理</p></div><div class="card"><h3>web/routes/query_runs.py</h3><p>内部 QueryRun API</p></div><div class="card"><h3>agent/agent.py</h3><p>查询准备与问候语前置门禁</p></div><div class="card"><h3>agent/llm.py</h3><p>Provider 协议与 Tool Calling</p></div></div>
       <div><div class="card"><h3>registry/sync.py</h3><p>数据库结构内省与 Registry 合并</p></div><div class="card"><h3>forge/compiler.py</h3><p>确定性 SQL 编译</p></div><div class="card"><h3>forge/query_runs.py</h3><p>审批、幂等、执行与结果</p></div><div class="card guard"><h3>forge/executor.py</h3><p>唯一数据库执行入口</p></div></div>
     </div>
-    <div class="card key"><h3>监听地址</h3><p class="code">192.168.8.10:18001　·　forge-m41-api.service</p><span class="status ok">active · 内网认证</span></div>
+    <div class="card key"><h3>监听地址</h3><p class="code">preview.internal.invalid:18001　·　forge-m41-api.service</p><span class="status ok">active · 内网认证</span></div>
   </div>
 
   <div class="group" style="left:1174px;top:158px;width:370px;height:570px"><h2>外部资源与数据<small>密钥和数据库不进入 Pi</small></h2>
@@ -261,7 +261,7 @@
   <div class="band" style="left:54px;top:772px;width:1490px;height:122px"><h2>持久化文件与恢复边界</h2><div class="cols" style="grid-template-columns:repeat(5,1fr)">
     <div class="state"><b>orchestrator.sqlite3</b><span>Pi Task/Event/Artifact/Attempt<br>SQLite WAL</span></div><div class="state"><b>query-runs.sqlite3</b><span>Forge QueryRun 与执行结果</span></div><div class="state"><b>forge-audit.sqlite3</b><span>查询与审批审计</span></div><div class="state"><b>schema.registry.json</b><span>当前结构层；将升级为版本化统一结构模型</span></div><div class="state"><b>forge.yaml / Model Store</b><span>当前需重启；阶段 4.4 改为无重启切换</span></div>
   </div>
-  <div class="foot">当前部署目录：~/services/forge-m4.1　·　Web 页面：http://192.168.8.10:18001/tasks</div>
+  <div class="foot">当前部署目录：~/services/forge-m4.1　·　Web 页面：http://preview.internal.invalid:18001/tasks</div>
 </section>
 
 <!-- 04 控制面 -->
