@@ -280,6 +280,7 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "datasource_binding_v1",
         "registry_binding_v1",
         "governance_action_catalog_v1",
+        "product_projection_v1",
     )
     for name in contract_names():
         schema = load_contract(name)

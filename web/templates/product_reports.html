@@ -1,0 +1,45 @@
+{% extends "product_base.html" %}
+{% block title %}交付 · Forge{% endblock %}
+{% block page_actions %}<a class="button" href="/chat">从对话生成报告</a>{% endblock %}
+{% block content %}
+<div class="content-width" data-product-page="reports">
+  <section class="page-intro">
+    <div><h2>交付中心</h2><p>查找不可变 Report、Export 和重要 Artifact；每份交付都能回到 Task、Query、Evidence、限制与 revision。</p></div>
+  </section>
+  <section class="capability-grid capability-grid-compact" aria-label="交付能力">
+    <article class="capability-card" data-capability="available">
+      <header><div><p class="capability-domain">Deliverable</p><h3>Reports</h3></div><span class="status" data-state="available">可用</span></header>
+      <p class="capability-copy">不可变业务报告与技术报告，固定 Task、数据、分析和 revision。</p>
+      <footer><p><strong>真相源：</strong>Report Store</p><a class="button button-primary" href="#report-library">查看报告</a></footer>
+    </article>
+    <article class="capability-card" data-capability="available">
+      <header><div><p class="capability-domain">Export</p><h3>PDF / PPTX</h3></div><span class="status" data-state="available">可用</span></header>
+      <p class="capability-copy">从同一 Report Bundle revision 生成确定性导出，不重新执行 SQL。</p>
+      <footer><p><strong>入口：</strong>报告详情</p><a class="button button-primary" href="#report-library">选择报告</a></footer>
+    </article>
+    <article class="capability-card" data-capability="planned">
+      <header><div><p class="capability-domain">H6</p><h3>Reusable Definition</h3></div><span class="status" data-state="planned">规划中</span></header>
+      <p class="capability-copy">版本化 SemanticQuery、Criteria、Skill 与 Delivery policy；不隐式获得自动执行权。</p>
+      <footer><p><strong>依赖：</strong>H6 Definition Runtime</p><a class="button button-quiet" href="/deliverables/reusable">查看边界</a></footer>
+    </article>
+    <article class="capability-card" data-capability="planned">
+      <header><div><p class="capability-domain">Outcome</p><h3>Outcome &amp; Feedback</h3></div><span class="status" data-state="planned">规划中</span></header>
+      <p class="capability-copy">记录采用、纠错与复用，把失败转为受审核 Proposal，而不是自动写入组织知识。</p>
+      <footer><p><strong>依赖：</strong>Q1 Outcome / G1 Proposal</p><a class="button button-quiet" href="/deliverables/outcomes">查看边界</a></footer>
+    </article>
+  </section>
+  <div class="panel" id="report-library">
+    <header class="panel-header task-toolbar">
+      <div><h2>最近报告</h2><p data-report-count>正在读取</p></div>
+      <div class="toolbar-fields">
+        <label class="sr-only" for="report-status-filter">状态</label>
+        <select id="report-status-filter" class="select" data-report-status-filter><option value="">全部状态</option><option value="published">已发布</option><option value="publishing">生成中</option><option value="failed">未完成</option></select>
+        <button class="button" type="button" data-refresh-page>刷新</button>
+      </div>
+    </header>
+    <div class="panel-body flush" data-report-list><div class="state-box"><p>正在读取报告…</p></div></div>
+    <footer class="pagination-footer" data-report-pagination hidden><button class="button" type="button" data-load-more-reports>加载更多</button></footer>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}

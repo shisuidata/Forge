@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "start": "node --import tsx src/server.ts",
+    "export:product-contract": "tsx scripts/export-product-projection-schema.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts"
   },

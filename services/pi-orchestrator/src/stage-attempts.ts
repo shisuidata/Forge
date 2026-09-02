@@ -177,12 +177,13 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
         throw new TaskStateError(`StageAttempt is already terminal: ${attempt.status}`);
       }
       const now = new Date().toISOString();
+      const normalizedError = error?.trim();
       const updated: StageAttempt = {
         ...attempt,
         status,
         updated_at: now,
         finished_at: now,
-        error: error?.slice(0, 2_000) ?? null,
+        error: normalizedError ? normalizedError.slice(0, 2_000) : null,
       };
       attempts[index] = updated;
       return structuredClone(updated);

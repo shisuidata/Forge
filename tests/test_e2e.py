@@ -295,3 +295,197 @@ class TestSchema:
         page = logged_in_page
         page.goto("/admin/schema")
         assert page.locator("text=结构层").first.is_visible()
+
+
+# ── Product Conversation ─────────────────────────────────────────────────────
+
+class TestProductConversation:
+    def test_query_result_renders_bounded_table(self, page):
+        conversation_id = "web_conv_table_test"
+        summary = {
+            "conversation_id": conversation_id,
+            "title": "看下各个品类的销售额数据",
+            "latest_message_preview": "查询结果",
+            "updated_at": "2026-08-25T08:00:00Z",
+            "href": f"/chat?conversation={conversation_id}",
+            "display_state": "ready",
+        }
+        detail = {
+            "summary": summary,
+            "entries": [{
+                "task": {
+                    "task_run_id": "tr_table_test",
+                    "conversation_id": conversation_id,
+                    "status": "ready_for_analysis",
+                    "display_state": "ready",
+                },
+                "user_message": {
+                    "text": "看下各个品类的销售额数据",
+                    "created_at": "2026-08-25T08:00:00Z",
+                },
+                "presentation": {
+                    "title": "查询结果",
+                    "markdown": "共 107 行。",
+                    "fields": [],
+                    "table": {
+                        "columns": ["品类", "销售额"],
+                        "rows": [["电子产品", 1200], ["家居用品", 800]],
+                        "truncated": True,
+                    },
+                    "source_artifact_ids": ["ar_query_result"],
+                },
+                "actions": [],
+            }],
+        }
+
+        def product_conversations(route):
+            if route.request.url.split("?", 1)[0].endswith(f"/{conversation_id}"):
+                route.fulfill(json={"conversation": detail})
+            else:
+                route.fulfill(json={"conversations": [summary]})
+
+        page.route("**/api/product/conversations**", product_conversations)
+        page.goto(f"/chat?conversation={conversation_id}")
+
+        table = page.locator(".conversation-entry table.data-table")
+        assert table.is_visible()
+        assert table.locator("thead th").all_text_contents() == ["品类", "销售额"]
+        assert table.locator("tbody tr").count() == 2
+        assert table.get_by_text("电子产品").is_visible()
+        assert page.get_by_text("结果已截断").is_visible()
+
+    def test_latest_task_status_sidebar_is_visible_and_mobile_drawer_works(self, page):
+        conversation_id = "web_conv_task_status"
+        task_id = "tr_task_status"
+        summary = {
+            "conversation_id": conversation_id,
+            "title": "分析渠道销售额",
+            "latest_message_preview": "正在执行查询",
+            "updated_at": "2026-08-25T09:00:00Z",
+            "href": f"/chat?conversation={conversation_id}",
+            "display_state": "running",
+        }
+        conversation = {
+            "summary": summary,
+            "entries": [{
+                "task": {
+                    "task_run_id": task_id,
+                    "conversation_id": conversation_id,
+                    "status": "querying",
+                    "display_state": "running",
+                },
+                "user_message": {
+                    "text": "分析渠道销售额",
+                    "created_at": "2026-08-25T09:00:00Z",
+                },
+                "presentation": {
+                    "title": "Forge 正在处理",
+                    "markdown": "正在安全执行已审批的只读查询。",
+                    "fields": [],
+                    "table": None,
+                    "source_artifact_ids": ["ar_plan"],
+                },
+                "actions": [],
+            }],
+        }
+        task_detail = {
+            "task": {
+                "task_run_id": task_id,
+                "conversation_id": conversation_id,
+                "title": "分析渠道销售额",
+                "status": "querying",
+                "display_state": "running",
+            },
+            "plan": {
+                "steps": [
+                    {"step_id": "step_query", "title": "执行查询", "capability": "query", "required": True, "status": "running"},
+                    {"step_id": "step_analyze", "title": "分析结果", "capability": "analysis", "required": True, "status": "pending"},
+                ],
+            },
+            "actions": [],
+            "artifacts": [{
+                "artifact_id": "ar_plan",
+                "artifact_type": "execution_plan",
+                "title": "执行计划",
+                "state": "ready",
+                "evidence_refs": [],
+            }],
+            "activity": [{
+                "sequence": 3,
+                "title": "查询执行中",
+                "state": "running",
+                "created_at": "2026-08-25T09:00:03Z",
+            }],
+            "review_request": None,
+        }
+        for index in range(8):
+            task_detail["artifacts"].append({
+                "artifact_id": f"ar_extra_{index}",
+                "artifact_type": "analysis",
+                "title": f"分析证据 {index + 1}",
+                "state": "ready",
+                "evidence_refs": [f"ev_{index}"],
+            })
+            task_detail["activity"].append({
+                "sequence": 10 + index,
+                "title": f"任务活动 {index + 1}",
+                "state": "ready",
+                "created_at": f"2026-08-25T09:00:{10 + index:02d}Z",
+            })
+
+        def product_conversations(route):
+            if route.request.url.split("?", 1)[0].endswith(f"/{conversation_id}"):
+                route.fulfill(json={"conversation": conversation})
+            else:
+                route.fulfill(json={"conversations": [summary]})
+
+        task_detail_requests = 0
+
+        def product_task(route):
+            nonlocal task_detail_requests
+            task_detail_requests += 1
+            route.fulfill(json={"detail": task_detail})
+
+        page.route("**/api/product/conversations**", product_conversations)
+        page.route(f"**/api/product/tasks/{task_id}", product_task)
+        page.goto(f"/chat?conversation={conversation_id}")
+
+        sidebar = page.locator("[data-conversation-task-panel]")
+        assert sidebar.is_visible()
+        sidebar.get_by_text("分析渠道销售额").wait_for(state="visible")
+        assert sidebar.get_by_text("执行查询").is_visible()
+        assert sidebar.get_by_text("任务活动 8").is_visible()
+        assert not page.locator("[data-task-panel-toggle]").is_visible()
+        panel_summary = sidebar.locator(".task-panel-summary")
+        panel_summary.evaluate("(element) => { element.dataset.stabilityProbe = 'preserve'; }")
+        page.wait_for_timeout(1300)
+        assert task_detail_requests >= 2
+        assert panel_summary.get_attribute("data-stability-probe") == "preserve"
+        task_panel_scroll = sidebar.locator("[data-task-panel-body]")
+        scroll_before = task_panel_scroll.evaluate(
+            "(element) => { element.scrollTop = 120; return element.scrollTop; }"
+        )
+        assert scroll_before > 0
+        task_detail["activity"].append({
+            "sequence": 99,
+            "title": "分析阶段已开始",
+            "state": "running",
+            "created_at": "2026-08-25T09:01:00Z",
+        })
+        page.wait_for_timeout(2400)
+        assert task_detail_requests >= 3
+        sidebar.get_by_text("分析阶段已开始").wait_for(state="visible")
+        assert abs(task_panel_scroll.evaluate("(element) => element.scrollTop") - scroll_before) <= 1
+
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.reload()
+        toggle = page.locator("[data-task-panel-toggle]")
+        assert toggle.is_visible()
+        toggle.click()
+        assert sidebar.get_attribute("data-open") == "true"
+        assert toggle.get_attribute("aria-expanded") == "true"
+        backdrop = page.locator("[data-task-panel-backdrop]")
+        assert not backdrop.is_hidden()
+        page.keyboard.press("Escape")
+        assert sidebar.get_attribute("data-open") == "false"
+        assert backdrop.is_hidden()

@@ -334,7 +334,9 @@ test("active lease and one-running-attempt constraint fail closed", async () => 
       }),
     /already has a running StageAttempt/,
   );
-  assert.equal(state.attempts.finish(attempt.attempt_id, "succeeded").status, "succeeded");
+  const finished = state.attempts.finish(attempt.attempt_id, "succeeded", "  ");
+  assert.equal(finished.status, "succeeded");
+  assert.equal(finished.error, null);
   assert.equal(state.attempts.list(task.task_run_id)[0]?.progress_phase, "artifact_submitted");
   assert.equal(state.attempts.list(task.task_run_id).length, 1);
   state.close();
@@ -378,4 +380,74 @@ test("SQLite Artifact Store retains schema and producer validation", async () =>
   );
   assert.deepEqual(state.artifacts.list(task.task_run_id), []);
   state.close();
+});
+
+test("SQLite conversation queries remain scoped, ordered, and recoverable after restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-conversations-"));
+  const databasePath = join(directory, "orchestrator.sqlite3");
+  const first = new SqliteOrchestratorState(databasePath);
+  const original = first.tasks.create({
+    ...taskInput,
+    channel_conversation_id: "web_conv_001",
+    metadata: { original_message: "第一个问题" },
+  });
+  const followUp = first.tasks.create({
+    ...taskInput,
+    channel_conversation_id: "web_conv_001",
+    metadata: { original_message: "继续追问" },
+  });
+  first.tasks.create({
+    ...taskInput,
+    user_id: "user_other",
+    channel_conversation_id: "web_conv_other",
+    metadata: { original_message: "其他用户" },
+  });
+  const child = first.tasks.create({
+    ...taskInput,
+    channel_conversation_id: "web_conv_001",
+    parent_task_run_id: followUp.task_run_id,
+    metadata: { original_message: "补查任务" },
+  });
+  first.close();
+
+  const reopened = new SqliteOrchestratorState(databasePath);
+  const groups = reopened.tasks.listConversations({
+    orgId: "org_001",
+    teamId: "team_001",
+    userId: "user_001",
+    channel: "web",
+    limit: 10,
+    taskLimit: 10,
+  });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]?.conversationId, "web_conv_001");
+  assert.equal(groups[0]?.taskCount, 3);
+  assert.equal(groups[0]?.firstTaskRunId, original.task_run_id);
+  assert.deepEqual(groups[0]?.tasks.map((task) => task.task_run_id), [
+    original.task_run_id,
+    followUp.task_run_id,
+    child.task_run_id,
+  ]);
+  assert.deepEqual(
+    reopened.tasks.listChildren(followUp.task_run_id, 10).map((task) => task.task_run_id),
+    [child.task_run_id],
+  );
+  assert.equal(
+    reopened.tasks.getConversation({
+      orgId: "org_001",
+      teamId: "team_001",
+      userId: "user_other",
+      channel: "web",
+      conversationId: "web_conv_001",
+      taskLimit: 10,
+    }),
+    undefined,
+  );
+  assert.equal(
+    reopened.tasks.list({
+      orgId: "org_001", teamId: "team_001", userId: "user_other", limit: 10,
+    }).length,
+    1,
+  );
+  reopened.close();
 });

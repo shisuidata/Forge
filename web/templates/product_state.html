@@ -1,0 +1,20 @@
+{% extends "product_base.html" %}
+{% block title %}{{ page_title }} · Forge{% endblock %}
+{% block content %}
+<div class="content-width state-page" data-product-page="state" data-product-state="{{ state }}">
+  <section class="state-page-card panel">
+    <span class="status" data-state="{{ state }}">{{ state_label }}</span>
+    <p class="page-eyebrow">{{ state_kicker }}</p>
+    <h2>{{ state_title }}</h2>
+    <p>{{ state_copy }}</p>
+    <dl class="capability-boundary">
+      <div><dt>影响范围</dt><dd>{{ state_impact }}</dd></div>
+      <div><dt>安全下一步</dt><dd>{{ state_next_step }}</dd></div>
+    </dl>
+    <div class="state-page-actions">
+      <a class="button button-primary" href="{{ primary_href }}">{{ primary_label }}</a>
+      {% if secondary_href %}<a class="button" href="{{ secondary_href }}">{{ secondary_label }}</a>{% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

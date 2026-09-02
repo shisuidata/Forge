@@ -1,0 +1,668 @@
+{
+  "schema_version": 1,
+  "valid": {
+    "action_capability_v1": [
+      {
+        "case_id": "action_approve_query_enabled",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "action_capability_v1",
+          "task_run_id": "tr_demo_001",
+          "action_type": "approve_query",
+          "label": "确认只读执行",
+          "availability": "enabled",
+          "reason_code": null,
+          "requires_confirmation": true,
+          "requires_idempotency_key": true
+        }
+      }
+    ],
+    "conversation_summary_v1": [
+      {
+        "case_id": "conversation_needs_input",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "conversation_summary_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001",
+            "channel": "web"
+          },
+          "conversation_id": "web_conv_001",
+          "title": "分析本月各渠道支付金额",
+          "display_state": "needs_input",
+          "task_count": 2,
+          "latest_task_run_id": "tr_demo_002",
+          "latest_message_preview": "请补充希望采用自然月还是最近三十天。",
+          "started_at": "2026-08-25T08:00:00Z",
+          "updated_at": "2026-08-25T08:05:00Z",
+          "href": "/chat?conversation=web_conv_001",
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T08:05:01Z",
+            "source_revisions": [
+              {"source": "pi_task_store", "revision": "2026-08-25T08:05:00Z"},
+              {"source": "pi_event_store", "revision": "tr_demo_002:4"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": []
+          }
+        }
+      },
+      {
+        "case_id": "conversation_failed",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "conversation_summary_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001",
+            "channel": "web"
+          },
+          "conversation_id": "web_conv_failed",
+          "title": "检查订单异常",
+          "display_state": "failed",
+          "task_count": 1,
+          "latest_task_run_id": "tr_failed_001",
+          "latest_message_preview": "本次处理未完成，可以从任务详情查看恢复方式。",
+          "started_at": "2026-08-25T07:00:00Z",
+          "updated_at": "2026-08-25T07:02:00Z",
+          "href": "/chat?conversation=web_conv_failed",
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T08:05:01Z",
+            "source_revisions": [
+              {"source": "pi_task_store", "revision": "2026-08-25T07:02:00Z"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": [
+              {"field_path": "latest_error", "reason_code": "sensitive_error_redacted"}
+            ]
+          }
+        }
+      }
+    ],
+    "conversation_detail_v1": [
+      {
+        "case_id": "conversation_running",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "conversation_detail_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001",
+            "channel": "web"
+          },
+          "summary": {
+            "schema_version": 1,
+            "projection_type": "conversation_summary_v1",
+            "scope": {
+              "org_id": "org_demo",
+              "team_id": "team_data",
+              "user_id": "user_001",
+              "channel": "web"
+            },
+            "conversation_id": "web_conv_running",
+            "title": "分析品类销售变化",
+            "display_state": "running",
+            "task_count": 1,
+            "latest_task_run_id": "tr_running_001",
+            "latest_message_preview": "正在分析已审批的查询结果。",
+            "started_at": "2026-08-25T09:00:00Z",
+            "updated_at": "2026-08-25T09:03:00Z",
+            "href": "/chat?conversation=web_conv_running",
+            "projection_meta": {
+              "availability": "ready",
+              "generated_at": "2026-08-25T09:03:01Z",
+              "source_revisions": [
+                {"source": "pi_task_store", "revision": "2026-08-25T09:03:00Z"}
+              ],
+              "unavailable_reasons": [],
+              "redactions": []
+            }
+          },
+          "entries": [
+            {
+              "task": {
+                "task_run_id": "tr_running_001",
+                "conversation_id": "web_conv_running",
+                "parent_task_run_id": null,
+                "intent": "business_root_cause_analysis",
+                "title": "分析品类销售变化",
+                "status": "analyzing",
+                "display_state": "running",
+                "current_stage": "business_root_cause_analysis",
+                "created_at": "2026-08-25T09:00:00Z",
+                "updated_at": "2026-08-25T09:03:00Z"
+              },
+              "user_message": {
+                "message_id": "web_message_001",
+                "text": "分析本月各品类销售额变化并给出报告。",
+                "created_at": "2026-08-25T09:00:00Z"
+              },
+              "presentation": {
+                "kind": "progress",
+                "title": "正在分析查询结果",
+                "markdown": "查询已完成，正在整理观察、限制和建议。",
+                "fields": [{"label": "当前阶段", "value": "分析"}],
+                "table": null,
+                "source_event_sequence": 8,
+                "source_artifact_ids": ["ar_plan_001", "ar_query_001"]
+              },
+              "actions": [
+                {
+                  "schema_version": 1,
+                  "projection_type": "action_capability_v1",
+                  "task_run_id": "tr_running_001",
+                  "action_type": "cancel_task",
+                  "label": "取消任务",
+                  "availability": "disabled",
+                  "reason_code": "stage_in_progress",
+                  "requires_confirmation": true,
+                  "requires_idempotency_key": true
+                }
+              ]
+            }
+          ],
+          "next_cursor": null,
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T09:03:01Z",
+            "source_revisions": [
+              {"source": "pi_task_store", "revision": "2026-08-25T09:03:00Z"},
+              {"source": "pi_event_store", "revision": "tr_running_001:8"},
+              {"source": "pi_artifact_store", "revision": "tr_running_001:2"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": []
+          }
+        }
+      }
+    ],
+    "task_summary_v1": [
+      {
+        "case_id": "task_summary_needs_input",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "task_summary_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001",
+            "channel": "web"
+          },
+          "task_run_id": "tr_summary_001",
+          "conversation_id": "web_conv_summary",
+          "parent_task_run_id": null,
+          "intent": "knowledge_answer",
+          "title": "解释支付金额口径",
+          "status": "needs_input",
+          "display_state": "needs_input",
+          "current_stage": "requirement_clarification",
+          "created_at": "2026-08-25T08:00:00Z",
+          "updated_at": "2026-08-25T08:01:00Z",
+          "href": "/tasks/tr_summary_001",
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T08:01:01Z",
+            "source_revisions": [
+              {"source": "pi_task_store", "revision": "2026-08-25T08:01:00Z"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": []
+          }
+        }
+      }
+    ],
+    "task_detail_projection_v1": [
+      {
+        "case_id": "task_waiting_query_approval",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "task_detail_projection_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001",
+            "channel": "web"
+          },
+          "task": {
+            "task_run_id": "tr_demo_001",
+            "conversation_id": "web_conv_001",
+            "parent_task_run_id": null,
+            "intent": "business_root_cause_analysis",
+            "title": "统计本月各渠道支付金额",
+            "status": "waiting_for_query_approval",
+            "display_state": "waiting_decision",
+            "current_stage": "query_review",
+            "created_at": "2026-08-25T08:00:00Z",
+            "updated_at": "2026-08-25T08:01:00Z"
+          },
+          "plan": {
+            "plan_revision": 1,
+            "status": "active",
+            "required_deliverables": ["query_result", "analysis", "report"],
+            "steps": [
+              {
+                "step_id": "step_query",
+                "title": "准备并审批查询",
+                "capability": "query",
+                "status": "waiting_approval",
+                "required": true,
+                "depends_on": []
+              },
+              {
+                "step_id": "step_analysis",
+                "title": "分析查询结果",
+                "capability": "analysis",
+                "status": "pending",
+                "required": true,
+                "depends_on": ["step_query"]
+              }
+            ]
+          },
+          "review_request": {
+            "review_type": "query",
+            "query_run_id": "qr_demo_001",
+            "sql": "SELECT channel, SUM(amount) AS paid_amount FROM orders WHERE status = 'paid' GROUP BY channel",
+            "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "assurance_report_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "dialect": "postgresql",
+            "expires_at": "2026-08-25T08:31:00Z",
+            "read_only": true,
+            "risk_summary": ["只读聚合查询", "执行前将再次校验 SQL 与 Assurance hash"]
+          },
+          "presentation": {
+            "kind": "query_review",
+            "title": "Forge SQL 审核",
+            "markdown": "请审核查询范围，确认后将以只读方式执行。",
+            "fields": [
+              {"label": "数据范围", "value": "本月支付订单，按渠道汇总"}
+            ],
+            "table": null,
+            "source_event_sequence": 5,
+            "source_artifact_ids": ["ar_plan_001"]
+          },
+          "actions": [
+            {
+              "schema_version": 1,
+              "projection_type": "action_capability_v1",
+              "task_run_id": "tr_demo_001",
+              "action_type": "approve_query",
+              "label": "确认只读执行",
+              "availability": "enabled",
+              "reason_code": null,
+              "requires_confirmation": true,
+              "requires_idempotency_key": true
+            },
+            {
+              "schema_version": 1,
+              "projection_type": "action_capability_v1",
+              "task_run_id": "tr_demo_001",
+              "action_type": "cancel_task",
+              "label": "取消任务",
+              "availability": "enabled",
+              "reason_code": null,
+              "requires_confirmation": true,
+              "requires_idempotency_key": true
+            }
+          ],
+          "activity": [
+            {
+              "sequence": 1,
+              "event_type": "task.created",
+              "title": "任务已创建",
+              "detail": null,
+              "state": "ready",
+              "created_at": "2026-08-25T08:00:00Z"
+            },
+            {
+              "sequence": 5,
+              "event_type": "query.review_requested",
+              "title": "等待查询审批",
+              "detail": "尚未执行 SQL。",
+              "state": "waiting_decision",
+              "created_at": "2026-08-25T08:01:00Z"
+            }
+          ],
+          "attempts": [
+            {
+              "attempt_id": "sa_prepare_001",
+              "stage": "query_prepare",
+              "status": "succeeded",
+              "started_at": "2026-08-25T08:00:10Z",
+              "finished_at": "2026-08-25T08:01:00Z",
+              "elapsed_ms": 50000,
+              "safe_error": null
+            }
+          ],
+          "artifacts": [
+            {
+              "artifact_id": "ar_plan_001",
+              "artifact_type": "execution_plan",
+              "producer": "pi-planner",
+              "title": "任务执行计划",
+              "state": "ready",
+              "created_at": "2026-08-25T08:00:01Z",
+              "evidence_refs": [],
+              "href": "/tasks/tr_demo_001#plan"
+            }
+          ],
+          "relations": {
+            "parent_task_run_id": null,
+            "child_task_run_ids": []
+          },
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T08:01:01Z",
+            "source_revisions": [
+              {"source": "pi_task_store", "revision": "2026-08-25T08:01:00Z"},
+              {"source": "pi_event_store", "revision": "tr_demo_001:5"},
+              {"source": "pi_artifact_store", "revision": "tr_demo_001:1"},
+              {"source": "forge_query_store", "revision": "qr_demo_001:needs_review"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": [
+              {"field_path": "attempts[0].model_revision", "reason_code": "technical_metadata_omitted"}
+            ]
+          }
+        }
+      }
+    ],
+    "workspace_projection_v1": [
+      {
+        "case_id": "workspace_partial",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "workspace_projection_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001",
+            "channel": "web"
+          },
+          "counts": {
+            "needs_input": 1,
+            "waiting_decision": 1,
+            "running": 1,
+            "failed": 0,
+            "recent_reports": 0
+          },
+          "needs_input": [
+            {
+              "item_type": "task",
+              "item_id": "tr_input_001",
+              "title": "补充首购观察窗口",
+              "state": "needs_input",
+              "updated_at": "2026-08-25T08:10:00Z",
+              "href": "/tasks/tr_input_001",
+              "reason": "缺少首购观察窗口。"
+            }
+          ],
+          "waiting_decision": [
+            {
+              "item_type": "task",
+              "item_id": "tr_demo_001",
+              "title": "审批本月渠道支付金额查询",
+              "state": "waiting_decision",
+              "updated_at": "2026-08-25T08:01:00Z",
+              "href": "/tasks/tr_demo_001",
+              "reason": "SQL 尚未执行。"
+            }
+          ],
+          "running": [
+            {
+              "item_type": "task",
+              "item_id": "tr_running_001",
+              "title": "分析品类销售变化",
+              "state": "running",
+              "updated_at": "2026-08-25T09:03:00Z",
+              "href": "/tasks/tr_running_001",
+              "reason": null
+            }
+          ],
+          "failed": [],
+          "recent_reports": [],
+          "dependencies": [
+            {
+              "item_type": "dependency",
+              "item_id": "report_store",
+              "title": "报告索引暂不可用",
+              "state": "offline",
+              "updated_at": "2026-08-25T09:04:00Z",
+              "href": "/reports",
+              "reason": "报告服务未响应，任务和对话仍可使用。"
+            }
+          ],
+          "projection_meta": {
+            "availability": "partial",
+            "generated_at": "2026-08-25T09:04:00Z",
+            "source_revisions": [
+              {"source": "pi_task_store", "revision": "2026-08-25T09:03:00Z"},
+              {"source": "forge_report_store", "revision": "offline:2026-08-25T09:04:00Z"}
+            ],
+            "unavailable_reasons": ["report_store_offline"],
+            "redactions": []
+          }
+        }
+      }
+    ],
+    "report_summary_v1": [
+      {
+        "case_id": "report_published",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "report_summary_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001"
+          },
+          "report_id": "rp_demo_001",
+          "task_run_id": "tr_demo_001",
+          "revision": 1,
+          "title": "本月各渠道支付金额分析",
+          "status": "published",
+          "display_state": "completed",
+          "pdf_status": "ready",
+          "pptx_status": "ready",
+          "internal_url": "/reports/rp_demo_001",
+          "technical_url": "/reports/rp_demo_001/technical",
+          "pdf_url": "/reports/rp_demo_001/download/pdf",
+          "pptx_url": "/reports/rp_demo_001/download/pptx",
+          "created_at": "2026-08-25T08:20:00Z",
+          "updated_at": "2026-08-25T08:22:00Z",
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T08:22:01Z",
+            "source_revisions": [
+              {"source": "forge_report_store", "revision": "rp_demo_001:v1:2026-08-25T08:22:00Z"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": []
+          }
+        }
+      },
+      {
+        "case_id": "report_failed",
+        "value": {
+          "schema_version": 1,
+          "projection_type": "report_summary_v1",
+          "scope": {
+            "org_id": "org_demo",
+            "team_id": "team_data",
+            "user_id": "user_001"
+          },
+          "report_id": "rp_failed_001",
+          "task_run_id": "tr_failed_001",
+          "revision": 1,
+          "title": "订单异常分析",
+          "status": "failed",
+          "display_state": "failed",
+          "pdf_status": "failed",
+          "pptx_status": "failed",
+          "internal_url": null,
+          "technical_url": null,
+          "pdf_url": null,
+          "pptx_url": null,
+          "created_at": "2026-08-25T07:10:00Z",
+          "updated_at": "2026-08-25T07:11:00Z",
+          "projection_meta": {
+            "availability": "ready",
+            "generated_at": "2026-08-25T07:11:01Z",
+            "source_revisions": [
+              {"source": "forge_report_store", "revision": "rp_failed_001:v1:2026-08-25T07:11:00Z"}
+            ],
+            "unavailable_reasons": [],
+            "redactions": [
+              {"field_path": "error", "reason_code": "sensitive_error_redacted"}
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "invalid": [
+    {
+      "case_id": "unknown_display_state",
+      "base_case_id": "conversation_needs_input",
+      "contract": "conversation_summary_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {"op": "set", "path": ["display_state"], "value": "unknown"}
+    },
+    {
+      "case_id": "secret_like_field_rejected",
+      "base_case_id": "conversation_needs_input",
+      "contract": "conversation_summary_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {"op": "set", "path": ["api_key"], "value": "should-not-project"}
+    },
+    {
+      "case_id": "network_path_href_rejected",
+      "base_case_id": "conversation_needs_input",
+      "contract": "conversation_summary_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {"op": "set", "path": ["href"], "value": "//attacker.example/path"}
+    },
+    {
+      "case_id": "partial_requires_reason",
+      "base_case_id": "conversation_needs_input",
+      "contract": "conversation_summary_v1",
+      "expected_code": "meta.unavailable_reason_required",
+      "mutation": {"op": "set", "path": ["projection_meta", "availability"], "value": "partial"}
+    },
+    {
+      "case_id": "duplicate_source_revision",
+      "base_case_id": "conversation_needs_input",
+      "contract": "conversation_summary_v1",
+      "expected_code": "meta.duplicate_source_revision",
+      "mutation": {
+        "op": "append",
+        "path": ["projection_meta", "source_revisions"],
+        "value": {"source": "pi_task_store", "revision": "2026-08-25T08:05:00Z"}
+      }
+    },
+    {
+      "case_id": "disabled_action_requires_reason",
+      "base_case_id": "action_approve_query_enabled",
+      "contract": "action_capability_v1",
+      "expected_code": "action.disabled_reason_required",
+      "mutation": {"op": "set", "path": ["availability"], "value": "disabled"}
+    },
+    {
+      "case_id": "query_approval_requires_confirmation",
+      "base_case_id": "action_approve_query_enabled",
+      "contract": "action_capability_v1",
+      "expected_code": "action.query_approval_requires_confirmation",
+      "mutation": {"op": "set", "path": ["requires_confirmation"], "value": false}
+    },
+    {
+      "case_id": "conversation_cross_scope_rejected",
+      "base_case_id": "conversation_running",
+      "contract": "conversation_detail_v1",
+      "expected_code": "conversation.scope_mismatch",
+      "mutation": {"op": "set", "path": ["summary", "scope", "org_id"], "value": "org_other"}
+    },
+    {
+      "case_id": "conversation_action_task_mismatch",
+      "base_case_id": "conversation_running",
+      "contract": "conversation_detail_v1",
+      "expected_code": "conversation.action_task_mismatch",
+      "mutation": {"op": "set", "path": ["entries", 0, "actions", 0, "task_run_id"], "value": "tr_other_001"}
+    },
+    {
+      "case_id": "conversation_table_shape_mismatch",
+      "base_case_id": "conversation_running",
+      "contract": "conversation_detail_v1",
+      "expected_code": "presentation.table_shape_mismatch",
+      "mutation": {
+        "op": "set",
+        "path": ["entries", 0, "presentation", "table"],
+        "value": {"columns": ["channel", "amount"], "rows": [["web"]], "truncated": false}
+      }
+    },
+    {
+      "case_id": "task_summary_display_state_must_match_runtime_status",
+      "base_case_id": "task_summary_needs_input",
+      "contract": "task_summary_v1",
+      "expected_code": "task.display_state_mismatch",
+      "mutation": {"op": "set", "path": ["display_state"], "value": "completed"}
+    },
+    {
+      "case_id": "task_display_state_must_match_runtime_status",
+      "base_case_id": "task_waiting_query_approval",
+      "contract": "task_detail_projection_v1",
+      "expected_code": "task.display_state_mismatch",
+      "mutation": {"op": "set", "path": ["task", "display_state"], "value": "completed"}
+    },
+    {
+      "case_id": "waiting_query_review_requires_review",
+      "base_case_id": "task_waiting_query_approval",
+      "contract": "task_detail_projection_v1",
+      "expected_code": "task.query_review_required",
+      "mutation": {"op": "set", "path": ["review_request"], "value": null}
+    },
+    {
+      "case_id": "presentation_artifact_must_exist",
+      "base_case_id": "task_waiting_query_approval",
+      "contract": "task_detail_projection_v1",
+      "expected_code": "task.presentation_artifact_missing",
+      "mutation": {"op": "set", "path": ["presentation", "source_artifact_ids"], "value": ["ar_missing_001"]}
+    },
+    {
+      "case_id": "workspace_count_cannot_underflow",
+      "base_case_id": "workspace_partial",
+      "contract": "workspace_projection_v1",
+      "expected_code": "workspace.needs_input_count_underflow",
+      "mutation": {"op": "set", "path": ["counts", "needs_input"], "value": 0}
+    },
+    {
+      "case_id": "report_display_state_must_match_status",
+      "base_case_id": "report_published",
+      "contract": "report_summary_v1",
+      "expected_code": "report.display_state_mismatch",
+      "mutation": {"op": "set", "path": ["display_state"], "value": "running"}
+    },
+    {
+      "case_id": "ready_pdf_requires_url",
+      "base_case_id": "report_published",
+      "contract": "report_summary_v1",
+      "expected_code": "report.ready_pdf_url_required",
+      "mutation": {"op": "set", "path": ["pdf_url"], "value": null}
+    },
+    {
+      "case_id": "oversized_report_title",
+      "base_case_id": "report_published",
+      "contract": "report_summary_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {
+        "op": "set",
+        "path": ["title"],
+        "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  ]
+}

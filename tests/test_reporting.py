@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -60,6 +61,47 @@ def _source() -> dict:
             "decision_log": [{"stage": "analysis", "decision": "按地区比较", "rationale": "用户问题要求地区维度"}],
         },
     }
+
+
+def test_report_store_list_is_scope_aware_and_cursor_stable(tmp_path: Path):
+    store = ReportStore(str(tmp_path / "reports.db"), str(tmp_path / "artifacts"))
+    first = _source()
+    first["report_id"] = "rp_list001"
+    first["task_run_id"] = "tr_list001"
+    second = deepcopy(first)
+    second["report_id"] = "rp_list002"
+    second["task_run_id"] = "tr_list002"
+    other = deepcopy(first)
+    other["report_id"] = "rp_other001"
+    other["task_run_id"] = "tr_other001"
+    other["org_id"] = "org_other"
+    store.create(first)
+    store.create(second)
+    store.create(other)
+
+    page = store.list(
+        org_id="org_demo", team_id="team_demo", user_id="user_demo", limit=1
+    )
+    assert len(page) == 1
+    assert page[0]["report_id"] in {"rp_list001", "rp_list002"}
+    next_page = store.list(
+        org_id="org_demo",
+        team_id="team_demo",
+        user_id="user_demo",
+        limit=2,
+        before=(page[0]["updated_at"], page[0]["report_id"]),
+    )
+    assert len(next_page) == 1
+    assert {page[0]["report_id"], next_page[0]["report_id"]} == {
+        "rp_list001", "rp_list002"
+    }
+    assert store.list(
+        org_id="org_demo", team_id="team_demo", user_id="user_other", limit=10
+    ) == []
+    with pytest.raises(ValueError, match="unsupported report status"):
+        store.list(
+            org_id="org_demo", team_id="team_demo", user_id="user_demo", status="ready"
+        )
 
 
 def test_report_store_builds_immutable_html_and_pptx(tmp_path: Path):

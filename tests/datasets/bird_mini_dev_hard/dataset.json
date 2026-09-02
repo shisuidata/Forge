@@ -1,0 +1,44 @@
+{
+  "suite": "bird-mini-dev-hard-v1",
+  "title": "BIRD-SQL Mini-Dev Challenging Diagnostic Subset",
+  "source": {
+    "project": "BIRD-SQL",
+    "official_site": "https://bird-bench.github.io/",
+    "repository": "https://github.com/bird-bench/mini_dev",
+    "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+    "huggingface": "https://huggingface.co/datasets/birdsql/bird_mini_dev",
+    "paper": "https://arxiv.org/abs/2305.03111",
+    "license": "CC BY-SA 4.0"
+  },
+  "selection": {
+    "difficulty": "challenging",
+    "question_ids": [880, 896, 955, 962, 988, 994, 1001, 1011, 94, 115, 116, 169],
+    "databases": ["formula_1", "financial"],
+    "coverage": {"cases": "12/102 challenging", "databases": "2/11"},
+    "selection_rule": "Fixed diagnostic sample from two official databases; not a representative or leaderboard-comparable Mini-Dev split."
+  },
+  "evaluation": {
+    "primary": "BIRD Execution Accuracy",
+    "verdict": "set(gold_result_tuples) == set(predicted_result_tuples)",
+    "exact_values": true,
+    "row_order_ignored": true,
+    "duplicate_multiplicity_ignored": true,
+    "sql_text_scored": false
+  },
+  "cases": "cases.json",
+  "structure_layer": "tables.json",
+  "semantic_layer": "Each official case.evidence field; database_description CSV files from the official package.",
+  "runtime_assets": {
+    "root": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV",
+    "formula_1_database": "dev_databases/formula_1/formula_1.sqlite",
+    "financial_database": "dev_databases/financial/financial.sqlite",
+    "database_descriptions": "dev_databases/<db_id>/database_description/*.csv"
+  },
+  "methods": [
+    {"id": "forge", "label": "Forge JSON → Deterministic SQL"},
+    {"id": "direct", "label": "Direct SQL"}
+  ],
+  "default_runs_per_case": 3,
+  "default_workers": 4,
+  "result_boundary": "Public BIRD diagnostic subset scored by official exact execution-result set equality; not a full Mini-Dev score."
+}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set active = "benchmark" %}
+{% block title %}SQL 测试台 — Forge{% endblock %}
+{% block heading %}SQL 测试台{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/accuracy-benchmark.css?v=15">{% endblock %}
+
+{% block content %}
+<div class="pi-benchmark" data-pi-benchmark>
+  <header class="pb-header">
+    <div><p class="pb-eyebrow">PI 原生 · RAG · 双子智能体</p><h2>SQL 准确率测试台</h2><p>共享召回上下文，并行比较 Forge JSON 与直接 SQL。</p></div>
+    <div class="pb-config">
+      <label>下次运行模型<select id="model-choice"><option value="">加载中…</option></select></label>
+      <label>用例规模<select id="case-limit"><option value="20">20 条试跑</option><option value="100">100 条</option><option value="500">完整 500 条</option></select></label>
+      <button id="run-start" class="pb-button primary" type="button">启动测试</button>
+    </div>
+  </header>
+
+  <section class="pb-runbar">
+    <div><span>运行 ID</span><strong id="run-id">—</strong></div><div><span>状态</span><strong id="run-status">—</strong></div><div><span>本次模型</span><strong id="run-model">—</strong></div><div><span>当前用例</span><strong id="current-case">—</strong></div>
+    <div class="pb-controls"><button id="run-pause" type="button" disabled>暂停</button><button id="run-resume" type="button" disabled>继续</button><button id="run-stop" type="button" disabled>停止</button></div>
+  </section>
+  <section class="pb-progress"><div><span id="progress-fill"></span></div><p id="progress-copy">0 / 0 条 · 0 / 0 次调用</p></section>
+
+  <section class="pb-cards">
+    <article><span>Forge 执行准确率</span><strong id="forge-ea">—</strong><small id="forge-ea-count">—</small></article><article><span>直接 SQL 执行准确率</span><strong id="direct-ea">—</strong><small id="direct-ea-count">—</small></article><article><span>准确率差值</span><strong id="ea-delta">—</strong><small>Forge − 直接 SQL</small></article><article><span>语义契约准确率</span><strong id="contract-accuracy">—</strong><small>Forge / 直接 SQL</small></article><article><span>执行成功率</span><strong id="execution-success">—</strong><small>Forge / 直接 SQL</small></article><article><span>Token 总量</span><strong id="total-tokens">—</strong><small>Forge / 直接 SQL</small></article><article><span>平均生成耗时</span><strong id="generation-latency">—</strong><small>Forge / 直接 SQL</small></article>
+  </section>
+
+  <section class="pb-overview-grid">
+    <div class="pb-overview-main">
+      <article class="pb-panel dag-panel"><header><div><h3>运行流程</h3><p>节点状态来自 Pi 调度器</p></div><span id="dag-sequence">序号 —</span></header><div id="benchmark-dag" class="benchmark-dag"></div><div id="rag-detail" class="rag-detail"><p>等待 RAG 上下文快照。</p></div></article>
+      <section class="arm-log-grid">
+        <article class="pb-panel arm-log forge-log"><header><div><h3>Forge JSON 子智能体</h3><p>生成、编译、执行、评价</p></div><span id="forge-log-count">0 条日志</span></header><ol id="forge-live-log"></ol></article>
+        <article class="pb-panel arm-log direct-log"><header><div><h3>直接 SQL 子智能体</h3><p>生成、校验、执行、评价</p></div><span id="direct-log-count">0 条日志</span></header><ol id="direct-live-log"></ol></article>
+      </section>
+    </div>
+    <aside class="pb-overview-side">
+      <article class="pb-panel"><header><div><h3>准确率堆积趋势</h3><p>双方正确、单边正确与共同失败</p></div></header><div id="accuracy-area" class="svg-visual compact-visual"></div></article>
+      <article class="pb-panel shared-log-panel"><header><div><h3>共享召回与控制日志</h3><p>上下文快照、状态机和错误</p></div><span id="shared-log-count">0 条日志</span></header><ol id="shared-live-log" class="shared-live-log"></ol></article>
+    </aside>
+  </section>
+
+  <section class="pb-analysis-grid">
+    <article class="pb-panel comparison-panel">
+      <header><div><h3>用例实时对比</h3><p>召回、速度、Token、编译、执行与双评价</p></div><div class="pb-filters"><select id="case-db"><option value="">全部数据库</option></select><select id="case-difficulty"><option value="">全部难度</option><option value="simple">简单</option><option value="moderate">中等</option><option value="challenging">困难</option></select><input id="case-search" type="search" placeholder="搜索题号或问题"></div></header>
+      <div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>用例 / 问题</th><th>RAG</th><th>Forge 耗时</th><th>Forge Token</th><th>JSON 编译</th><th>Forge 执行</th><th>Forge EA / 语义</th><th>直接 SQL 耗时</th><th>直接 SQL Token</th><th>直接 SQL 执行</th><th>直接 SQL EA / 语义</th><th>结果</th></tr></thead><tbody id="comparison-body"><tr><td colspan="12">暂无 Pi 测试记录</td></tr></tbody></table></div>
+    </article>
+    <aside class="pb-insight-stack">
+      <article class="pb-panel"><header><div><h3>流程损失桑基图</h3><p>生成、编译、执行到正确结果</p></div></header><div id="pipeline-sankey" class="svg-visual sankey-visual"></div></article>
+      <article class="pb-panel"><header><div><h3>失败构成</h3><p>生成、编译、执行与结果错误</p></div></header><div id="failure-donuts" class="donut-grid"></div></article>
+    </aside>
+  </section>
+
+  <section class="pb-chart-grid secondary-charts">
+    <article class="pb-panel"><header><div><h3>准确率分层</h3><p>执行准确率 / 语义契约 / 执行成功率</p></div></header><div id="accuracy-bars" class="metric-bars"></div></article><article class="pb-panel"><header><div><h3>Token 与速度</h3><p>两条路径的累计成本</p></div></header><div id="cost-bars" class="metric-bars"></div></article><article class="pb-panel"><header><div><h3>数据库维度</h3><p>Forge / 直接 SQL 胜负分布</p></div></header><div id="dimension-bars" class="metric-bars"></div></article>
+  </section>
+  <section class="pb-legacy"><strong>历史测试</strong><p>旧 Python Run 保持只读；新 Run 仅由 Pi 创建和调度。</p></section>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/accuracy-benchmark.js?v=15"></script>{% endblock %}

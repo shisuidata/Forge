@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { pathToFileURL } from "node:url";
 
 import { OrchestratorApplication } from "./application.js";
+import { PiBenchmarkRuntime } from "./benchmark-runtime.js";
 import { parseChannelEvent, type ChannelIdentity } from "./channels/contracts.js";
 import { ChannelIdentityError, ChannelIdentityResolver } from "./channels/identity.js";
 import { loadConfig, type OrchestratorConfig } from "./config.js";
@@ -25,6 +26,7 @@ import {
 
 const MAX_BODY_BYTES = 64 * 1024;
 const CHANNELS = new Set<TaskChannel>(["web", "feishu", "dingtalk", "api"]);
+const CONVERSATION_CHANNELS = new Set<Exclude<TaskChannel, "api">>(["web", "feishu", "dingtalk"]);
 const TASK_STATUS_SET = new Set<string>(TASK_STATUSES);
 const DIALECTS = new Set<string>(FORGE_DIALECTS);
 const AUTHORIZED_SKILLS = new Set<string>(AUTHORIZED_SKILL_NAMES);
@@ -145,6 +147,19 @@ function requireScopeId(encodedValue: string, field: string): string {
   return value;
 }
 
+function requireProductIdentifier(encodedValue: string, field: string): string {
+  let value: string;
+  try {
+    value = decodeURIComponent(encodedValue);
+  } catch {
+    throw new RequestError(`${field} is not valid URL encoding`);
+  }
+  if (!/^[A-Za-z0-9_.:-]{1,256}$/.test(value)) {
+    throw new RequestError(`${field} contains unsupported characters`);
+  }
+  return value;
+}
+
 function requireString(body: Record<string, unknown>, field: string): string {
   const value = body[field];
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -179,6 +194,7 @@ export function createOrchestratorServer(
       transactions: state.transactions,
     });
   }
+  const benchmarkRuntime = new PiBenchmarkRuntime(config, application);
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(
@@ -215,6 +231,76 @@ export function createOrchestratorServer(
             error: error instanceof Error ? error.message : "runtime inspection failed",
           });
         }
+        return;
+      }
+
+      if (url.pathname === "/v1/benchmarks/models" && request.method === "GET") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        sendJson(response, 200, { models: await benchmarkRuntime.modelOptions() });
+        return;
+      }
+      if (url.pathname === "/v1/benchmarks" && request.method === "POST") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const body = await readJson(request);
+        const provider = requireString(body, "provider");
+        const model = requireString(body, "model");
+        const limit = body.limit === undefined ? undefined : Number(body.limit);
+        const caseIds = Array.isArray(body.case_ids)
+          ? body.case_ids.filter((item): item is string => typeof item === "string")
+          : undefined;
+        const run = await benchmarkRuntime.start({
+          provider,
+          model,
+          ...(Number.isInteger(limit) && Number(limit) > 0 ? { limit: Number(limit) } : {}),
+          ...(caseIds?.length ? { caseIds } : {}),
+        });
+        sendJson(response, 202, run);
+        return;
+      }
+      if (url.pathname === "/v1/benchmarks" && request.method === "GET") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        sendJson(response, 200, { runs: benchmarkRuntime.history(Number(url.searchParams.get("limit") ?? 20)) });
+        return;
+      }
+      if (url.pathname === "/v1/benchmarks/latest" && request.method === "GET") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        sendJson(response, 200, { run: benchmarkRuntime.latest() ?? null });
+        return;
+      }
+      const benchmarkMatch = url.pathname.match(new RegExp("^/v1/benchmarks/(pbr_[A-Za-z0-9_-]+)$"));
+      if (benchmarkMatch?.[1] && request.method === "GET") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const run = benchmarkRuntime.get(benchmarkMatch[1]);
+        if (!run) { sendJson(response, 404, { error: "Benchmark run not found" }); return; }
+        sendJson(response, 200, run);
+        return;
+      }
+      const benchmarkLogsMatch = url.pathname.match(new RegExp("^/v1/benchmarks/(pbr_[A-Za-z0-9_-]+)/logs$"));
+      if (benchmarkLogsMatch?.[1] && request.method === "GET") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const arm = url.searchParams.get("arm");
+        const stage = url.searchParams.get("stage");
+        const caseId = url.searchParams.get("case_id");
+        const search = url.searchParams.get("search");
+        sendJson(response, 200, benchmarkRuntime.logs(benchmarkLogsMatch[1], {
+          ...(arm ? { arm } : {}),
+          ...(stage ? { stage } : {}),
+          ...(caseId ? { caseId } : {}),
+          ...(search ? { search } : {}),
+          limit: Number(url.searchParams.get("limit") ?? 100),
+          offset: Number(url.searchParams.get("offset") ?? 0),
+        }));
+        return;
+      }
+      const benchmarkControlMatch = url.pathname.match(new RegExp("^/v1/benchmarks/(pbr_[A-Za-z0-9_-]+)/(pause|resume|stop)$"));
+      if (benchmarkControlMatch?.[1] && benchmarkControlMatch[2] && request.method === "POST") {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const run = benchmarkControlMatch[2] === "pause"
+          ? benchmarkRuntime.pause(benchmarkControlMatch[1])
+          : benchmarkControlMatch[2] === "resume"
+            ? benchmarkRuntime.resume(benchmarkControlMatch[1])
+            : benchmarkRuntime.stop(benchmarkControlMatch[1]);
+        sendJson(response, 200, run);
         return;
       }
 
@@ -305,6 +391,8 @@ export function createOrchestratorServer(
       if (request.method === "GET" && url.pathname === "/v1/tasks") {
         const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
         const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
+        const userValue = url.searchParams.get("user_id");
+        const userId = userValue === null ? undefined : requireScopeId(userValue, "user_id");
         const channelValue = url.searchParams.get("channel");
         if (channelValue !== null && !CHANNELS.has(channelValue as TaskChannel)) {
           throw new RequestError(`unsupported channel: ${channelValue}`);
@@ -321,10 +409,72 @@ export function createOrchestratorServer(
           orgId,
           teamId,
           limit: limitValue,
+          ...(userId === undefined ? {} : { userId }),
           ...(channelValue === null ? {} : { channel: channelValue as TaskChannel }),
           ...(statusValue === null ? {} : { status: statusValue as TaskStatus }),
         });
         sendJson(response, 200, { tasks });
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/conversations") {
+        response.setHeader("cache-control", "no-store");
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
+        const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
+        const userId = requireScopeId(url.searchParams.get("user_id") ?? "", "user_id");
+        const channelValue = url.searchParams.get("channel") ?? "";
+        if (!CONVERSATION_CHANNELS.has(channelValue as Exclude<TaskChannel, "api">)) {
+          throw new RequestError(`unsupported conversation channel: ${channelValue}`);
+        }
+        const limit = Number(url.searchParams.get("limit") ?? "20");
+        if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+          throw new RequestError("limit must be an integer from 1 to 50");
+        }
+        const cursor = url.searchParams.get("cursor");
+        if (cursor !== null && (cursor.length === 0 || cursor.length > 512)) {
+          throw new RequestError("cursor is invalid");
+        }
+        const projection = application.listConversationProjections({
+          orgId,
+          teamId,
+          userId,
+          channel: channelValue as Exclude<TaskChannel, "api">,
+          limit,
+          ...(cursor === null ? {} : { cursor }),
+        });
+        sendJson(response, 200, projection);
+        return;
+      }
+
+      const conversationMatch = url.pathname.match(/^\/v1\/conversations\/([^/]+)$/);
+      if (request.method === "GET" && conversationMatch?.[1] !== undefined) {
+        response.setHeader("cache-control", "no-store");
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
+        const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
+        const userId = requireScopeId(url.searchParams.get("user_id") ?? "", "user_id");
+        const channelValue = url.searchParams.get("channel") ?? "";
+        if (!CONVERSATION_CHANNELS.has(channelValue as Exclude<TaskChannel, "api">)) {
+          throw new RequestError(`unsupported conversation channel: ${channelValue}`);
+        }
+        const cursor = url.searchParams.get("cursor");
+        if (cursor !== null && (cursor.length === 0 || cursor.length > 512)) {
+          throw new RequestError("cursor is invalid");
+        }
+        const conversation = application.getConversationProjection({
+          orgId,
+          teamId,
+          userId,
+          channel: channelValue as Exclude<TaskChannel, "api">,
+          conversationId: requireProductIdentifier(conversationMatch[1], "conversation_id"),
+          ...(cursor === null ? {} : { cursor }),
+        });
+        if (conversation === undefined) {
+          sendJson(response, 404, { status: "not_found" });
+        } else {
+          sendJson(response, 200, { conversation });
+        }
         return;
       }
 
@@ -359,6 +509,34 @@ export function createOrchestratorServer(
           sendJson(response, 404, { status: "not_found" });
         } else {
           sendJson(response, 200, { task });
+        }
+        return;
+      }
+
+      const taskDetailMatch = url.pathname.match(
+        /^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/detail$/,
+      );
+      if (request.method === "GET" && taskDetailMatch?.[1] !== undefined) {
+        response.setHeader("cache-control", "no-store");
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
+        const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
+        const userId = requireScopeId(url.searchParams.get("user_id") ?? "", "user_id");
+        const channelValue = url.searchParams.get("channel") ?? "";
+        if (!CHANNELS.has(channelValue as TaskChannel)) {
+          throw new RequestError(`unsupported channel: ${channelValue}`);
+        }
+        const detail = application.getTaskDetailProjection({
+          orgId,
+          teamId,
+          userId,
+          channel: channelValue as TaskChannel,
+          taskRunId: taskDetailMatch[1],
+        });
+        if (detail === undefined) {
+          sendJson(response, 404, { status: "not_found" });
+        } else {
+          sendJson(response, 200, { detail });
         }
         return;
       }

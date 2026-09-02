@@ -20,6 +20,12 @@ import {
 import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
 import type { ForgeDialect } from "./forge/client.js";
 import {
+  ProductProjectionService,
+  type ConversationListProjection,
+  type ProductConversationChannel,
+} from "./product-projection-builder.js";
+import type { ConversationDetailV1, TaskDetailProjectionV1 } from "./product-projections.js";
+import {
   ForgeQueryRunClient,
   type ContextSearchResult,
   type ReportPublication,
@@ -120,6 +126,7 @@ export class OrchestratorApplication {
   readonly #channelEvents: ChannelEventStore | undefined;
   readonly #config: OrchestratorConfig;
   readonly #skillPolicies: SkillPolicyStore;
+  readonly #productProjections: ProductProjectionService;
 
   constructor(options: {
     config: OrchestratorConfig;
@@ -143,6 +150,12 @@ export class OrchestratorApplication {
     this.#channelEvents = options.channelEvents;
     this.#config = options.config;
     this.#skillPolicies = options.skillPolicies ?? new InMemorySkillPolicyStore(AUTHORIZED_SKILL_NAMES);
+    this.#productProjections = new ProductProjectionService({
+      tasks: this.#tasks,
+      events: this.#events,
+      artifacts: this.#artifacts,
+      ...(this.#attempts === undefined ? {} : { attempts: this.#attempts }),
+    });
     this.#skills =
       options.skillExecutor ?? new PiStructuredSkillExecutor({ config: options.config });
     this.#forge =
@@ -197,11 +210,44 @@ export class OrchestratorApplication {
   listTasks(options: {
     orgId: string;
     teamId: string;
+    userId?: string;
     channel?: TaskChannel;
     status?: TaskStatus;
     limit: number;
   }): TaskRun[] {
     return this.#tasks.list(options);
+  }
+
+  listConversationProjections(input: {
+    orgId: string;
+    teamId: string;
+    userId: string;
+    channel: ProductConversationChannel;
+    limit: number;
+    cursor?: string;
+  }): ConversationListProjection {
+    return this.#productProjections.listConversations(input);
+  }
+
+  getConversationProjection(input: {
+    orgId: string;
+    teamId: string;
+    userId: string;
+    channel: ProductConversationChannel;
+    conversationId: string;
+    cursor?: string;
+  }): ConversationDetailV1 | undefined {
+    return this.#productProjections.getConversation(input);
+  }
+
+  getTaskDetailProjection(input: {
+    orgId: string;
+    teamId: string;
+    userId: string;
+    channel: TaskChannel;
+    taskRunId: string;
+  }): TaskDetailProjectionV1 | undefined {
+    return this.#productProjections.getTaskDetail(input);
   }
 
   getEvents(taskRunId: string, afterSequence = 0): TaskEvent[] {

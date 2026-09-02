@@ -35,6 +35,7 @@ _CONTRACT_FILES = {
     "datasource_binding_v1": "datasource-binding-v1.schema.json",
     "registry_binding_v1": "registry-binding-v1.schema.json",
     "governance_action_catalog_v1": "governance-action-catalog-v1.schema.json",
+    "product_projection_v1": "product-projection-v1.schema.json",
 }
 
 
@@ -60,13 +61,18 @@ def load_contract(name: str) -> dict[str, Any]:
     return json.loads(resource.read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=None)
+def _compiled_validator(name: str) -> Any:
+    schema = load_contract(name)
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    return validator_class(schema, format_checker=FormatChecker())
+
+
 def validate_contract(name: str, instance: Any) -> None:
     """Validate an instance against a versioned contract.
 
     ``jsonschema.ValidationError`` is intentionally allowed to propagate so API
     and orchestration layers can translate it into their own bounded error type.
     """
-    schema = load_contract(name)
-    validator_class = validator_for(schema)
-    validator_class.check_schema(schema)
-    validator_class(schema, format_checker=FormatChecker()).validate(instance)
+    _compiled_validator(name).validate(instance)

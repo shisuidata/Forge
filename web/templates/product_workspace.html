@@ -1,0 +1,41 @@
+{% extends "product_base.html" %}
+{% block title %}工作台 · Forge{% endblock %}
+{% block page_actions %}<a class="button button-primary" href="/chat">开始对话</a>{% endblock %}
+{% block content %}
+<div class="content-width" data-product-page="workspace">
+  <section class="page-intro">
+    <div>
+      <h2>需要关注的工作</h2>
+      <p>这里只汇总真实待办、阻断和最近交付。审批表示允许执行精确操作，不代表结论必然正确。</p>
+    </div>
+    <button class="button button-quiet" type="button" data-refresh-page>刷新</button>
+  </section>
+
+  <div data-page-notices aria-live="polite"></div>
+  <section class="stat-row" aria-label="工作状态概览" data-workspace-stats>
+    {% for label in ['需要补充', '等待确认', '进行中', '未完成'] %}
+    <div class="stat"><p class="stat-label">{{ label }}</p><p class="stat-value skeleton">00</p><p class="stat-note">正在读取</p></div>
+    {% endfor %}
+  </section>
+
+  <div class="layout-grid two workspace-grid">
+    <section class="panel">
+      <header class="panel-header"><div><h2>待我处理</h2><p>补充信息与精确操作确认</p></div><a class="button button-quiet" href="/tasks">全部任务</a></header>
+      <div class="panel-body flush" data-workspace-attention><div class="state-box state-box-compact"><p>正在读取待办…</p></div></div>
+    </section>
+    <section class="panel">
+      <header class="panel-header"><div><h2>进行中的任务</h2><p>真实阶段与更新时间</p></div></header>
+      <div class="panel-body flush" data-workspace-running><div class="state-box state-box-compact"><p>正在读取任务…</p></div></div>
+    </section>
+    <section class="panel">
+      <header class="panel-header"><div><h2>最近报告</h2><p>不可变 revision 与导出状态</p></div><a class="button button-quiet" href="/reports">报告库</a></header>
+      <div class="panel-body flush" data-workspace-reports><div class="state-box state-box-compact"><p>正在读取报告…</p></div></div>
+    </section>
+    <section class="panel">
+      <header class="panel-header"><div><h2>依赖与阻断</h2><p>部分可用不会被标记为完成</p></div></header>
+      <div class="panel-body" data-workspace-dependencies><div class="state-box state-box-compact"><p>正在检查依赖…</p></div></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}

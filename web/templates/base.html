@@ -28,6 +28,7 @@
     #ai-messages::-webkit-scrollbar { width: 4px; }
     #ai-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
   </style>
+  {% block head %}{% endblock %}
 </head>
 <body class="flex h-screen bg-gray-100 font-sans text-sm text-gray-800">
 
@@ -100,7 +101,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8"/>
         </svg>
-        Staging
+        待审核
       </a>
       <a href="/admin/sessions"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
@@ -156,7 +157,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M13 10V3L4 14h7v7l9-11h-7z"/>
         </svg>
-        Pipeline
+        流程记录
+      </a>
+      <a href="/admin/benchmark"
+         class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors
+                {% if active == 'benchmark' %}bg-gray-700 text-white{% else %}text-gray-300{% endif %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 18V9m5 9V5m5 13v-7m5 7V3M3 21h18"/>
+        </svg>
+        准确率实验室
       </a>
       <a href="/admin/architecture" target="_blank"
          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors text-gray-300">
@@ -391,5 +400,6 @@ function dismissProposal(btn) {
 }
 </script>
 
+{% block scripts %}{% endblock %}
 </body>
 </html>

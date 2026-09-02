@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}{{ page_title | default('Forge') }} · Forge{% endblock %}</title>
+  <link rel="stylesheet" href="/static/product/product.css?v=5">
+  {% block head %}{% endblock %}
+  <script type="module" src="/static/product/product-shell.js?v=2"></script>
+</head>
+<body class="product-body" data-active-route="{{ active | default('') }}">
+  <a class="skip-link" href="#product-main">跳到主要内容</a>
+  <button class="nav-backdrop" type="button" data-nav-backdrop aria-label="关闭主导航" hidden></button>
+
+  <div class="product-frame">
+    <aside id="product-sidebar" class="product-sidebar" data-product-nav aria-label="Forge 主导航">
+      <div class="brand-lockup">
+        <a class="brand-mark" href="/workspace" aria-label="Forge 工作台">F</a>
+        <div>
+          <p class="brand-name">Forge</p>
+          <p class="brand-context">可信数据任务</p>
+        </div>
+      </div>
+
+      <nav class="nav-groups">
+        <section class="nav-group" aria-labelledby="nav-work">
+          <h2 id="nav-work" class="nav-label">工作</h2>
+          <a class="nav-item{% if active == 'workspace' %} is-active{% endif %}" href="/workspace"{% if active == 'workspace' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5.5h16v13H4zM8 9h8M8 13h5"/></svg><span>工作台</span>
+          </a>
+          <a class="nav-item{% if active == 'chat' %} is-active{% endif %}" href="/chat"{% if active == 'chat' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v11H9l-4 3zM8 9h8M8 12h5"/></svg><span>对话</span>
+          </a>
+          <a class="nav-item{% if active == 'tasks' %} is-active{% endif %}" href="/tasks"{% if active == 'tasks' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9M3 6h.01M3 12h.01M3 18h.01"/></svg><span>任务</span>
+          </a>
+          <a class="nav-item{% if active == 'deliverables' %} is-active{% endif %}" href="/deliverables"{% if active == 'deliverables' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20H6zM15 3.5V7h3M9 11h6M9 15h6"/></svg><span>交付</span>
+          </a>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-trust">
+          <h2 id="nav-trust" class="nav-label">信任</h2>
+          <a class="nav-item{% if active == 'data' %} is-active{% endif %}" href="/data"{% if active == 'data' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6M5 11.5v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6"/></svg><span>数据资产</span>
+          </a>
+          <a class="nav-item{% if active == 'governance' %} is-active{% endif %}" href="/governance"{% if active == 'governance' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.6-2.8 7.8-7 10-4.2-2.2-7-5.4-7-10V6zM9 12l2 2 4-5"/></svg><span>治理与审计</span>
+          </a>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-access">
+          <h2 id="nav-access" class="nav-label">接入</h2>
+          <a class="nav-item{% if active == 'runtime' %} is-active{% endif %}" href="/runtime"{% if active == 'runtime' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 8h8v8H8zM4 10h4M16 10h4M4 14h4M16 14h4M10 4v4M14 4v4M10 16v4M14 16v4"/></svg>
+            <span>Agents &amp; Apps</span><span class="nav-item-badge">受限</span>
+          </a>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-system">
+          <h2 id="nav-system" class="nav-label">系统</h2>
+          <a class="nav-item{% if active == 'manage' %} is-active{% endif %}" href="/manage"{% if active == 'manage' %} aria-current="page"{% endif %}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3"/></svg><span>管理</span>
+          </a>
+        </section>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="runtime-line" aria-label="当前产品边界">
+          <span class="runtime-dot" aria-hidden="true"></span>
+          <span>单用户私有部署 · Runtime 受限</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="product-surface">
+      <header class="product-topbar">
+        <button class="nav-toggle" type="button" data-nav-toggle aria-controls="product-sidebar" aria-expanded="false" aria-label="打开主导航">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="page-identity">
+          {% if page_eyebrow %}<p class="page-eyebrow">{{ page_eyebrow }}</p>{% endif %}
+          <h1>{{ page_title | default('Forge') }}</h1>
+        </div>
+        <div class="topbar-context" aria-label="当前上下文">
+          <span class="scope-chip">默认工作区</span>
+          <a class="shell-utility" href="/search">搜索 <kbd>⌘K</kbd></a>
+          <a class="shell-utility" href="/inbox">待办</a>
+        </div>
+        <div class="topbar-actions">{% block page_actions %}{% endblock %}</div>
+      </header>
+
+      <main id="product-main" class="product-main" tabindex="-1">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <div class="sr-only" aria-live="polite" data-product-announcer></div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

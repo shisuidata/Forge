@@ -8,18 +8,17 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_task_workspace_renders_hash_bound_queryrun_approval(client: AsyncClient):
+async def test_task_workspace_uses_the_real_product_shell_without_a_second_create_form(client: AsyncClient):
     response = await client.get("/tasks")
     assert response.status_code == 200
-    assert "AI 数据任务" in response.text
-    assert "批准并只读执行" in response.text
-    assert 'id="task-mode"' in response.text
-    assert "专业 Advisory Skill" in response.text
-    assert 'value="funnel-analysis"' in response.text
-    assert "sql-editor" not in response.text
-    assert "实时任务监控" in response.text
-    assert 'id="task-inbox"' in response.text
-    assert 'id="task-attempts"' in response.text
+    assert 'data-product-page="tasks"' in response.text
+    assert 'data-task-list' in response.text
+    assert 'data-task-status-filter' in response.text
+    assert "在对话中发起" in response.text
+    assert "创建 TaskRun" not in response.text
+    assert 'id="task-mode"' not in response.text
+    assert "cdn." not in response.text.lower()
+    assert '/static/product/product-pages.js?v=6' in response.text
 
 
 @pytest.mark.asyncio
@@ -66,25 +65,16 @@ async def test_web_task_detail_fails_closed_outside_admin_scope(client: AsyncCli
 
 
 @pytest.mark.asyncio
-async def test_task_event_stream_is_incremental_and_uses_poll_backoff(client: AsyncClient):
+async def test_task_workspace_keeps_runtime_logic_out_of_the_template(client: AsyncClient):
     response = await client.get("/tasks")
     assert response.status_code == 200
     source = response.text
-    assert "const renderedEventKeys = new Set()" in source
-    assert "if (additions.length === 0) return" in source
-    # One clear for the first render and one only when the operator switches TaskRun.
-    assert source.count("eventsPanel.replaceChildren();") == 2
-    assert "Math.min(2000, Math.round(pollDelay * 1.5))" in source
-    assert "prefers-reduced-motion: reduce" in source
-    assert 'id="result-chart"' in source
-    assert "renderResultChart(result)" in source
-    assert "采用推荐补查并继续分析" in source
-    assert "批准补查 SQL 并继续分析" in source
-    assert "await runAnalysis();" in source
-    assert "refreshTaskInbox()" in source
-    assert "refreshSelectedTask()" in source
-    assert "safeLogPayload(event.payload)" in source
-    assert "task.metadata?.original_message" in source
+    assert "<script>" not in source
+    assert "fetch(" not in source
+    assert "task.metadata" not in source
+    assert "sql-editor" not in source
+    assert "prefers-reduced-motion" not in source
+    assert '/static/product/product.css?v=5' in source
 
 
 @pytest.mark.asyncio
@@ -477,14 +467,13 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
 
     page = await client.get("/chat")
     assert page.status_code == 200
-    assert "剩余安全窗口" in page.text
-    assert "耗时较长，但任务仍在运行" in page.text
-    assert "window.setInterval(updateFlowAttemptClock, 1000)" in page.text
-    assert "flowStageLabels" in page.text
-    assert "safeMarkdownHref" in page.text
-    assert "blockquote[data-tone=\"warning\"]" in page.text
-    assert "noopener noreferrer" in page.text
-    assert "app-nav-toggle" in page.text
+    assert 'data-product-page="chat"' in page.text
+    assert 'data-conversation-list' in page.text
+    assert 'data-conversation-feed' in page.text
+    assert 'data-conversation-form' in page.text
+    assert "SQL 执行前需要确认" in page.text
+    assert '/static/product/product-pages.js?v=6' in page.text
+    assert "cdn." not in page.text.lower()
 
 
 @pytest.mark.asyncio

@@ -145,8 +145,11 @@ async def login_redirect_handler(request: Request, exc: _LoginRedirect):
 async def root():
     return RedirectResponse(url="/chat", status_code=302)
 
-# 图表静态文件服务
-_charts_dir = Path(__file__).parent / "web" / "static" / "charts"
+# 本地静态文件服务；Product Shell 禁止依赖外部 CDN。
+_static_dir = Path(__file__).parent / "web" / "static"
+_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+_charts_dir = _static_dir / "charts"
 _charts_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/charts", StaticFiles(directory=str(_charts_dir)), name="charts")
 

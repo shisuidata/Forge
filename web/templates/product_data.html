@@ -1,0 +1,41 @@
+{% extends "product_base.html" %}
+{% block title %}数据资产 · Forge{% endblock %}
+{% block page_actions %}<a class="button" href="/admin/registry-studio">打开 Registry Studio</a>{% endblock %}
+{% block content %}
+<div class="content-width" data-product-page="data">
+  <section class="page-intro">
+    <div><h2>结构与语义</h2><p>这里投影 Forge 已有 Registry 能力。Owner、Conflict 和质量运行时尚未开放，不会以空页面冒充完成。</p></div>
+    <button class="button button-quiet" type="button" data-refresh-page>刷新</button>
+  </section>
+  <div data-page-notices aria-live="polite"></div>
+  <section class="stat-row data-stats" data-data-stats>
+    <div class="stat"><p class="stat-label">数据表</p><p class="stat-value skeleton">00</p><p class="stat-note">正在读取</p></div>
+    <div class="stat"><p class="stat-label">业务指标</p><p class="stat-value skeleton">00</p><p class="stat-note">正在读取</p></div>
+    <div class="stat"><p class="stat-label">Registry revision</p><p class="stat-value stat-value-small skeleton">revision</p><p class="stat-note">内容版本</p></div>
+    <div class="stat"><p class="stat-label">当前状态</p><p class="stat-value stat-value-small skeleton">读取中</p><p class="stat-note">结构与指标</p></div>
+  </section>
+  <section class="panel data-entry-panel">
+    <header class="panel-header"><div><h2>维护入口</h2><p>写入仍由原 Registry/Knowledge Store 持有</p></div></header>
+    <div class="data-entry-grid" data-data-links><div class="state-box"><p>正在读取数据资产入口…</p></div></div>
+  </section>
+  <section class="capability-grid capability-grid-compact" aria-label="数据信任能力">
+    <article class="capability-card" data-capability="planned">
+      <header><div><p class="capability-domain">Quality</p><h3>Quality &amp; Freshness</h3></div><span class="status" data-state="planned">规划中</span></header>
+      <p class="capability-copy">质量规则、数据快照、迟到与过期状态，以及对 Task 和交付的影响。</p>
+      <footer><p><strong>依赖：</strong>G1 / Q1 Quality Contract</p><a class="button button-quiet" href="/data/quality">查看边界</a></footer>
+    </article>
+    <article class="capability-card" data-capability="partial">
+      <header><div><p class="capability-domain">Stewardship</p><h3>Conflict &amp; Proposal</h3></div><span class="status" data-state="partial">部分可用</span></header>
+      <p class="capability-copy">从现有 Staging/Knowledge Review 演进到有作用域的 Claim、Conflict 和修订 Proposal。</p>
+      <footer><p><strong>现有入口：</strong>Staging / Knowledge</p><a class="button button-primary" href="/data/conflicts">查看审核入口</a></footer>
+    </article>
+    <article class="capability-card" data-capability="blocked">
+      <header><div><p class="capability-domain">Governance</p><h3>Owner &amp; Policy Impact</h3></div><span class="status" data-state="blocked">未接入 Runtime</span></header>
+      <p class="capability-copy">显示 Data Owner、有效期、Policy、受影响 Agent 和正在使用旧 revision 的 Task。</p>
+      <footer><p><strong>依赖：</strong>M1A / G1</p><a class="button button-quiet" href="/governance/policies">查看治理边界</a></footer>
+    </article>
+  </section>
+  <div class="notice" data-state="partial"><div><p class="notice-title">能力边界</p><p class="notice-copy">现有结构、指标、语义、Staging 与 Knowledge 使用真实 Store；Quality、ConflictSet、Owner 和 Policy Impact 页面只固定产品结构，不生成记录。</p></div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}

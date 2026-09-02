@@ -123,6 +123,68 @@ test("task list endpoint scopes cross-channel tasks by org and team", async (con
   assert.equal(invalid.status, 400);
 });
 
+test("Product Projection APIs are authenticated, scoped, and bounded", async (context) => {
+  const config = loadConfig({ PI_CHANNEL_SERVICE_KEYS: "product-test-key" });
+  const application = new OrchestratorApplication({ config });
+  const created = application.createTask({
+    org_id: "org_product",
+    team_id: "team_product",
+    user_id: "user_product",
+    channel: "web",
+    channel_conversation_id: "web_conv_product",
+    intent: "conversation",
+    message: "解释支付金额口径",
+  });
+  const server = createOrchestratorServer(config, application);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => server.close());
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const query = "org_id=org_product&team_id=team_product&user_id=user_product&channel=web";
+
+  const unauthenticated = await fetch(`${baseUrl}/v1/conversations?${query}`);
+  assert.equal(unauthenticated.status, 403);
+
+  const conversations = await fetch(`${baseUrl}/v1/conversations?${query}`, {
+    headers: { "x-channel-service-key": "product-test-key" },
+  });
+  assert.equal(conversations.status, 200);
+  assert.equal(conversations.headers.get("cache-control"), "no-store");
+  const conversationBody = (await conversations.json()) as {
+    schema_version: number;
+    conversations: Array<{ conversation_id: string }>;
+  };
+  assert.equal(conversationBody.schema_version, 1);
+  assert.deepEqual(conversationBody.conversations.map((item) => item.conversation_id), [
+    "web_conv_product",
+  ]);
+
+  const detail = await fetch(
+    `${baseUrl}/v1/conversations/web_conv_product?${query}`,
+    { headers: { "x-channel-service-key": "product-test-key" } },
+  );
+  assert.equal(detail.status, 200);
+
+  const taskDetail = await fetch(
+    `${baseUrl}/v1/tasks/${created.task.task_run_id}/detail?${query}`,
+    { headers: { "x-channel-service-key": "product-test-key" } },
+  );
+  assert.equal(taskDetail.status, 200);
+  const taskBody = (await taskDetail.json()) as { detail: { task: { task_run_id: string } } };
+  assert.equal(taskBody.detail.task.task_run_id, created.task.task_run_id);
+
+  const crossUser = await fetch(
+    `${baseUrl}/v1/tasks/${created.task.task_run_id}/detail?org_id=org_product&team_id=team_product&user_id=user_other&channel=web`,
+    { headers: { "x-channel-service-key": "product-test-key" } },
+  );
+  assert.equal(crossUser.status, 404);
+
+  const badCursor = await fetch(`${baseUrl}/v1/conversations?${query}&cursor=bad`, {
+    headers: { "x-channel-service-key": "product-test-key" },
+  });
+  assert.equal(badCursor.status, 409);
+});
+
 test("async Stage returns 202 and completes through Task polling", async (context) => {
   let releaseStage: (() => void) | undefined;
   const gate = new Promise<void>((resolve) => { releaseStage = resolve; });

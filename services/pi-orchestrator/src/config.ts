@@ -32,6 +32,10 @@ export interface OrchestratorConfig {
   piModelProvider: string | undefined;
   piModelId: string | undefined;
   piModelRevision: string | null;
+  benchmarkModelProvider: string;
+  benchmarkModelId: string;
+  benchmarkModelRevision: string;
+  benchmarkConcurrency: number;
   modelControlDbPath: string | undefined;
 }
 
@@ -136,6 +140,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
     provider: piModelProvider,
     modelId: piModelId,
   });
+  const benchmarkModelProvider = env.PI_BENCHMARK_MODEL_PROVIDER ?? "volcengine-coding-plan";
+  const benchmarkModelId = env.PI_BENCHMARK_MODEL_ID ?? "deepseek-v4-flash";
+  const benchmarkModelRevision = computePiModelRevision({
+    agentDir,
+    provider: benchmarkModelProvider,
+    modelId: benchmarkModelId,
+  }) ?? "unresolved:" + benchmarkModelProvider + "/" + benchmarkModelId;
   return {
     host: env.PI_ORCHESTRATOR_HOST ?? "127.0.0.1",
     port: parsePort(env.PI_ORCHESTRATOR_PORT),
@@ -175,6 +186,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
     piModelProvider,
     piModelId,
     piModelRevision,
+    benchmarkModelProvider,
+    benchmarkModelId,
+    benchmarkModelRevision,
+    benchmarkConcurrency: parsePositiveInteger(
+      env.PI_BENCHMARK_CONCURRENCY,
+      2,
+      "PI_BENCHMARK_CONCURRENCY",
+    ),
     modelControlDbPath: env.PI_MODEL_CONTROL_DB_PATH
       ? resolve(env.PI_MODEL_CONTROL_DB_PATH)
       : env.MODEL_CONTROL_DB_PATH ? resolve(env.MODEL_CONTROL_DB_PATH) : undefined,

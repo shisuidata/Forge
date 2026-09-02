@@ -956,24 +956,21 @@ class TestAdminPages:
     async def test_web_chat_page_is_a_first_class_pi_channel(self, client: AsyncClient):
         resp = await client.get("/chat", follow_redirects=False)
         assert resp.status_code == 200
-        assert "Forge Data Desk" in resp.text
-        assert "/api/pi/chat/messages" in resp.text
-        assert "/api/pi/chat/tasks/${encodeURIComponent(taskRunId)}/flow" in resp.text
-        assert 'id="task-flow-panel"' in resp.text
-        assert 'id="flow-dag"' in resp.text
-        assert 'id="flow-stream"' in resp.text
-        assert "height: calc(100dvh - 4.1rem)" in resp.text
-        assert "min-h-0 min-w-0 flex-1 flex-col overflow-hidden" in resp.text
-        assert "function revealTaskCard(card)" in resp.text
-        assert "card.append(stripe, body); revealTaskCard(card);" in resp.text
+        assert 'data-product-page="chat"' in resp.text
+        assert 'data-conversation-list' in resp.text
+        assert 'data-conversation-feed' in resp.text
+        assert 'data-conversation-form' in resp.text
+        assert '/static/product/product-pages.js?v=6' in resp.text
+        assert "<script>" not in resp.text
         assert "/api/chat" not in resp.text
 
     async def test_chat_and_task_monitor_have_separate_navigation(self, client: AsyncClient):
         resp = await client.get("/tasks")
         assert resp.status_code == 200
-        assert "AI 数据任务" in resp.text
+        assert "数据任务" in resp.text
         assert 'href="/chat"' in resp.text
-        assert "任务监控" in resp.text
+        assert "在对话中发起" in resp.text
+        assert 'data-task-list' in resp.text
 
 
 # ── Dashboard 数据 ───────────────────────────────────────────────────────────

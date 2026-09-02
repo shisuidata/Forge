@@ -240,6 +240,8 @@ class ReportStore:
               status TEXT NOT NULL, pdf_status TEXT NOT NULL, pptx_status TEXT NOT NULL,
               error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS idx_reports_scope_updated
+              ON reports(org_id, team_id, user_id, updated_at DESC, report_id DESC);
             CREATE TABLE IF NOT EXISTS report_attempts (
               attempt_id TEXT PRIMARY KEY, report_id TEXT NOT NULL, stage TEXT NOT NULL,
               status TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT, error TEXT
@@ -580,6 +582,42 @@ class ReportStore:
         prs.save(target)
         os.chmod(target, 0o600)
         return "ready"
+
+    def list(
+        self,
+        *,
+        org_id: str,
+        team_id: str,
+        user_id: str,
+        limit: int = 50,
+        status: str | None = None,
+        before: tuple[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        if not all(isinstance(value, str) and value for value in (org_id, team_id, user_id)):
+            raise ValueError("report scope is required")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1 or limit > 100:
+            raise ValueError("report limit must be from 1 to 100")
+        if status is not None and status not in {"publishing", "published", "failed"}:
+            raise ValueError("unsupported report status")
+        predicates = ["org_id=?", "team_id=?", "user_id=?"]
+        values: list[Any] = [org_id, team_id, user_id]
+        if status is not None:
+            predicates.append("status=?")
+            values.append(status)
+        if before is not None:
+            updated_at, report_id = before
+            if not isinstance(updated_at, str) or not isinstance(report_id, str):
+                raise ValueError("report cursor is invalid")
+            predicates.append("(updated_at < ? OR (updated_at = ? AND report_id < ?))")
+            values.extend([updated_at, updated_at, report_id])
+        values.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM reports WHERE {' AND '.join(predicates)} "
+                "ORDER BY updated_at DESC, report_id DESC LIMIT ?",
+                values,
+            ).fetchall()
+        return [self._row(row) for row in rows]
 
     def get(self, report_id: str) -> dict[str, Any]:
         with self._connect() as conn:

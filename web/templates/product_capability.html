@@ -1,0 +1,57 @@
+{% extends "product_base.html" %}
+{% block title %}{{ page_title }} · Forge{% endblock %}
+{% block page_actions %}
+  {% if back_href %}<a class="button button-quiet" href="{{ back_href }}">返回{{ back_label }}</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="content-width" data-product-page="capability" data-capability-status="{{ capability_status }}">
+  <section class="capability-hero panel">
+    <div class="capability-hero-copy">
+      <div class="capability-heading-line">
+        <p class="page-eyebrow">{{ capability_kicker }}</p>
+        <span class="status" data-state="{{ capability_status }}">{{ capability_status_label }}</span>
+      </div>
+      <h2>{{ capability_title }}</h2>
+      <p>{{ capability_copy }}</p>
+    </div>
+    <dl class="capability-boundary">
+      <div><dt>当前边界</dt><dd>{{ capability_boundary }}</dd></div>
+      <div><dt>依赖阶段</dt><dd>{{ capability_dependency }}</dd></div>
+    </dl>
+  </section>
+
+  {% if capability_notice %}
+  <div class="notice" data-state="{{ capability_status }}">
+    <div><p class="notice-title">能力状态</p><p class="notice-copy">{{ capability_notice }}</p></div>
+  </div>
+  {% endif %}
+
+  <section class="capability-grid" aria-label="{{ capability_title }}能力地图">
+    {% for item in capabilities %}
+    <article class="capability-card" data-capability="{{ item.status }}">
+      <header>
+        <div>
+          <p class="capability-domain">{{ item.domain }}</p>
+          <h3>{{ item.title }}</h3>
+        </div>
+        <span class="status" data-state="{{ item.status }}">{{ item.status_label }}</span>
+      </header>
+      <p class="capability-copy">{{ item["copy"] }}</p>
+      {% if item.features %}
+      <ul class="capability-feature-list">
+        {% for feature in item.features %}<li>{{ feature }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <footer>
+        <p><strong>依赖：</strong>{{ item.dependency }}</p>
+        {% if item.href %}
+        <a class="button{% if item.status in ['available', 'partial'] %} button-primary{% else %} button-quiet{% endif %}" href="{{ item.href }}">{{ item.action_label }}</a>
+        {% else %}
+        <span class="button button-disabled" aria-disabled="true">{{ item.action_label }}</span>
+        {% endif %}
+      </footer>
+    </article>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

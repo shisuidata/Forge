@@ -1,0 +1,58 @@
+{% extends "product_base.html" %}
+{% block title %}对话 · Forge{% endblock %}
+{% block page_actions %}<span class="status" data-state="{% if pi_enabled %}ready{% else %}offline{% endif %}">{% if pi_enabled %}任务运行时可用{% else %}任务运行时不可用{% endif %}</span>{% endblock %}
+{% block content %}
+<div class="conversation-layout" data-product-page="chat" data-pi-enabled="{{ 'true' if pi_enabled else 'false' }}">
+  <aside class="panel conversation-index" aria-label="最近对话">
+    <header class="panel-header"><div><h2>对话</h2><p>同一主题下可以有多个任务</p></div><button class="button icon-button" type="button" data-new-conversation aria-label="新对话">＋</button></header>
+    <div class="conversation-list" data-conversation-list><div class="state-box state-box-compact"><p>正在读取最近对话…</p></div></div>
+  </aside>
+
+  <section class="panel conversation-workspace">
+    <header class="conversation-header">
+      <div><p class="page-eyebrow">当前对话</p><h2 data-conversation-title>新对话</h2></div>
+      <div class="conversation-header-actions">
+        <button class="button task-panel-toggle" type="button" data-task-panel-toggle aria-controls="conversation-task-panel" aria-expanded="false">任务状态</button>
+        <a class="button button-quiet" href="/tasks" data-open-task-list>全部任务</a>
+      </div>
+    </header>
+    <div class="conversation-feed" data-conversation-feed aria-live="polite">
+      <div class="conversation-empty" data-conversation-empty>
+        <div class="state-symbol">F</div>
+        <h3>输入要处理的问题</h3>
+        <p>可以询问指标口径、查询真实数据、继续分析或要求报告。需要执行 SQL 时，Forge 会先等待你的确认。</p>
+        <div class="conversation-prompts">
+          <button class="prompt-chip" type="button" data-prompt="销售额这个指标采用什么业务口径？">解释指标口径</button>
+          <button class="prompt-chip" type="button" data-prompt="统计本月各渠道支付金额，并分析主要差异">查询并分析数据</button>
+          <button class="prompt-chip" type="button" data-prompt="帮我分析最近三个月销售额变化并生成报告">分析并生成报告</button>
+        </div>
+      </div>
+    </div>
+    <form class="conversation-composer" data-conversation-form>
+      <label class="sr-only" for="conversation-input">输入问题</label>
+      <textarea id="conversation-input" class="textarea" rows="2" maxlength="20000" placeholder="输入业务问题，或说明需要的交付物…" {% if not pi_enabled %}disabled{% endif %}></textarea>
+      <div class="composer-footer"><p>Enter 发送 · Shift+Enter 换行 · SQL 执行前需要确认</p><button class="button button-primary" type="submit" {% if not pi_enabled %}disabled{% endif %}>发送</button></div>
+    </form>
+  </section>
+
+  <aside id="conversation-task-panel" class="panel conversation-task-panel" data-conversation-task-panel data-open="false" aria-label="当前任务状态">
+    <header class="panel-header">
+      <div><h2>当前任务</h2><p>只读投影 · 来自 Pi Task Store</p></div>
+      <button class="button icon-button button-quiet task-panel-close" type="button" data-task-panel-close aria-label="关闭任务状态">×</button>
+    </header>
+    <div class="task-panel-scroll" data-task-panel-body>
+      <div class="state-box state-box-compact"><p>当前对话还没有关联任务。</p></div>
+    </div>
+  </aside>
+</div>
+<button class="task-panel-backdrop" type="button" data-task-panel-backdrop aria-label="关闭任务状态" hidden></button>
+
+<dialog class="product-dialog" data-action-dialog>
+  <form method="dialog" class="dialog-card" data-action-form>
+    <header><div><p class="page-eyebrow">任务操作</p><h2 data-dialog-title>确认操作</h2></div><button class="button icon-button button-quiet" value="cancel" aria-label="关闭">×</button></header>
+    <div class="dialog-body"><p data-dialog-copy></p><div class="field" data-dialog-input-wrap hidden><label for="dialog-input">补充信息</label><textarea id="dialog-input" class="textarea" maxlength="20000"></textarea></div></div>
+    <footer><button class="button" value="cancel">取消</button><button class="button button-primary" value="confirm" data-dialog-confirm>确认</button></footer>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}

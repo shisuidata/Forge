@@ -1,0 +1,24 @@
+{% extends "product_base.html" %}
+{% block title %}任务 · Forge{% endblock %}
+{% block page_actions %}<a class="button button-primary" href="/chat">在对话中发起</a>{% endblock %}
+{% block content %}
+<div class="content-width" data-product-page="tasks" data-pi-enabled="{{ 'true' if pi_enabled else 'false' }}">
+  <section class="page-intro">
+    <div><h2>数据任务</h2><p>查看跨 Conversation 的执行状态、等待项和恢复入口。任务由 Pi 持有，页面不复制状态。</p></div>
+  </section>
+  <div class="panel">
+    <header class="panel-header task-toolbar">
+      <div><h2>全部任务</h2><p data-task-count>正在读取</p></div>
+      <div class="toolbar-fields">
+        <label class="sr-only" for="task-status-filter">状态</label>
+        <select id="task-status-filter" class="select" data-task-status-filter>
+          <option value="">全部状态</option><option value="needs_input">需要补充</option><option value="waiting_for_query_approval">等待查询确认</option><option value="analyzing">分析中</option><option value="rendering">报告生成中</option><option value="completed">已完成</option><option value="failed">未完成</option>
+        </select>
+        <button class="button" type="button" data-refresh-page>刷新</button>
+      </div>
+    </header>
+    <div class="panel-body flush" data-task-list><div class="state-box"><p>正在读取任务…</p></div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}

@@ -1,0 +1,170 @@
+[
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 880,
+    "db_id": "formula_1",
+    "question": "Paul di Resta was in the No. 853 race, what percent faster did he finish in the 853rd race than the next race for the fastest lap speed?",
+    "evidence": "Paul di Resta refers to the full name of the driver; Full name of the driver refers to drivers.forename ='Paul' and drivers.surname = 'di Resta'; race number refers to raceId; percentage = DIVIDE(SUBTRACT(fastestLapSpeed(raceId = 853), (fastestLapSpeed (raceId = 854)) * 100 , (fastestLapSpeed(raceId = 853))",
+    "SQL": "SELECT (SUM(IIF(T2.raceId = 853, T2.fastestLapSpeed, 0)) - SUM(IIF(T2.raceId = 854, T2.fastestLapSpeed, 0))) * 100 / SUM(IIF(T2.raceId = 853, T2.fastestLapSpeed, 0)) FROM drivers AS T1 INNER JOIN results AS T2 ON T2.driverId = T1.driverId WHERE T1.forename = 'Paul' AND T1.surname = 'di Resta'",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 896,
+    "db_id": "formula_1",
+    "question": "Calculate the percentage whereby Hamilton was not at the 1st track of the the f1 circuit since 2010.",
+    "evidence": "percentage = DIVIDE(COUNT(raceId) where surname = 'Hamilton' and position>1), (COUNT(raceId) where surname = 'Hamilton'); since 2010 refers to year >= 2010",
+    "SQL": "SELECT CAST(COUNT(CASE WHEN T2.position <> 1 THEN T2.position END) AS REAL) * 100 / COUNT(T2.driverStandingsId) FROM races AS T1 INNER JOIN driverStandings AS T2 ON T2.raceId = T1.raceId INNER JOIN drivers AS T3 ON T3.driverId = T2.driverId WHERE T3.surname = 'Hamilton' AND T1.year >= 2010",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 955,
+    "db_id": "formula_1",
+    "question": "What is the average time in seconds of champion for each year, before year 1975?",
+    "evidence": "only champion's finished time is represented by 'HH:MM:SS.mmm'; finished the game refers to time is not null; before year 1975 refers to year < 1975;",
+    "SQL": "WITH time_in_seconds AS ( SELECT T2.year, T2.raceId, T1.positionOrder, CASE WHEN T1.positionOrder = 1 THEN (CAST(SUBSTR(T1.time, 1, 1) AS REAL) * 3600) + (CAST(SUBSTR(T1.time, 3, 2) AS REAL) * 60) + CAST(SUBSTR(T1.time, 6,2) AS REAL )   + CAST(SUBSTR(T1.time, 9) AS REAL)/1000 ELSE 0 END AS time_seconds FROM results AS T1 INNER JOIN races AS T2 ON T1.raceId = T2.raceId WHERE T1.time IS NOT NULL ), champion_time AS ( SELECT year, raceId, time_seconds FROM time_in_seconds WHERE positionOrder = 1 ) SELECT year, AVG(time_seconds) FROM champion_time WHERE year < 1975 GROUP BY year HAVING AVG(time_seconds) IS NOT NULL",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 962,
+    "db_id": "formula_1",
+    "question": "From 2000 to 2005, what percentage of drivers who were born before 1985 and the lap numbers were over 50?",
+    "evidence": "born before 1985 refers to year(dob)<1985; in 2000 to 2005 refers to year between 2000 and 2005; percentage = Divide(COUNT(driverId where year (dob) <1985 and laps >50),COUNT(DriverID where year between 2000 and 2005) *100;",
+    "SQL": "SELECT CAST(SUM(IIF(STRFTIME('%Y', T3.dob) < '1985' AND T1.laps > 50, 1, 0)) AS REAL) * 100 / COUNT(*) FROM results AS T1 INNER JOIN races AS T2 on T1.raceId = T2.raceId INNER JOIN drivers AS T3 on T1.driverId = T3.driverId WHERE T2.year BETWEEN 2000 AND 2005",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 988,
+    "db_id": "formula_1",
+    "question": "List down top 3 German drivers who has the shortest average pit stop duration and were born between 1980-1985.",
+    "evidence": "Full name of the driver refers to drivers.forename and drivers.surname; born between 1980-1985 refers to 1980<= year(dob) <=1985; Average pitstop duration refers to Divide(SUM(duration),COUNT(duration)); shortest average refers to Min(avg(duration));",
+    "SQL": "SELECT T2.forename, T2.surname FROM pitStops AS T1 INNER JOIN drivers AS T2 on T1.driverId = T2.driverId WHERE T2.nationality = 'German' AND STRFTIME('%Y', T2.dob) BETWEEN '1980' AND '1985' GROUP BY T2.forename, T2.surname ORDER BY AVG(T1.duration) LIMIT 3",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 994,
+    "db_id": "formula_1",
+    "question": "Which constructor scored most points from Monaco Grand Prix between 1980 and 2010? List the score, name and nationality of this team.",
+    "evidence": "Monaco Grand Priz refers to the race; race in year between 1980 and 2010",
+    "SQL": "SELECT SUM(T1.points), T2.name, T2.nationality FROM constructorResults AS T1 INNER JOIN constructors AS T2 ON T1.constructorId = T2.constructorId INNER JOIN races AS T3 ON T3.raceid = T1.raceid WHERE T3.name = 'Monaco Grand Prix' AND T3.year BETWEEN 1980 AND 2010 GROUP BY T2.name ORDER BY SUM(T1.points) DESC LIMIT 1",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 1001,
+    "db_id": "formula_1",
+    "question": "What is full name of the racer who ranked 1st in the 3rd qualifying race held in the Marina Bay Street Circuit in 2008?",
+    "evidence": "Ranked 1st in the 3rd qualifying race refer to MIN(q3); 2008 is the year of race; full name of racer = forename, surname",
+    "SQL": "SELECT T2.forename, T2.surname FROM qualifying AS T1 INNER JOIN drivers AS T2 on T1.driverId = T2.driverId INNER JOIN races AS T3 ON T1.raceid = T3.raceid WHERE q3 IS NOT NULL AND T3.year = 2008 AND T3.circuitId IN ( SELECT circuitId FROM circuits WHERE name = 'Marina Bay Street Circuit' ) ORDER BY CAST(SUBSTR(q3, 1, INSTR(q3, ':') - 1) AS INTEGER) * 60 + CAST(SUBSTR(q3, INSTR(q3, ':') + 1, INSTR(q3, '.') - INSTR(q3, ':') - 1) AS REAL) + CAST(SUBSTR(q3, INSTR(q3, '.') + 1) AS REAL) / 1000 ASC LIMIT 1",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 1011,
+    "db_id": "formula_1",
+    "question": "Which top 20 driver created the shortest lap time ever record in a Formula_1 race? Please give them full names.",
+    "evidence": "shortest lap time refers to MIN(time); the time format for the shortest lap time is 'MM:SS.mmm' or 'M:SS.mmm'; full name of the driver refers to forename, surname",
+    "SQL": "WITH lap_times_in_seconds AS (SELECT driverId, (CASE WHEN SUBSTR(time, 1, INSTR(time, ':') - 1) <> '' THEN CAST(SUBSTR(time, 1, INSTR(time, ':') - 1) AS REAL) * 60 ELSE 0 END + CASE WHEN SUBSTR(time, INSTR(time, ':') + 1, INSTR(time, '.') - INSTR(time, ':') - 1) <> '' THEN CAST(SUBSTR(time, INSTR(time, ':') + 1, INSTR(time, '.') - INSTR(time, ':') - 1) AS REAL) ELSE 0 END + CASE WHEN SUBSTR(time, INSTR(time, '.') + 1) <> '' THEN CAST(SUBSTR(time, INSTR(time, '.') + 1) AS REAL) / 1000 ELSE 0 END) AS time_in_seconds FROM lapTimes) SELECT T2.forename, T2.surname, T1.driverId FROM (SELECT driverId, MIN(time_in_seconds) AS min_time_in_seconds FROM lap_times_in_seconds GROUP BY driverId) AS T1 INNER JOIN drivers AS T2 ON T1.driverId = T2.driverId ORDER BY T1.min_time_in_seconds ASC LIMIT 20",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 94,
+    "db_id": "financial",
+    "question": "List out the account numbers of female clients who are oldest and has lowest average salary, calculate the gap between this lowest average salary with the highest average salary?",
+    "evidence": "Female means gender = 'F'; A11 refers to average salary; Gap = highest average salary - lowest average salary; If the person A's birthdate > B's birthdate, it means that person B is order than person A.",
+    "SQL": "SELECT T1.account_id , ( SELECT MAX(A11) - MIN(A11) FROM district ) FROM account AS T1 INNER JOIN district AS T2 ON T1.district_id = T2.district_id INNER JOIN disp AS T3 ON T1.account_id = T3.account_id INNER JOIN client AS T4 ON T3.client_id = T4.client_id WHERE T2.district_id = ( SELECT district_id FROM client WHERE gender = 'F' ORDER BY birth_date ASC LIMIT 1 ) ORDER BY T2.A11 DESC LIMIT 1",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 115,
+    "db_id": "financial",
+    "question": "For the branch which located in the south Bohemia with biggest number of inhabitants, what is the percentage of the male clients?",
+    "evidence": "Percentage of the male clients = DIVIDE(COUNT(male clients), COUNT(clients)) * 100; Male refers to gender = 'M', A3 is the region name. A4 contains the information about inhabitants.",
+    "SQL": "SELECT CAST(SUM(T1.gender = 'M') AS REAL) * 100 / COUNT(T1.client_id) FROM client AS T1 INNER JOIN district AS T2 ON T1.district_id = T2.district_id WHERE T2.A3 = 'south Bohemia' GROUP BY T2.A4 ORDER BY T2.A4 DESC LIMIT 1",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 116,
+    "db_id": "financial",
+    "question": "For the client whose loan was approved first in 1993/7/5, what is the increase rate of his/her account balance from 1993/3/22 to 1998/12/27?",
+    "evidence": "Increase rate of his/her account balance = [(balance of date A - balance of date B) / balance of Date B] * 100%",
+    "SQL": "SELECT CAST((SUM(IIF(T3.date = '1998-12-27', T3.balance, 0)) - SUM(IIF(T3.date = '1993-03-22', T3.balance, 0))) AS REAL) * 100 / SUM(IIF(T3.date = '1993-03-22', T3.balance, 0)) FROM loan AS T1 INNER JOIN account AS T2 ON T1.account_id = T2.account_id INNER JOIN trans AS T3 ON T3.account_id = T2.account_id WHERE T1.date = '1993-07-05'",
+    "difficulty": "challenging"
+  },
+  {
+    "source": {
+      "dataset": "BIRD-SQL Mini-Dev",
+      "repository": "https://github.com/bird-bench/mini_dev",
+      "download": "https://bird-bench.oss-cn-beijing.aliyuncs.com/minidev.zip",
+      "license": "CC BY-SA 4.0"
+    },
+    "question_id": 169,
+    "db_id": "financial",
+    "question": "What was the growth rate of the total amount of loans across all accounts for a male client between 1996 and 1997?",
+    "evidence": "Growth rate = (sum of amount_1997 - sum of amount_1996) / (sum of amount_1996) * 100%; Male refers to gender = 'M'",
+    "SQL": "SELECT CAST((SUM(CASE WHEN STRFTIME('%Y', T1.date) = '1997' THEN T1.amount ELSE 0 END) - SUM(CASE WHEN STRFTIME('%Y', T1.date) = '1996' THEN T1.amount ELSE 0 END)) AS REAL) * 100 / SUM(CASE WHEN STRFTIME('%Y', T1.date) = '1996' THEN T1.amount ELSE 0 END) FROM loan AS T1 INNER JOIN account AS T2 ON T1.account_id = T2.account_id INNER JOIN disp AS T3 ON T3.account_id = T2.account_id INNER JOIN client AS T4 ON T4.client_id = T3.client_id WHERE T4.gender = 'M' AND T3.type = 'OWNER'",
+    "difficulty": "challenging"
+  }
+]

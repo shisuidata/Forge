@@ -1,0 +1,56 @@
+{% extends "product_base.html" %}
+{% block title %}任务详情 · Forge{% endblock %}
+{% block page_actions %}<a class="button" href="/tasks">返回任务</a>{% endblock %}
+{% block content %}
+<div class="content-width" data-product-page="task-detail" data-task-id="{{ task_run_id }}">
+  <section class="task-hero panel" data-task-hero>
+    <div><p class="page-eyebrow">数据任务</p><h2>正在读取任务…</h2><p class="task-id">{{ task_run_id }}</p></div>
+    <span class="status" data-state="running">正在读取</span>
+  </section>
+  <div data-page-notices aria-live="polite"></div>
+
+  <div class="layout-grid main-aside task-detail-grid">
+    <div class="layout-grid">
+      <section class="panel" data-task-plan>
+        <header class="panel-header"><div><h2>计划与进度</h2><p>步骤按依赖顺序推进</p></div></header>
+        <div class="panel-body"><div class="state-box state-box-compact"><p>正在读取执行计划…</p></div></div>
+      </section>
+      <section class="panel" data-task-review hidden>
+        <header class="panel-header"><div><h2>SQL 审核</h2><p>你看到的 SQL 就是将要执行的 SQL</p></div></header>
+        <div class="panel-body" data-task-review-body></div>
+      </section>
+      <section class="panel" data-task-presentation>
+        <header class="panel-header"><div><h2>当前输出</h2><p>数据范围、阶段结果与限制</p></div></header>
+        <div class="panel-body"><div class="state-box state-box-compact"><p>正在读取结果…</p></div></div>
+      </section>
+      <section class="panel" data-task-artifacts>
+        <header class="panel-header"><div><h2>交付与证据</h2><p>查询结果、分析与报告来源</p></div></header>
+        <div class="panel-body flush"><div class="state-box state-box-compact"><p>正在读取交付…</p></div></div>
+      </section>
+    </div>
+    <aside class="layout-grid task-side">
+      <section class="panel" data-task-actions>
+        <header class="panel-header"><div><h2>下一步</h2><p>当前可以执行的操作</p></div></header>
+        <div class="panel-body"><div class="state-box state-box-compact"><p>正在读取操作…</p></div></div>
+      </section>
+      <section class="panel" data-task-relations>
+        <header class="panel-header"><div><h2>关联任务</h2><p>父任务与补查任务</p></div></header>
+        <div class="panel-body"><p class="muted-copy">正在读取关系…</p></div>
+      </section>
+      <section class="panel" data-task-activity>
+        <header class="panel-header"><div><h2>活动记录</h2><p>去敏后的状态变化</p></div></header>
+        <div class="panel-body flush"><div class="state-box state-box-compact"><p>正在读取活动…</p></div></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<dialog class="product-dialog" data-action-dialog>
+  <form method="dialog" class="dialog-card" data-action-form>
+    <header><div><p class="page-eyebrow">任务操作</p><h2 data-dialog-title>确认操作</h2></div><button class="button icon-button button-quiet" value="cancel" aria-label="关闭">×</button></header>
+    <div class="dialog-body"><p data-dialog-copy></p><div class="field" data-dialog-input-wrap hidden><label for="dialog-input">补充信息</label><textarea id="dialog-input" class="textarea" maxlength="20000"></textarea></div></div>
+    <footer><button class="button" value="cancel">取消</button><button class="button button-primary" value="confirm" data-dialog-confirm>确认</button></footer>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}

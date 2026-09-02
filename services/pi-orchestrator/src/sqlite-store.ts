@@ -31,6 +31,9 @@ import {
 import {
   TASK_STATUSES,
   TaskStateError,
+  type ConversationGetOptions,
+  type ConversationListOptions,
+  type ConversationTaskGroup,
   type CreateTaskInput,
   type TaskListOptions,
   type TaskRun,
@@ -77,7 +80,15 @@ function normalizeStageAttempt(attempt: StageAttempt): StageAttempt {
 }
 
 class SqliteTaskStore implements TaskStore {
-  constructor(private readonly database: DatabaseSync) {}
+  #lastCreatedAtMs: number;
+
+  constructor(private readonly database: DatabaseSync) {
+    const row = this.database.prepare(
+      "SELECT MAX(created_at) AS created_at FROM task_runs",
+    ).get() as { created_at: string | null };
+    const persisted = row.created_at === null ? 0 : Date.parse(row.created_at);
+    this.#lastCreatedAtMs = Number.isFinite(persisted) ? persisted : 0;
+  }
 
   create(input: CreateTaskInput): TaskRun {
     for (const [field, value] of Object.entries({
@@ -88,7 +99,9 @@ class SqliteTaskStore implements TaskStore {
     })) {
       if (value.trim().length === 0) throw new TaskStateError(`${field} must not be empty`);
     }
-    const now = new Date().toISOString();
+    const timestamp = Math.max(Date.now(), this.#lastCreatedAtMs + 1);
+    this.#lastCreatedAtMs = timestamp;
+    const now = new Date(timestamp).toISOString();
     const task: TaskRun = {
       task_run_id: `tr_${randomUUID().replaceAll("-", "")}`,
       org_id: input.org_id,
@@ -140,6 +153,10 @@ class SqliteTaskStore implements TaskStore {
       "json_extract(data_json, '$.team_id') = ?",
     ];
     const values: Array<string | number> = [options.orgId, options.teamId];
+    if (options.userId !== undefined) {
+      predicates.push("json_extract(data_json, '$.user_id') = ?");
+      values.push(options.userId);
+    }
     if (options.channel !== undefined) {
       predicates.push("json_extract(data_json, '$.channel') = ?");
       values.push(options.channel);
@@ -162,6 +179,213 @@ class SqliteTaskStore implements TaskStore {
     });
   }
 
+  listChildren(taskRunId: string, limit: number): TaskRun[] {
+    const rows = this.database.prepare(
+      `SELECT data_json FROM task_runs
+       WHERE parent_task_run_id = ?
+       ORDER BY created_at ASC, task_run_id ASC
+       LIMIT ?`,
+    ).all(taskRunId, limit) as Array<{ data_json: string }>;
+    return rows.map((row) => structuredClone(parseJson<TaskRun>(row.data_json, "Child TaskRun")));
+  }
+
+  listConversations(options: ConversationListOptions): ConversationTaskGroup[] {
+    const values: Array<string | number> = [
+      options.orgId,
+      options.teamId,
+      options.userId,
+      options.channel,
+    ];
+    const cursor = options.before === undefined
+      ? ""
+      : "WHERE updated_at < ? OR (updated_at = ? AND conversation_id < ?)";
+    if (options.before !== undefined) {
+      values.push(
+        options.before.updatedAt,
+        options.before.updatedAt,
+        options.before.conversationId,
+      );
+    }
+    values.push(options.limit);
+    const rows = this.database.prepare(
+      `WITH scoped AS (
+         SELECT
+           json_extract(data_json, '$.channel_conversation_id') AS conversation_id,
+           task_run_id,
+           created_at,
+           updated_at
+         FROM task_runs
+         WHERE json_extract(data_json, '$.org_id') = ?
+           AND json_extract(data_json, '$.team_id') = ?
+           AND json_extract(data_json, '$.user_id') = ?
+           AND json_extract(data_json, '$.channel') = ?
+           AND json_extract(data_json, '$.channel_conversation_id') IS NOT NULL
+       ), ranked AS (
+         SELECT *,
+           ROW_NUMBER() OVER (
+             PARTITION BY conversation_id ORDER BY created_at ASC, task_run_id ASC
+           ) AS first_rank,
+           ROW_NUMBER() OVER (
+             PARTITION BY conversation_id ORDER BY updated_at DESC, task_run_id DESC
+           ) AS latest_rank
+         FROM scoped
+       ), grouped AS (
+         SELECT
+           conversation_id,
+           MIN(created_at) AS started_at,
+           MAX(updated_at) AS updated_at,
+           COUNT(*) AS task_count,
+           MAX(CASE WHEN first_rank = 1 THEN task_run_id END) AS first_task_run_id,
+           MAX(CASE WHEN latest_rank = 1 THEN task_run_id END) AS latest_task_run_id
+         FROM ranked
+         GROUP BY conversation_id
+       )
+       SELECT conversation_id, started_at, updated_at, task_count,
+         first_task_run_id, latest_task_run_id
+       FROM grouped
+       ${cursor}
+       ORDER BY updated_at DESC, conversation_id DESC
+       LIMIT ?`,
+    ).all(...values) as Array<{
+      conversation_id: string;
+      started_at: string;
+      updated_at: string;
+      task_count: number | bigint;
+      first_task_run_id: string;
+      latest_task_run_id: string;
+    }>;
+    return rows.map((row) => options.includeTasks === false
+      ? {
+          conversationId: row.conversation_id,
+          taskCount: Number(row.task_count),
+          startedAt: row.started_at,
+          updatedAt: row.updated_at,
+          firstTaskRunId: row.first_task_run_id,
+          latestTaskRunId: row.latest_task_run_id,
+          tasks: [],
+          tasksTruncated: Number(row.task_count) > 0,
+        }
+      : this.#conversationGroup(row, options, options.taskLimit));
+  }
+
+  getConversation(options: ConversationGetOptions): ConversationTaskGroup | undefined {
+    const row = this.database.prepare(
+      `SELECT
+         MIN(created_at) AS started_at,
+         MAX(updated_at) AS updated_at,
+         COUNT(*) AS task_count
+       FROM task_runs
+       WHERE json_extract(data_json, '$.org_id') = ?
+         AND json_extract(data_json, '$.team_id') = ?
+         AND json_extract(data_json, '$.user_id') = ?
+         AND json_extract(data_json, '$.channel') = ?
+         AND json_extract(data_json, '$.channel_conversation_id') = ?`,
+    ).get(
+      options.orgId,
+      options.teamId,
+      options.userId,
+      options.channel,
+      options.conversationId,
+    ) as {
+      started_at: string | null;
+      updated_at: string | null;
+      task_count: number | bigint;
+    };
+    if (Number(row.task_count) === 0 || row.started_at === null || row.updated_at === null) {
+      return undefined;
+    }
+    const endpoints = this.database.prepare(
+      `SELECT
+         (SELECT task_run_id FROM task_runs
+          WHERE json_extract(data_json, '$.org_id') = ?
+            AND json_extract(data_json, '$.team_id') = ?
+            AND json_extract(data_json, '$.user_id') = ?
+            AND json_extract(data_json, '$.channel') = ?
+            AND json_extract(data_json, '$.channel_conversation_id') = ?
+          ORDER BY created_at ASC, task_run_id ASC LIMIT 1) AS first_task_run_id,
+         (SELECT task_run_id FROM task_runs
+       WHERE json_extract(data_json, '$.org_id') = ?
+         AND json_extract(data_json, '$.team_id') = ?
+         AND json_extract(data_json, '$.user_id') = ?
+         AND json_extract(data_json, '$.channel') = ?
+         AND json_extract(data_json, '$.channel_conversation_id') = ?
+       ORDER BY updated_at DESC, task_run_id DESC LIMIT 1) AS latest_task_run_id`,
+    ).get(
+      options.orgId,
+      options.teamId,
+      options.userId,
+      options.channel,
+      options.conversationId,
+      options.orgId,
+      options.teamId,
+      options.userId,
+      options.channel,
+      options.conversationId,
+    ) as { first_task_run_id: string; latest_task_run_id: string };
+    return this.#conversationGroup({
+      conversation_id: options.conversationId,
+      started_at: row.started_at,
+      updated_at: row.updated_at,
+      task_count: row.task_count,
+      first_task_run_id: endpoints.first_task_run_id,
+      latest_task_run_id: endpoints.latest_task_run_id,
+    }, options, options.taskLimit);
+  }
+
+  #conversationGroup(
+    row: {
+      conversation_id: string;
+      started_at: string;
+      updated_at: string;
+      task_count: number | bigint;
+      first_task_run_id: string;
+      latest_task_run_id: string;
+    },
+    options: ConversationListOptions | ConversationGetOptions,
+    taskLimit: number,
+  ): ConversationTaskGroup {
+    const beforeTask = "beforeTask" in options ? options.beforeTask : undefined;
+    const taskCursor = beforeTask === undefined
+      ? ""
+      : "AND (created_at < ? OR (created_at = ? AND task_run_id < ?))";
+    const values: Array<string | number> = [
+      options.orgId,
+      options.teamId,
+      options.userId,
+      options.channel,
+      row.conversation_id,
+    ];
+    if (beforeTask !== undefined) {
+      values.push(beforeTask.createdAt, beforeTask.createdAt, beforeTask.taskRunId);
+    }
+    values.push(taskLimit + 1);
+    const taskRows = this.database.prepare(
+      `SELECT data_json FROM task_runs
+       WHERE json_extract(data_json, '$.org_id') = ?
+         AND json_extract(data_json, '$.team_id') = ?
+         AND json_extract(data_json, '$.user_id') = ?
+         AND json_extract(data_json, '$.channel') = ?
+         AND json_extract(data_json, '$.channel_conversation_id') = ?
+         ${taskCursor}
+       ORDER BY created_at DESC, task_run_id DESC
+       LIMIT ?`,
+    ).all(...values) as Array<{ data_json: string }>;
+    const tasks = taskRows
+      .slice(0, taskLimit)
+      .map((taskRow) => parseJson<TaskRun>(taskRow.data_json, "Conversation TaskRun"))
+      .reverse();
+    return {
+      conversationId: row.conversation_id,
+      taskCount: Number(row.task_count),
+      startedAt: row.started_at,
+      updatedAt: row.updated_at,
+      firstTaskRunId: row.first_task_run_id,
+      latestTaskRunId: row.latest_task_run_id,
+      tasks: tasks.map((task) => structuredClone(task)),
+      tasksTruncated: taskRows.length > taskLimit,
+    };
+  }
+
   transition(options: {
     taskRunId: string;
     expectedStatus: TaskStatus;
@@ -178,11 +402,13 @@ class SqliteTaskStore implements TaskStore {
     if (TERMINAL_STATUSES.has(task.status)) {
       throw new TaskStateError(`Terminal TaskRun cannot transition: ${task.status}`);
     }
+    const updatedAtMs = Math.max(Date.now(), Date.parse(task.updated_at) + 1);
+    this.#lastCreatedAtMs = Math.max(this.#lastCreatedAtMs, updatedAtMs);
     const updated: TaskRun = {
       ...task,
       status: options.status,
       current_stage: options.currentStage,
-      updated_at: new Date().toISOString(),
+      updated_at: new Date(updatedAtMs).toISOString(),
     };
     const result = this.database
       .prepare(
@@ -530,12 +756,13 @@ class SqliteStageAttemptStore implements StageAttemptStore {
       throw new TaskStateError(`StageAttempt is already terminal: ${attempt.status}`);
     }
     const now = new Date().toISOString();
+    const normalizedError = error?.trim();
     const updated: StageAttempt = {
       ...attempt,
       status,
       updated_at: now,
       finished_at: now,
-      error: error?.slice(0, 2_000) ?? null,
+      error: normalizedError ? normalizedError.slice(0, 2_000) : null,
     };
     const result = this.database
       .prepare(
