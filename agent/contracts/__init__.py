@@ -35,6 +35,7 @@ _CONTRACT_FILES = {
     "datasource_binding_v1": "datasource-binding-v1.schema.json",
     "registry_binding_v1": "registry-binding-v1.schema.json",
     "governance_action_catalog_v1": "governance-action-catalog-v1.schema.json",
+    "benchmark_failure_v1": "benchmark-failure-v1.schema.json",
     "query_candidate_v1": "query-candidate-v1.schema.json",
     "product_projection_v1": "product-projection-v1.schema.json",
 }

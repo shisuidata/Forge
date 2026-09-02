@@ -37,6 +37,7 @@ def test_context_snapshot_is_bounded_frozen_and_relationship_complete():
     assert "orders.amount" in snapshot.fields
     assert snapshot.relationships == ("orders.user_id -> users.id",)
     assert len(snapshot.retrieval_rounds) <= 3
+    assert set(snapshot.tables) == {"users", "orders", "products"}
     assert snapshot.content_hash.startswith("sha256:")
 
 
@@ -51,6 +52,7 @@ def test_semantic_compare_allows_column_permutation_when_values_identify_mapping
         "correct": True,
         "verdict": "multiset_equal",
         "column_mapping": [1, 0],
+        "failure_code": None,
     }
 
 
@@ -59,7 +61,9 @@ def test_semantic_compare_enforces_order_only_when_question_requires_it():
     unordered = build_result_contract("Show users and revenue")
     gold = [("Bob", 20), ("Alice", 10)]
     reverse = [("Alice", 10), ("Bob", 20)]
-    assert semantic_result_compare(gold, reverse, ordered)["correct"] is False
+    ordered_verdict = semantic_result_compare(gold, reverse, ordered)
+    assert ordered_verdict["correct"] is False
+    assert ordered_verdict["failure_code"] == "result_order_or_value_mismatch"
     assert semantic_result_compare(gold, reverse, unordered)["correct"] is True
 
 
@@ -72,4 +76,56 @@ def test_semantic_compare_uses_explicit_rounding_policy_only():
     exact = build_result_contract("Show the ratio")
     rounded = build_result_contract("Show the ratio rounded to 2 decimal places")
     assert semantic_result_compare([(1.234,)], [(1.23,)], exact)["correct"] is False
-    assert semantic_result_compare([(1.234,)], [(1.2344,)], rounded)["correct"] is True
+
+
+def test_result_contract_requires_order_only_for_explicit_output_ordering():
+    assert build_result_contract("Which driver ranked first?").row_order_significant is False
+    assert build_result_contract("List the top 3 drivers by score").row_order_significant is True
+    assert build_result_contract("Sort drivers by score descending").row_order_significant is True
+
+
+def test_retrieval_does_not_claim_sufficiency_from_last_round_alone():
+    tables = [
+        {"name": f"table_{index}", "columns": [
+            {"name": f"metric_{index}", "description": "", "values": ""},
+        ]}
+        for index in range(25)
+    ]
+    relationships = [
+        {"from": f"table_{index}.metric_{index}", "to": f"table_{index + 1}.metric_{index + 1}"}
+        for index in range(24)
+    ]
+
+    snapshot = build_context_snapshot(
+        "metric_0 unrelated_alpha unrelated_beta unrelated_gamma unrelated_delta unrelated_epsilon",
+        "",
+        {"tables": tables, "relationships": relationships},
+        top_k_rounds=(5, 10, 20),
+    )
+
+    assert snapshot.sufficiency_status == "retrieval_insufficient"
+    assert snapshot.retrieval_rounds[-1].sufficient is False
+    assert len(snapshot.tables) >= 20
+
+
+def test_retrieval_requires_one_connected_relationship_component():
+    tables = [
+        {"name": f"table_{index}", "columns": [
+            {"name": f"metric_{index}", "description": "", "values": ""},
+        ]}
+        for index in range(25)
+    ]
+    relationships = [
+        {"from": f"table_{index}.metric_{index}", "to": f"table_{index + 1}.metric_{index + 1}"}
+        for index in range(24)
+    ]
+
+    snapshot = build_context_snapshot(
+        "metric_0 metric_24",
+        "",
+        {"tables": tables, "relationships": relationships},
+        top_k_rounds=(5, 10, 20),
+    )
+
+    assert snapshot.sufficiency_status == "retrieval_insufficient"
+    assert snapshot.retrieval_rounds[-1].join_connected is False

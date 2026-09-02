@@ -130,18 +130,39 @@ _QUERY_RULES_BENCHMARK = """\
 # ── 按需加载的示例（关键词 → 文件名）────────────────────────────────────────
 _EXAMPLES_DIR = Path(__file__).parent / "prompt_examples"
 
-_EXAMPLE_TRIGGERS: list[tuple[list[str], str]] = [
-    # (触发关键词列表, 文件名)
-    (["or", "或者", "任意", "其中一个"], "filter_or.md"),
-    (["每个", "每组", "每类", "各品类", "各组", "topn", "前3", "前5", "前10", "前n"], "topn.md"),
-    (["lag", "lead", "上一", "上次", "环比", "前一", "前次", "时序", "累计", "滚动", "窗口", "占比", "排名",
-      "按月", "每月", "月份", "按年", "每季", "间隔", "天数", "相邻"], "window_lag.md"),
-    (["cte", "子查询", "多步", "先计算", "先统计", "先算", "再过滤", "再筛选", "再按",
-      "率", "比率", "占比", "复购", "转化", "退款率", "退款", "高于平均", "超过平均", "均值以上",
-      "既有", "同时", "分组排名", "组内排名"], "cte.md"),
-    (["从未", "没有过", "不存在", "anti", "semi", "未曾", "没有写过", "没有下过",
-      "但.*没有", "加入.*但.*未", "有.*但.*没"], "antijoin.md"),
+_EXAMPLE_TRIGGERS: list[tuple[tuple[re.Pattern[str], ...], str]] = [
+    ((
+        re.compile(r"\b(?:or|either|any\s+of)\b", re.IGNORECASE),
+        re.compile(r"(?:或者|或是|其中(?:任意)?一个|任意(?:一个|一项))"),
+    ), "filter_or.md"),
+    ((
+        re.compile(r"\b(?:top|bottom)\s*\d+\b", re.IGNORECASE),
+        re.compile(r"(?:前|后)\s*(?:\d+|n)"),
+        re.compile(r"(?:每个|每组|每类|各(?:组|类|品类)).*(?:排名|前|后)"),
+        re.compile(r"\b(?:for each|per)\b.*\b(?:top|bottom|rank(?:ed|ing)?)\b", re.IGNORECASE),
+    ), "topn.md"),
+    ((
+        re.compile(r"\b(?:lag|lead|previous|next|cumulative|running total|moving average)\b", re.IGNORECASE),
+        re.compile(r"\b(?:month|quarter|year)[ -]over[ -](?:month|quarter|year)\b", re.IGNORECASE),
+        re.compile(r"(?:上一|上次|环比|同比|前一|前次|时序|累计|滚动|窗口|相邻)"),
+    ), "window_lag.md"),
+    ((
+        re.compile(r"\b(?:cte|subquer(?:y|ies)|percentage|ratio|rate|conversion|retention)\b", re.IGNORECASE),
+        re.compile(r"\b(?:above|below|higher than|lower than)\s+(?:the\s+)?average\b", re.IGNORECASE),
+        re.compile(r"(?:子查询|多步|先(?:计算|统计|算).*(?:再|然后)|比率|占比|转化率|退款率|高于平均|超过平均|均值以上|既有.*又有)"),
+    ), "cte.md"),
+    ((
+        re.compile(r"\b(?:anti|semi)[ -]?join\b", re.IGNORECASE),
+        re.compile(r"\b(?:without|never)\b", re.IGNORECASE),
+        re.compile(r"\b(?:does not|do not|did not|no)\s+have\b", re.IGNORECASE),
+        re.compile(r"(?:从未|没有过|不存在|未曾|但.*没有|加入.*但.*未|有.*但.*没)"),
+    ), "antijoin.md"),
 ]
+
+_RELATIVE_TIME_PATTERNS = (
+    re.compile(r"\b(?:today|yesterday|tomorrow|this\s+(?:week|month|quarter|year)|last\s+(?:week|month|quarter|year)|recent(?:ly)?|past\s+\d+\s+days?)\b", re.IGNORECASE),
+    re.compile(r"(?:今天|昨日|昨天|明天|今年|本月|本周|本季度|上周|上月|上季度|最近\s*\d*\s*天|近\s*\d+\s*天)"),
+)
 
 
 @functools.lru_cache(maxsize=16)
@@ -155,15 +176,12 @@ def _load_example(name: str) -> str:
 
 
 def _detect_needed_examples(question: str | None) -> list[str]:
-    """根据问题关键词决定注入哪些示例，返回文件名列表（保持固定顺序）。
-    关键词支持正则表达式（如 \"有.*但.*没\"）和普通字符串。
-    """
+    """根据跨语言意图模式按固定顺序注入相关示例。"""
     if not question:
         return []
-    q = question.lower()
     seen: list[str] = []
-    for keywords, filename in _EXAMPLE_TRIGGERS:
-        if any(re.search(kw, q) for kw in keywords):
+    for patterns, filename in _EXAMPLE_TRIGGERS:
+        if any(pattern.search(question) for pattern in patterns):
             seen.append(filename)
     return seen
 
@@ -198,16 +216,16 @@ def build_system(registry_context: str, question: str | None = None,
 
     sections.append(query_rules)
 
-    # 注入当前日期，确保 LLM 正确理解"今年""本月""上周"等相对时间
-    from datetime import date
-    today = date.today()
-    sections.append(
-        f"## 当前时间\n\n"
-        f"今天是 {today.isoformat()}（{today.strftime('%Y年%-m月%-d日')}，"
-        f"星期{['一','二','三','四','五','六','日'][today.weekday()]}）。\n"
-        f"当用户说「今年」指 {today.year} 年，「本月」指 {today.strftime('%Y-%m')}，"
-        f"「上周」「最近7天」等均以今天为基准计算。"
-    )
+    if question and any(pattern.search(question) for pattern in _RELATIVE_TIME_PATTERNS):
+        from datetime import date
+        today = date.today()
+        sections.append(
+            f"## 当前时间\n\n"
+            f"今天是 {today.isoformat()}（{today.strftime('%Y年%-m月%-d日')}，"
+            f"星期{['一','二','三','四','五','六','日'][today.weekday()]}）。\n"
+            f"当用户说「今年」指 {today.year} 年，「本月」指 {today.strftime('%Y-%m')}，"
+            f"「上周」「最近7天」等均以今天为基准计算。"
+        )
 
     sections.append(f"## 当前数据库结构\n\n{registry_context}")
 

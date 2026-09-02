@@ -280,6 +280,7 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "datasource_binding_v1",
         "registry_binding_v1",
         "governance_action_catalog_v1",
+        "benchmark_failure_v1",
         "query_candidate_v1",
         "product_projection_v1",
     )
@@ -314,6 +315,26 @@ def test_query_candidate_contract_accepts_both_input_kinds(candidate: dict) -> N
 def test_query_candidate_contract_rejects_ambiguous_shapes(candidate: dict) -> None:
     with pytest.raises(ValidationError):
         validate_contract("query_candidate_v1", candidate)
+
+def test_benchmark_failure_contract_accepts_bounded_taxonomy() -> None:
+    validate_contract("benchmark_failure_v1", {
+        "stage": "execution",
+        "code": "unknown_column",
+        "retryable": True,
+    })
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        {"stage": "execution", "code": "raw database secret", "retryable": True},
+        {"stage": "unknown", "code": "execution_failed", "retryable": False},
+        {"stage": "execution", "code": "execution_failed"},
+    ],
+)
+def test_benchmark_failure_contract_rejects_unbounded_shapes(failure: dict) -> None:
+    with pytest.raises(ValidationError):
+        validate_contract("benchmark_failure_v1", failure)
 
 
 def test_valid_instances_satisfy_contracts(valid_instances: dict[str, dict]) -> None:

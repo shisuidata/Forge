@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/benchmark-failure-v1.schema.json",
+  "title": "Benchmark Failure V1",
+  "description": "Bounded, non-sensitive failure taxonomy shared by Pi and Forge benchmark paths.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["stage", "code", "retryable"],
+  "properties": {
+    "stage": {
+      "type": "string",
+      "enum": [
+        "context",
+        "generation",
+        "parse",
+        "candidate_contract",
+        "compile",
+        "assurance",
+        "execution",
+        "result_contract",
+        "official_ea"
+      ]
+    },
+    "code": {
+      "type": "string",
+      "enum": [
+        "retrieval_insufficient",
+        "context_failed",
+        "agent_failed",
+        "generation_empty",
+        "malformed_output",
+        "candidate_contract_invalid",
+        "compile_failed",
+        "readonly_violation",
+        "sql_parse_failed",
+        "unknown_table",
+        "unknown_column",
+        "unknown_schema_reference",
+        "dialect_unsupported",
+        "execution_timeout",
+        "execution_failed",
+        "result_row_count_mismatch",
+        "result_column_count_mismatch",
+        "result_column_alignment_ambiguous",
+        "result_order_or_value_mismatch",
+        "result_value_mismatch",
+        "official_ea_mismatch"
+      ]
+    },
+    "retryable": {
+      "type": "boolean"
+    }
+  }
+}

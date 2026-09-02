@@ -35,7 +35,8 @@ interface ArmEvaluation extends Record<string, unknown> {
   execution_status: ArmMetricsV2["execution_status"];
   official_ea: boolean;
   contract_accuracy: boolean;
-  error_code: string | null;
+  failure: NonNullable<ArmMetricsV2["failure"]> | null;
+  error_code: ArmMetricsV2["error_code"];
   sql: string | null;
 }
 interface PersistedRun {
@@ -65,6 +66,7 @@ const emptyArm = (): ArmMetricsV2 => ({
   execution_status: "pending",
   official_ea: null,
   contract_accuracy: null,
+  failure: null,
   error_code: null,
   sql: null,
   output: null,
@@ -87,17 +89,7 @@ function assistantText(messages: readonly any[]): string {
   }
   return "";
 }
-function cleanJson(text: string): unknown {
-  let value = text.trim();
-  if (value.startsWith("```")) value = value.split(/\r?\n/).slice(1, -1).join("\n").trim();
-  return JSON.parse(value);
-}
-function cleanSql(text: string): string {
-  let value = text.trim();
-  if (value.startsWith("```")) value = value.split(/\r?\n/).slice(1, -1).join("\n").trim();
-  if (value.toLowerCase().startsWith("sql\n")) value = value.slice(4).trim();
-  return value.replace(/;\s*$/, "");
-}
+
 
 export class PiBenchmarkRuntime {
   readonly #db: DatabaseSync;
@@ -231,6 +223,7 @@ export class PiBenchmarkRuntime {
         status: "pending",
         current_stage: "queued",
         context_snapshot: null,
+        failure: null,
         forge: emptyArm(),
         direct: emptyArm(),
         winner: null,
@@ -440,14 +433,19 @@ export class PiBenchmarkRuntime {
       item.forge = forge;
       item.direct = direct;
       item.current_stage = "evaluated";
+      item.failure = null;
       item.winner = forge.contract_accuracy === direct.contract_accuracy
         ? "tie"
         : forge.contract_accuracy ? "forge" : "direct";
       item.status = "passed";
       item.completed_at = now();
     } catch (error) {
+      const message = error instanceof Error ? error.message : "case failed";
       item.status = "failed";
       item.current_stage = "failed";
+      item.failure = message === "retrieval_insufficient"
+        ? { stage: "context", code: "retrieval_insufficient", retryable: true }
+        : { stage: "context", code: "context_failed", retryable: true };
       item.completed_at = now();
       this.#log(
         runId,
@@ -455,8 +453,8 @@ export class PiBenchmarkRuntime {
         "shared",
         "case",
         "error",
-        error instanceof Error ? error.message : "case failed",
-        {},
+        message,
+        { failure: item.failure },
       );
     }
     this.#saveCase(runId, item);
@@ -548,7 +546,10 @@ export class PiBenchmarkRuntime {
         "The Gold SQL and Gold result are intentionally hidden.",
         branchInstructions,
         "Question: " + item.question,
-        "ContextSnapshot: " + JSON.stringify(context.context_snapshot),
+        "ContextSnapshot: " + JSON.stringify(
+          context.context_snapshot,
+          (key, value) => key === "question" || key === "evidence" ? undefined : value,
+        ),
       ].join("\n\n");
       this.#log(
         runId, item.case_id, arm, "generation.prompt", "info",
@@ -568,15 +569,8 @@ export class PiBenchmarkRuntime {
         { output_chars: raw.length, stream_events: streamEvents, tokens: stats.tokens },
       );
       session.dispose();
-      this.#log(runId, item.case_id, arm, "output.parse", "info", arm === "forge" ? "开始解析 Forge JSON。" : "开始提取只读 SQL。", {});
-      const output = arm === "forge" ? cleanJson(raw) : cleanSql(raw);
-      this.#log(
-        runId, item.case_id, arm, "output.parse", "success",
-        arm === "forge"
-          ? "Forge JSON 解析完成：" + Object.keys(output as Record<string, unknown>).join(", ") + "。"
-          : "SQL 提取完成：" + String(output).length + " 字符。",
-        { output_type: arm, output_chars: raw.length },
-      );
+      this.#log(runId, item.case_id, arm, "output.handoff", "info", "提交原始候选，由 Forge 统一解析与保障。", {});
+      const output = raw;
       this.#log(runId, item.case_id, arm, "evaluation.request", "info", "提交 Forge 执行层进行编译、只读执行和双评价。", {});
       const evaluation = await this.#forgePost<ArmEvaluation>(
         "/api/internal/benchmark-v2/evaluate",
@@ -593,6 +587,7 @@ export class PiBenchmarkRuntime {
         execution_status: evaluation.execution_status,
         official_ea: evaluation.official_ea,
         contract_accuracy: evaluation.contract_accuracy,
+        failure: evaluation.failure,
         error_code: evaluation.error_code,
         sql: evaluation.sql,
         output,
@@ -626,6 +621,7 @@ export class PiBenchmarkRuntime {
         generation_ms: Math.round((performance.now() - started) * 10) / 10,
         compile_status: arm === "forge" ? "failed" : "not_applicable",
         execution_status: "failed",
+        failure: { stage: "generation", code: "agent_failed", retryable: true },
         error_code: "agent_failed",
       };
     } finally {

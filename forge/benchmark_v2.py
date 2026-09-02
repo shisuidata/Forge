@@ -12,11 +12,18 @@ from typing import Any
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[\u4e00-\u9fff]{1,8}")
-_ORDER_TERMS = (
-    "order", "sort", "ascending", "descending", "highest", "lowest", "top ",
-    "first", "second", "rank", "排名", "排序", "最高", "最低", "前", "第",
+_ORDER_PATTERNS = (
+    re.compile(r"\b(?:order(?:ed)?|sort(?:ed)?)\s+by\b", re.IGNORECASE),
+    re.compile(r"\bin\s+(?:ascending|descending)\s+order\b", re.IGNORECASE),
+    re.compile(r"\b(?:ascending|descending)\b", re.IGNORECASE),
+    re.compile(r"\b(?:top|bottom)\s+\d+\b", re.IGNORECASE),
+    re.compile(r"(?:按.+(?:排序|升序|降序)|(?:前|后)\s*\d+|升序|降序)"),
 )
-_ROUND_TERMS = ("round", "decimal", "approximately", "四舍五入", "小数", "约")
+_ROUND_PATTERNS = (
+    re.compile(r"\bround(?:ed|ing)?\b", re.IGNORECASE),
+    re.compile(r"\b(?:decimal places?|approximately)\b", re.IGNORECASE),
+    re.compile(r"(?:四舍五入|\d+\s*位小数|近似值)"),
+)
 
 
 def _canonical(value: Any) -> str:
@@ -69,11 +76,11 @@ class ContextSnapshot:
 def build_result_contract(question: str, evidence: str = "") -> ResultContract:
     lowered = question.lower()
     semantics = tuple(sorted(_tokens(question) | _tokens(evidence)))
-    row_order = any(term in lowered or term in question for term in _ORDER_TERMS)
-    numeric_mode = "rounded" if any(term in lowered or term in question for term in _ROUND_TERMS) else "exact"
+    row_order = any(pattern.search(question) for pattern in _ORDER_PATTERNS)
+    numeric_mode = "rounded" if any(pattern.search(question) for pattern in _ROUND_PATTERNS) else "exact"
     scale_match = re.search(r"(\d+)\s*(?:decimal places?|位小数)", lowered)
     scale = int(scale_match.group(1)) if scale_match else None
-    grain = "grouped" if any(term in lowered for term in ("each ", "per ", "by ", "每个", "各", "按")) else "scalar_or_detail"
+    grain = "grouped" if re.search(r"(?:\b(?:each|per)\b|\bgrouped?\s+by\b|每个|各(?:个|类|项)?|按.+(?:分组|统计))", lowered) else "scalar_or_detail"
     body = {
         "semantics": semantics,
         "column_order": False,
@@ -146,16 +153,31 @@ def semantic_result_compare(
     contract: ResultContract,
 ) -> dict[str, Any]:
     if len(gold_rows) != len(predicted_rows):
-        return {"correct": False, "verdict": "row_count_mismatch", "column_mapping": None}
+        return {
+            "correct": False,
+            "verdict": "row_count_mismatch",
+            "column_mapping": None,
+            "failure_code": "result_row_count_mismatch",
+        }
     gold_width = len(gold_rows[0]) if gold_rows else 0
     predicted_width = len(predicted_rows[0]) if predicted_rows else 0
     if gold_width != predicted_width or any(len(row) != gold_width for row in gold_rows + predicted_rows):
-        return {"correct": False, "verdict": "column_count_mismatch", "column_mapping": None}
+        return {
+            "correct": False,
+            "verdict": "column_count_mismatch",
+            "column_mapping": None,
+            "failure_code": "result_column_count_mismatch",
+        }
     mapping = tuple(range(gold_width))
     if not contract.column_order_significant:
         resolved = _column_mapping(gold_rows, predicted_rows, contract)
         if resolved is None:
-            return {"correct": False, "verdict": "column_alignment_ambiguous", "column_mapping": None}
+            return {
+                "correct": False,
+                "verdict": "column_alignment_ambiguous",
+                "column_mapping": None,
+                "failure_code": "result_column_alignment_ambiguous",
+            }
         mapping = resolved
     aligned = [tuple(row[index] for index in mapping) for row in predicted_rows]
     gold = _normalize_rows(gold_rows, contract)
@@ -163,13 +185,21 @@ def semantic_result_compare(
     if contract.row_order_significant:
         correct = gold == predicted
         verdict = "ordered_equal" if correct else "row_order_or_value_mismatch"
+        failure_code = None if correct else "result_order_or_value_mismatch"
     elif contract.duplicate_policy == "multiset":
         correct = Counter(gold) == Counter(predicted)
         verdict = "multiset_equal" if correct else "multiset_mismatch"
+        failure_code = None if correct else "result_value_mismatch"
     else:
         correct = set(gold) == set(predicted)
         verdict = "set_equal" if correct else "set_mismatch"
-    return {"correct": correct, "verdict": verdict, "column_mapping": list(mapping)}
+        failure_code = None if correct else "result_value_mismatch"
+    return {
+        "correct": correct,
+        "verdict": verdict,
+        "column_mapping": list(mapping),
+        "failure_code": failure_code,
+    }
 
 
 def _field_records(structure: dict[str, Any]) -> list[dict[str, str]]:
@@ -200,6 +230,31 @@ def _score(text_tokens: set[str], candidate: str) -> float:
     return overlap / math.sqrt(max(1, len(candidate_tokens)))
 
 
+def _relationships_connect(
+    relevant_tables: set[str],
+    chosen_tables: set[str],
+    relationships: list[tuple[str, str]],
+) -> bool:
+    if len(relevant_tables) <= 1:
+        return True
+    graph: dict[str, set[str]] = defaultdict(set)
+    for left, right in relationships:
+        left_table = left.split(".", 1)[0]
+        right_table = right.split(".", 1)[0]
+        if left_table in chosen_tables and right_table in chosen_tables:
+            graph[left_table].add(right_table)
+            graph[right_table].add(left_table)
+    pending = [next(iter(relevant_tables))]
+    visited: set[str] = set()
+    while pending:
+        table = pending.pop()
+        if table in visited:
+            continue
+        visited.add(table)
+        pending.extend(graph[table] - visited)
+    return relevant_tables.issubset(visited)
+
+
 def build_context_snapshot(
     question: str,
     evidence: str,
@@ -207,6 +262,12 @@ def build_context_snapshot(
     *,
     top_k_rounds: tuple[int, ...] = (5, 10, 20),
 ) -> ContextSnapshot:
+    if (
+        not top_k_rounds
+        or any(top_k <= 0 for top_k in top_k_rounds)
+        or tuple(sorted(set(top_k_rounds))) != top_k_rounds
+    ):
+        raise ValueError("top_k_rounds must contain unique, increasing positive budgets")
     query_tokens = _tokens(question + " " + evidence)
     concepts = tuple(sorted(query_tokens))
     fields = _field_records(structure)
@@ -220,22 +281,15 @@ def build_context_snapshot(
         (str(item.get("from", "")), str(item.get("to", "")))
         for item in structure.get("relationships", [])
     ]
+    ranked_tables = sorted(table_scores, key=lambda table: (-table_scores[table], table))
+    full_schema_fits = bool(ranked_tables) and len(ranked_tables) <= max(top_k_rounds)
+    round_budgets = (len(ranked_tables),) if full_schema_fits else top_k_rounds
     rounds: list[RetrievalRound] = []
     selected_tables: tuple[str, ...] = ()
     selected_fields: tuple[str, ...] = ()
     selected_relationships: tuple[str, ...] = ()
-    for round_index, top_k in enumerate(top_k_rounds, start=1):
-        ranked_tables = sorted(table_scores, key=lambda table: (-table_scores[table], table))
-        chosen = set(ranked_tables[: min(top_k, len(ranked_tables))])
-        expanded = True
-        while expanded:
-            expanded = False
-            for left, right in relationships:
-                left_table, right_table = left.split(".", 1)[0], right.split(".", 1)[0]
-                if left_table in chosen and right_table not in chosen and len(chosen) < top_k + 3:
-                    chosen.add(right_table); expanded = True
-                if right_table in chosen and left_table not in chosen and len(chosen) < top_k + 3:
-                    chosen.add(left_table); expanded = True
+    for round_index, top_k in enumerate(round_budgets, start=1):
+        chosen = set(ranked_tables if full_schema_fits else ranked_tables[: min(top_k, len(ranked_tables))])
         chosen_fields = [
             f"{table}.{field}" for score, table, field in sorted(field_scores, reverse=True)
             if table in chosen and score > 0
@@ -246,13 +300,18 @@ def build_context_snapshot(
             f"{left} -> {right}" for left, right in relationships
             if left.split(".", 1)[0] in chosen and right.split(".", 1)[0] in chosen
         )
-        covered = set()
+        covered: set[str] = set()
         for record in fields:
             if record["table"] in chosen:
                 covered |= query_tokens & _tokens(record["text"])
         concept_coverage = len(covered) / max(1, len(query_tokens))
-        join_connected = len(chosen) <= 1 or bool(selected_relationships)
-        sufficient = bool(selected_fields) and join_connected and (concept_coverage >= 0.18 or round_index == len(top_k_rounds))
+        relevant_tables = {
+            table for table in chosen if table_scores.get(table, 0.0) > 0
+        }
+        join_connected = _relationships_connect(relevant_tables, chosen, relationships)
+        sufficient = full_schema_fits or (
+            bool(selected_fields) and join_connected and concept_coverage >= 0.18
+        )
         rounds.append(RetrievalRound(
             round_index=round_index,
             top_k=top_k,
@@ -263,8 +322,6 @@ def build_context_snapshot(
             join_connected=join_connected,
             sufficient=sufficient,
         ))
-        if sufficient:
-            break
     status = "sufficient" if rounds[-1].sufficient else "retrieval_insufficient"
     contract = build_result_contract(question, evidence)
     body = {

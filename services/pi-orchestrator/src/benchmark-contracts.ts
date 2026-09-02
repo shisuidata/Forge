@@ -5,6 +5,28 @@ export type BenchmarkRunStatus = (typeof BENCHMARK_RUN_STATUSES)[number];
 export type BenchmarkArm = "forge" | "direct";
 export type BenchmarkNodeStatus = "pending" | "running" | "passed" | "failed" | "skipped" | "cancelled";
 
+export const BENCHMARK_FAILURE_STAGES = [
+  "context", "generation", "parse", "candidate_contract", "compile",
+  "assurance", "execution", "result_contract", "official_ea",
+] as const;
+export type BenchmarkFailureStage = (typeof BENCHMARK_FAILURE_STAGES)[number];
+
+export const BENCHMARK_FAILURE_CODES = [
+  "retrieval_insufficient", "context_failed", "agent_failed", "generation_empty", "malformed_output",
+  "candidate_contract_invalid", "compile_failed", "readonly_violation", "sql_parse_failed",
+  "unknown_table", "unknown_column", "unknown_schema_reference", "dialect_unsupported",
+  "execution_timeout", "execution_failed", "result_row_count_mismatch",
+  "result_column_count_mismatch", "result_column_alignment_ambiguous",
+  "result_order_or_value_mismatch", "result_value_mismatch", "official_ea_mismatch",
+] as const;
+export type BenchmarkFailureCode = (typeof BENCHMARK_FAILURE_CODES)[number];
+
+export interface BenchmarkFailureV1 {
+  stage: BenchmarkFailureStage;
+  code: BenchmarkFailureCode;
+  retryable: boolean;
+}
+
 export interface BenchmarkModelSnapshot {
   provider: string;
   model: string;
@@ -60,7 +82,8 @@ export interface ArmMetricsV2 {
   execution_status: "pending" | "passed" | "failed" | "skipped";
   official_ea: boolean | null;
   contract_accuracy: boolean | null;
-  error_code: string | null;
+  failure?: BenchmarkFailureV1 | null;
+  error_code: BenchmarkFailureCode | null;
   sql: string | null;
   output: unknown;
 }
@@ -74,6 +97,7 @@ export interface BenchmarkCaseProjectionV2 {
   status: BenchmarkNodeStatus;
   current_stage: string;
   context_snapshot: ContextSnapshotV2 | null;
+  failure?: BenchmarkFailureV1 | null;
   forge: ArmMetricsV2;
   direct: ArmMetricsV2;
   winner: BenchmarkArm | "tie" | null;

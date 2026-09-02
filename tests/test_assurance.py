@@ -339,6 +339,40 @@ def test_direct_sql_and_forge_json_share_assurance_identity(assurance_registry):
     assert direct_report.candidate_revision == forge_report.candidate_revision
 
 
+def test_direct_sql_assurance_accepts_explicit_registry_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(cfg, "REGISTRY_PATH", tmp_path / "missing.json")
+    registry = {
+        "tables": {
+            "external_orders": {"columns": {"id": {}, "amount": {}}},
+        },
+    }
+
+    report = assure_direct_sql(
+        "SELECT external_orders.id FROM external_orders",
+        dialect="sqlite",
+        registry_snapshot=registry,
+        registry_revision="snapshot-r1",
+    )
+
+    assert report.status == "passed"
+    assert report.registry_revision == "snapshot-r1"
+
+
+def test_direct_sql_assurance_rejects_unknown_field_in_explicit_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(cfg, "REGISTRY_PATH", tmp_path / "missing.json")
+    registry = {"tables": {"external_orders": {"columns": {"id": {}}}}}
+
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql(
+            "SELECT external_orders.secret FROM external_orders",
+            dialect="sqlite",
+            registry_snapshot=registry,
+            registry_revision="snapshot-r1",
+        )
+
+    assert caught.value.report.registry_revision == "snapshot-r1"
+
+
 def test_direct_sql_assurance_rejects_mutation(assurance_registry):
     with pytest.raises(QueryAssuranceError, match="只允许执行只读") as caught:
         assure_direct_sql("DELETE FROM orders", dialect="sqlite")
