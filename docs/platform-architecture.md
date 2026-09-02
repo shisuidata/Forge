@@ -1,12 +1,12 @@
 # Forge AI 数据任务平台架构
 
-> 状态：已确认目标架构，企业演进横向平面已纳入规划 · Last updated: 2026-08-24。本文描述 Pi、Forge、拾穗 DATA Skills 与渠道之间的长期边界，不表示所有模块均已实现。主动实施计划见 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。
+> 状态：已确认目标架构，企业演进横向平面已纳入规划 · Last updated: 2026-08-25。本文描述 Pi、Forge、拾穗 DATA Skills 与渠道之间的长期边界，不表示所有模块均已实现。产品存在理由和方向边界见 [`product-north-star.md`](product-north-star.md)，主动实施计划见 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。
 >
 > 中文架构全景图：[`architecture-diagrams/forge-platform-architecture.html`](architecture-diagrams/forge-platform-architecture.html)，包含产品、技术、元数据、流程、闭环、部署、模型、安全、状态和接口等 11 个视角。
 
 ## 1. 产品定位
 
-Forge 的目标产品形态是面向数据团队的**可信 AI 数据任务平台**。它不只回答“这条 SQL 怎么写”，还要把一个模糊业务问题推进为可审核、可执行、可解释、可交付的数据任务。
+Forge 的目标产品形态是面向数据团队建设、供人和企业 Agent 共同使用的**可信数据运行时与数据任务控制/执行平台**。它不只回答“这条 SQL 怎么写”，还要为人和受委托 Agent 提供有来源、语义、权限、版本和 Evidence 的数据能力，并把一个模糊业务问题推进为可审核、可执行、可解释、可交付的数据任务。
 
 整体能力由四层组成：
 

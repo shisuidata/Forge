@@ -1,39 +1,65 @@
-# Forge 企业演进阶段性实施计划 v1.1
+# Forge 企业演进阶段性实施计划 v1.2
 
-> 状态：产品方向与长期边界已确认；M0 Governance Contract Ready 已完成但 Runtime Coverage 仍为 0%；W3A Web Product Shell 隔离原型已部署 Atlas，等待用户逐页 IA/交互门禁；W3B 尚未批准，M1A 顺延为 W3 后首个后端治理工作包，H5/H6/M1B–M7 暂停新增实现 · Last updated: 2026-08-24
+> 状态：`REQ-2026-09-03-025` 为当前产品主线；`REQ-2026-08-26-024` SQL Accuracy Benchmark 已验证并作为反证基线；`REQ-2026-08-25-023` 已吸收为历史短期切口。当前阶段为 R0 Open-source Trust Runtime Product Cut / Adoption Baseline；Runtime Governance Coverage 仍为 0% · Last updated: 2026-09-03
 >
-> 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；本轮评审依据见 [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md)。
+> 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；当前产品决策见 [`requirements-pool.md`](requirements-pool.md#req-2026-09-03-025以开源-trust-runtime-收敛-forge-产品方向)。
 >
-> 每个工作包继续遵循“先更新计划 → 再实现 → 验证 → 回写状态、风险与下一步”。M0 Contract 评审通过前，不修改运行时授权、API、数据库 Schema 或 OAuth Runtime。
+> 每个工作包继续遵循“先更新计划 → 再实现 → 验证 → 回写状态、风险与下一步”。真实客户数据、生产凭证、权限变化和高风险副作用必须单独授权。
 
 ## 0. 摘要与硬约束
 
-采用“近期详、远期粗”的门禁式路线。M0 已完成 Contract 收口；当前根据用户人工测试需求，先建设不复制后端真相源的 Web 产品骨架和关键交互，再进入 M1A 运行时治理。随后才考虑多 Binding、成本账本、多人决策和平台 Assurance，最后以第二场景决定 Context/Memory 和更广 AI Infra 的边界。
+长期产品角色保持为企业可信数据平台，近期入口改为面向 Data/AI Engineer 的开源 Trust Runtime。当前不再以完整问数应用、Product Shell 或 Forge JSON 为产品边界，而以 `Evaluate → Enforce → Explain` 建立开发者采用：
+
+```text
+R0 Product Cut / Adoption Baseline
+→ R1 Evaluate Golden Path
+→ R2 Enforce Runtime Gate
+→ R3 Explain Evidence Contract
+→ R4 Open-source Adoption Gate
+→ 基于真实消费者证据重评更广企业能力
+```
 
 全程保持以下硬约束：
 
-- Pi 是唯一主 Orchestrator。
-- Forge 是唯一可信数据执行层并保留独立否决权。
-- 渠道和 Skills 不获得数据库执行权。
-- 高风险副作用不自动重放。
-- 不新建第二套任务状态或业务真相源。
+- Pi 是默认部署中的唯一主 Orchestrator 和 Task 真相源。
+- Forge 是唯一可信数据执行层并保留独立校验、拒绝和失败关闭能力。
+- Direct SQL 必须成为一等输入；Forge JSON 是可替换 Planner Adapter，不再以其准确率代表 Forge 产品价值。
+- 上游 Agent、渠道、Skills 和 MCP Client 不直接获得数据库执行权。
+- 高风险副作用不自动重放；不新建第二套任务状态或业务真相源。
+- 公共 Benchmark 保留 Official 指标、版本、上下文、失败和方法边界；自有题集与 stars/forks 不得替代外部运行证据。
 - 新需求先进入 [`requirements-pool.md`](requirements-pool.md)，完成澄清、评估和用户确认后才能进入本文。
-- 每个已批准工作包遵循“先更新计划 → 再实现 → 验证 → 回写需求状态/计划状态/风险”。
 
-中期产品定位：
+当前产品定位：
 
-> **Forge 是面向数据团队、供人和企业 Agent 共同使用的可信数据任务控制与执行平台。**
+> **Forge 是面向企业 Data Agent 的开源可信数据运行时：让既有 Agent 的数据访问可验证、可约束、可追溯。**
 
 采用原则：
 
 ```text
-GTM：Data-Team Led
-体验：Business Accessible
+GTM：Open-source Developer First
+用户：Data/AI Engineer 与数据平台团队
 架构：Agent Native
 治理：Human Accountable
+证据：Real Run Before Platform Expansion
 ```
 
-质量策略是 `100% Governed` 的受支持过程边界，而不是开放世界端到端 `100% Correct`。Action Catalog 必须同时报告：① `Contract Coverage`，表示受支持 Action 的治理契约是否完整；② `Runtime Governance Coverage`，表示这些 Contract 是否已由生产 PEP 执行并通过负向门禁。两者不得混称；目录外高风险 Action 失败关闭，不纳入能力声明。
+质量策略是 `100% Governed` 的受支持过程边界，而不是开放世界端到端 `100% Correct`。Contract Coverage、Runtime Governance Coverage、Statistical Quality 与外部 Adoption Evidence 必须分开报告。
+
+### R0：Open-source Trust Runtime Product Cut / Adoption Baseline（当前唯一主动工作）
+
+**目标**：把现有工程资产切割成外部开发者可独立理解和运行的单一产品路径，不新增平台面来掩盖采用缺口。
+
+**当前范围**：
+
+1. 定义统一输入边界，使既有 Agent 的 Direct SQL/结果与 Forge JSON 都能进入同一 Evaluate、Assurance、Executor、Evidence 和 Audit 链。
+2. 固定唯一 Golden Path：“现有 Agent/样例输出 → Evaluate → 失败定位 → Policy Gate → Evidence”。
+3. 将 Benchmark 的 Exact Result Comparison、失败分层、lineage 和版本绑定产品化为可复现发布门禁。
+4. 收敛 README、Quickstart、CLI/API 和 Dashboard；隐藏或降级与 Golden Path 无关的 Product Shell、报告和未来平台入口。
+5. 建立开源采用证据：独立 Quickstart、外部 failure case、Adapter/Rule/Dataset 贡献和下游集成。
+
+**R0 退出门禁**：外部开发者无需理解 Pi、Forge JSON 或内部产品对象，即可从公开入口独立完成 Golden Path；Direct SQL 不需要先转换为 Forge JSON；运行产出可复算结果、失败分类、Policy verdict 和 Evidence；当前仍无真实外部采用时不得宣称门禁通过。
+
+**R0 明确不做**：新增通用 Product Shell 页面、报告 Renderer、SaaS Connector、非 SQL Action、Economics/Outcome Ledger、完整企业身份权限或新的独立 Runtime 服务。
 
 ## 1. 当前基线与状态
 
@@ -74,15 +100,21 @@ GTM：Data-Team Led
 | M0.5 Contract Review Closure | 已完成 | `REQ-2026-08-24-003`：Web/飞书/Agent review trace、40 个负向 mutation、Threat Model、迁移/回滚设计完成；正式 verdict 为 Approved for M1A proposal，Runtime Coverage 仍为 0% |
 | W1 Web 对话实时任务视图 | 已完成 | `REQ-2026-08-24-001`：`/chat` 已提供 Pi 真相源的业务 DAG、有界实时任务流和移动抽屉；跨渠道/跨 scope 失败关闭，不新增状态机。Python 546 passed，Pi 88 passed，Playwright 桌面/移动端通过。 |
 | W2 Web 主体内容规则 | 已实施，待用户视觉确认 | 已审计 19 个模板并清理 Chat/Tasks/Registry/全局/登录页宣传与口号；H5 candidate 同步去除候选/Renderer 自述。静态回归和桌面候选通过，用户确认前不标记 verified。 |
-| W3 Web 产品骨架与交互框架 | W3A 已部署，等待用户门禁 | `REQ-2026-08-24-014`：`821065f` 隔离 Product Shell 已在 Atlas `:18006` 覆盖工作台/任务/报告/数据资产/管理及关键状态；0 生产请求。用户通过前不进入 W3B |
+| N1 产品北极星沉淀 | 已完成 | `REQ-2026-08-25-015`：`docs/product-north-star.md` 已固定 100% 正确性边界、可执行一致性、Agent-facing Trusted Data Runtime、事实/Evidence/真相源和产品非目标；已接 README/Architecture/AGENTS，未改变 Runtime |
+| N2 产品设计与路线重建 | 方向已形成；短期顺序由 REQ-017 修订 | `REQ-2026-08-25-016`：三产品面与对象模型保留；不再由 fixture W3A 主导近期实施 |
+| SP0–SP5 短期 Product Spine | 两个 Atlas P0 已验证，等待用户继续复验 | `REQ-2026-08-25-019`：Table 已存在于 Pi Presentation/Product Projection，Web Conversation Renderer 未消费。统一复用 `renderPresentation` 后，真实 107 行任务显示 2 列、20 行有界预览、总行数与截断提示；最终 candidate `product-spine-6a23e71276e5` 以 `product-pages.js?v=2` 强制缓存刷新。性能 P0 保持通过 |
+| F0–F2 完整未来 Product Shell | 闪烁 P0 已修复，待用户 Atlas 确认 | `REQ-2026-08-25-022`：Sidebar 语义 fingerprint 排除易变 projection metadata；相同轮询 no-op，真实变化保留 scroll 后更新，失败保留最后有效状态；candidate `product-spine-beb59d1a56f7` |
+| R0 Open-source Trust Runtime | 当前开始 | `REQ-2026-09-03-025`：以 Evaluate/Enforce/Explain 收敛外部开发者入口；Direct SQL 一等输入；Golden Path 与开源采用证据优先 |
+| S0–S4 真实用户短期产品闭环 | 已被 R0 吸收为历史验证路线 | `REQ-2026-08-25-023`：Design Partner、Enterprise Reference 与 Thin Founder Sandbox 的证据分工继续有效，但不再是唯一主动计划 |
+| W3 Web 产品骨架与交互框架 | 已吸收进 SP3–SP5 | `REQ-2026-08-24-014`：`821065f` 隔离 Product Shell 已证明页面骨架，但错误移除了连续 Chat；“分析工作台”修订也被判定过窄。先以 N1 北极星重建产品地图，确认后再修订原型；W3B 不进入 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
 | H2 长文本语义化阅读体验 | 已完成并部署 | `REQ-2026-08-24-006`：NAS `9fca1ea` health/readiness/认证门禁通过；隔离 ReportStore HTML/PDF/PPTX exporter 全部 ready，无 SQL/Task 重放 |
 | H3 Golden Journey 双验收 | 已完成，产品 FAIL | `REQ-2026-08-24-007`：物理链路 PASS；桌面旅程/可信交付 FAIL。发现 PDF 路径泄漏、same-page Publication 空白、Chart grain 误导 3 个 P0 |
 | H4 Golden Journey P0 Closure | 已完成并验证 | `REQ-2026-08-24-008`：真实 NAS PDF 路径清除、same-page Report/Publication 可见、重复 label Chart fail-closed；同一 Golden Journey 复验 262.399s，物理与三个 P0 门禁 PASS |
 | H5 Evidence-bound Chart Storytelling | Editorial revision 暂定保留，生产 R1 未批准 | 已改为连续报告并建立受控强调规范；用户要求先保留当前形态，后续再做视觉与语言精修。Atlas 只发布隔离静态预览，不等于接入生产 Renderer |
 | D1 Atlas 隔离报告预览 | 已完成 | `REQ-2026-08-24-013`：`929e8d4` 固定构建物独立发布到 `192.168.8.10:18005`；生产源码仍为干净 `d2b0fd9`，Forge/Pi 未重启；阶段差距重评估完成 |
-| H6 Reusable Report Definitions | 待确认 | `REQ-2026-08-24-010`：Definition/SemanticQuery/Binding/Criteria/Run 版本化，Forge 确定性选择 SQL reuse/rebind/recompile/replan/blocked；先 Contract/双时间 fixture/桌面原型，不原地改旧报告、不自动重放 SQL |
-| M1A–M1C | 未批准 | M0 Contract 评审通过后分别批准 |
+| H6 Reusable Report Definitions | 延后 | `REQ-2026-08-25-023`：不属于“随时问真实业务数据 → 可信答案 → 语义复用”的首个短期闭环；S4 通过后按真实重复交付需求重评 |
+| M1A–M1C | 延后，未批准 | M0 Contract 已允许提出 M1A，但当前先验证 Human/Data-Team 产品闭环；S4 通过后再决定 Runtime Trust Foundation 与单一 Agent Consumer |
 | M2–M7 | 规划中 | 保留门禁级或粗粒度规划，不提前拆服务 |
 
 ## 2. M0：计划与 Contract Ready（近期，详细）
@@ -233,6 +265,265 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - v1 Schema 负责稳定形状和最小类型不变量；跨对象 Organization/Workspace 一致性、时间先后、撤销状态和 delegation chain 连续性已由 M0.5 review validator 与共享 mutation corpus固定，仍需 M1 PEP 在生产路径失败关闭执行。
 - 新 Contract 和 Catalog 当前没有生产调用方；未经本轮 Contract 评审不得接入 M1A。
 
+## N1：产品北极星沉淀（当前先行文档工作包）
+
+> Requirement：[`REQ-2026-08-25-015`](requirements-pool.md#req-2026-08-25-015沉淀-forge-产品北极星指导文档) · 决策：`accepted`
+
+本工作包只沉淀并接入战略指导，不修改 Runtime、API、数据库、Web 原型或生产部署：
+
+1. 新增 `docs/product-north-star.md`，明确产品存在理由、定位层级、100% 正确性边界、可执行一致性、Agent 数据事实能力、信息分型、参与者、核心对象、四平面、产品投影和非目标。
+2. 明确“其他 Agent 的数据底座”是受控 Data Runtime/Trust Boundary，不是复制所有业务事实的单一数据库；原系统继续持有业务真相，Forge 提供语义、权限、Evidence、Assurance 与可信 Action。
+3. 明确 Conversation 是人的连续交互面，Task/Artifact/Evidence/Decision/Action 是协同真相源；该原则用于下一轮 W3 Product Map，但不在 N1 内提前冻结一级导航。
+4. 将文档加入 README，并在 `AGENTS.md` 中设为产品、体验、架构与商业方向判断的必读依据；旧“查询 Agent”描述降为当前结构化查询验证切片，不再代表完整产品边界。
+5. 运行文档链接、静态内容和 `git diff --check`；回写实际结果后，W3A 才可继续提出修订产品地图。
+
+### N1 实施结果（2026-08-25）
+
+- 新增 [`product-north-star.md`](product-north-star.md)：明确北极星命题、Data Agent/Trusted Data Runtime/长期假设三层定位、四类质量、Silent Error、合法可执行一致性、Source/Event/Claim/Evidence/Knowledge/Decision/Action 分型、Agent Runtime、Conversation/Task、四平面和非目标。
+- README 与 `platform-architecture.md` 对齐为“面向数据团队建设、供人和企业 Agent 使用的可信数据运行时与数据任务控制/执行平台”；结构化查询仍是第一验证切片，不声明开放世界 100% 正确。
+- `AGENTS.md` 将北极星加入产品/体验/架构相关任务必读清单，并移除“生成错误物理上不可能”“Registry 消灭业务逻辑错误”等绝对化旧表述。
+- 文档链接与 Web 内容静态测试 `4 passed`；北极星 8 项必要主题断言及 `git diff --check` 通过。未修改 Runtime、API、数据库、Web 原型或部署。
+- N1 只提供 W3A 复核依据，不自动冻结新导航。下一步仍需提出并由用户确认 Conversation、Task、Decision、Delivery、Data Governance 和 Agent Runtime 的 Product Map。
+
+## N2：基于北极星重建产品设计与阶段计划（方向提案已完成，短期顺序由 REQ-017 修订）
+
+> Requirement：[`REQ-2026-08-25-016`](requirements-pool.md#req-2026-08-25-016基于产品北极星重建产品设计与阶段计划) · 当前只批准规划，不批准实现
+
+本工作包输出一份独立、可门禁的产品设计与路线提案：
+
+1. 以 Human Control Plane、Agent-facing Trusted Data Runtime 和共享 Trust/Data Foundation 三个产品面重新定义 Forge，不以单一 Chat、分析页面或治理后台概括产品。
+2. 明确 Conversation、Task、Plan、Decision、Artifact、Evidence、Data Asset、Agent Client 和 Outcome 的关系、Owner、真相源和当前实现差距。
+3. 提出按角色分组的信息架构、深链接 Route、核心 Human/Agent/Steward Journeys，以及 loading/needs_input/waiting_decision/partial/failed/forbidden 等状态投影。
+4. 重新排序 W3A/W3B、M1A、Agent Runtime MVP、Data Trust Control Plane、平台 Assurance、Reusable Deliverables、Economics/Coordination 和第二场景；每阶段必须有证伪门禁与不做项。
+5. 标明旧 `web-product-shell-plan-2026-08-24.md` 和 `821065f` 原型中可保留、需删除和必须重建的部分；不修改现有原型和生产 Web。
+6. 用户对提案给出 `PASS / CHANGE / REMOVE` 后，才回写批准后的实施顺序并启动下一版 W3A。
+
+### N2 提案结果（2026-08-25）
+
+- 新增 [`product-design-roadmap-2026-08-25.md`](product-design-roadmap-2026-08-25.md)，将 Forge 重建为 Human Work Surface、Shared Trust & Data Foundation、Agent-facing Trusted Data Runtime 三个共享真相链的产品面。
+- 定义 Workspace/Principal/Agent Client/Conversation/Task/Plan/Decision/Action/Artifact/Evidence/Data Asset/Deliverable/Outcome 的产品关系、Owner、当前真相源和实现缺口。
+- 提出按“工作 / 信任 / 接入 / 系统”分组的 IA、Route 兼容、H1/H2/A1/S1/F1 五条 Journey、统一状态语言、旧 W3A 的保留/修改/删除清单和质量/Agent 指标。
+- 初版曾建议 W3A.2 隔离原型 → W3B Human Control Plane → M1A/R1/G1/Q1/H6；用户随后通过 `REQ-2026-08-25-017` 明确改为底层 Product Spine 先行，初版短期顺序不再生效。
+- 旧 [`web-product-shell-plan-2026-08-24.md`](web-product-shell-plan-2026-08-24.md) 已标记为历史第一版；N2 本身未修改 `tools/web-product-shell-prototype/`、生产 Web、Runtime、API、数据库或部署。
+- 文档链接/内容测试 `4 passed`，提案 8 项必要结构断言与 `git diff --check` 通过；长期 Agent/Governance 阶段仍需后续真实测试证据，不由 N2 自动批准。
+
+## SP0–SP5：短期 Product Spine（自动门禁通过，待用户 Atlas 确认）
+
+> Requirement：[`REQ-2026-08-25-017`](requirements-pool.md#req-2026-08-25-017短期-product-spine-底层优先实施计划) · 详细计划：[`short-term-product-spine-plan-2026-08-25.md`](short-term-product-spine-plan-2026-08-25.md)
+
+用户确认近期不再以隔离 fixture 原型作为主路径，而是先完成足以支撑真实产品 Journey 的底层框架，再接 Web Product Shell：
+
+```text
+SP0 Projection Contract / truth source closure
+  → SP1 Pi Conversation + Task Product Projection
+  → SP2 Web Product BFF + scoped Report Index
+  → Backend Gate
+  → SP3 local-asset Product Shell
+  → SP4 real Workspace / Conversation / Task / Report / Data pages
+  → SP5 real Human Golden Journeys + isolated Atlas candidate
+```
+
+短期范围保持单用户私有化 Human Control Plane。Conversation 从现有 TaskRun/ChannelEvent 关系只读投影，不增加可写 Conversation Store；Task/Approval/Report 继续由 Pi/Forge/ReportStore 持有；Agent Runtime、完整 Decision Runtime、Economics、多 Workspace、Reusable Report 和 H5 Renderer 不并行实施。
+
+### SP0 验证结果（2026-08-25）
+
+- TypeBox + generated JSON Schema + Python semantic gate 在 SP0 固定六类 Product Projection v1；SP2 为真实 Task list BFF 补充同版本 `TaskSummaryV1`，不允许前端消费 raw TaskRun。共享 fixture 持续覆盖关键产品状态和结构/语义负向边界。
+- Pi `108 passed`；Python 全量 `567 passed / 24 skipped`；SP0 Python 定向最终 `19 passed`；typecheck、npm audit、JSON parse、schema sync、`git diff --check` 通过。
+- 未改 DB/API/Task state/UI/deployment。详细契约见 [`product-projection-contracts.md`](product-projection-contracts.md)。
+
+### SP1 验证结果（2026-08-25）
+
+- 从真实 Pi Store 构建 Conversation/Task Product Projection，增加 authenticated/no-store read API、opaque pagination、scope/lineage/redaction/2 MB boundary 与 restart recovery。
+- 10K Task Conversation list 从首版约 19,040 ms 优化到平均约 26.8 ms；使用单次 window CTE 消除相关子查询/N+1，没有提前增加 schema v5。
+- Pi `114 passed`、Python `569 passed / 24 skipped`、typecheck/npm audit/`git diff --check` 通过；正式证据见 [`product-spine-sp1-evidence-2026-08-25.md`](product-spine-sp1-evidence-2026-08-25.md)。
+- 未新增 Conversation Store、DB Schema、Task 状态或 Web 页面。SP2 当前开始。
+
+### SP2 验证结果（2026-08-25）
+
+- ReportStore scope-aware list/index 与 authenticated Product BFF 已完成；Workspace 可在 Pi/Report/Registry 失效时 partial/offline，不复制 Task/Report 状态。
+- 增加同版本 `TaskSummaryV1`，BFF 执行二次 Contract/scope gate、去敏、bounded 和 no-store；Registry revision 使用内容 hash。
+- Python `575 passed / 24 skipped`、SP2 定向 `34 passed`、Pi `114 passed`、typecheck/npm audit/`git diff --check` 通过；证据见 [`product-spine-sp2-evidence-2026-08-25.md`](product-spine-sp2-evidence-2026-08-25.md)。
+- Backend Gate PASS，SP3 当前开始；仍无 Product 页面或部署变更。
+
+### SP3 验证结果（2026-08-25）
+
+- 新增 local-only Product Shell template/CSS/JS 与 `/static` mount；短期导航、共享状态、focus/reduced-motion/mobile navigation 基础完成。
+- 0 CDN、0 inline style/script、0 fixture、0 data fetch/localStorage；现有 Admin 未被一次性重写。
+- Python `581 passed / 24 skipped`、SP3/Docs `10 passed`、Pi `114 passed`、typecheck/npm audit/`git diff --check` 通过；证据见 [`product-spine-sp3-evidence-2026-08-25.md`](product-spine-sp3-evidence-2026-08-25.md)。
+- SP4 当前开始，首次将 Shell 接到真实 Product BFF。
+
+### SP4 验证结果（2026-08-25）
+
+- Workspace/Conversation/Task list+detail/Report Library/Data 页面已接 Product BFF；Chat/Task action 复用原 typed ChannelEvent endpoint。
+- 任务详情首轮视觉审查的主审批可发现性、pending 状态和层级 P0 已修正；复审无 P0。
+- Python `583 passed / 24 skipped`、Product/Web/Docs `33 passed`、Pi `114 passed`、typecheck/npm audit/JS syntax/Playwright 双桌面 viewport/0 error/0 overflow/`git diff --check` 通过；证据见 [`product-spine-sp4-evidence-2026-08-25.md`](product-spine-sp4-evidence-2026-08-25.md)。
+### SP5 验证结果（2026-08-25）
+
+- Candidate `product-spine-5dcd4715941a` 已使用独立 Pi/QueryRun/Report/Registry/Artifact 状态和 candidate 内 mode `0400` 只读数据副本，认证开启；生产 Forge/Pi 未替换。
+- 固定渠道指标问题在最终配置下连续 3 次完成真实 Conversation → SQL Review → 单次只读执行 → Analysis → Report → Report Library；每次 1 个 QueryRun/`query.completed`、4 个 succeeded StageAttempt，PDF/PPTX ready。
+- 重复消息返回原任务，过期重复批准 409 且不重放 SQL；等待审批/完成态 restart recovery、Pi offline partial、双桌面 12 routes/0 external request/0 error/0 overflow 通过。
+- Live Gate 修复 insecure-HTTP ID、瞬时 ready 轮询、同源 HTTP Report URL、空 Attempt error、长 SQL Grid overflow 和完成态历史审核误标权限；复杂查询 Assurance 拒绝与 Analysis `incomplete` 作为反证保留。
+- Python `583 passed / 24 skipped`、Pi `115 passed`、typecheck/npm audit/JS syntax/`git diff --check` 通过；证据见 [`product-spine-sp5-evidence-2026-08-25.md`](product-spine-sp5-evidence-2026-08-25.md)。
+
+每个工作包单独门禁。SP0–SP5 自动门禁现已通过，但用户尚未给出 Atlas `PASS / CHANGE / REMOVE`，因此 Product Spine 不能标记为最终接受，也不能据此自动启动 M1A、G1、Q1 或 H6。
+
+## F0–F2：完整未来 Product Shell（已实施，待用户确认）
+
+> Requirement：[`REQ-2026-08-25-020`](requirements-pool.md#req-2026-08-25-020按未来产品方向补全前端产品面)
+
+用户选择“完整未来产品壳”。本工作包只建设前端产品地图、页面职责、稳定 Route、状态与现有能力入口，不据此批准或实现 Agent Runtime、通用 Decision、Policy/Mandate PEP、Economics、Reusable Definition、Outcome Ledger 或多用户治理。
+
+### F0 Product Map / Shell
+
+- 一级导航固定为：
+  - 工作：工作台、对话、任务、交付；
+  - 信任：数据资产、治理与审计；
+  - 接入：Agents & Apps；
+  - 系统：管理。
+- 增加稳定聚合 Route：`/deliverables`、`/governance`、`/runtime`、`/manage`；现有 `/reports`、`/data`、`/admin/*` 保持兼容。
+- 所有未来能力显示机器可读/可样式化的 `available / partial / planned / blocked` 状态、依赖阶段和 disabled 原因。
+- 复用现有 Product Shell、design token、键盘/焦点、reduced motion、移动导航、local-only asset 和 no-store 规则。
+
+### F1 Existing Truth Wiring
+
+- 交付页接真实 scoped Report Library、Export readiness、Task/Report lineage；Reusable Definition 保持 planned。
+- 治理页接现有 Query Approval/Audit、Registry Revision、Model/Skill/Channel/System 管理入口；通用 Decision/Policy/Mandate 保持 planned。
+- 数据资产页组织现有 Datasource/Schema/Metric/Semantic/Relationship/Knowledge/Registry Studio 入口；Quality/Freshness/Conflict/Proposal 保持 planned。
+- 管理页组织现有 Workspace/Team、Model、Skill、Channel、Database 和 readiness 入口，不复制 Admin 状态。
+
+### F2 Future Surface
+
+- Agents & Apps 页面展示未来 Agent Client、Owner/Purpose、Mandate、Capabilities、Task/Artifact consumption 和 Human takeover 的真实信息结构；M1A/R1 前所有执行与 credential Action 为 blocked。
+- Evidence & Assurance、Decision Inbox、Policy/Mandate、Quality/Conflict、Reusable Deliverable、Outcome/Feedback 页面只展示对象职责、依赖和 planned/blocked 状态，不生成记录。
+- 每个 disabled Action 必须说明“缺少什么 Runtime/Contract”，不能只显示灰按钮。
+
+### 验收门禁
+
+- 所有一级和子级 Route 可深链接、刷新、后退；1440×900、1600×1000 和 390px 无横向溢出、0 console/page error。
+- 当前可用能力最多两次导航到达；未来能力可发现但不会被误认成已上线。
+- 0 fixture 业务记录、0 死按钮、0 前端业务状态库、0 新 Task/Approval/Report 真相源。
+- 现有 Conversation → Task → SQL Review → QueryResult Table → Analysis → Report 主链不回归。
+- Product Shell 与旧 Admin 保持兼容；只重新组织入口，不在本工作包把所有 Admin 页面换皮。
+
+### F0–F2 实施结果（2026-08-25）
+
+- Product Shell 已按“工作 / 信任 / 接入 / 系统”组织 8 个一级入口；Report 近期产品名升级为“交付”，`/reports` 保持兼容。
+- 新增交付、治理、Agent Runtime、管理、搜索、待办及 11 个子产品 Route；页面使用同一 capability-aware 模板和 `available / partial / planned / blocked` 状态。
+- Existing Truth Wiring：
+  - 交付 → scoped Report Library、PDF/PPTX readiness；
+  - Decision/Evidence → Workspace/Task/Query Approval/Audit；
+  - Data Trust → Schema/Metric/Semantic/Registry Studio/Staging/Knowledge；
+  - 管理 → Team/Model/Skill/Channel/Database/Readiness。
+- Future Surface 不生成业务记录：Agent Client/execute/credential、通用 Decision、Policy/Mandate PEP、Quality/Freshness、ConflictSet、Reusable Definition、Outcome/Feedback 均明确依赖阶段和不可用原因。
+- 增加默认 Workspace context、Search、Inbox、Evidence Drawer/Diff Viewer 产品边界，以及统一 Product Shell 404/403/offline 页面；未知产品 Route 返回 404 且不泄漏对象存在性。
+- Candidate `product-spine-beb59d1a56f7` 使用原独立 Pi/QueryRun/Report/Registry/Artifact 状态和 mode `0400` 只读测试数据；生产 Forge/Pi 未替换。
+- 自动验证：资源/页面契约 `11 passed`、Product Conversation 浏览器行为 `2 passed`、JS syntax PASS。
+- Chat Sidebar 使用语义 fingerprint 稳定刷新：相同 Task/Projection 轮询不替换 DOM；真实 Plan/Action/Artifact/Activity/Review 变化才更新并恢复 scroll；已有有效内容时刷新失败不覆盖。
+- 真实浏览器：侧栏、移动 Drawer、QueryResult Table、1440×900/390px、0 console/page error、0 横向溢出保持通过；Product Pages JS 已提升为 `v6`。
+- 本工作包只完成前端产品面和现有入口；Runtime Governance Coverage 仍为 0%，任何 blocked capability 都没有执行路径。
+
+## S0–S4：真实用户驱动的短期产品闭环（历史验证路线）
+
+> Requirement：[`REQ-2026-08-25-023`](requirements-pool.md) · 决策：`accepted_with_changes`
+
+短期产品定义：
+
+> **面向已有数据库/数仓的小型数据团队的可信业务问数助手；不要求先完成完整数据治理，在真实提问中逐步沉淀和复用业务语义。**
+
+长期“可信数据与知识底座”方向不变，但短期不再把未来企业对象、完整 Product Shell 或内部 Semantic Gap 机制当作用户产品。核心 Job 是：
+
+```text
+连接一个现有可查询数据源
+→ 提出真实业务问题
+→ 只澄清会改变结果的最小语义
+→ 只读可信执行
+→ 直接获得业务答案、表格和限制
+→ 按需查看口径、SQL、数据范围与 Evidence
+→ 纠正并安全复用已确认语义
+```
+
+
+### S0-B SQL Accuracy Benchmark 观测（已批准实施）
+
+- Requirement：`REQ-2026-08-26-024`。使用现有 Ark Coding Plan `method_ai` 与 large 40 题 Enterprise Reference 数据集重跑 SQL Accuracy Benchmark。
+- Benchmark Runtime 持久化 run/case/call 状态；Web 页面只读订阅同一状态，实时显示 partial/final EA、Run Accuracy、编译成功率、分类成绩、延迟和失败。
+- 固定默认参数：40 题、每题 3 次、最多 2 次编译修复；运行绑定方法、数据集、模型 revision、Registry/code lineage。
+- 页面必须区分部分成绩与最终成绩，明确该结果不能代表开放世界或真实客户 SQL 100% 准确。
+- 不读取真实客户数据，不修改模型绑定，不暴露 Secret，不创建第二测试真相源；进程中断后标记 interrupted，不自动重放模型调用。
+- **退出门禁**：Web 可启动 run；状态与成绩无需刷新实时同步；重连恢复持久 snapshot；定向契约测试和真实浏览器运行均通过。
+
+**实施结果（2026-08-26）**：工作包已完成。Accuracy Lab 通过持久 SQLite Benchmark Store + SSE 只读投影实时同步；真实 Ark Coding Plan run `abr_b410ab2b05ef40d88050b1b9be1eb097` 完成 120/120 calls、40/40 cases，Case EA 100.0%、Run Accuracy 98.3%、Compile Success 100.0%、P95 58,945 ms。Case 23 与 38 均为 2/3，页面保留 mixed 与有界错误说明。61 个定向回归通过，桌面/移动浏览器与服务重启恢复通过。结果仅代表固定 Enterprise Reference + 当前 dirty code/model/Registry lineage。
+
+### S0-B2 Hard Benchmark 双臂对照与结果可解释页面（已批准实施）
+
+- 在 S0-B 基础上新增 BIRD-SQL 官方 hard 诊断集；题目、Gold SQL、Evidence、Schema 和 SQLite 数据均保持官方来源。
+- Forge 与 Direct SQL 共享 Ark Coding Plan、问题、结构层、Oracle Evidence 和数据库；路径专属系统提示与 Forge 编译修复预算属于被测方法差异，必须显式披露，不能声称上下文完全相同。
+- 主评分严格使用 BIRD Execution Accuracy：两个 SQL 在同一 SQLite 数据库执行后比较精确结果 tuple 集合；不比较 SQL 文本，不允许数值容差或文本归一化。Execution Success 与延迟单独报告。
+- 重复运行时，Mean EA 是每次生成的官方 EA 均值；First-run EA、Pass@K、Consistent@K 分开命名，Pass@K 不得再标为 Case EA。
+- 持久化 method/case/stage 日志、生成 SQL 和安全结果摘要；Web 实时展示双臂进度、成绩、差异与逐题详情。
+- **退出门禁**：诊断集来源与抽样边界可审查；全部 Gold SQL 可执行；双臂真实 run 完成；实时日志、逐题 SQL/结果查看、重连恢复和桌面/移动浏览器验证通过。完整公共成绩必须覆盖 Mini-Dev 500 题与 11 个数据库；12 题子集不得用于 leaderboard 或泛化声明。
+
+**EA 审计修订（2026-08-26）**：已确认当前 12 题字段与官方记录完全一致，但样本只占 challenging 的 12/102、数据库 2/11，且原选择规则不能解释同两库另 6 道可执行非空题为何未入选，因此降级为诊断子集。NAS run hbr_9a78d73cc64642709b03d4dc8aef978a 按官方 exact-set EA 重算：Forge 5.56% (2/36)，Direct SQL 27.78% (10/36)，Direct 领先 22.22pp；旧近似比较器造成 11 个假阳性，旧的 30.56% / 33.33% 结论作废。下一公共验证门禁是完整 Mini-Dev 500 题一次生成；102 道 challenging 只作难题切片，3-run 指标只作稳定性分析。
+
+**修订部署证据**：NAS commit e076573，API/Pi active；目标回归 8 passed，前端脚本语法通过；最新 run hbr_c99bb3d506f54a25b528d191c3955944 独立重执行与存储 verdict 一致（Forge 2/36，Direct 11/36）。三轮完整运行聚合 Forge 7/108 (6.48%)、Direct 28/108 (25.93%)，仍只作为 12 题诊断样本证据。
+
+**完整数据看板部署（2026-08-26）**：NAS commit 4056986。完整 Mini-Dev 500 题、11 个数据库与 1000-call 运行契约已接入；启动 API 要求 confirm_model_calls=1000，未确认返回 409。页面改为克制的浅色实时看板，包含历史/累计 EA、延迟分布、结果构成、逐题筛选、详情弹窗和日志筛选分页。NAS 回归 9 passed，桌面 1440px 与移动 390px 无页面级横向溢出；部署前后保持 6 runs、246 observations、0 active，未触发模型测试。
+
+**启动阻塞修复（2026-08-26）**：完整套件首次启动卡在 run 创建前。根因是 create_hard_run 同步执行全部 500 条 Gold SQL，阻塞 FastAPI 事件循环；execute_result 无 progress timeout 且 Connection context 不负责 close。修订后 POST 先落 queued run 并立即返回，Gold 预检在后台 worker 中执行，4-way 并行、单 SQL 30 秒超时、失败取消剩余任务、每 10 题持久日志；预检失败关闭且模型调用为 0。NAS 11 passed，health 3.5ms，未确认启动门禁 31ms；原请求未落库，恢复后仍为 6 runs / 246 observations / 0 active。
+
+### S0-B3 Pi-native RAG 双 Sub-Agent Benchmark（已批准实施）
+
+- Pi 创建根 TaskRun 并持有新 Benchmark Run、Case、日志和控制状态；Python 旧 Runtime 仅保留 GET 历史投影，POST 启动返回 410。
+- 每个 Case 先由 Forge 内部受认证 API 构造字段级有界 RAG ContextSnapshot 和 ResultContract；同一 hash 并行交给两个独立 Pi AgentSession，分别生成 Forge JSON 与 Direct SQL。
+- Provider 与 Model 在运行前从 Pi ModelRuntime ready catalog 选择；运行开始后绑定不可变 provider/model/revision。默认推荐 deepseek-v4-flash，但不硬编码且不修改生产 ActiveBinding。
+- Forge 负责 JSON 编译、只读 SQL 校验、执行、Official EA 与 ResultContract Accuracy；Pi 持久化生成时延、prompt/completion/cache tokens、compile/execute/error 和双分支日志。
+- 页面投影当前问题、模型、进度、DAG、RAG rounds、并排双日志、实时 Case 表、准确率/Token/速度/失败/维度图表，支持 pause/resume/stop。
+- 生产 Canary：openai/deepseek-v4-flash 固定 revision 已完成 2-case、1-case、pause/resume 3-case 和 stop 3-case 验证；Pause 时 2 Case 完成、1 Case 保持 pending，Resume 后恰好 6/6 calls 且无重复；Stop 后 4 calls 封存、1 Case pending。
+- 完整验收 Run pbr_1f735d433a284366bfe6526146511792 已完成 500/500 cases、1000/1000 Sub-Agent calls；模型 openai/deepseek-v4-flash revision sha256:f75be09a。固定 500 分母：Forge Official EA 45.40%、Contract Accuracy 39.80%、Execution Success 73.00%、3,506,756 tokens、平均生成 29.11s；Direct 分别 56.40%、50.80%、91.20%、2,386,708 tokens、16.46s；Forge Delta -11.00pp。生产 head c7eb9da，API/Pi active，源码 clean。
+### S0 Design Partner 与问题基线（历史验证路线，证据分工保留）
+
+- 选择一个已经拥有数据库或数仓、存在持续临时问数需求、语义治理尚不完整的小型数据团队。
+- 第一阶段固定一个数据 Domain、一套现有可查询数据源、一名可确认业务口径的 Owner/Steward 和一组真实历史问题；后续问题必须来自真实工作，不由 Forge 团队为演示反向设计。
+- 明确私有化、数据不出域、最小权限、允许记录的有界 Evidence、禁止读取/回显的 Secret/PII，以及退出和删除边界。
+- 建立当前人工流程基线：问题如何进入、由谁写 SQL、澄清几次、如何复核、结果如何交付、哪些错误曾静默发生。没有该基线，不能证明 Forge 提效。
+- **S0 退出门禁**：Design Partner、Domain、Datasource、Owner、真实问题 corpus、隐私/授权边界和现状基线均明确；否则停止，不以 Demo 或个人低频数据替代。
+
+### S1 Direct Trusted Answer（计划候选，未批准实现）
+
+- 围绕 S0 的真实问题审计现有 Conversation → Task → Query → Result 链，只修复阻碍“直接可信答案”的最小缺口。
+- 默认产品体验是答案、数据表、关键限制和继续追问；Task/DAG、SQL、Assurance、Registry revision 与 Audit 按需展开，不默认要求用户理解内部架构。
+- 不要求先维护完整 Registry；只有会实质改变结果的缺口进入澄清。低风险只读路径是否使用有界预授权，必须由 S0 真实摩擦和安全评估另立需求决定，不能在本计划中预设绕过精确审批。
+- 默认不生成完整报告；报告仅在用户交付物明确要求时进入 Plan。
+- **S1 退出门禁**：目标用户能在一个现有数据源上完成真实问题，获得可理解且可追溯的答案；歧义和 Evidence 不足时诚实停止；页面不制造第二 Task/Evidence 状态。
+
+### S2 Semantic Learning Loop（计划候选，未批准实现）
+
+- Conversation 中的业务纠正先形成 task-local binding，用户明确选择后才进入 Domain-level Proposal。
+- AI 可以提取来源、比较定义、生成 Diff 和影响分析；不能自行发布组织知识、覆盖冲突定义或扩大作用域。
+- Owner Review/Publish 生成 Registry revision，并进入 Forge IR、Assurance、Approval、QueryRun 和 Evidence lineage。
+- 第二次相关任务应减少重复澄清；Purpose、Domain、Datasource、Grain 或 revision 不匹配时重新绑定。Schema/语义 drift 后旧审批失败关闭。
+- **S2 退出门禁**：至少一项真实语义纠正被后续真实任务正确复用，并有一项不安全复用被系统阻断。
+
+### S3 三环境验证（计划候选，未批准实现）
+
+| 环境 | 唯一责任 | 不得冒充 |
+|---|---|---|
+| Design Partner | 真实问题、真实责任、重复使用和产品价值 | 不能要求客户承担破坏性压测或泄露数据 |
+| Enterprise Reference Workspace | Ground Truth、复杂 Join、规模、脏数据、漂移、冲突、权限和负向回归 | 不能证明目标用户愿意使用 |
+| Thin Founder Sandbox | 在无需定制采集时补充交互、纠正和 Evidence 体感 | 不能证明企业代表性，也不驱动 Connector/ETL |
+
+Forge 当前从可查询数据库/数仓开始，不承担外部内容、支付、广告或 SaaS 平台的通用采集、身份统一和 Attribution。多个真实 Partner 因相同接入阻断无法采用时，再单独评估 Connector Contract 或现有生态集成。
+
+### S4 短期产品退出门禁
+
+- 目标用户在没有演示脚本或 Forge 团队推动的情况下，再次提出新的真实问题。
+- 至少一次语义确认减少后续任务的澄清或维护成本。
+- 至少一次歧义、证据不足、权限问题或 drift 被正确停止，没有以完整语气输出 Silent Error。
+- 用户可以从答案回到采用口径、数据范围、SQL、Datasource/Registry revision 和 Evidence。
+- 额外治理与审批成本能够由复用、错误减少或交付效率解释；否则收缩机制而不是继续增加治理页面。
+
+原 S0–S4 路线在 S4 通过前暂停新增 Product Shell、通用 Decision Center、Economics/Outcome Ledger、Reusable Report、更多渠道、非 SQL Action、通用 SaaS Connector、M1A Runtime PEP 和 Agent Runtime；现由 R0 门禁承接近期优先级。已有功能的安全事故、数据损坏和已确认行为回归仍可按需求池规则修复。
+
 ## W1：Web 对话实时任务视图（独立只读切片）
 
 > Requirement：[`REQ-2026-08-24-001`](requirements-pool.md#req-2026-08-24-001web-对话右侧任务-dag-与实时任务流) · 决策：`accepted_with_changes`
@@ -298,7 +589,9 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 
 采用 `Interaction-first, Contract-backed`：Web 可以先搭完整页面骨架和状态，但 Task、Artifact、QueryRun、Approval、Report 与 Registry 继续使用原真相源；演示数据只进入隔离原型并明确标记；生产中的按钮必须真实可用或 disabled 并说明原因。
 
-### W3.2 目标信息架构
+### W3.2 第一版目标信息架构（已被用户门禁退回）
+
+以下结构只保留为 `821065f` 原型的历史设计依据，不再作为下一版已确认 IA。N1 北极星完成后，W3A 需要重新提出 Conversation、Task、Decision、Delivery、Data Governance 和 Agent Runtime 的产品投影并再次获得用户确认。
 
 - **工作台**：待处理、进行中任务、最近报告、阻断状态；
 - **新建任务**：对话提出问题、补充目标和选择交付物；
@@ -334,7 +627,7 @@ M1A 不取消，但顺延为 W3 核心 Product Shell 稳定后的首个后端工
 - 所有页面显示“交互原型/演示数据”；源码无生产网络请求。审批 dialog 绑定任务、数据源、范围、限制、完整 SQL 和检查结果；演示确认不会写生产 Store。
 - prototype tests `5 passed`、build/audit 通过；Python 全量 `564 passed / 24 skipped`（Web 定向 `19 passed`）；Pi typecheck/`103 passed`。Playwright 在 1440×900、1600×1000 本地与 Atlas 走通关键 route、dialog、fixture state、search、back/forward/reload，0 console error、0 横向溢出。
 - 固定 commit `821065f` 发布到 Atlas `/home/elazer/services/forge-previews/web-shell-821065f/`，`forge-web-shell-preview.service` 仅绑定 `192.168.8.10:18006`。生产 Jinja、Forge/Pi、Store 和 `d2b0fd9` checkout 未修改。
-- 当前等待用户逐页给出 `PASS / CHANGE / REMOVE`；W3B 的生产 route/API/feature flag 方案尚未批准。证据见 [`web-product-shell-w3a-evidence-2026-08-24.md`](web-product-shell-w3a-evidence-2026-08-24.md)。
+- 用户门禁已给出 `CHANGE`：连续 Chat 不应被一次性创建表单替代；同时“分析工作台”不足以概括产品。当前先复核 2026-08-21 至 2026-08-24 的产品对话，重新确认 Conversation、Task、Artifact、Decision、Governance 与 Agent-facing Runtime 的产品投影。新的 IA 未确认前不修改生产 route/API，不进入 W3B。原型自动证据见 [`web-product-shell-w3a-evidence-2026-08-24.md`](web-product-shell-w3a-evidence-2026-08-24.md)。
 
 ## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
 
@@ -759,19 +1052,18 @@ Observed Cost / Outcome
 
 ## 15. 当前实施顺序
 
-M0.1–M0.5 已完成 Contract Ready。用户在阶段重评估后明确将可人工测试的产品外壳置于下一优先级，当前顺序调整为：
+M0.1–M0.5、N1/N2、SP0–SP5 与 Benchmark v2 已形成可复用工程资产；Atlas 人工复验保留为历史验收债务，但不再阻塞 R0。当前只推进开源 Trust Runtime 产品切割：
 
 ```text
-W3A 产品地图 + 隔离高保真交互骨架 + Atlas 人工门禁
-  → W3B 生产 Product Shell + 真实 Golden Path
-  → W3C 数据资产/管理入口收口
-  → M1A Runtime Identity / Delegation / Default Deny
-  → 真实治理 Golden Journey
-  → H6 最小可复用报告切片
-  → 根据第二团队或成本证据选择 M1B 或 M2
+R0.1 Unified Input Contract：Direct SQL / Forge JSON
+  → R0.2 Evaluate：Exact Result / Regression / Failure Taxonomy
+  → R0.3 Enforce：Policy / Assurance / Read-only / Approval
+  → R0.4 Explain：Evidence / Lineage / Limitations
+  → R0.5 Public Golden Path：README / Quickstart / CLI-API / Dashboard
+  → R0.6 External Adoption Evidence
 ```
 
-W3A 已获用户确认并进入隔离原型实施。H5 生产 R1、H6 runtime、M1B–M7 暂停新增实现；不因前端优先删除已有 Contract、测试或失败关闭边界。
+R0 未通过前，不恢复 M1A、G1、Q1、H6 或更广企业平台实现。Atlas candidate 可在不扩张产品范围的前提下单独复验；不得因产品切割删除已有 Contract、测试、审计或失败关闭边界。
 
 明确假设：
 

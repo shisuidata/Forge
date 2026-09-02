@@ -1,6 +1,6 @@
 # 基准测试
 
-Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以及 Spider2-Lite 学术 benchmark。
+Forge 当前同时使用三类证据：BIRD Mini-Dev 官方 challenging 公共基准、自有 40 题回归集，以及 Spider2-Lite 陌生数据库基准。公共基准优先用于判断泛化，自有题集只用于版本回归。
 
 ---
 
@@ -8,7 +8,9 @@ Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以�
 
 | 基准 | 题数 | 指标 | 得分 |
 |---|---|---|---|
-| 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 40 | Case EA(any) | **100.0%** |
+| BIRD Mini-Dev challenging 诊断子集（Forge，NAS 三轮完成运行） | 12/102 | Official EA aggregate | **6.48% (7/108)** |
+| BIRD Mini-Dev challenging 诊断子集（Direct SQL，同模型同 Evidence，NAS 三轮完成运行） | 12/102 | Official EA aggregate | **25.93% (28/108)** |
+| 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 40 | Case EA(any，旧近似比较器) | **100.0%** |
 | 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 40 | Case EA(all) | **100.0%** |
 | 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 120 runs | Run ACC | **100.0%** |
 | 自有用例（Method AI，Ark Coding Plan，large，3 runs） | 120 runs | 编译失败率 | **0.0%** |
@@ -29,6 +31,29 @@ Forge 在两类基准上进行测试：自有 40 题业务查询测试集，以�
 | Spider2-Lite SQLite | 123 | 编译成功率 | **97.6%** |
 
 ---
+## BIRD-SQL 官方 Challenging 诊断子集双臂对照（2026-08-26，EA 审计后）
+
+来源：[BIRD 官方站](https://bird-bench.github.io/) · [Mini-Dev GitHub](https://github.com/bird-bench/mini_dev) · [HuggingFace](https://huggingface.co/datasets/birdsql/bird_mini_dev)。题目、Oracle Evidence、Schema、database description、SQLite database 和 Gold SQL 均来自官方公开数据；许可证 CC BY-SA 4.0。当前 12 个 case 的 question / evidence / SQL / difficulty / db_id 已逐字段核对，与官方原始记录完全一致。
+
+评分只看执行结果，不比较 SQL 文本。每条 Gold SQL 与生成 SQL 在同一官方 SQLite 数据库执行；判定严格复刻 BIRD Execution Accuracy：set(gold_result_tuples) == set(predicted_result_tuples)。值和 tuple 列顺序必须精确一致；忽略结果行顺序与重复行 multiplicity；不做数值容差、大小写归一化或 trim。Execution Success 只表示 SQL 可执行，不代表结果正确。
+
+本轮只覆盖 102 道 challenging 题中的 12 道（11.8%），且只覆盖 11 个数据库中的 Formula 1、Financial 两个。它是诊断子集，不是完整 Mini-Dev 成绩，也不能与 leaderboard 横向比较。原抽样说明曾声称只保留 Gold 非空可执行题，但同两库另有 6 道满足该条件却未入选；该说明已撤销，不再把该 12 题称为代表性样本。
+
+| 方法 | Official EA mean | First-run EA | Pass@3 | Consistent@3 | Execution Success | P95 |
+|---|---:|---:|---:|---:|---:|---:|
+| Forge JSON → SQL | 5.56% (2/36) | 0.00% (0/12) | 16.67% (2/12) | 0.00% (0/12) | 91.67% | 116,851 ms |
+| Direct SQL | **27.78%** (10/36) | **33.33%** (4/12) | **50.00%** (6/12) | **8.33%** (1/12) | **100.00%** | **23,518 ms** |
+
+NAS run hbr_9a78d73cc64642709b03d4dc8aef978a 重新按官方 EA 评分后，Direct SQL 领先 22.22pp，且 P95 约为 Forge 的五分之一。旧比较器使用 0.1% 相对误差、0.005 绝对误差、大小写与首尾空格归一化，因此把 11 个不精确结果误判为正确；旧的 Forge 30.56% 与 Direct 33.33% 结论作废。
+
+NAS 上共有三轮完整 72-call 运行。最新页面 run hbr_c99bb3d506f54a25b528d191c3955944：Forge EA 5.56% (2/36)，Direct EA 30.56% (11/36)，Direct +25.00pp；三轮合计 Forge 7/108 (6.48%)、Direct 28/108 (25.93%)。三轮差异说明模型输出与执行成功率存在明显波动，单轮分数不得包装成稳定结论。
+
+后续公共基准标准：完整 500 题 Mini-Dev、11 个数据库、每题一次生成，以 Official EA 为主指标；102 道 challenging 全集作为难题切片。重复 3 次只报告 Mean EA、Pass@3、Consistent@3 等稳定性指标，不再把 Pass@3 命名为 Case EA。未完成完整 500 题前，页面和文档必须保持“诊断子集”标识。
+
+Accuracy Lab：http://192.168.8.10:18001/admin/benchmark。
+
+---
+
 
 ## 当前推荐交付基线：Method AI
 

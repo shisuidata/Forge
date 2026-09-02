@@ -1,168 +1,71 @@
-# AGENTS.md
+# Forge 项目协作规则
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+默认使用中文沟通；代码、API、命令和 symbol 保持原语言。
 
----
+Forge 是 Agent-native 的可信数据执行层。进入仓库后，先读 [`docs/current-project-state.md`](docs/current-project-state.md)；它是当前产品、阶段、门禁和未关闭验收项的简明投影。
 
-## 需求池与计划治理
+## 上下文读取
 
-任何新的产品、体验、架构或业务需求都必须先进入 `docs/requirements-pool.md`，不得直接写入 Plan 或 Architecture：
+不要默认扫描全部历史文档。按以下顺序读取：
 
-1. 先记录为 `captured`，澄清真实问题、目标用户、场景、预期结果和边界。
-2. 评估价值、产品公理、职责归属、安全/隐私、复杂度、复用、替代方案、机会成本以及是否应更正、延期或拒绝。
-3. 给出明确建议，等待用户确认；只有 `accepted` 或 `accepted_with_changes` 才能进入主动 Plan。
-4. `deferred/rejected/superseded` 需求仍保留原因，不删除。
-5. 普通 Bug 可走简化评估；安全事故和数据损坏可先止损，但必须立即补录。
+1. `docs/current-project-state.md`
+2. 与任务直接相关的源码、测试和文档章节
+3. 产品方向问题：`docs/product-north-star.md`
+4. 当前阶段或实施门禁：`docs/forge-enterprise-evolution-plan.md`
+5. 职责边界：`docs/platform-architecture.md`
+6. 新需求及历史决策：`docs/requirements-pool.md` 中相关 Requirement
 
-涉及 Pi、Forge 执行层、拾穗 DATA Skills、Web/飞书/钉钉渠道或职责迁移的已确认需求时：
+文档分类和历史材料见 `docs/README.md`。历史计划、评审、证据和 Devlog 只用于溯源，不能自动恢复为当前待办。
 
-1. 开始前必须阅读 `docs/platform-architecture.md`、`docs/pi-forge-integration-plan.md`、`docs/forge-enterprise-evolution-plan.md` 和 `docs/requirements-pool.md`。
-2. 用户确认新需求或方向变化后，先更新主动计划；影响职责边界时同时更新架构，再修改代码。
-3. 完成一个步骤后，回写需求池和计划中的当前状态、验证结果、遗留风险和下一步。
-4. Pi 是唯一主 Orchestrator；Forge 是可信执行层。不得新增双写任务状态或第二套主调度流程。
-5. 若实现与计划冲突，先暂停并澄清，不能靠临时兼容继续堆叠职责。
+## 当前产品与阶段
 
-## 产品定位
+- 当前产品切口：面向已有数据库或数仓的小型数据团队的可信业务问数助手，在真实提问中逐步沉淀并安全复用业务语义。
+- 当前有效需求：`REQ-2026-08-25-023`。
+- 唯一主动计划：`docs/forge-enterprise-evolution-plan.md`。
+- 当前只推进 **S0 Design Partner / Problem Baseline**；没有证据和用户确认，不实施 S1–S3、M1A、Agent Runtime、更多 Connector 或企业平台扩张。
+- 不承诺开放世界 100% 正确；通过语义、来源、权限、Evidence、确定性编译、审批和失败关闭减少静默错误。
 
-**Forge 是一个面向数据团队的 AI 查询 Agent，私有化部署，让弱模型也能生成可信 SQL。**
+## 稳定架构边界
 
-### 解决的问题
+- Pi 是唯一主 Orchestrator 和 Task 真相源。
+- Forge 是可信数据执行层，并保留校验、拒绝和失败关闭能力。
+- DATA Skills 是专业方法层，不持有任务主状态，不直接获得数据库执行权。
+- Web、飞书、钉钉是渠道与投影层，不创建第二套业务真相源。
+- 不新增双写任务状态、第二套主调度流程或绕过审批的执行路径。
 
-SQL 生成错误分两类：
+## 工作流
 
-| 错误类型 | 定义 | Forge 能解决 |
-|---|---|---|
-| 生成错误 | 推理正确，但翻译成 SQL 时出错（忘写 OVER、JOIN 无类型等） | ✅ DSL 约束 + Structured Output |
-| 业务逻辑错误 | 指标定义歧义（复购率的分母是什么） | ✅ Registry 语义层 |
-| 算法逻辑错误 | 模型不知道该用 CTE 解决这个问题 | ❌ 超出 Forge 能力边界 |
+1. 开始前查看工作区状态，保留用户已有未提交修改；不要 reset、覆盖或清理未知工作。
+2. 普通 Bug、测试修复和已确认行为的维护可直接定位、修复并验证。
+3. 新产品、体验、架构或业务需求先追加到 `docs/requirements-pool.md`，保留原始表达，并完成价值、边界、风险、替代方案和机会成本评估。
+4. 只有用户明确接受的需求才能进入主动计划；涉及职责迁移时再更新架构。
+5. 修改前复用现有模块、Contract 和测试模式；不得建立旁路真相源或第二套约定。
+6. 修改后运行覆盖实际行为的最小验证；跨 Python/Pi Contract 时同时验证两侧。
+7. 回写当前状态、主动计划和 Requirement 的必要变化；不要把易变进度、测试数量或候选地址写进本文件。
 
-Forge 的核心价值：**把生成错误降到接近零，通过 Registry 消灭业务逻辑错误。**
+## 工程入口
 
-### 完整工作流
+- Python API 与产品层：`main.py`、`web/`
+- Forge Runtime：`forge/`
+- Agent 与 Contract：`agent/`
+- Registry：`registry/`
+- Pi Orchestrator：`services/pi-orchestrator/`
+- Python tests：`tests/`
+- 产品与架构事实：`docs/`
 
-```
-用户自然语言
-  ↓
-Forge Agent（理解意图）
-  ↓ Structured Output
-Forge JSON       ← 格式由 JSON Schema 强制约束，生成错误物理上不可能
-  ↓ 确定性编译
-SQL              ← 人工审核，审核者看到的 = 实际执行的
-  ↓ 用户确认
-Forge 直连数据库执行，展示结果
-```
+常用验证命令：
 
----
-
-## 产品形态
-
-**独立产品，私有化部署，用户自配 LLM。**
-
-```
-私有化部署的 Forge Agent
-    ├── 对话界面（Web）
-    ├── 自配 LLM（Codex API / 本地模型 / 任意兼容 OpenAI 接口的模型）
-    ├── 直连内网数据库
-    │     ├── forge sync  → 自动同步表结构到 Registry
-    │     └── 执行已审核的 SQL，展示结果
-    └── Registry（组织知识库，随使用积累）
-          ├── 结构层：表、字段（forge sync 自动生成）
-          └── 语义层：业务指标定义（对话式维护）
+```bash
+.venv/bin/python -m pytest tests -q
+npm --prefix services/pi-orchestrator run typecheck
+npm --prefix services/pi-orchestrator test
 ```
 
-**Registry 是产品的核心资产**——记录组织的数据结构和业务语义，用得越多越准确。
+按变更范围先跑最小测试，再决定是否扩大；不要用硬编码测试数量判断完成。
 
-### Registry 两层设计
+## 安全与版本管理
 
-- **结构层**：`forge sync --db <connection>` 直连数据库自动生成，无需手动维护
-- **语义层**：通过对话定义业务指标，AI 提取结构，用户确认后写入
-
-```
-用户：复购率是指下过 2 次及以上订单的用户，除以所有下过至少 1 次订单的用户
-Forge：分子 = 订单数 >= 2 的用户数，分母 = 订单数 >= 1 的用户数，是否正确？
-用户：对
-Forge：已保存，以后"复购率"直接可用
-```
-
-### Agent 的两个模式
-
-- **查询模式**：自然语言 → Forge JSON → SQL → 审核 → 执行 → 展示结果
-- **定义模式**：自然语言定义指标 → AI 提取结构 → 用户确认 → 写入 Registry
-
----
-
-## 技术实现
-
-**语言**：Python
-
-**Forge DSL 格式**：JSON（不是自定义文本语法）
-
-**生成方式**：Structured Output（token 级别约束）
-
-**为什么是 JSON + Structured Output**：
-- LLM 对 JSON 生成准确率最高
-- JSON Schema 约束枚举值/必填字段，在生成时就已强制
-- Parser 零成本
-
----
-
-## 当前状态与路线图
-
-### 已完成 ✅
-
-**Forge DSL 核心**
-- `forge/schema.json`：Forge DSL 格式定义（JSON Schema）
-- `forge/compiler.py`：Forge JSON → SQL 确定性编译器（支持 window/CTE/anti-join 等）
-- `forge/cli.py`：CLI 入口（compile / sync / sync-staging）
-- 53 个编译器测试用例
-
-**Registry 三层语义架构**（`registry/data/`）
-- `schema.registry.json`：结构层，`forge sync` 自动生成
-- `metrics.registry.yaml`：指标语义层，对话式维护
-- `disambiguations.registry.yaml`：业务歧义消除规则（新）
-- `field_conventions.registry.yaml`：字段使用约定（新）
-- `registry/staging_sync.py`：staging → registry 自动合并（新）
-
-**Agent 对话循环**
-- `agent/agent.py`：查询模式 / 定义模式 / 澄清轮次（新） / 提案模式
-- `agent/session.py`：对话状态 + `IntentSpec` 澄清中间状态（新）
-- `agent/llm.py`：歧义规则 + 字段约定 → 自动注入 system prompt（新）
-- `agent/feishu.py`：飞书长连接 Bot
-- `forge/cache.py`：查询缓存（两阶段确认）
-
-**其他**
-- `forge sync`：直连数据库生成结构层
-- `web/router.py`：Web API
-- `tests/accuracy/`：40 题 EA 基准，当前 ~72%（Method K，大 Schema）
-
-### 待建设
-- [ ] Web 界面（Admin UI）
-- [ ] 数据库直连执行 + 结果展示（`forge/executor.py` 已有雏形）
-- [ ] `forge sync-staging` 定时轮询（cron / systemd timer）
-- [ ] EA 继续提升（目标 80%+）
-- [ ] 多轮对话记忆（跨会话 Session 持久化）
-
----
-
-## 测试用例（`tests/text-to-sql-failures/`）
-
-Forge 真正的靶心（生成错误 + 业务逻辑错误）：
-
-| 案例 | 错误类型 | Forge 是否解法 |
-|---|---|---|
-| A1 LEFT JOIN vs INNER | 生成错误 | ✅ |
-| A2 NOT IN NULL 陷阱 | 生成错误 | ✅ |
-| B1 WHERE vs HAVING 混淆 | 生成错误 | ✅ |
-| D1 复购率指标歧义 | 业务逻辑错误 | ✅ Registry |
-| E2 窗口函数语法错误 | 生成错误 | ✅ |
-| B2 与自身均值比较 | 算法逻辑错误 | ❌ |
-| E1 每组取 TopN | 算法逻辑错误 | ❌ |
-
-### 测试 Schema
-
-```sql
-users        (id, name, city, created_at, is_vip)
-orders       (id, user_id, status, total_amount, created_at)
-order_items  (id, order_id, product_id, quantity, unit_price)
-products     (id, name, category, cost_price)
-```
+- 不读取、记录或提交 `.env`、凭证、客户数据和生产 Secret。
+- 不主动修改生产配置、签名、外部服务或真实数据源。
+- 未经用户明确要求，不 commit、push、tag、发布或部署。
+- 高风险副作用不自动重放；真实客户数据、生产凭证和权限变更必须单独获得用户授权。

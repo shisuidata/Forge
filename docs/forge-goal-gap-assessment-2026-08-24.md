@@ -2,7 +2,7 @@
 
 > 评估对象：当前本地 `929e8d4`、Atlas 生产基线 `d2b0fd9`、M0–M7 唯一主动计划。百分比只表示对已定义目标的阶段估计，不是准确度、可靠性或商业成功率。
 >
-> **后续优先级修订**：本评估最初建议 M1A 作为下一工作包；用户随后确认没有稳定产品骨架就无法持续人工测试和指导方向。根据 `REQ-2026-08-24-014`，当前先执行 W3 Web Product Shell，M1A 顺延为 W3 后首个后端治理工作包。长期差距判断不变。
+> **后续优先级修订**：本评估最初建议 M1A，随后调整为 W3 Product Shell。第一版 W3A 用户门禁为 CHANGE；2026-08-25 已完成 [`product-north-star.md`](product-north-star.md) 并形成新的 [`product-design-roadmap-2026-08-25.md`](product-design-roadmap-2026-08-25.md) 提案。当前等待用户确认 Human Control Plane、Agent Data Runtime 和 Shared Trust/Data Foundation 的新阶段顺序；本文件的差距数据仍保留为历史估计，不再单独决定优先级。
 
 ## 1. 先区分两个目标
 

@@ -1,9 +1,11 @@
 # Forge
 
-> **面向数据团队的可信 AI 问数 Agent，解决 AI 参与数据查询时不可信的问题。**
-> 当前状态：已达到受控生产落地 / 封闭 Beta 候选标准；可用于设计型客户 PoC，不建议无约束规模化铺开。
+> **面向数据团队建设、供人和企业 Agent 共同使用的可信数据运行时与数据任务平台。**
+> 结构化查询是当前首个高价值验证切片；Forge 不承诺开放世界 100% 正确，而是通过语义、来源、权限、Evidence 和确定性执行减少静默错误。当前可用于设计型客户 PoC，不建议无约束规模化铺开。
 
 [English README](README_EN.md)
+
+> 使用 OMP 继续开发：从根目录启动，OMP 会读取 [`AGENTS.md`](AGENTS.md)；当前阶段和门禁以 [`docs/current-project-state.md`](docs/current-project-state.md) 为第一入口。
 
 ---
 
@@ -227,12 +229,19 @@ tests/
 
 | 文档 | 内容 |
 |---|---|
+| [当前项目状态](docs/current-project-state.md) | 当前产品定义、阶段、门禁、未关闭验收项与 OMP 继续开发入口 |
+| [文档导航](docs/README.md) | 区分当前事实、稳定约束、主动计划与历史材料 |
 | [完整架构教材](docs/architecture-course/index.md) | 从可信问数原理、核心技术优势到实战与生产架构 |
 | [架构设计](docs/architecture.md) | 系统整体架构与模块职责的精简入口 |
+| [产品北极星](docs/product-north-star.md) | Forge 为什么存在、服务谁，以及正确性、共识、数据事实与产品边界的长期指导 |
+| [产品设计与阶段路线重建提案](docs/product-design-roadmap-2026-08-25.md) | Human Control Plane、Agent Data Runtime、产品对象、信息架构与长期阶段方向 |
+| [短期 Product Spine 历史计划](docs/short-term-product-spine-plan-2026-08-25.md) | SP0–SP5 已完成实施与验证记录；仅作历史溯源，不是当前待办 |
+| [Product Spine SP5 集成门禁证据](docs/product-spine-sp5-evidence-2026-08-25.md) | 真实 Pi/Forge/Report 三连 Golden Journey、restart/idempotency/offline、Atlas candidate 与失败关闭反证 |
+| [Product Projection v1 Contract](docs/product-projection-contracts.md) | Conversation、Task、Action、Workspace、Report 的版本化只读边界、状态、bounds、redaction 与 SP1 入口 |
 | [产品公理](docs/product-axioms.md) | 以第一性原理约束身份、证据、协同、记忆、成本与可信行动 |
 | [AI Native 企业长期论证](docs/ai-native-enterprise-thesis.md) | Data Agent、组织协同、统一记忆、企业 AI Infra 的论证、反证与待验证假设 |
 | [产品方向与架构复审](docs/product-direction-architecture-review-2026-08-24.md) | 按产品公理审核当前实现、四平面缺口、目标架构与分阶段建议 |
-| [企业演进主动计划](docs/forge-enterprise-evolution-plan.md) | Contract、身份授权、成本、协同、保障、Context 实验和企业交付的阶段门禁 |
+| [企业演进主动计划](docs/forge-enterprise-evolution-plan.md) | 唯一主动计划；当前阶段为 S0 Design Partner / Problem Baseline |
 | [需求池](docs/requirements-pool.md) | 新需求的澄清、评估、接受、延期、拒绝、计划与验证记录 |
 | [M0 Governance Contract 评审](docs/governance-contract-review-2026-08-24.md) | 跨 Contract 语义、Threat Model、迁移/回滚与 M1A 前置结论 |
 | [工作原理与 DSL 能力](docs/how-it-works.md) | 执行流程详解、DSL 特性表、Schema RAG |

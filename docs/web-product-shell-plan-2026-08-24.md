@@ -1,6 +1,8 @@
 # Forge Web Product Shell 实施蓝图（W3）
 
-> Status: W3A planning · Requirement: REQ-2026-08-24-014 · Scope: desktop first
+> Status: historical first W3A plan · User gate: CHANGE · Requirement: REQ-2026-08-24-014 · Scope: desktop first
+>
+> 本文保留 `821065f` 原型的第一版设计依据，不再作为当前已确认产品地图。“新建任务”中心和缺少连续 Conversation 的 IA 已被用户门禁退回。北极星见 [`product-north-star.md`](product-north-star.md)，长期重建方向见 [`product-design-roadmap-2026-08-25.md`](product-design-roadmap-2026-08-25.md)，当前底层优先实施提案见 [`short-term-product-spine-plan-2026-08-25.md`](short-term-product-spine-plan-2026-08-25.md)。
 
 ## 1. 目的
 
