@@ -15,6 +15,7 @@ forge.yaml
 demo/*.db
 .DS_Store
 .claude/
+.planning/
 .forge/
 docs/conversation-logs/
 forge_audit.db
