@@ -1509,12 +1509,12 @@ Forge 已形成 Registry、Compiler、Assurance、只读执行、QueryRun、Appr
 
 ### R0.6 External Adoption Evidence 准备与当前阻塞（2026-09-03）
 
-- 公开 GitHub 信号盘点显示：现有 8 个 Issue 均由 `shisuidata-legacy` 提交；现有 1 个 Pull Request 同样由 `shisuidata-legacy` 提交且 head 属于 `shisuidata`；11 stars 与 1 fork 仅是传播指标。当前没有可确认的非维护者 Golden Path 回执或 Adapter、Rule、Dataset、真实 failure case、下游集成贡献。
+- 公开 GitHub 信号盘点显示：现有 9 个 Issue 与 1 个 Pull Request 均由维护者身份提交；11 stars 与 1 fork 仅是传播指标。当前没有可确认的非维护者 Golden Path 回执或 Adapter、Rule、Dataset、真实 failure case、下游集成贡献。Issue #9 是维护者创建的外部试跑招募入口，本身不计入采用证据。
 - `forge quickstart` 现在先提交写 SQL，并要求公开 Evaluate 以 `stage=assurance`、`code=readonly_violation` 失败关闭；随后才运行已审核的只读 Evaluate → Enforce → Explain → Dashboard 链路，避免成功路径掩盖拒绝边界。
 - `summary.json` 新增 `run_receipt`：记录 Forge version、OS/arch/Python、起止时间、运行时长及有界阶段结果，并用 canonical JSON 的 SHA-256 checksum 检测回执漂移。回执排除 hostname、username、文件路径、SQL rows、凭证和私有 schema；Forge 不发送 telemetry。Checksum 不证明身份，公开 GitHub 提交者才提供 provenance。
 - 新增 Quickstart adoption Issue 表单，并在 README、中文 README、CONTRIBUTING 和 CLI 终态指向同一提交入口。表单要求 tested release/commit、fresh-clone setup time、首个失败或困惑步骤、回执、开发者对 Policy verdict/Evidence integrity/limitations 的独立解释，以及 fresh clone、非实现者、SQL 审核和无敏感信息确认。
-- 实际人工批准与 `--yes --json` Quickstart 均完成失败关闭、exact-result Evaluate、hash-bound Enforce、七类 Evidence、三项限制和 Dashboard 投影；聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck、Python compileall 与 Issue YAML 结构检查通过。
-- 上述代码与入口已发布为公开 revision `0b4fd36b7175c09dc3375d839c5aba888aacb900`，但发布和内部验证不是外部采用证据。当前仍没有非维护者 fresh-clone 回执，R0.6 与 R0 退出门禁保持未通过。下一动作是由未参与实现的外部开发者独立试跑、提交回执和摩擦；若失败，必须完成 issue → fix → rerun 闭环后再评估门禁。
+- 实际人工批准与 `--yes --json` Quickstart 均完成失败关闭、exact-result Evaluate、hash-bound Enforce、七类 Evidence、三项限制和 Dashboard 投影；聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck、Python compileall 与 Issue YAML 结构检查通过。另从公开 HTTPS 远端全新克隆 `main@5bbdabe5ceca10fd7128a825d277e5e4534d69e7`，在空工作目录完成 bootstrap + Quickstart 共 36 秒并重算 receipt checksum 一致。
+- 上述代码与入口已发布，[Issue #9](https://github.com/shisuidata/Forge/issues/9) 已公开招募独立试跑，#8 保持为 framework-neutral external-agent adapter 贡献入口；但发布、维护者 fresh-clone 和维护者 Issue 都不是外部采用证据。当前仍没有非维护者回执，R0.6 与 R0 退出门禁保持未通过。下一动作是等待未参与实现的外部开发者独立试跑、提交回执和摩擦；若失败，必须完成 issue → fix → rerun 闭环后再评估门禁。
 
 ---
 

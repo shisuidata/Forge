@@ -32,9 +32,9 @@ Forge 当前验证的是：
 - R0.3 Enforce 已完成：版本化 `POST /api/v1/enforce/query-runs`、`GET /api/v1/enforce/query-runs/{query_run_id}`、`POST /api/v1/enforce/query-runs/{query_run_id}/approve` 与 `forge enforce` 将 Principal、Purpose、Task、可选 DelegatedMandate、Resource Scope、Policy、Assurance、Registry 和只读凭证绑定进 QueryRun；回读绑定创建凭证，只有独立 reviewer credential 提交匹配 SQL/Assurance/Enforcement hashes 后才能执行。上下文、Policy、Registry、权限或只读条件漂移均失败关闭。
 - R0.4 Explain 已完成：版本化 `GET /api/v1/explain/query-runs/{query_run_id}`、`forge explain` 与 `explain-query-response-v1` 从同一 QueryRun 投影结果、实际 SQL、Registry 语义/来源、Principal/Policy/Approval、Assurance、Evidence、lineage、版本和显式限制。来源上下文、审批与结果在写入时 hash-bound；篡改失败关闭，历史未锚定 QueryRun 只返回 `integrity=partial`，不伪造证据。
 - R0.5 Public Golden Path 已完成：`forge quickstart` 使用隔离 SQLite 与真实本地服务串联公开 Evaluate → Enforce → Explain API，无需 API Key、LLM、Embedding、Pi、Forge JSON、已有数据库或 `.env`；默认展示实际 SQL 并等待批准，`--serve` 保持 Dashboard 可浏览，`--yes --json` 提供合成数据 CI 证明。Dashboard 只读投影同一 QueryRun 的执行状态与 Evidence integrity，不复制真相源。
-- 当前已完成工程证据：Accuracy Lab 完整 Run `pbr_1f735d433a284366bfe6526146511792` 完成 500/500 cases、1000/1000 calls：Forge EA 45.40%、Direct SQL 56.40%，Forge Delta -11.00pp。R0.6 采用入口聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过；实际人工批准与 `--yes --json` 两条 `forge quickstart` 均完成失败关闭、Evaluate、Enforce、Explain 与 Dashboard 链路。
+- 当前已完成工程证据：Accuracy Lab 完整 Run `pbr_1f735d433a284366bfe6526146511792` 完成 500/500 cases、1000/1000 calls：Forge EA 45.40%、Direct SQL 56.40%，Forge Delta -11.00pp。R0.6 采用入口聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过；实际人工批准与 `--yes --json` 两条 `forge quickstart` 均完成失败关闭、Evaluate、Enforce、Explain 与 Dashboard 链路。另从公开 HTTPS 远端全新克隆 `main@5bbdabe5ceca10fd7128a825d277e5e4534d69e7`，在空工作目录完成 bootstrap + Quickstart 共 36 秒并重算回执 checksum 一致；该维护者 smoke 只证明公开路径可运行，不计入外部采用。
 - R0.6 证据采集准备已完成：Quickstart 先用写 SQL 证明 `assurance/readonly_violation` 失败关闭，再运行已审核只读查询；`summary.json` 生成不含 hostname、username、路径、SQL rows、凭证或私有 schema 的 `run_receipt` 与 SHA-256 漂移校验。公开 Quickstart adoption Issue 表单收集 tested revision、fresh-clone setup time、首个失败/困惑点、回执及开发者对 Policy、Evidence 和限制的独立解释；Forge 不发送 telemetry，checksum 不证明身份。
-- 当前切入要求：R0.6 必须取得外部开发者独立完成 Golden Path 或提交 Adapter、Rule、Dataset、真实 failure case 的采用证据，并记录 setup time、失败点与修复闭环；内部 smoke、页面数量、自有题集和测试通过不能替代外部证据。可测试公开 revision 已发布为 `0b4fd36b7175c09dc3375d839c5aba888aacb900`；下一步是由未参与实现的外部开发者 fresh clone 试跑并提交公开回执。
+- 当前切入要求：R0.6 必须取得外部开发者独立完成 Golden Path 或提交 Adapter、Rule、Dataset、真实 failure case 的采用证据，并记录 setup time、失败点与修复闭环；内部 smoke、页面数量、自有题集和测试通过不能替代外部证据。可测试公开 revision 已发布，独立试跑招募见 [GitHub #9](https://github.com/shisuidata/Forge/issues/9)；下一步等待未参与实现的外部开发者 fresh clone 试跑并提交公开回执。
 - 当前不扩张通用 Product Shell、SaaS Connector、非 SQL Action、Economics/Outcome Ledger 或完整企业权限平台；真实客户数据、生产凭证和高风险数据源仍需单独授权。
 
 ## 4. 已完成且可复用的工程基础
@@ -50,8 +50,8 @@ Forge 当前验证的是：
 
 ## 5. 未关闭的验收与采用事实
 
-- 公开 GitHub 信号盘点中，现有 8 个 Issue 与 1 个 Pull Request 均由维护者身份提交；11 stars 与 1 fork 仅是传播信号。尚无可确认的外部开发者 Golden Path 回执，也没有外部 Adapter、Rule、Dataset 或真实 failure case 贡献。
-- R0.6 的失败关闭样例、隐私有界回执与公开提交表单已在 revision `0b4fd36b7175c09dc3375d839c5aba888aacb900` 发布并通过内部 smoke，但仍没有外部独立完成记录；R0.6 外部采用门禁未通过。
+- 公开 GitHub 信号盘点中，现有 9 个 Issue 与 1 个 Pull Request 均由维护者身份提交；11 stars 与 1 fork 仅是传播信号。尚无可确认的外部开发者 Golden Path 回执，也没有外部 Adapter、Rule、Dataset 或真实 failure case 贡献。
+- R0.6 的失败关闭样例、隐私有界回执与公开提交表单已发布；[Issue #9](https://github.com/shisuidata/Forge/issues/9) 是维护者创建的外部试跑招募入口，不是采用证据。当前仍没有外部独立完成记录，R0.6 外部采用门禁未通过。
 - W2 主体内容规则、Product Spine 与完整 Product Shell 的 Atlas candidate 仍有历史人工复验项，但不再主导当前产品路线。
 - Governance Action Catalog 的 14 个 supported Action 中仅 `query.prepare`、`query.approve`、`query.execute` 已完成 v1 Runtime Enforcement，覆盖率为 3/14（21.4%）；Explain 是只读证据投影，不新增 Action Runtime Enforcement，Contract Coverage 不能替代其余运行时执行覆盖。
 
