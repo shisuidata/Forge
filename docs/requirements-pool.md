@@ -1466,3 +1466,35 @@ Forge 已形成 Registry、Compiler、Assurance、只读执行、QueryRun、Appr
 - QueryRun 和 Pi 事件持久传递 `input_kind`、candidate revision；相同 SQL 的两条路径共享 SQL hash、assurance/policy/registry/candidate revision，输入来源仍可区分。
 - 非只读 SQL、未授权表、未知字段、歧义或附加字段候选均失败关闭；既有自然语言 → Forge JSON 路径保持兼容。
 - 验证：Python 全套 `612 passed / 28 skipped`；Pi `118 passed`；TypeScript typecheck 通过。该证据只关闭 R0.1，不代表 R0 Golden Path 或外部采用门禁已通过。
+
+---
+
+## REQ-2026-09-03-026：默认英文 README 与中文本地化入口
+
+- **提出日期**：2026-09-03
+- **当前状态**：`verified`
+- **用户原始表达**：Forge 应该更加国际化，例如默认使用英文 README。
+
+### 真实问题与目标结果
+
+Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认展示中文，英文版本位于非默认文件；同时存在一份过期的中文 README 副本，容易形成两个中文事实源。目标是让国际访问者默认看到英文项目定位、Quickstart、能力边界和贡献入口，同时保留完整、易发现且与英文版对应的简体中文入口。
+
+### 评估与实施边界
+
+- **用户价值**：高；减少国际开发者理解成本，并使英文项目描述、Topics、Release 与仓库首页保持一致。
+- **职责边界**：只调整公开文档入口与语言导航，不改变 Forge 产品定义、Runtime Contract、主动计划或工程行为。
+- **一致性要求**：根 `README.md` 为英文；中文使用明确 locale 文件 `README.zh-CN.md`；两者首屏互链；移除 `README_EN.md` 和过期 `README_CN.md`，避免并行事实源。
+- **风险**：文档重命名可能产生失效链接；必须更新仓库内引用并运行文档链接检查。
+- **替代方案**：保留中文根 README、仅增加英文链接，无法改变 GitHub 默认呈现；保留三个 README 会继续制造漂移，均不采纳。
+- **机会成本**：不在本次扩张为全量英文文档翻译；内部规划与历史文档继续使用中文，以免产生大规模双写维护成本。
+
+### 用户确认
+
+- **确认日期**：2026-09-03
+- **决策**：接受默认英文 README，并保留简体中文本地化入口。
+
+### 关联
+
+- **实现**：根 `README.md`、`README.zh-CN.md` 及仓库内语言导航链接。
+- **Plan / Architecture**：无需更新；该需求不改变当前 R0 主线或稳定职责边界。
+- **验证**：根 README locale contract 检查通过；`tests/test_docs_links.py` 为 `1 passed`；`git diff --check` 通过。

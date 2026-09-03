@@ -3,123 +3,142 @@
 [![CI](https://github.com/shisuidata/Forge/actions/workflows/ci.yml/badge.svg)](https://github.com/shisuidata/Forge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **面向 Data Agent 的开源可信数据运行时：让 AI 辅助的数据查询可约束、可审核、可执行、可追溯。**
+> **Open-source infrastructure for trustworthy AI-assisted data querying: constrained, reviewable, executable, and auditable.**
 
-Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束的 Forge JSON 候选，通过 Registry、确定性 SQL 编译、只读与权限校验、人工审核、Evidence 和 Audit 降低静默错误。它不是只把自然语言转成 SQL 的 wrapper，也不把“模型生成了 SQL”等同于“查询可信”。
+Forge sits between an upstream agent and a database. It accepts Direct SQL or constrained Forge JSON candidates, then applies Registry context, deterministic SQL compilation, read-only and scope checks, human review, Evidence, and Audit. It is not a thin Text-to-SQL wrapper, and it does not treat “the model produced SQL” as proof that a query is trustworthy.
 
-[English README](README_EN.md) · [贡献指南](CONTRIBUTING.md) · [文档索引](docs/README.md)
+[简体中文](README.zh-CN.md) · [Contributing](CONTRIBUTING.md) · [Documentation index](docs/README.md)
 
-## 30 秒理解 Forge
+## Forge in 30 seconds
 
-| 普通 Text-to-SQL 路径 | Forge 当前路径 |
+| A typical Text-to-SQL path | Forge today |
 |---|---|
-| 模型直接生成并执行开放 SQL | 候选先进入受约束、可拒绝的保障流程 |
-| Prompt 同时承担语义、语法和安全 | Registry 管语义，编译器管转换，运行时管校验与执行 |
-| 失败通常只有“SQL 报错” | 保留输入类型、SQL hash、版本、失败阶段和 Evidence |
-| 结果正确性依赖单次模型表现 | 用可复现 benchmark 和 regression 迭代，不承诺开放世界 100% 正确 |
+| A model emits and may execute open-ended SQL | A candidate enters a bounded, rejectable assurance path |
+| The prompt owns semantics, syntax, and safety | Registry owns semantics, the compiler owns translation, and runtime gates own execution |
+| Failures collapse into a SQL error | Input kind, SQL hash, revisions, failure stage, Evidence, and Audit remain inspectable |
+| Correctness depends on one model response | Reproducible benchmarks and regressions guide development; open-world 100% accuracy is not claimed |
 
-**当前已有的核心能力：**
+**Working core available today:**
 
-- Forge JSON 受约束中间表示与确定性 SQL 编译；
-- Direct SQL / Forge JSON 统一候选、QueryRun 审核和执行链；
-- Registry 结构与语义约束、关系和粒度校验；
-- 只读 SQL、字段/表范围、审批 hash、超时和结果上限；
-- SQLite、PostgreSQL、MySQL 的自动化兼容性检查；
-- 可回放的准确率 Benchmark、Exact Result 比较和失败诊断。
+- constrained Forge JSON intermediate representation and deterministic SQL compilation;
+- a shared candidate, QueryRun review, and execution path for Direct SQL and Forge JSON;
+- Registry-backed schema and semantic constraints, relationship checks, and grain checks;
+- read-only SQL, table/column scope, approval hashes, timeouts, and result limits;
+- automated compatibility checks for SQLite, PostgreSQL, and MySQL;
+- replayable accuracy benchmarks, exact-result comparison, and bounded failure diagnostics.
 
-> **项目状态：early-stage，actively iterating。** 当前适合评估、贡献和带人工审核/只读账号的受控部署，不代表功能完备、开放世界准确或大规模高可用。最新完整 500-case BIRD 运行中，Forge EA 为 **45.4%**，Direct SQL 为 **56.4%**；历史 Spider2-Lite SQLite 子集 EA 仍为 **9.2%**。这些结果受数据集、模型、Provider、Prompt、Registry 与运行配置约束，不能外推为普遍能力。详见 [当前项目状态](docs/current-project-state.md) 与 [Benchmark 边界](docs/benchmarks.md)。
-
----
-
-## 快速开始
-
-```bash
-# 1. 克隆 & 安装
-git clone https://github.com/shisuidata/Forge
-cd Forge
-bash scripts/bootstrap-dev.sh
-
-# 2. 配置（填入 LLM_API_KEY + EMBED_API_KEY）
-cp .env.example .env
-
-# 3. 一键启动 Demo（生成 200 表数仓 + 同步 Registry + 跑通测试）
-bash scripts/demo-setup.sh
-
-# 4. 启动服务
-uvicorn main:app --host 0.0.0.0 --port 8000  # Web UI + API
-```
-
-**Docker 开发方式（自带 PostgreSQL，热重载）：**
-
-```bash
-docker compose up
-# 访问 http://localhost:8000/admin
-```
-
-**生产交付方式：**
-
-```bash
-cp .env.production.example .env.production
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
-forge doctor --profile prod
-bash scripts/production-smoke.sh
-```
-
-生产部署必须使用数据库只读账号，并确认 `/health/readiness` 无 `fail` 项。详见 [生产交付部署说明](docs/production-deployment.md)。
-
-**接入自己的数据库：**
-
-```bash
-# 修改 .env 中的 DATABASE_URL，然后同步 schema
-forge sync --db postgresql://user:pass@host/db
-# 或写入指定 Registry 路径
-forge sync --db "$DATABASE_URL" --out registry/data/schema.registry.json
-```
-
-**使用火山方舟 Ark（OpenAI 兼容接口）：**
-
-```env
-LLM_PROVIDER=openai
-LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-LLM_MODEL=doubao-seed-2-1-pro-260628
-LLM_API_KEY=你的火山方舟 API Key
-```
-
-**运行测试：**
-
-```bash
-# 编译器 + API 测试（本地，无需服务运行）
-pytest tests/ -v
-
-# Playwright E2E 测试（需服务运行）
-pip install playwright && playwright install chromium
-FORGE_BASE_URL=http://localhost:8000 pytest tests/test_e2e.py -v
-```
+> **Project status: early-stage and actively maintained.** Forge is suitable for evaluation, contribution, and controlled deployments with human review and read-only database credentials. It is not feature-complete or HA-ready. In the latest complete 500-case BIRD run, Forge reached **45.4% EA** versus **56.4%** for Direct SQL; the historical Spider2-Lite SQLite subset remains at **9.2% EA**. Results are specific to the dataset, model, provider, prompt, Registry, and run configuration—not a universal performance claim. See [Current project state](docs/current-project-state.md) and [Benchmark boundaries](docs/benchmarks.md).
 
 ---
 
-## 工作原理
+## Table of Contents
+
+- [The Problem We Solve](#the-problem-we-solve)
+- [Core Philosophy](#core-philosophy)
+- [How It Works](#how-it-works)
+- [Walkthrough](#walkthrough)
+- [DSL Capabilities](#dsl-capabilities)
+- [Schema Retrieval (RAG)](#schema-retrieval-rag)
+- [Benchmark Results](#benchmark-results)
+- [Engineering Lessons](#engineering-lessons)
+- [An Honest Question We're Wrestling With](#an-honest-question-were-wrestling-with)
+- [Getting Started](#getting-started)
+
+---
+
+## The Problem We Solve
+
+AI data querying becomes unreliable when the model owns the whole chain: business definitions, schema selection, SQL generation, execution, and result traceability. Forge separates those responsibilities into a trustworthy query workflow.
+
+| Trust gap | Definition | Example | Forge's answer |
+|---|---|---|---|
+| **Definition trust** | Metric definition ambiguity across teams | Is "repurchase rate" denominator all users, or only users who placed an order? | ✅ Registry semantic layer |
+| **Generation trust** | Reasoning correct, translation to SQL wrong | `INNER JOIN` instead of `LEFT JOIN`; `NOT IN` silently fails on NULLs | ✅ DSL constraints + compiler |
+| **Execution trust** | Users cannot see what the AI actually ran | SQL execution bypasses review | ✅ Review flow, read-only role, timeout, row cap |
+| **Traceability trust** | Failures do not become reusable knowledge | The same mistake repeats next week | ✅ Audit, feedback, failure triage |
+| **Capability trust** | Model does not know which algorithm to use | Date series fill, period-over-period calculation | ❌ Outside Forge's scope, honestly labeled |
+
+**Forge's core claim**: trustworthy AI data querying requires a constrained, reviewable, auditable middle layer. Better prompts alone are not enough.
+
+---
+
+## Core Philosophy
+
+### 1. Constraints enable freedom
+
+Asking an LLM to write unconstrained SQL is asking it to random-walk through an infinite error space. **LLM error rate scales with output space size.**
+
+Forge radically narrows the output space:
+
+- Only table/column names registered in the Registry are valid tokens
+- JOIN type must be chosen from an enum — physically impossible to emit bare `JOIN` (no type)
+- `filter` must be an array, `count_all` cannot have a `col` field…
+
+When syntactic errors are physically blocked at generation time, only semantic errors remain.
+
+### 2. Intent and execution are separated
+
+```
+LLM handles:      understand intent → generate Forge JSON  (semantic layer)
+Compiler handles: Forge JSON → SQL                          (execution layer, deterministic)
+```
+
+This separation has deep implications:
+
+- **Auditable**: the SQL the user reviews is the SQL that executes — no runtime surprises
+- **Debuggable**: if the SQL is wrong, it was caused by specific Forge JSON, traceable exactly
+- **Upgradable**: switch to a stronger LLM without touching the compiler; optimize the compiler without retraining
+
+### 3. Registry is the organization's data asset
+
+Registry is not a static schema file — it is the accumulation of organizational knowledge:
+
+```
+Structural layer (auto-generated by forge sync)
+  └── table structure, column names, types, low-cardinality enum values (status: cancelled/completed)
+
+Semantic layer (maintained conversationally, more accurate with each use)
+  └── repurchase rate = users with ≥2 orders / users with ≥1 order
+  └── average order value = avg total_amount of completed orders
+  └── VIP user = is_vip = 1
+```
+
+The more it's used, the more accurate Registry becomes, the lower the error rate. **This is a positive flywheel.**
+
+### 4. Compiler fixes beat prompt fixes
+
+When the model's semantic intent is correct but the DSL format is slightly off, adding a `_coerce` fix in the compiler is more stable than changing the prompt:
+
+- Prompt fixes have butterfly effects — fixing one problem often breaks another
+- Compiler fixes are deterministic, don't affect other paths, fully testable
+- 14 `_coerce` fixes accumulated, each from a real failure case
+
+---
+
+## How It Works
 
 ```mermaid
 flowchart LR
-    NL["自然语言"]
+    NL["🗣️ Natural Language<br/>Average order value per city<br/>for VIP users"]
 
-    subgraph forge["Forge 管道"]
+    subgraph forge["Forge Pipeline"]
         direction TB
-        REG["Registry<br/>结构层 + 语义层"]
-        RETRIEVER["SchemaRetriever<br/>向量检索 / BM25 降级"]
-        LLM["LLM<br/>Structured Output"]
-        JSON["Forge JSON<br/>有约束的中间表示"]
-        COMPILER["确定性编译器"]
-        SQL["SQL"]
+        REG["📚 Registry<br/>structural + semantic layer"]
+        RETRIEVER["🔍 SchemaRetriever<br/>vector search / BM25 fallback<br/>→ top-k relevant tables"]
+        SCHEMA["📋 JSON Schema<br/>enforced enum constraints"]
+        LLM["🤖 LLM<br/>Structured Output"]
+        JSON["📄 Forge JSON<br/>constrained intermediate representation"]
+        COMPILER["⚙️ Deterministic Compiler<br/>compile_query()"]
+        SQL["📝 SQL"]
     end
 
-    DB["数据库"]
-    RESULT["结果集"]
+    DB["🗄️ Database"]
+    RESULT["📊 Result set"]
 
     NL --> RETRIEVER
     REG --> RETRIEVER
-    RETRIEVER -->|"top-k 相关表"| LLM
+    RETRIEVER -->|"condensed schema<br/>(top-k tables only)"| LLM
+    SCHEMA --> LLM
     LLM --> JSON
     JSON --> COMPILER
     COMPILER --> SQL
@@ -127,162 +146,456 @@ flowchart LR
     DB --> RESULT
 ```
 
-自然语言经 Registry 语义注入后，由 LLM 生成结构化的 Forge JSON，再由确定性编译器翻译为 SQL。在 Provider 严格执行动态 JSON Schema 的字段上，非法候选可在生成阶段被阻止；表达式透传、兼容降级路径、业务口径和算法选择仍需校验、审核与测试。用户审核的 SQL 和执行的 SQL 是同一份。
+### Error Recovery and Fallback
 
-从产品价值、核心原理到生产落地的系统讲解，见 [Forge 完整架构教材](docs/architecture-course/index.md)；快速参考见 [工作原理与 DSL 能力](docs/how-it-works.md)。
+```mermaid
+flowchart TD
+    FJ["Forge JSON"]
 
----
+    FJ --> C1{Compile}
+    C1 -->|success| EXEC[Execute + EA evaluation]
+    C1 -->|failure| FB1["Return error to LLM<br/>request corrected Forge JSON"]
 
-## 当前状态
+    FB1 --> C2{Re-compile}
+    C2 -->|success| EXEC
+    C2 -->|failure| FB2["raw SQL fallback<br/>generate_sql_direct<br/>escape hatch when DSL is insufficient"]
 
-| 信号 | 当前边界 |
-|---|---|
-| BIRD 500-case 完整运行 | Forge EA **45.4%**；Direct SQL EA **56.4%** |
-| 历史自有 40 题回归集 | 用于域内回归，不作为陌生 Schema 泛化证明 |
-| Python CI | 完整 `pytest`，并覆盖 SQLite / PostgreSQL / MySQL compatibility smoke |
-| Pi Orchestrator | TypeScript typecheck 与 Node test 可在本地独立运行 |
-| Spider2-Lite SQLite | 编译成功率 **97.6%**；EA **9.2%** |
-
-不同数据集、模型、Provider、Prompt、Registry、重试策略和评价器的结果不可直接横向比较。详见 [基准测试详情](docs/benchmarks.md)。
-
-### 已落地功能
-
-| 功能 | 状态 |
-|---|---|
-| Web UI（Chat + 12 个 Admin 页面 + Dashboard 概览） | ✅ |
-| SQL 审核编辑（生成后可修改 SQL 再执行） | ✅ |
-| 查询结果导出（CSV / JSON，中文 BOM 兼容） | ✅ |
-| 认证鉴权（Cookie session + API Key） | ✅ |
-| 多租户基础（user → team 映射；org/team/user 仍在完善） | ✅ 基础能力 |
-| 数据权限（team 级别表可见性 ACL + 无权限提示） | ✅ |
-| PostgreSQL 支持（SQLite 零改动切换） | ✅ |
-| 三层记忆系统（EMS / SMP / WMB） | ✅ |
-| Pipeline 引擎（分析 / 可视化 / 报告） | ✅ 代码路径；需客户域验收 |
-| 飞书 Bot（流式卡片 + 按钮回调） | ✅ |
-| 五通道知识收集（RSS / URL / 文档 / 对话 / 手动） | ✅ |
-| 文档导入（上传 .txt/.md → LLM 提取 → 确认入库） | ✅ |
-| 自动化测试（API / compiler / executor / lint / docs / audit / feedback） | ✅ |
-| 部署就绪检查（`/health/readiness` + `forge doctor`） | ✅ |
-| 生产部署包（Dockerfile / compose.prod / env 模板 / 部署文档） | ✅ |
+    FB2 --> EXEC
+    EXEC -->|result matches| PASS["✅ Pass"]
+    EXEC -->|no match| FAIL["✗ Fail — log Forge JSON for analysis"]
+```
 
 ---
 
-## 项目结构
+## Walkthrough
+
+Example: "Calculate repurchase rate, where a repurchase user is defined as having placed 2 or more orders."
+
+### Step 1 — Registry builds the system prompt
+
+`forge sync` connects directly to the database and auto-samples low-cardinality column enum values:
+
+```
+Database schema:
+  users: id, name, city, created_at, is_vip[0/1]
+  orders: id, user_id, status[cancelled/completed], total_amount, created_at
+  order_items: id, order_id, product_id, quantity, unit_price
+  products: id, name, category[Books/Clothing/Electronics], cost_price
+```
+
+`status[cancelled/completed]` tells the LLM the exact string spellings, eliminating a whole class of hallucinations.
+
+### Step 2 — LLM generates Forge JSON (Structured Output)
+
+```json
+{
+  "cte": [{
+    "name": "user_orders",
+    "query": {
+      "scan": "orders",
+      "group": ["orders.user_id"],
+      "agg": [{"fn": "count_all", "as": "order_count"}],
+      "select": ["orders.user_id", "order_count"]
+    }
+  }],
+  "scan": "user_orders",
+  "agg": [
+    {"fn": "count_all", "as": "total_users"},
+    {"fn": "count", "col": "CASE WHEN order_count >= 2 THEN 1 END", "as": "repeat_users"}
+  ],
+  "select": [{"expr": "repeat_users * 1.0 / total_users", "as": "repurchase_rate"}]
+}
+```
+
+JSON Schema enforces constraints at the token generation level: `fn` can only be enum values, `scan` can only be table names in the Registry.
+
+### Step 3 — Deterministic compilation
+
+```python
+compile_query(forge_json)  # same input always produces same SQL
+```
+
+Before compilation, `_expand_aliases()` expands agg aliases referenced in SELECT into their full expressions, eliminating SQL alias scope traps:
+
+```sql
+WITH user_orders AS (
+  SELECT orders.user_id, COUNT(*) AS order_count
+  FROM orders
+  GROUP BY orders.user_id
+)
+SELECT COUNT(CASE WHEN order_count >= 2 THEN 1 END) * 1.0 / COUNT(*) AS repurchase_rate
+FROM user_orders
+```
+
+### Step 4 — User review → execution
+
+What the user sees is what will be executed — no runtime transformation. On approval, Forge connects directly to the database, executes, and displays results.
+
+---
+
+## DSL Capabilities
+
+| Feature | Notes |
+|---|---|
+| **JOIN types** | `inner / left / right / full / anti / semi`, type must be explicitly declared |
+| **anti join** | Replaces `NOT IN`, eliminates NULL trap at the root |
+| **Aggregate functions** | `count / count_all / count_distinct / sum / avg / min / max / group_concat` |
+| **Agg FILTER clause** | `{"fn":"sum","col":"...","filter":[...]}` → `SUM(...) FILTER (WHERE ...)`, native in SQLite/PG |
+| **CASE WHEN in agg** | `{"fn":"count","col":"CASE WHEN x>=2 THEN 1 END"}` |
+| **Window — ranking/distribution** | `row_number / rank / dense_rank / percent_rank / cume_dist / ntile(n)` |
+| **Window — value/navigation** | `lag / lead / first_value / last_value`, with optional offset, default, frame |
+| **Window frame** | `{"unit":"rows","start":"6 preceding","end":"current_row"}` → `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW`; supports sliding avg, running total |
+| **qualify** | Window result filtering (per-group TopN), compiled into a wrapping subquery |
+| **CTE** | Multi-step aggregation, derived metrics; recursive CTE supported |
+| **Date trunc group key** | `group` accepts `{"expr":"STRFTIME('%Y-%m',col)","as":"month"}`; alias usable directly in select |
+| **Dates** | `$date` literal + `$preset` relative dates (8 presets) |
+| **SELECT DISTINCT** | Add `"distinct": true` at top level |
+| **Set operations** | `union / union_all / intersect / except`; main query sort/limit applies to the whole result |
+| **IN subquery** | `{"col":"users.id","op":"in","val":{"subquery":{...}}}` → `col IN (SELECT ...)` |
+| **Dialect support** | SQLite / MySQL / PostgreSQL (date functions, string agg, FULL JOIN detection, FILTER clause availability check) |
+| **Alias expansion** | agg/window aliases referenced in SELECT expr are auto-expanded, eliminating alias scope errors |
+
+---
+
+## Schema Retrieval (RAG)
+
+When the Registry contains dozens or hundreds of tables, injecting the full schema into every prompt is both expensive and noisy. Forge ships a two-tier schema retriever in `forge/retriever.py`.
+
+### How It Works
+
+```
+User question
+  ↓
+SchemaRetriever.retrieve(question, embed_fn, top_k=5)
+  ├── index built + embed_fn available → vector search (cosine similarity)
+  └── otherwise → BM25-lite keyword fallback (auto, no config needed)
+  ↓
+DDL schema for top-k relevant tables only
+  ↓
+LLM generates Forge JSON (shorter context, less noise)
+```
+
+### Table Description Construction
+
+Retrieval quality is bounded by how well each table is described. Forge builds a rich text representation from the Registry:
+
+```
+Table: orders. Description: order master table. Columns: id, user_id, status (completed, cancelled), total_amount, created_at
+```
+
+**Key: enum values are embedded in the description.** When a user asks about "completed orders", `status (completed, cancelled)` lets the embedding correctly surface `orders` rather than an unrelated table.
+
+### Two-Tier Retrieval
+
+| Mode | Mechanism | Trigger | Recall (4 tables, top_k=5) |
+|---|---|---|---|
+| **Vector search** | L2-normalized cosine similarity | Index built + embed_fn available | 100% |
+| **BM25-lite fallback** | TF×IDF + Chinese bigram tokenization | No embedding API | 92.9% |
+
+The BM25-lite tokenizer generates both full Chinese strings (high exact-match weight) and character-level bigrams (fuzzy matching), so a short query term can still match longer column descriptions.
+
+### Embedding API Compatibility
+
+The `make_embed_fn` factory normalizes differences across APIs:
+
+| API | Request format | Response format |
+|---|---|---|
+| Standard OpenAI | `{"input": ["..."]}` | `{"data": [{"embedding": [...]}]}` |
+| MiniMax | `{"texts": ["..."], "type": "db"/"query"}` | `{"vectors": [[...], [...]]}` |
+
+MiniMax distinguishes `db` (index documents) from `query` (query text) embedding types — mixing them degrades recall. Forge automatically uses the correct type for index building vs. query retrieval.
+
+### Index Caching
+
+- First run: batch-embeds all table descriptions, L2-normalizes, caches to `.forge/schema_embeddings.pkl`
+- Subsequent queries: loads from cache (milliseconds); auto-invalidated when the table set changes
+- When `top_k >= number of tables`, retrieval is skipped and all tables are returned (avoids wasting API calls on small schemas)
+
+### Compression Effect
+
+| Scenario | Full schema tokens | After retrieval | Reduction |
+|---|---|---|---|
+| 4 tables, top_k=5 | ~230 | ~230 (auto full-fetch) | 0% |
+| 50 tables, top_k=5 | ~2,800 | ~560 | **~80%** |
+
+> In real enterprise schemas with dozens of tables, only the 5 most relevant tables are injected per query — schema tokens in the prompt reduce by 80%+.
+
+---
+
+## Benchmark Results
+
+### Proprietary Test Set: 40 Cases
+
+Test schema: `users / orders / order_items / products` (SQLite, covering real business query scenarios)
+
+#### Version Evolution (LLM Judge 0–10, 5-run average per case)
+
+| Version | Core change | Score | Compile err | vs prev |
+|---|---|---|---|---|
+| **A** | Baseline (SQL-style DSL) | 7.63 | 3.8% | — |
+| **B** | Control: direct SQL generation | 8.38 | 0.0% | — |
+| **D** | New DSL + enum schema constraints | 8.46 | 1.2% | +0.83 |
+| **E** | Prompt refinement (HAVING alias, LIMIT, ranking) | 8.41 | 0.0% | −0.05 |
+| **F** | Semantic precision (semi→EXISTS, JOIN completeness) | 8.43 | 0.6% | +0.02 |
+| **G** | Rule robustness (quantifier semantics, positive rules) | 8.69 | 0.0% | **+0.26** |
+| **H** | New capabilities (CASE WHEN, $preset, CTE, expr) | 8.45 | 0.5% | −0.24 |
+| **I** | Stability fixes (compiler fix 7, CTE boundary) | 8.45 | 2.0% | 0.00 |
+| **J** | HAVING precision + avg-per-X pattern | 8.65 | 0.5% | **+0.20** |
+| **J+Sem** | J + runtime semantic disambiguation library | **8.82** | **0.0%** | **+0.17** |
+
+> A/D/E/F/G tested on 32 cases. H onwards expanded to all 40 cases (new capability cases 33–40).
+
+#### EA Comparison (Execution Accuracy, cross-model)
+
+Same 40 cases, Forge DSL mode vs direct SQL generation mode, on two models:
+
+**MiniMax-M2.5 (mid-tier model)**
+
+| Method | EA | Correct | Execution errors | Compile/other errors | Avg latency |
+|---|---|---|---|---|---|
+| **Forge (DSL)** | **65.0%** | 26/40 | 2 | 0 | ~10s |
+| **Direct SQL** | **57.5%** | 23/40 | 16 | 1 | 4.2s |
+
+**GLM-5 via SiliconFlow (strong reasoning model, 35/39 cases each, 5 cases timed out)**
+
+| Method | EA | Correct | Avg latency |
+|---|---|---|---|
+| **Forge (DSL)** | **74.3%** | 26/35 | 10–660s (reasoning model) |
+| **Direct SQL** | **74.4%** | 29/39 | ~15s |
+
+Category breakdown (GLM-5, completed cases):
+
+| Category | Forge | Direct | Δ |
+|---|---|---|---|
+| Basic filter / Multi-table JOIN / Window functions | tied | tied | — |
+| Aggregation+GROUPBY / Time series | **100%** | 80% | **+20pp** |
+| Ranking TopN | 60% | **80%** | -20pp |
+| CTE multi-step / Complex composite | weaker | stronger | -15~25pp |
+
+> Note: MiniMax API output has irreducible randomness (temperature=0 still has ~±5pp single-run variance); figures above are representative single-run measurements. GLM-5's 5 timeouts stem from the reasoning model's extremely long inference time on complex CTEs (up to 660s per case).
+
+#### Forge J+Sem vs Direct SQL (Claude Sonnet, LLM Judge, historical data)
+
+| Category | Cases | Direct SQL | Forge J+Sem | Δ |
+|---|---|---|---|---|
+| Multi-table JOIN + agg | 6 | 8.53 | **8.73** | +0.20 |
+| Complex filter | 4 | 9.00 | **9.25** | +0.25 |
+| GROUP BY + HAVING | 5 | 8.60 | **8.80** | +0.20 |
+| Ranking & TopN | 5 | 8.36 | **9.00** | +0.64 |
+| Window aggregation | 4 | 8.40 | **8.75** | +0.35 |
+| Time navigation | 3 | 8.40 | **9.00** | +0.60 |
+| ANTI/SEMI JOIN | 3 | 7.80 | **8.60** | **+0.80** |
+| Complex composite | 2 | 7.60 | **8.00** | +0.40 |
+| **Overall** | **40** | **8.38** | **8.82** | **+0.44** |
+
+ANTI/SEMI JOIN has the largest gap (+0.80): direct SQL models frequently produce `NOT IN`, which silently returns wrong results on NULLs. Forge's `anti` join primitive eliminates this error class at the root.
+
+---
+
+### Spider2-Lite SQLite Subset Test
+
+Spider2-Lite is an academic text-to-SQL benchmark containing complex analytical queries from real data warehouses. We ran a systematic test on its 123 SQLite cases to validate Forge's generalization to unfamiliar databases and query patterns.
+
+#### Test Iteration History
+
+```mermaid
+timeline
+    title Spider2-Lite Test Iterations
+    Round 1 : 123 SQL files generated
+            : compile success rate 82%
+            : EA 5.9% (only 17 cases had gold SQL)
+            : issue: gold CSV path errors, many cases evaluated as no_gold
+    Fix EA evaluation : gold CSV supports multi-subfile (_a/_b/_c)
+                     : condition_cols dual-format parsing (per-subfile / flat)
+                     : added raw SQL fallback (escape hatch when DSL is insufficient)
+                     : all 123 cases now have gold reference answers
+    Full re-run : compile success rate 97.6%
+               : EA 9.2% (11/119)
+               : raw SQL fallback triggered 26 times, 6 passed
+```
+
+#### Final Results
+
+| Metric | Value |
+|---|---|
+| Test cases | 123 SQLite cases |
+| **Compile success rate** | **97.6%** (120/123) |
+| **EA (Execution Accuracy)** | **9.2%** (11/119) |
+| Raw SQL fallback triggered | 26 times |
+| Fallback passed | 6 times |
+
+#### Why Is Spider2 EA Low?
+
+Forge is designed to solve **generation errors** and **business logic errors** — not academic benchmark algorithm puzzles. Spider2's query distribution is systematically misaligned with Forge's design targets:
+
+- Date series generation (generate_series / recursive CTE)
+- Complex self-joins and multi-level nested subqueries
+- Period-over-period calculation (DATE_TRUNC + self-join)
+- Statistical modeling (linear regression, moving average)
+
+These all fall into "algorithm logic errors" — even human analysts need to know the specific algorithm to answer them.
+
+In real enterprise data query scenarios, over 80% of daily analytical queries fall within Forge DSL's coverage. Spider2's low EA is an **honest boundary label**, not a product defect.
+
+---
+
+## Engineering Lessons
+
+### Compiler fixes beat prompt fixes
+
+The single highest-impact improvement in the benchmark was a compiler fix (Case 39: 3.0 → 9.0), not any prompt change. Prompts have butterfly effects; compiler fixes are surgical.
+
+### Alias scope is SQL's hidden reef
+
+The SQL standard does not allow referencing same-level agg aliases within the same SELECT:
+
+```sql
+-- Wrong: repeat_users doesn't exist yet at this point
+SELECT repeat_users * 1.0 / total_users AS repurchase_rate
+```
+
+Solution: `_expand_aliases()` replaces aliases in expr with their full expressions before compilation, eliminating this entire error class.
+
+### New capability docs cause overfitting
+
+Every new capability added to the prompt risks the model over-applying it. After adding CTE docs, the model started wrapping simple GROUP BY queries in CTEs. Mitigation: every new capability **must** be paired with a "when NOT to use" counter-example.
+
+### Semantic enrichment is additive
+
+The semantic library injects disambiguations before the LLM call ("more than N times" → `op: "gt"` not `"gte"`), without touching the core prompt or adding extra API calls. J → J+Sem improved by 0.17, compile failure rate dropped from 0.5% to 0.0%.
+
+---
+
+## An Honest Question We're Wrestling With
+
+> **This section is active self-doubt, not a conclusion.**
+
+The GLM-5 benchmark results made us re-examine Forge's core premise.
+
+### The Core Premise
+
+Forge's logic chain is:
+
+```
+LLM writing unconstrained SQL → high error rate
+↓
+DSL + Structured Output narrows the output space → generation errors physically impossible
+↓
+Forge EA clearly beats direct SQL generation
+```
+
+MiniMax (a mid-tier model) supports this: Forge 65.0% vs Direct SQL 57.5%, a gap of **+7.5pp**.
+
+### Where the Question Arises
+
+GLM-5 (a strong reasoning model) returned a different picture: Forge 74.3% vs Direct SQL 74.4% — **essentially identical**.
+
+This points to an uncomfortable hypothesis:
+
+**As models get stronger, the "generation error" category itself shrinks.** Strong models don't need DSL constraints to avoid the `NOT IN` NULL trap, or to remember that JOINs need a type — they just don't make these mistakes.
+
+If this holds, Forge's DSL constraint layer may deliver diminishing returns as foundation models continue to improve.
+
+### What Still Holds
+
+After reflection, several things we believe remain true regardless of model capability:
+
+**1. The Registry semantic layer's value is model-agnostic**
+
+Whether "repurchase rate" counts all users or only users who placed at least one order is a business definition problem, not a reasoning problem. No matter how strong the LLM, it cannot know your organization's metric definitions from thin air. The Registry as an accumulation of organizational knowledge is a real moat.
+
+**2. The audit trail's value is model-agnostic**
+
+The SQL the user reviews is the SQL that gets executed — no runtime transformation. In enterprise data environments, this "auditable, traceable" property is a hard requirement regardless of LLM capability.
+
+**3. Weak-model deployments remain widespread**
+
+The reality of self-hosted deployments is that many data teams run local small/mid models (Qwen 7B, Llama 8B), not GPT-4-class models. In weak-model scenarios, DSL constraints still provide measurable value.
+
+### What We Don't Know Yet
+
+- Is GLM-5's "74.3% parity" a real signal or sampling noise (5 timeouts skew the comparison)?
+- If foundation models keep improving, should Forge's value proposition shift from "DSL constraints reduce generation errors" to "Registry semantic layer + audit trail"?
+- Should the DSL become thinner — keeping only semantic disambiguation, relaxing SQL syntax constraints?
+
+**These questions don't have answers yet. We're actively looking for them.** If you have thoughts, open an Issue.
+
+---
+
+## Getting Started
+
+```bash
+# Install
+git clone https://github.com/shisuidata/Forge
+cd Forge
+pip install -e .
+
+# Configure
+cp .env.example .env
+# Fill in: LLM_API_KEY, LLM_BASE_URL, DATABASE_URL
+
+# Sync database schema
+forge sync --db sqlite:///your.db
+
+# Run proprietary tests
+python tests/text-to-sql-failures/create_db.py
+python tests/text-to-sql-failures/run_ea.py
+
+# Run Spider2 subset test
+python tests/spider2/runner.py --limit 20
+```
+
+---
+
+## Project Structure
 
 ```
 forge/
-  ├── schema.json          — Forge DSL 格式定义（JSON Schema）
-  ├── compiler.py          — 确定性编译器：Forge JSON → SQL
-  ├── retriever.py         — Schema 向量检索器（四层召回 + ACL 过滤）
-  ├── executor.py          — SQL 执行器
-  ├── lint.py              — 业务/字段/结果契约检查
-  ├── cache.py             — 查询缓存（精确 + 模糊匹配）
-  ├── chart.py             — 图表生成（ECharts）
-  └── cli.py               — CLI 入口（compile / sync / doctor）
-
-agent/
-  ├── agent.py             — Agent 调度（查询 / 指标定义 / 缓存反馈）
-  ├── llm.py               — LLM 客户端（RAG + ACL + 约定注入）
-  ├── pipeline.py          — Pipeline 引擎（分析 / 可视化 / 报告）
-  ├── db.py                — 数据库抽象层（SQLite / PostgreSQL）
-  ├── tenant.py            — 多租户（org / team / user / ACL）
-  ├── knowledge.py         — 五通道知识收集框架
-  └── memory/
-      ├── ems.py           — Episodic Memory Store（对话历史）
-      ├── smp.py           — Semantic Memory Pool（业务知识）
-      └── wmb.py           — Working Memory Buffer（当前上下文）
-
-web/
-  ├── router.py            — FastAPI 路由（Web UI + API + execute-raw）
-  ├── auth.py              — HMAC-SHA256 Cookie + API Key 认证
-  └── templates/           — Jinja2 模板（Chat + Dashboard + 11 个 Admin 页面）
+  ├── schema.json          — Forge DSL format definition (JSON Schema)
+  ├── compiler.py          — Deterministic compiler: Forge JSON → SQL (3 dialects, 14 coerce fixes)
+  ├── retriever.py         — Schema vector retriever (embedding + BM25-lite fallback)
+  ├── schema_builder.py    — Dynamically builds tool schema (injects enum constraints)
+  └── cli.py               — CLI entry point
 
 registry/
-  ├── sync.py              — forge sync：直连数据库生成结构层
-  ├── staging_sync.py      — 用户确认规则合并入 Registry
-  └── data/                — 生产 Registry 路径（schema / metrics / disambiguations / conventions）
-
-scripts/
-  └── seed_mock_data.py    — Mock 数据填充（团队/用户/审计/会话/知识）
+  └── sync.py              — forge sync: connects to database and generates Registry
 
 tests/
-  ├── conftest.py          — 共享 fixtures（app / client / auth_client）
-  ├── test_compiler*.py    — 编译器单元测试（118 个用例）
-  ├── test_api.py          — API 端点测试（26 个用例）
-  ├── test_e2e.py          — Playwright E2E 测试（22 个用例）
-  ├── test_docs_links.py   — 公开文档本地链接检查
-  ├── accuracy/            — 自有 40 题基准（当前推荐 Method AI）
-  └── spider2/             — Spider2-Lite SQLite 子集（123 题）
+  ├── test_compiler.py     — Compiler unit tests (38 cases)
+  ├── accuracy/            — Proprietary 40-case benchmark (LLM judge + EA, 10 versions)
+  │   ├── cases.json       — Cases + reference SQL
+  │   ├── runner.py        — Multi-method comparison runner
+  │   └── results/         — Per-version run results
+  ├── text-to-sql-failures/— Targeted failure cases (JOIN traps, aggregation traps, etc.)
+  └── spider2/             — Spider2-Lite SQLite subset test (123 cases)
+      ├── runner.py        — Full pipeline runner (EA embedded + raw SQL fallback)
+      └── results/         — SQL files + run logs
 ```
 
 ---
 
-## 文档
+## Current Scores
 
-| 文档 | 内容 |
-|---|---|
-| [当前项目状态](docs/current-project-state.md) | 当前产品定义、阶段、门禁、未关闭验收项与 OMP 继续开发入口 |
-| [文档导航](docs/README.md) | 区分当前事实、稳定约束、主动计划与历史材料 |
-| [完整架构教材](docs/architecture-course/index.md) | 从可信问数原理、核心技术优势到实战与生产架构 |
-| [架构设计](docs/architecture.md) | 系统整体架构与模块职责的精简入口 |
-| [产品北极星](docs/product-north-star.md) | Forge 为什么存在、服务谁，以及正确性、共识、数据事实与产品边界的长期指导 |
-| [产品设计与阶段路线重建提案](docs/product-design-roadmap-2026-08-25.md) | Human Control Plane、Agent Data Runtime、产品对象、信息架构与长期阶段方向 |
-| [短期 Product Spine 历史计划](docs/short-term-product-spine-plan-2026-08-25.md) | SP0–SP5 已完成实施与验证记录；仅作历史溯源，不是当前待办 |
-| [Product Spine SP5 集成门禁证据](docs/product-spine-sp5-evidence-2026-08-25.md) | 真实 Pi/Forge/Report 三连 Golden Journey、restart/idempotency/offline、Atlas candidate 与失败关闭反证 |
-| [Product Projection v1 Contract](docs/product-projection-contracts.md) | Conversation、Task、Action、Workspace、Report 的版本化只读边界、状态、bounds、redaction 与 SP1 入口 |
-| [产品公理](docs/product-axioms.md) | 以第一性原理约束身份、证据、协同、记忆、成本与可信行动 |
-| [AI Native 企业长期论证](docs/ai-native-enterprise-thesis.md) | Data Agent、组织协同、统一记忆、企业 AI Infra 的论证、反证与待验证假设 |
-| [产品方向与架构复审](docs/product-direction-architecture-review-2026-08-24.md) | 按产品公理审核当前实现、四平面缺口、目标架构与分阶段建议 |
-| [企业演进主动计划](docs/forge-enterprise-evolution-plan.md) | 唯一主动计划；当前阶段为 S0 Design Partner / Problem Baseline |
-| [需求池](docs/requirements-pool.md) | 新需求的澄清、评估、接受、延期、拒绝、计划与验证记录 |
-| [M0 Governance Contract 评审](docs/governance-contract-review-2026-08-24.md) | 跨 Contract 语义、Threat Model、迁移/回滚与 M1A 前置结论 |
-| [工作原理与 DSL 能力](docs/how-it-works.md) | 执行流程详解、DSL 特性表、Schema RAG |
-| [基准测试详情](docs/benchmarks.md) | 版本演化、跨模型 EA 对比、Spider2 结果 |
-| [设计哲学与工程洞察](docs/philosophy.md) | 核心哲学、工程经验、开放问题 |
-| [商业化就绪清单](docs/commercial-readiness.md) | 当前商业化差距、已补齐的安全/审计能力、PoC 到正式交付路线 |
-| [商业化推进计划](docs/commercialization-plan.md) | P0/P1/P2 优先级、准确率闭环、PoC 到正式交付判定标准 |
-| [兼容性矩阵](docs/compatibility-matrix.md) | 数据库、数据仓库、Agent 入口、LLM 服务的支持边界 |
-| [客户 PoC 执行手册](docs/poc-playbook.md) | 客户域 golden questions、failure triage 和交付物 |
-| [外部 Agent 集成边界](docs/agent-integration.md) | MCP / OpenAI Agents / Claude Desktop 等外部入口的 prepare-query 只读边界 |
-| [交付前综合评估](docs/delivery-assessment-2026-05-07.md) | 业务板块、文档、目录、工作流、三轮测试和交付优化方案 |
-| [生产交付部署说明](docs/production-deployment.md) | 生产 compose、env、只读数据库账号、readiness、运维建议 |
-| [DSL 形式化语义](docs/dsl-semantics.md) | DSL 的形式化定义 |
-| [构建你的语义库](docs/registry.md) | Registry 结构层 + 语义层三文件详解，从零构建指南 |
-| [飞书 Bot 部署](docs/feishu-setup.md) | 飞书集成配置 |
+| Benchmark | Cases | Metric | Score |
+|---|---:|---|---:|
+| BIRD complete run | 500 | Forge Execution Accuracy | **45.4%** |
+| BIRD complete run | 500 | Direct SQL Execution Accuracy | **56.4%** |
+| Historical proprietary Method J | 40 | LLM Judge | **8.65 / 10** |
+| Historical proprietary Method J+Sem | 40 | LLM Judge | **8.82 / 10** |
+| Historical proprietary MiniMax run | 40 | Execution Accuracy | **65.0%** |
+| Spider2-Lite SQLite | 123 | Execution Accuracy | **9.2%** |
+| Spider2-Lite SQLite | 123 | Compile success rate | **97.6%** |
 
----
+These rows are retained as versioned evidence, not as directly comparable scores. Dataset, case selection, model, provider, prompt, Registry, retry policy, evaluator, and metric must match before two runs are compared.
 
-## 开发日志
+## Contributing
 
-真实的建造记录，包括走错的路、自我怀疑的时刻，和偶尔出现的顿悟。
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, testing, benchmark, pull request, and security guidance.
 
-| 篇 | 日期 | 主题 |
-|---|---|---|
-| [Day 0 · 开发实录](docs/devlog/forge-dev-story.md) | 2026-03 | 为什么做这件事；错误分类；核心洞见的形成过程 |
-| [Day 1 · 历史债 / 地面泥潭](docs/devlog/day1_2026-03-15.md) | 2026-03-15 | SQL 的设计哲学、四层召回演进、飞书 Bot 工程坑、SQL 缓存双阶段反馈 |
-| [Day 2 · CROSS JOIN / HAVING 别名 / EA 95%](docs/devlog/day2_2026-03-16.md) | 2026-03-16 | CROSS JOIN 标量 CTE 模式、HAVING alias 展开修复、DeepSeek strict tool calling 实验、M/O/N 三组 EA 基准 |
-| [Day 3 · 工程稳固 / 产品门面 / 连锁故障](docs/devlog/day3_2026-03-18.md) | 2026-03-18 | Session 持久化、编译器拆分、飞书 Bot 四层连锁故障、demo 向导、forge config CLI |
-| [Day 5 · 先看自己错没错 / 三层系统优化](docs/devlog/day5_2026-03-19.md) | 2026-03-19 | 5 处设计缺陷修复、编译重试对齐、约定 lint 程序化验证、LAG 示例补全、M2.7 EA 72.5% |
-| [Day 6 · 从原型到产品](docs/devlog/day6_2026-03-25.md) | 2026-03-25 | PostgreSQL 支持、HMAC 认证、数据权限 ACL、Pipeline E2E、Web Admin 完整落地、EA 70.0% |
-| [Day 7 · 准确率回炉 / TopN lint](docs/devlog/day7_2026-05-05.md) | 2026-05-05 | 测试口径拆分、Z.AI GLM-5.1 接入受阻、DeepSeek single-run EA 55.0%→65.0%、TopN lint/prompt 优化 |
-| [Day 8 · 把准确率问题重新工程化](docs/devlog/day8_2026-05-06.md) | 2026-05-06 | 面向博客发布的阶段总结：测试分层、GLM-5.1 接入受阻、DeepSeek EA 55.0%→65.0%、TopN 错误形式化为 lint |
+## Maintainer context
 
----
-
-## 参与维护
-
-贡献入口与复现要求见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。[`shisuidata/Forge`](https://github.com/shisuidata/Forge) 是项目主仓库，由 [`shisuidata`](https://github.com/shisuidata) 组织维护；[`rockythink`](https://github.com/rockythink) 是组织管理员和主要维护者。历史提交中原 `shisuidata` 个人账号现为 [`shisuidata-legacy`](https://github.com/shisuidata-legacy)，仅保留历史归属，不再参与项目维护。
+[`shisuidata/Forge`](https://github.com/shisuidata/Forge) is the canonical repository under the [`shisuidata`](https://github.com/shisuidata) organization. [`rockythink`](https://github.com/rockythink) is the organization administrator and primary maintainer. Historical commits attributed to the former `shisuidata` user now appear under [`shisuidata-legacy`](https://github.com/shisuidata-legacy); that account is retained only for history and is no longer used for project operations.
 
 ## License
 
-Forge 使用 [Apache License 2.0](LICENSE)。
-
-## 官网
-
-`website/` 是 Forge 的 Astro + Starlight 对外站点，用于承载快速开始、概念说明、基准测试和商业化 PoC 叙事：
-
-```bash
-cd website
-npm install
-npm run build
-```
+Forge is licensed under the [Apache License 2.0](LICENSE).

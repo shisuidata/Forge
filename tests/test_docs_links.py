@@ -9,7 +9,7 @@ MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 def test_public_markdown_local_links_resolve():
     """Keep public docs shippable by catching broken relative Markdown links."""
-    roots = [Path("README.md"), Path("README_CN.md"), *Path("docs").rglob("*.md")]
+    roots = [Path("README.md"), Path("README.zh-CN.md"), *Path("docs").rglob("*.md")]
     docs = [path for path in roots if path.exists() and "conversation-logs" not in path.parts]
     missing: list[tuple[str, str]] = []
 
