@@ -284,6 +284,10 @@ def test_all_registered_contracts_are_valid_json_schemas() -> None:
         "query_candidate_v1",
         "evaluation_suite_v1",
         "evaluation_run_manifest_v1",
+        "enforce_query_request_v1",
+        "enforce_query_approval_v1",
+        "enforce_query_response_v1",
+        "explain_query_response_v1",
         "product_projection_v1",
     )
     for name in contract_names():

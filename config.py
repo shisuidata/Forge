@@ -255,6 +255,11 @@ class Config:
         )
         if k
     ]
+    ENFORCE_REVIEWER_API_KEYS: list[str] = [
+        key
+        for key in os.getenv("ENFORCE_REVIEWER_API_KEYS", "").split(",")
+        if key
+    ]
     AUTH_COOKIE_SECURE: bool = (
         os.getenv("AUTH_COOKIE_SECURE")
         or _y("server", "auth", "cookie_secure", default="false")

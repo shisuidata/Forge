@@ -39,6 +39,10 @@ _CONTRACT_FILES = {
     "query_candidate_v1": "query-candidate-v1.schema.json",
     "evaluation_suite_v1": "evaluation-suite-v1.schema.json",
     "evaluation_run_manifest_v1": "evaluation-run-manifest-v1.schema.json",
+    "enforce_query_request_v1": "enforce-query-request-v1.schema.json",
+    "enforce_query_approval_v1": "enforce-query-approval-v1.schema.json",
+    "enforce_query_response_v1": "enforce-query-response-v1.schema.json",
+    "explain_query_response_v1": "explain-query-response-v1.schema.json",
     "product_projection_v1": "product-projection-v1.schema.json",
 }
 

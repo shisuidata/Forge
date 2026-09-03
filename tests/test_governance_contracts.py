@@ -144,7 +144,11 @@ def test_action_catalog_separates_contract_and_runtime_coverage() -> None:
     enforced = [action for action in supported if action["runtime_enforcement_status"] == "enforced"]
     assert supported
     assert len(specified) / len(supported) == 1.0
-    assert len(enforced) / len(supported) == 0.0
+    assert {action["action"] for action in enforced} == {
+        "query.prepare",
+        "query.approve",
+        "query.execute",
+    }
     assert catalog["unsupported_high_risk_behavior"] == "fail_closed"
 
     for action in supported:

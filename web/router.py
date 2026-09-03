@@ -55,6 +55,8 @@ from forge.executor import execute_with_data
 from config import cfg
 from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
+from web.routes.enforce import router as enforce_router
+from web.routes.explain import router as explain_router
 from web.routes.query_runs import router as query_runs_router
 from web.routes.evaluate import router as evaluate_router
 from web.routes.context import router as context_router
@@ -81,6 +83,8 @@ chat_router = APIRouter()
 chat_router.include_router(query_runs_router)
 chat_router.include_router(evaluate_router)
 chat_router.include_router(context_router)
+chat_router.include_router(enforce_router)
+chat_router.include_router(explain_router)
 chat_router.include_router(reports_router)
 chat_router.include_router(memory_router)
 chat_router.include_router(product_router)
@@ -2074,11 +2078,11 @@ async def dashboard_page(request: Request):
     disambiguations = _load_disambiguations()
     conventions = _load_conventions()
 
-    # 系统健康检查
     health = {"db": False, "embedding": False}
     try:
         if cfg.DATABASE_URL:
             from sqlalchemy import create_engine, text as sa_text
+
             engine = create_engine(cfg.DATABASE_URL)
             with engine.connect() as conn:
                 conn.execute(sa_text("SELECT 1"))
@@ -2087,12 +2091,12 @@ async def dashboard_page(request: Request):
         pass
     health["embedding"] = bool(cfg.EMBED_API_KEY)
 
-    # 今日查询数
     today_count = 0
     try:
         from datetime import date as _date
-        today_str = _date.today().isoformat()
         import aiosqlite
+
+        today_str = _date.today().isoformat()
         await audit._ensure_schema()
         async with aiosqlite.connect(audit._db_path()) as db:
             cursor = await db.execute(
@@ -2104,8 +2108,44 @@ async def dashboard_page(request: Request):
     except Exception:
         pass
 
-    # 最近查询
     recent_queries = await audit.recent(limit=5)
+    governed_runs = []
+    governed_runs_available = True
+    try:
+        from forge.explain import ExplainError, project_explain_query_run
+        from forge.query_runs import list_governed_query_runs
+
+        for run in await list_governed_query_runs(limit=8):
+            try:
+                explanation = project_explain_query_run(run)
+                governed_runs.append(
+                    {
+                        "query_run_id": explanation["query_run_id"],
+                        "question": explanation["statement"]["question"],
+                        "status": explanation["status"],
+                        "integrity": explanation["integrity"]["status"],
+                        "evidence_count": len(explanation["evidence"]),
+                        "limitation_count": len(explanation["limitations"]),
+                        "updated_at": run["updated_at"],
+                        "error_code": None,
+                    }
+                )
+            except ExplainError as exc:
+                governed_runs.append(
+                    {
+                        "query_run_id": run["query_run_id"],
+                        "question": run["question"],
+                        "status": "evidence_error",
+                        "integrity": "failed",
+                        "evidence_count": 0,
+                        "limitation_count": 0,
+                        "updated_at": run["updated_at"],
+                        "error_code": exc.code,
+                    }
+                )
+    except Exception:
+        governed_runs = []
+        governed_runs_available = False
 
     return templates.TemplateResponse(
         request,
@@ -2120,9 +2160,11 @@ async def dashboard_page(request: Request):
             "embed_model": cfg.EMBED_MODEL or "",
             "registry_path": str(cfg.REGISTRY_PATH),
             "recent_queries": recent_queries,
+            "governed_runs": governed_runs,
+            "governed_runs_available": governed_runs_available,
+            "governance_coverage": "3 / 14",
         },
     )
-
 
 # ── 结构层（表 / 字段）─────────────────────────────────────────────────────────
 

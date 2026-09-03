@@ -1475,7 +1475,47 @@ Forge 已形成 Registry、Compiler、Assurance、只读执行、QueryRun、Appr
 - 新增 `evaluation-suite-v1` 与 `evaluation-run-manifest-v1`：持久化完整 suite、dataset/producer/prompt/retrieval/retry/timeout/evaluator/metric/Registry 等修订、原始 case outcomes 和可复算 aggregate；可按 suite revision 回放，按 run ID 导出。
 - 跨 producer/model/Prompt 版本可使用 baseline release gate；dataset、case selection、evaluation basis、Policy、evaluator、Registry 或 dialect 不一致时明确标记 `not_comparable` 并失败关闭。默认不允许新增失败或 pass rate 下降。
 - README、Benchmark 文档和公开本地 fixture `examples/evaluation-suite-v1.json` 已提供完整 CLI 路径。持久运行、suite revision 回放、baseline gate 和 manifest 导出实际 CLI/API smoke 均通过；R0.2 聚焦测试 `42 passed`，Python 全套 `649 passed / 28 skipped`。
-- 该证据关闭 R0.2 Evaluate，当前进入 R0.3 Enforce；R0 Golden Path、外部独立 Quickstart 与真实采用证据仍未关闭。
+- 该证据关闭 R0.2 Evaluate；R0 Golden Path、外部独立 Quickstart 与真实采用证据仍未关闭。
+
+### R0.3 Enforce 实施与关闭证据（2026-09-03）
+
+- 新增 `enforce-query-request-v1`、`enforce-query-approval-v1` 与 `enforce-query-response-v1`，公开输入显式绑定 Principal、Purpose、Task、可选 DelegatedMandate、Resource Scope、candidate 与 dialect。
+- 新增 `POST /api/v1/enforce/query-runs`、`GET /api/v1/enforce/query-runs/{query_run_id}`、`POST /api/v1/enforce/query-runs/{query_run_id}/approve` 和 `forge enforce`；复用现有 QueryRun 存储与状态机，不创建第二套执行真相源。
+- Human 直接调用必须自行承担责任；Agent/Service 调用必须提供唯一、有效且与 actor、accountable human、task、purpose、audience、capability、scope 和 budget 匹配的 mandate。Resource Scope 只支持当前 datasource 与可选 table 子集，不能扩张配置中的数据源或租户 ACL。
+- 创建阶段只准备并持久化候选、实际 SQL、Assurance、Policy 和全部上下文 hashes，不执行数据库；审批必须来自独立 reviewer credential，并匹配 accountable human、SQL hash、Assurance hash 与 Enforcement Context hash。重复审批不会重复执行。
+- 执行前重新校验 Principal/Mandate 有效期、Policy/Registry/Assurance/candidate/resource hashes、执行开关和只读凭证；任何 drift 或异常均失败关闭并返回有界失败，不泄漏原始数据库错误。
+- Governance Action Catalog 升至 v1.2.0；仅 `query.prepare`、`query.approve`、`query.execute` 标记为 runtime `enforced`，覆盖 3/14（21.4%），不得外推为其余 Action 已治理。
+- 聚焦回归 `67 passed`，Python 全套 `663 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 通过。真实本地服务经 CLI 完成创建 → hash-bound 审批执行 → GET 回读，结果按 2 行上限截断；R0.3 关闭，当前进入 R0.4 Explain。
+- 该证据不关闭完整 IAM、生产部署、R0.4 Explain、R0.5 Public Golden Path 或 R0.6 外部采用门禁。
+
+### R0.4 Explain 实施与关闭证据（2026-09-03）
+
+- 新增稳定 `explain-query-response-v1`、`GET /api/v1/explain/query-runs/{query_run_id}` 与 `forge explain`，覆盖 `review_required`、`denied`、`executing`、`completed`、`failed`、`cancelled`、`expired` QueryRun 状态。
+- Explain 复用 QueryRun 作为唯一执行真相源，不创建 Artifact 旁路或第二状态库；公开投影收敛结果、实际 SQL、候选、Registry 表列语义、数据源/资源范围、Principal/Purpose/Policy/Approval、Assurance、版本、Evidence、lineage、integrity 与显式 limitations。
+- QueryRun 创建时固化来源/语义上下文，审批和完成时分别固化 approval/result hash；candidate、SQL、Assurance、Policy、Enforcement Context、source context、approval 或 result 漂移时返回有界错误并失败关闭。当前 Registry 后续变化不改写历史 Explain。
+- 历史未固化 Explain/approval/result hash 的 QueryRun 不伪造已验证证据，只返回 `integrity.status=partial`、未验证组件和对应限制；所有响应明确披露无数据库 snapshot、语义正确性未被证明、未完成执行或结果截断等适用边界。
+- Explain 读取绑定创建 QueryRun 的凭证，不公开 session hash、内部 SQLite 结构或原始数据库错误；独立 reviewer credential 无权回读创建凭证的 Explain。
+- Explain/Enforce 聚焦回归 `24 passed`，Python 全套 `673 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过。真实本地服务经 CLI 完成 Enforce 创建 → hash-bound 审批执行 → Explain，验证 2 行截断结果、7 类 Evidence 和 3 项显式限制。
+- Explain 是只读证据投影，不新增 Governance Action Catalog Action 或 Runtime Enforcement；覆盖仍为 3/14（21.4%）。R0.4 关闭，当前进入 R0.5 Public Golden Path；完整 IAM、生产部署和 R0.6 外部采用门禁仍未关闭。
+
+### R0.5 Public Golden Path 实施与关闭证据（2026-09-03）
+
+- 默认英文 README 与中文入口都把 `forge quickstart` 作为首个可运行路径；开发者无需 API Key、LLM、Embedding、Pi、Forge JSON、已有数据库或 `.env` 即可完成 Direct SQL Trust Runtime 链路。
+- Quickstart 创建隔离合成 SQLite/Registry 并启动真实 Forge 服务，只调用公开 Evaluate → Enforce → Explain HTTP API；默认展示实际 SQL 并等待人工批准，`--yes --json` 用于合成数据 CI，`--workdir` 保留数据库、QueryRun、日志与摘要，`--serve` 保持 Dashboard 可浏览。
+- Dashboard 不创建第二执行状态，只读取最近的 Enforce QueryRun 并通过同一 Explain 投影显示 question、执行状态、Evidence 数、limitations 数与 integrity；证据漂移显示有界错误并失败关闭。
+- 实际 `forge quickstart --yes --serve` 验证 exact-result comparison、review stop、hash-bound approval、只读两行上限截断、七类 Evidence、三项显式限制和同一 QueryRun Dashboard 投影。Browser 在 1440px 与 390px 实际页面确认 Golden Path、治理运行可见且无水平溢出。
+- R0.5 聚焦回归 `69 passed`，Python 全套 `675 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过。
+- Runtime Governance Coverage 仍为 3/14（21.4%）；内部 Quickstart 与 Browser smoke 只关闭工程收敛，不构成外部采用。R0.5 关闭，当前进入 R0.6 External Adoption Evidence；完整 IAM、生产部署和更广平台扩张仍未关闭。
+
+### R0.6 External Adoption Evidence 准备与当前阻塞（2026-09-03）
+
+- 公开 GitHub 信号盘点显示：现有 8 个 Issue 均由 `shisuidata-legacy` 提交；现有 1 个 Pull Request 同样由 `shisuidata-legacy` 提交且 head 属于 `shisuidata`；11 stars 与 1 fork 仅是传播指标。当前没有可确认的非维护者 Golden Path 回执或 Adapter、Rule、Dataset、真实 failure case、下游集成贡献。
+- `forge quickstart` 现在先提交写 SQL，并要求公开 Evaluate 以 `stage=assurance`、`code=readonly_violation` 失败关闭；随后才运行已审核的只读 Evaluate → Enforce → Explain → Dashboard 链路，避免成功路径掩盖拒绝边界。
+- `summary.json` 新增 `run_receipt`：记录 Forge version、OS/arch/Python、起止时间、运行时长及有界阶段结果，并用 canonical JSON 的 SHA-256 checksum 检测回执漂移。回执排除 hostname、username、文件路径、SQL rows、凭证和私有 schema；Forge 不发送 telemetry。Checksum 不证明身份，公开 GitHub 提交者才提供 provenance。
+- 新增 Quickstart adoption Issue 表单，并在 README、中文 README、CONTRIBUTING 和 CLI 终态指向同一提交入口。表单要求 tested release/commit、fresh-clone setup time、首个失败或困惑步骤、回执、开发者对 Policy verdict/Evidence integrity/limitations 的独立解释，以及 fresh clone、非实现者、SQL 审核和无敏感信息确认。
+- 实际人工批准与 `--yes --json` Quickstart 均完成失败关闭、exact-result Evaluate、hash-bound Enforce、七类 Evidence、三项限制和 Dashboard 投影；聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck、Python compileall 与 Issue YAML 结构检查通过。
+- 上述均是采用准备和内部工程证据，不是外部采用证据。本轮入口尚未发布到公开 revision，且没有非维护者 fresh-clone 回执；R0.6 与 R0 退出门禁保持未通过。下一动作是在用户明确授权后发布可测试 revision，并由未参与实现的外部开发者独立试跑、提交回执和摩擦；若失败，必须完成 issue → fix → rerun 闭环后再评估门禁。
+
 ---
 
 ## REQ-2026-09-03-026：默认英文 README 与中文本地化入口

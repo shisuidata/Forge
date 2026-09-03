@@ -1,0 +1,81 @@
+name: Quickstart adoption report
+description: Report an independent Forge Trust Runtime Quickstart run or a reproducible failure.
+title: "[Quickstart]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing Forge independently. This report is public adoption evidence, not telemetry: Forge sends nothing automatically.
+
+        Use synthetic data only. Remove usernames, home-directory paths, hostnames, credentials, private schemas, customer names, and production row values before submitting.
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What happened on the first independent attempt?
+      options:
+        - Completed Evaluate → Enforce → Explain and opened Dashboard
+        - Completed after a documented workaround
+        - Failed with a reproducible bounded error
+        - Contributing an Adapter, Rule, Dataset, or downstream integration
+    validations:
+      required: true
+  - type: input
+    id: forge_reference
+    attributes:
+      label: Forge version or commit
+      description: Paste the release version or full commit SHA that you tested.
+      placeholder: "0.1.0 or 0123456789abcdef..."
+    validations:
+      required: true
+  - type: input
+    id: setup_time
+    attributes:
+      label: Fresh-clone setup time
+      description: Elapsed minutes from clone to the first terminal outcome, including installation.
+      placeholder: "6 minutes"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, and Python version only. Do not include a hostname or username.
+      placeholder: "macOS arm64, Python 3.13"
+    validations:
+      required: true
+  - type: textarea
+    id: receipt
+    attributes:
+      label: Sanitized run receipt
+      description: Paste only the complete `run_receipt` object from a retained `summary.json`, or from `forge quickstart --yes --json` after your manual first attempt. For a failed first attempt, paste the bounded terminal failure instead.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: first_failure
+    attributes:
+      label: First failure or confusing step
+      description: State the first blocker, the exact bounded error, and any workaround. Write "None" only if the first attempt completed without confusion.
+    validations:
+      required: true
+  - type: textarea
+    id: interpretation
+    attributes:
+      label: What the output proved—and did not prove
+      description: In your own words, explain the Policy verdict, Evidence integrity, and at least one explicit limitation.
+    validations:
+      required: true
+  - type: checkboxes
+    id: independence
+    attributes:
+      label: Independence and safety confirmation
+      options:
+        - label: I ran this from a fresh clone and did not implement the tested Forge changes.
+          required: true
+        - label: I reviewed the displayed SQL before execution, or explicitly identified where the run failed closed.
+          required: true
+        - label: This report contains no credentials, private hostnames, customer data, or production query results.
+          required: true
+        - label: I understand that the receipt checksum detects receipt drift but is not proof of identity; my GitHub-authored report provides the public provenance.
+          required: true

@@ -8,6 +8,7 @@ auth disabled（默认）时所有 Depends 直接放行，不影响现有行为�
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import time
 from typing import Optional
@@ -123,35 +124,93 @@ async def require_pi_service_auth(request: Request):
     raise HTTPException(status_code=401, detail="Unauthorized: invalid Pi service key")
 
 
-async def require_api_auth(request: Request):
-    """
-    FastAPI dependency for /api/* routes.
-
-    - auth disabled → 直接放行
-    - auth enabled  → 验证 X-API-Key header / ?api_key= query param / Web session cookie
-      Web UI 用 cookie 登录后调用 /api/* 时，cookie 也视为有效凭证。
-    """
+async def require_api_auth(request: Request) -> dict[str, str | None]:
+    """Authenticate a public API request and return its credential binding."""
     if not cfg.AUTH_ENABLED:
-        return
-    if verify_api_key(request):
-        return
-    if verify_web_request(request):   # Web UI 用户持有有效 session cookie
-        return
+        return {
+            "method": "local",
+            "assurance_level": "single_factor",
+            "session_id_hash": None,
+        }
+    if verify_api_key(request) or verify_web_request(request):
+        return api_auth_binding(request)
     from fastapi import HTTPException
     raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing API key")
 
 
-def verify_api_key(request: Request) -> bool:
-    """检查 X-API-Key header 或 api_key query param，返回 bool。"""
-    if not cfg.AUTH_API_KEYS:
-        # 没配置 API key 列表时，auth enabled 但 api_keys 为空 → 拒绝所有
-        return False
-    key = (
+def _request_api_key(request: Request) -> str:
+    return (
         request.headers.get("X-API-Key")
         or request.query_params.get("api_key")
         or ""
     )
-    return any(hmac.compare_digest(key, valid_key) for valid_key in cfg.AUTH_API_KEYS)
+
+
+def _public_api_keys() -> list[str]:
+    return [*cfg.AUTH_API_KEYS, *cfg.ENFORCE_REVIEWER_API_KEYS]
+
+
+def verify_api_key(request: Request) -> bool:
+    """检查 X-API-Key header 或 api_key query param，返回 bool。"""
+    key = _request_api_key(request)
+    return bool(key) and any(
+        hmac.compare_digest(key, valid_key) for valid_key in _public_api_keys()
+    )
+
+
+def api_auth_binding(request: Request) -> dict[str, str | None]:
+    """Return a non-secret binding for the credential that authenticated the request."""
+    key = _request_api_key(request)
+    if key and any(hmac.compare_digest(key, valid_key) for valid_key in _public_api_keys()):
+        return {
+            "method": "service_key",
+            "assurance_level": "service_asserted",
+            "session_id_hash": "sha256:" + hashlib.sha256(key.encode("utf-8")).hexdigest(),
+        }
+    cookie = request.cookies.get(_COOKIE_NAME, "")
+    if cookie and _verify_session_value(cookie) is not None:
+        return {
+            "method": "local",
+            "assurance_level": "single_factor",
+            "session_id_hash": "sha256:" + hashlib.sha256(cookie.encode("utf-8")).hexdigest(),
+        }
+    return {
+        "method": "local",
+        "assurance_level": "single_factor",
+        "session_id_hash": None,
+    }
+
+
+def credential_binding_matches_principal_context(
+    principal_context: object,
+    auth_binding: dict[str, str | None],
+) -> bool:
+    """Check that a governed record belongs to the current non-secret credential binding."""
+    authentication = (
+        principal_context.get("authentication_context")
+        if isinstance(principal_context, dict)
+        else None
+    )
+    return isinstance(authentication, dict) and all(
+        authentication.get(field) == auth_binding[field]
+        for field in ("method", "assurance_level", "session_id_hash")
+    )
+
+
+async def require_enforce_reviewer_auth(request: Request) -> str:
+    """Require an explicitly configured reviewer credential in authenticated deployments."""
+    if not cfg.AUTH_ENABLED:
+        return "local-reviewer"
+    from fastapi import HTTPException
+    if not cfg.ENFORCE_REVIEWER_API_KEYS:
+        raise HTTPException(status_code=503, detail="Enforce reviewer credentials are not configured")
+    key = _request_api_key(request)
+    if key and any(
+        hmac.compare_digest(key, valid_key)
+        for valid_key in cfg.ENFORCE_REVIEWER_API_KEYS
+    ):
+        return "configured-reviewer"
+    raise HTTPException(status_code=403, detail="Reviewer authorization required")
 
 
 # ── 内部异常（用于重定向）────────────────────────────────────────────────────

@@ -148,10 +148,16 @@ test("Governance Action Catalog separates Contract and Runtime coverage", () => 
   assert.deepEqual(governanceCoverage(catalog), {
     supported: 14,
     specified: 14,
-    enforced: 0,
+    enforced: 3,
     contractCoverage: 1,
-    runtimeCoverage: 0,
+    runtimeCoverage: 3 / 14,
   });
+  assert.deepEqual(
+    catalog.actions
+      .filter((action) => action.runtime_enforcement_status === "enforced")
+      .map((action) => action.action),
+    ["query.prepare", "query.approve", "query.execute"],
+  );
   assert.equal(catalog.unsupported_high_risk_behavior, "fail_closed");
 
   for (const action of catalog.actions.filter((candidate) => candidate.risk_level === "high")) {

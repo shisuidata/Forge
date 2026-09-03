@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/enforce-query-approval-v1.schema.json",
+  "title": "EnforceQueryApprovalV1",
+  "description": "An explicit human approval bound to the exact reviewed candidate, SQL, Assurance report, Policy decision, principal, purpose, resource scope, and Registry revision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "approver_principal",
+    "sql_hash",
+    "assurance_report_hash",
+    "enforcement_context_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "approver_principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"const": "human"}
+      }
+    },
+    "sql_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "assurance_report_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "enforcement_context_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}

@@ -23,6 +23,8 @@ Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束�
 - Forge JSON 受约束中间表示与确定性 SQL 编译；
 - Direct SQL / Forge JSON 统一候选、QueryRun 审核和执行链；
 - 版本化、非执行的 Evaluate API/CLI，以及持久 suite、manifest、回放与 Regression gate；
+- 版本化 Enforce API/CLI，将 Principal、Purpose、Task、Resource Scope、Policy、Assurance、Registry 与 hash-bound 人工审批绑定进 QueryRun；
+- 版本化 Explain API/CLI，从同一 QueryRun 投影实际 SQL/结果、持久 Registry 语义、治理信息、Evidence、lineage、integrity 与显式限制；
 - Registry 结构与语义约束、关系和粒度校验；
 - 只读 SQL、字段/表范围、审批 hash、超时和结果上限；
 - SQLite、PostgreSQL、MySQL 的自动化兼容性检查；
@@ -34,20 +36,42 @@ Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束�
 
 ## 快速开始
 
+### Public Golden Path
+
 ```bash
-# 1. 克隆 & 安装
 git clone https://github.com/shisuidata/Forge
 cd Forge
 bash scripts/bootstrap-dev.sh
+source .venv/bin/activate
+forge quickstart
+```
 
-# 2. 配置（填入 LLM_API_KEY + EMBED_API_KEY）
+这一条命令就是完整的公开 Trust Runtime 路径：启动隔离的本地 Forge 服务与 SQLite 数据源，用 **Direct SQL** 调用 `Evaluate`，在 `Enforce` 阶段展示实际 SQL 并等待人工批准，批准后执行，再从同一个 QueryRun 调用 `Explain`，最后验证 Dashboard 投影。无需 API Key、LLM、Embedding、Pi、Forge JSON、已有数据库或 `.env`。
+
+预期证据：第一条 `Evaluate` 请求以 `assurance/readonly_violation` 拒绝写 SQL；只读请求的精确结果对比通过；`Enforce` 返回两行并明确标记行数上限截断；`Explain` 返回 `integrity=verified`、七类 Evidence 与显式限制；Dashboard 显示同一个 QueryRun ID；`run_receipt.receipt_hash` 为脱敏回执提供稳定校验和。
+
+```bash
+# 保持隔离服务运行，并打印可直接打开的 Dashboard 地址。
+forge quickstart --serve
+
+# CI 非交互输出；仅因命令使用本地合成数据而适合自动批准。
+forge quickstart --yes --json
+
+# 保留数据库、QueryRun、服务日志和证明摘要。
+forge quickstart --yes --workdir .forge/quickstart-proof
+```
+
+`--yes` 只是 Demo 便利参数。真实 Enforce 部署仍必须使用已认证的创建者/审批者分离，并提交匹配的不可变 review hashes。
+如果这是独立试跑，请通过 [Quickstart adoption report](https://github.com/shisuidata/Forge/issues/new?template=quickstart-adoption.yml) 提交脱敏后的 `run_receipt`、fresh-clone setup time、第一处失败或困惑，以及你对输出边界的理解。Forge 不发送遥测。校验和只用于发现回执漂移和去重，不是身份证明；GitHub 作者身份提供公开来源。
+
+### 完整自然语言问数 Demo（可选）
+
+下面的宽口径 NLQ Demo 需要 LLM 与 Embedding 配置，不属于 Trust Runtime Golden Path：
+
+```bash
 cp .env.example .env
-
-# 3. 一键启动 Demo（生成 200 表数仓 + 同步 Registry + 跑通测试）
 bash scripts/demo-setup.sh
-
-# 4. 启动服务
-uvicorn main:app --host 0.0.0.0 --port 8000  # Web UI + API
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 **Docker 开发方式（自带 PostgreSQL，热重载）：**
@@ -168,6 +192,42 @@ forge evaluate --run-id "evr_<run-id>"
 
 `evaluation-suite-v1` 记录数据集、producer/model、Prompt、检索、重试和超时版本；持久化的 `evaluation-run-manifest-v1` 继续绑定 evaluator、metric、候选契约、Assurance、Policy、Registry、dialect、原始 case outcomes 和可复算聚合。默认 release gate 不允许新增失败或通过率下降。数据集、case selection、预期评测基准、Policy、evaluator、Registry 或 dialect 变化时标记为 `not_comparable` 并失败关闭；producer/model/Prompt 版本允许变化，因为它们正是被比较变量。
 
+## 执行已审核的查询
+
+`POST /api/v1/enforce/query-runs` 只准备受治理 QueryRun，创建时绝不执行。请求遵循 [`enforce-query-request-v1`](agent/contracts/enforce-query-request-v1.schema.json)，将候选与 Principal、Purpose、Task、Resource Scope、Policy、Assurance、Registry revision 和只读数据源绑定。Human 直接调用时由本人承担责任；Agent/Service 调用必须提供唯一有效的 [Delegated Mandate](agent/contracts/delegated-mandate-v1.schema.json)，并与 actor、accountable human、task、purpose、capability 和 scope 完全匹配。
+
+```bash
+# 仅准备；返回 status=review_required 和不可变审核 hashes。
+forge enforce enforce-request.json --idempotency-key prepare-001
+
+# 使用创建时的凭证回读同一个受治理 QueryRun。
+forge enforce --run-id "qr_<query-run-id>"
+
+# 使用独立 reviewer credential 提交审核 hashes，并且只执行一次。
+FORGE_API_KEY="$FORGE_REVIEWER_API_KEY" forge enforce approval.json \
+  --approve "qr_<query-run-id>" \
+  --idempotency-key approve-001
+```
+
+`approval.json` 遵循 [`enforce-query-approval-v1`](agent/contracts/enforce-query-approval-v1.schema.json)：复制准备响应中的 `sql_hash`、`assurance_report_hash` 与 `enforcement_context_hash`，并标明承担责任的 Human reviewer。开启 API 鉴权时，普通创建/读取凭证放入 `AUTH_API_KEYS`，独立审批凭证放入 `ENFORCE_REVIEWER_API_KEYS`。Policy、Registry、candidate、授权上下文、scope、approval 或只读凭证发生 drift 时均失败关闭。响应遵循 [`enforce-query-response-v1`](agent/contracts/enforce-query-response-v1.schema.json)，返回有界失败码，不泄漏原始数据库错误。
+
+该 v1 路径只覆盖 Direct SQL/Forge JSON 的查询准备、审批和执行，不代表完整 IAM、生产部署或非查询 Action 的治理已完成。
+
+## 解释受治理 QueryRun
+
+`GET /api/v1/explain/query-runs/{query_run_id}` 为任意受治理 QueryRun 返回稳定的 [`explain-query-response-v1`](agent/contracts/explain-query-response-v1.schema.json) 投影。它使用创建凭证，并与 Enforce 读取同一个 QueryRun 真相源：
+
+```bash
+# 开启鉴权时，FORGE_API_KEY 必须是创建该 QueryRun 的凭证。
+forge explain "qr_<query-run-id>"
+
+curl --fail-with-body -sS   -H "X-API-Key: $FORGE_API_KEY"   "$FORGE_BASE_URL/api/v1/explain/query-runs/qr_<query-run-id>"
+```
+
+响应包含候选、实际审核 SQL、有界结果或失败、持久化表列描述、数据源与资源范围、Principal/Policy/Approval、Assurance gates、版本/hash lineage、确定性 Evidence 引用与限制。来源上下文、审批和完成结果均受 hash 约束；篡改会返回有界 Explain 错误并失败关闭。缺少这些锚点的历史 QueryRun 返回 `integrity.status: "partial"` 并逐项标明未验证组件，不伪造证明。
+
+每份解释都披露适用的认识论和运行边界，包括实时执行没有固化数据库 snapshot，以及 Registry 绑定和确定性门禁不能证明开放世界业务语义正确。Explain 不公开凭证 hash、内部存储结构或原始数据库错误。
+
 ---
 
 ## 工作原理
@@ -250,7 +310,7 @@ forge/
   ├── lint.py              — 业务/字段/结果契约检查
   ├── cache.py             — 查询缓存（精确 + 模糊匹配）
   ├── chart.py             — 图表生成（ECharts）
-  └── cli.py               — CLI 入口（evaluate / compile / sync / doctor）
+  └── cli.py               — CLI 入口（evaluate / enforce / explain / compile / sync / doctor）
 
 agent/
   ├── agent.py             — Agent 调度（查询 / 指标定义 / 缓存反馈）

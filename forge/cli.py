@@ -3,6 +3,8 @@ Forge 命令行入口。
 
 子命令：
     forge evaluate <file.json>  通过公共 API 评测 Direct SQL 或 Forge JSON 候选
+    forge enforce <file.json>   创建受 Policy/Approval 约束的公开 QueryRun
+    forge explain <query_run_id> 读取受治理 QueryRun 的证据、血缘和限制
     forge compile <file.json>   将 Forge JSON 文件编译为 SQL 并打印到 stdout
     forge compile -             从 stdin 读取 Forge JSON 并编译
     forge sync                  连接数据库，将表结构同步到 schema.registry.json
@@ -152,6 +154,158 @@ def _cmd_evaluate(args: argparse.Namespace) -> None:
             raise SystemExit(1)
     elif body.get("status") != "passed":
         raise SystemExit(1)
+
+
+def _cmd_enforce(args: argparse.Namespace) -> None:
+    import httpx
+
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if args.api_key:
+        headers["X-API-Key"] = args.api_key
+    base_url = args.url.rstrip("/")
+
+    payload: dict | None
+    if args.run_id:
+        if args.input or args.idempotency_key:
+            print("--run-id cannot be combined with input or --idempotency-key", file=sys.stderr)
+            raise SystemExit(2)
+        endpoint = f"{base_url}/api/v1/enforce/query-runs/{args.run_id}"
+        payload = None
+    elif args.approve:
+        if not args.input:
+            print("--approve requires an approval JSON path", file=sys.stderr)
+            raise SystemExit(2)
+        if not args.idempotency_key:
+            print("--approve requires --idempotency-key", file=sys.stderr)
+            raise SystemExit(2)
+        endpoint = f"{base_url}/api/v1/enforce/query-runs/{args.approve}/approve"
+        payload = _read_json_input(args.input)
+        headers["Idempotency-Key"] = args.idempotency_key
+    else:
+        if not args.input:
+            print("enforce requires a request JSON path", file=sys.stderr)
+            raise SystemExit(2)
+        if not args.idempotency_key:
+            print("enforce requires --idempotency-key", file=sys.stderr)
+            raise SystemExit(2)
+        endpoint = f"{base_url}/api/v1/enforce/query-runs"
+        payload = _read_json_input(args.input)
+        headers["Idempotency-Key"] = args.idempotency_key
+
+    try:
+        if payload is None:
+            response = httpx.get(endpoint, headers=headers, timeout=args.timeout)
+        else:
+            response = httpx.post(
+                endpoint,
+                json=payload,
+                headers=headers,
+                timeout=args.timeout,
+            )
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"Enforce request failed: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+    if not isinstance(body, dict):
+        print("Enforce response must be a JSON object", file=sys.stderr)
+        raise SystemExit(2)
+    output = json.dumps(body, ensure_ascii=False, indent=2)
+    if response.is_error or body.get("status") == "error":
+        print(output, file=sys.stderr)
+        raise SystemExit(1)
+    print(output)
+    if body.get("status") in {"denied", "failed", "cancelled", "expired"}:
+        raise SystemExit(1)
+
+
+def _cmd_explain(args: argparse.Namespace) -> None:
+    import httpx
+
+    headers = {"Accept": "application/json"}
+    if args.api_key:
+        headers["X-API-Key"] = args.api_key
+    endpoint = (
+        f"{args.url.rstrip('/')}/api/v1/explain/query-runs/{args.query_run_id}"
+    )
+    try:
+        response = httpx.get(endpoint, headers=headers, timeout=args.timeout)
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"Explain request failed: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    if not isinstance(body, dict):
+        print("Explain response must be a JSON object", file=sys.stderr)
+        raise SystemExit(2)
+    output = json.dumps(body, ensure_ascii=False, indent=2)
+    if response.is_error or body.get("status") == "error":
+        print(output, file=sys.stderr)
+        raise SystemExit(1)
+    print(output)
+
+
+def _cmd_quickstart(args: argparse.Namespace) -> None:
+    from .quickstart import QuickstartError, run_quickstart
+
+    if args.serve and args.json_output:
+        print("--serve cannot be combined with --json", file=sys.stderr)
+        raise SystemExit(2)
+    if args.json_output and not args.yes:
+        print(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "error": "--json requires --yes because approval is interactive",
+                }
+            )
+        )
+        raise SystemExit(2)
+
+    def present(summary: dict) -> None:
+        print("\nPublic Golden Path passed")
+        print(f"QueryRun: {summary['query_run_id']}")
+        print(f"Evidence integrity: {summary['explain']['integrity']}")
+        failure = summary["fail_closed"]["failure"]
+        print(f"Fail-closed proof: {failure['stage']}/{failure['code']}")
+        print(f"Receipt checksum: {summary['run_receipt']['receipt_hash']}")
+        print(
+            "Report an independent run: "
+            "https://github.com/shisuidata/Forge/issues/new?template=quickstart-adoption.yml"
+        )
+        if summary.get("workdir"):
+            print(f"Artifacts: {summary['workdir']}")
+
+    def hold_dashboard(summary: dict, base_url: str) -> None:
+        present(summary)
+        print(f"Dashboard: {base_url}/admin/dashboard")
+        try:
+            input("Press Enter to stop the isolated demo server. ")
+        except EOFError:
+            return
+
+    progress = (lambda _message: None) if args.json_output else print
+    try:
+        summary = run_quickstart(
+            workdir=Path(args.workdir) if args.workdir else None,
+            auto_approve=args.yes,
+            progress=progress,
+            hold_open=hold_dashboard if args.serve else None,
+        )
+    except KeyboardInterrupt:
+        print("\nQuickstart server stopped.")
+        return
+    except (QuickstartError, OSError) as exc:
+        if args.json_output:
+            print(json.dumps({"status": "failed", "error": str(exc)}, ensure_ascii=False))
+        else:
+            print(f"Quickstart failed: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    if args.json_output:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+    elif not args.serve:
+        present(summary)
+
 
 def _cmd_config(args: argparse.Namespace) -> None:
     """查看或修改配置。"""
@@ -349,6 +503,93 @@ def main() -> None:
         default=30.0,
         help="HTTP timeout in seconds (default: 30)",
     )
+    # ── enforce subcommand ────────────────────────────────────────────────────
+    enforce_parser = subparsers.add_parser(
+        "enforce",
+        help="Prepare, review, and execute a governed query candidate",
+    )
+    enforce_parser.add_argument(
+        "input",
+        nargs="?",
+        help="Enforce request or approval JSON path, or - to read from stdin",
+    )
+    enforce_mode = enforce_parser.add_mutually_exclusive_group()
+    enforce_mode.add_argument("--run-id", help="Read a governed QueryRun")
+    enforce_mode.add_argument(
+        "--approve",
+        metavar="QUERY_RUN_ID",
+        help="Approve and execute a QueryRun",
+    )
+    enforce_parser.add_argument(
+        "--idempotency-key",
+        default=os.environ.get("FORGE_IDEMPOTENCY_KEY", ""),
+        help="Required for create and approve operations",
+    )
+    enforce_parser.add_argument(
+        "--url",
+        default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"),
+        help="Forge server base URL",
+    )
+    enforce_parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FORGE_API_KEY", ""),
+        help="Forge API or reviewer key",
+    )
+    enforce_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="HTTP timeout in seconds (default: 30)",
+    )
+
+    # ── explain subcommand ────────────────────────────────────────────────────
+    explain_parser = subparsers.add_parser(
+        "explain",
+        help="Read Evidence, lineage, and limitations for a governed QueryRun",
+    )
+    explain_parser.add_argument("query_run_id", help="Governed QueryRun ID")
+    explain_parser.add_argument(
+        "--url",
+        default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"),
+        help="Forge server base URL",
+    )
+    explain_parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FORGE_API_KEY", ""),
+        help="Forge API key",
+    )
+    explain_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="HTTP timeout in seconds (default: 30)",
+    )
+
+    # ── quickstart subcommand ─────────────────────────────────────────────────
+    quickstart_parser = subparsers.add_parser(
+        "quickstart",
+        help="Run the self-contained Evaluate → Enforce → Explain Golden Path",
+    )
+    quickstart_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Approve synthetic local demo SQL without prompting",
+    )
+    quickstart_parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Emit only the machine-readable proof summary",
+    )
+    quickstart_parser.add_argument(
+        "--workdir",
+        help="Preserve demo database, QueryRuns, logs, and summary in an empty directory",
+    )
+    quickstart_parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Keep the isolated server available for Dashboard inspection until Enter",
+    )
     # ── sync 子命令 ───────────────────────────────────────────────────────────
     sync_parser = subparsers.add_parser("sync", help="Sync schema from database")
     sync_parser.add_argument(
@@ -444,6 +685,12 @@ def main() -> None:
     # ── evaluate handling ─────────────────────────────────────────────────────
     elif args.command == "evaluate":
         _cmd_evaluate(args)
+    elif args.command == "enforce":
+        _cmd_enforce(args)
+    elif args.command == "explain":
+        _cmd_explain(args)
+    elif args.command == "quickstart":
+        _cmd_quickstart(args)
 
     # ── sync 处理 ────────────────────────────────────────────────────────────
     elif args.command == "sync":

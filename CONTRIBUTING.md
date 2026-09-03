@@ -28,15 +28,18 @@ git clone https://github.com/shisuidata/Forge.git
 cd Forge
 bash scripts/bootstrap-dev.sh
 source .venv/bin/activate
+forge quickstart --workdir .forge/independent-run
 ```
 
-For local configuration, copy the example file and use development-only credentials:
+The Quickstart requires no `.env`, API key, LLM, embedding service, Pi, Forge JSON, or existing database. It must show one `assurance/readonly_violation` fail-closed result before the reviewed read-only query succeeds. The retained `summary.json` contains a privacy-bounded `run_receipt` and checksum.
+
+Only the broader natural-language demo requires local configuration:
 
 ```bash
 cp .env.example .env
 ```
 
-Never commit `.env`, API keys, database credentials, customer data, or production query results.
+Never commit `.env`, API keys, database credentials, customer data, production query results, or unsanitized receipts.
 
 The optional Pi orchestrator requires Node.js 22.19 or newer:
 
@@ -46,13 +49,19 @@ npm --prefix services/pi-orchestrator run typecheck
 npm --prefix services/pi-orchestrator test
 ```
 
-To run the local web application:
+To run the configured local web application outside Quickstart:
 
 ```bash
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-See [`README.md`](README.md) for the demo flow and [`docs/production-deployment.md`](docs/production-deployment.md) for the current deployment boundaries.
+See [`README.md`](README.md) for the public path and [`docs/production-deployment.md`](docs/production-deployment.md) for deployment boundaries.
+
+### Reporting an independent Quickstart run
+
+Use the [Quickstart adoption report](https://github.com/shisuidata/Forge/issues/new?template=quickstart-adoption.yml). Submit the `run_receipt` object from `.forge/independent-run/summary.json`, the tested release or commit, fresh-clone setup time, first failure or confusing step, and your interpretation of the Policy verdict, Evidence integrity, and limitations.
+
+Forge sends no telemetry. The receipt excludes hostnames, usernames, paths, SQL rows, credentials, and private schemas. Its checksum detects drift and supports deduplication; it does not attest identity. The GitHub-authored report supplies public provenance. Maintainer-authored runs, stars, and forks do not satisfy the external-adoption gate.
 
 ## Tests
 

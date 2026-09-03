@@ -1,133 +1,184 @@
 {% extends "base.html" %}
 {% set active = "dashboard" %}
-{% block title %}概览 — Forge{% endblock %}
-{% block heading %}概览{% endblock %}
+{% block title %}Trust Runtime — Forge{% endblock %}
+{% block heading %}Trust Runtime{% endblock %}
 
 {% block content %}
+<div class="space-y-6">
+  <section data-trust-runtime-path class="relative overflow-hidden rounded-xl border border-slate-700 bg-slate-950 text-slate-100 shadow-sm">
+    <div class="absolute inset-y-0 left-0 w-1 bg-amber-400"></div>
+    <div class="px-6 py-7 sm:px-8">
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div class="max-w-3xl">
+          <div class="mb-3 flex flex-wrap items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-amber-300">
+            <span>Public Golden Path</span>
+            <span class="h-px w-8 bg-slate-600"></span>
+            <span>Governance Runtime {{ governance_coverage }}</span>
+          </div>
+          <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Evaluate → Enforce → Explain</h2>
+          <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+            同一条可信执行链：先验证候选，再经策略与人工审批执行，最后从同一个 QueryRun 生成可校验的 Evidence。
+          </p>
+        </div>
+        <div class="shrink-0 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3">
+          <div class="font-mono text-[11px] uppercase tracking-widest text-slate-400">Local proof</div>
+          <code class="mt-1 block select-all font-mono text-sm text-emerald-300">forge quickstart</code>
+        </div>
+      </div>
 
-{# ── 概览卡片 ────────────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-4 gap-4 mb-8">
-  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
-    <p class="text-2xl font-semibold text-gray-900">{{ table_count }}</p>
-    <p class="text-xs text-gray-500 mt-1">数据表</p>
-  </div>
-  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
-    <p class="text-2xl font-semibold text-blue-600">{{ metric_count }}</p>
-    <p class="text-xs text-gray-500 mt-1">业务指标</p>
-  </div>
-  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
-    <p class="text-2xl font-semibold text-purple-600">{{ rule_count }}</p>
-    <p class="text-xs text-gray-500 mt-1">语义规则</p>
-  </div>
-  <div class="bg-white rounded-lg border border-gray-200 px-5 py-4">
-    <p class="text-2xl font-semibold text-green-600">{{ today_query_count }}</p>
-    <p class="text-xs text-gray-500 mt-1">今日查询</p>
-  </div>
-</div>
+      <div class="mt-7 grid gap-px overflow-hidden rounded-lg border border-slate-700 bg-slate-700 md:grid-cols-3">
+        <div class="bg-slate-900 p-5">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-amber-300">01 / EVALUATE</span>
+            <span class="font-mono text-xs text-emerald-300">Contract v1</span>
+          </div>
+          <p class="mt-3 text-sm font-medium text-white">候选与预期结果可复现</p>
+          <code class="mt-2 block text-xs text-slate-300">POST /api/v1/evaluate</code>
+        </div>
+        <div class="bg-slate-900 p-5">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-amber-300">02 / ENFORCE</span>
+            <span class="font-mono text-xs text-emerald-300">Contract v1</span>
+          </div>
+          <p class="mt-3 text-sm font-medium text-white">策略、审批与单次执行绑定</p>
+          <code class="mt-2 block text-xs text-slate-300">POST /api/v1/enforce/query-runs</code>
+        </div>
+        <div class="bg-slate-900 p-5">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-amber-300">03 / EXPLAIN</span>
+            <span class="font-mono text-xs text-emerald-300">Contract v1</span>
+          </div>
+          <p class="mt-3 text-sm font-medium text-white">结果、来源与限制可校验</p>
+          <code class="mt-2 block text-xs text-slate-300">GET /api/v1/explain/query-runs/{id}</code>
+        </div>
+      </div>
+    </div>
+  </section>
 
-{# ── 系统状态 ────────────────────────────────────────────────────────────── #}
-<div class="grid grid-cols-2 gap-6 mb-8">
-  <div class="bg-white rounded-lg border border-gray-200 p-5">
-    <h2 class="text-sm font-semibold text-gray-700 mb-4">系统状态</h2>
-    <div class="space-y-3">
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600">数据库连接</span>
-        {% if health.db %}
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
-          <span class="w-2 h-2 rounded-full bg-green-500"></span> 正常
-        </span>
+  <section data-governed-run-list class="rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div class="flex flex-col gap-3 border-b border-gray-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="text-base font-semibold text-gray-900">最近的治理运行</h2>
+        <p class="mt-1 text-sm text-gray-500">只投影 QueryRun 真相源；不复制执行状态。</p>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <span class="inline-flex items-center gap-1.5 text-gray-500"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Evidence verified</span>
+        <a href="/docs" class="font-medium text-indigo-600 hover:text-indigo-700">API Contract</a>
+      </div>
+    </div>
+    {% if not governed_runs_available %}
+    <div class="border-l-4 border-red-500 bg-red-50 px-6 py-5 text-sm text-red-800">
+      QueryRun 投影不可用；未将读取失败伪装成空记录。
+    </div>
+    {% elif governed_runs %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50 text-left font-mono text-[11px] uppercase tracking-wider text-gray-500">
+          <tr>
+            <th class="px-6 py-3 font-medium">QueryRun</th>
+            <th class="px-6 py-3 font-medium">Question</th>
+            <th class="px-6 py-3 font-medium">Execution</th>
+            <th class="px-6 py-3 font-medium">Evidence</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for run in governed_runs %}
+          <tr class="hover:bg-gray-50">
+            <td class="whitespace-nowrap px-6 py-4 align-top">
+              <code class="text-xs font-medium text-gray-800">{{ run.query_run_id }}</code>
+              <div class="mt-1 text-xs text-gray-500">{{ run.updated_at[:19] | replace('T', ' ') }}</div>
+            </td>
+            <td class="max-w-md px-6 py-4 align-top text-gray-700">{{ run.question }}</td>
+            <td class="whitespace-nowrap px-6 py-4 align-top">
+              <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{{ run.status }}</span>
+            </td>
+            <td class="whitespace-nowrap px-6 py-4 align-top">
+              {% if run.integrity == "verified" %}
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>verified · {{ run.evidence_count }} refs
+              </span>
+              <div class="mt-1 text-xs text-gray-400">{{ run.limitation_count }} explicit limitations</div>
+              {% else %}
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>failed closed
+              </span>
+              <div class="mt-1 font-mono text-xs text-red-500">{{ run.error_code }}</div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="px-6 py-10 text-center">
+      <p class="text-sm font-medium text-gray-700">还没有治理运行</p>
+      <p class="mt-1 text-sm text-gray-500">在终端运行 <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs">forge quickstart</code> 创建第一条可验证链路。</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="system-status-heading" class="space-y-4">
+    <div class="flex items-end justify-between">
+      <div>
+        <h2 id="system-status-heading" class="text-base font-semibold text-gray-900">系统状态</h2>
+        <p class="mt-1 text-sm text-gray-500">Registry 与运行依赖的当前诊断视图。</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <a href="/admin/schema" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-300 hover:shadow">
+        <div class="text-xs font-medium uppercase tracking-wider text-gray-500">数据表</div>
+        <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{{ table_count }}</div>
+      </a>
+      <a href="/admin/metrics" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-300 hover:shadow">
+        <div class="text-xs font-medium uppercase tracking-wider text-gray-500">业务指标</div>
+        <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{{ metric_count }}</div>
+      </a>
+      <a href="/admin/rules" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-300 hover:shadow">
+        <div class="text-xs font-medium uppercase tracking-wider text-gray-500">语义规则</div>
+        <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{{ rule_count }}</div>
+      </a>
+      <a href="/admin/audit" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-300 hover:shadow">
+        <div class="text-xs font-medium uppercase tracking-wider text-gray-500">今日查询</div>
+        <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{{ today_query_count }}</div>
+      </a>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-3">
+      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-900">运行依赖</h3>
+        <dl class="mt-4 space-y-3 text-sm">
+          <div class="flex items-center justify-between"><dt class="text-gray-500">数据库</dt><dd class="font-medium {{ 'text-emerald-600' if health.db else 'text-red-600' }}">{{ '已连接' if health.db else '未连接' }}</dd></div>
+          <div class="flex items-center justify-between"><dt class="text-gray-500">Embedding</dt><dd class="font-medium {{ 'text-emerald-600' if health.embedding else 'text-amber-600' }}">{{ '已配置' if health.embedding else '未配置' }}</dd></div>
+          <div class="flex items-center justify-between"><dt class="text-gray-500">LLM</dt><dd class="max-w-[12rem] truncate font-mono text-xs text-gray-700">{{ llm_model or '未配置' }}</dd></div>
+          <div class="flex items-start justify-between gap-3"><dt class="shrink-0 text-gray-500">Registry</dt><dd class="break-all text-right font-mono text-xs text-gray-700" title="{{ registry_path }}">{{ registry_path }}</dd></div>
+        </dl>
+      </div>
+
+      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-900">快速操作</h3>
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <a href="/admin/query" class="rounded-lg border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700">开始查询</a>
+          <a href="/admin/metrics" class="rounded-lg border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700">管理指标</a>
+          <a href="/admin/schema" class="rounded-lg border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700">查看结构</a>
+          <a href="/admin/audit" class="rounded-lg border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700">审计日志</a>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-900">最近查询</h3>
+        {% if recent_queries %}
+        <ul class="mt-3 divide-y divide-gray-100">
+          {% for q in recent_queries[:4] %}
+          <li class="py-2.5 first:pt-0"><div class="truncate text-sm text-gray-700">{{ q.question or '—' }}</div><div class="mt-0.5 text-xs text-gray-400">{{ q.timestamp[:19] if q.timestamp else '' }}</div></li>
+          {% endfor %}
+        </ul>
         {% else %}
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 px-2 py-1 rounded-full">
-          <span class="w-2 h-2 rounded-full bg-red-500"></span> 未连接
-        </span>
+        <p class="mt-4 text-sm text-gray-500">暂无查询记录</p>
         {% endif %}
       </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600">LLM 模型</span>
-        <span class="text-xs text-gray-500">{{ llm_model or '未配置' }}</span>
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600">Embedding 模型</span>
-        {% if health.embedding %}
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
-          <span class="w-2 h-2 rounded-full bg-green-500"></span> {{ embed_model }}
-        </span>
-        {% else %}
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-1 rounded-full">
-          <span class="w-2 h-2 rounded-full bg-yellow-500"></span> 降级（全表模式）
-        </span>
-        {% endif %}
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-600">Registry 路径</span>
-        <span class="text-xs text-gray-500 font-mono truncate max-w-[200px]" title="{{ registry_path }}">{{ registry_path }}</span>
-      </div>
     </div>
-  </div>
-
-  {# ── 快速操作 ──────────────────────────────────────────────────────────── #}
-  <div class="bg-white rounded-lg border border-gray-200 p-5">
-    <h2 class="text-sm font-semibold text-gray-700 mb-4">快速操作</h2>
-    <div class="grid grid-cols-2 gap-3">
-      <a href="/chat"
-         class="flex items-center gap-2 bg-gray-900 text-white text-xs font-medium px-4 py-3 rounded-lg hover:bg-gray-700 transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-        </svg>
-        开始查询
-      </a>
-      <a href="/admin/metrics"
-         class="flex items-center gap-2 bg-blue-600 text-white text-xs font-medium px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
-        管理指标
-      </a>
-      <a href="/admin/schema"
-         class="flex items-center gap-2 bg-white text-gray-700 text-xs font-medium px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-        </svg>
-        查看结构层
-      </a>
-      <a href="/admin/audit"
-         class="flex items-center gap-2 bg-white text-gray-700 text-xs font-medium px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-        查询审计
-      </a>
-    </div>
-  </div>
+  </section>
 </div>
-
-{# ── 最近查询 ────────────────────────────────────────────────────────────── #}
-<div class="bg-white rounded-lg border border-gray-200 p-5">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-sm font-semibold text-gray-700">最近查询</h2>
-    <a href="/admin/audit" class="text-xs text-blue-600 hover:text-blue-800">查看全部</a>
-  </div>
-  {% if recent_queries %}
-  <div class="space-y-3">
-    {% for q in recent_queries %}
-    <div class="flex items-start gap-3 py-2 {% if not loop.last %}border-b border-gray-100{% endif %}">
-      <div class="flex-1 min-w-0">
-        <p class="text-sm text-gray-800 truncate">{{ q.user_message }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">{{ q.user_id }} · {{ q.created_at }}</p>
-      </div>
-      <span class="flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full
-        {% if q.status == 'approved' %}bg-green-50 text-green-700
-        {% elif q.status == 'pending' %}bg-yellow-50 text-yellow-700
-        {% elif q.status == 'error' %}bg-red-50 text-red-700
-        {% else %}bg-gray-100 text-gray-500{% endif %}">
-        {% if q.status == 'approved' %}已执行{% elif q.status == 'pending' %}待确认{% elif q.status == 'error' %}错误{% else %}{{ q.status }}{% endif %}
-      </span>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="text-sm text-gray-400 text-center py-6">暂无查询记录</p>
-  {% endif %}
-</div>
-
 {% endblock %}

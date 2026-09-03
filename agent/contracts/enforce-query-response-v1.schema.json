@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/enforce-query-response-v1.schema.json",
+  "title": "EnforceQueryResponseV1",
+  "description": "The stable public projection of a governed QueryRun. QueryRun remains the single execution truth source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "query_run_id",
+    "task_run_id",
+    "status",
+    "decision",
+    "context",
+    "candidate",
+    "review",
+    "policy_decision",
+    "assurance",
+    "lineage",
+    "result",
+    "failure"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "query_run_id": {"type": "string", "pattern": "^qr_[a-f0-9]{32}$"},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "status": {"enum": ["review_required", "denied", "executing", "completed", "failed", "cancelled", "expired"]},
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "review_required", "execution_authorized"],
+      "properties": {
+        "verdict": {"enum": ["conditional", "allow", "deny"]},
+        "review_required": {"type": "boolean"},
+        "execution_authorized": {"type": "boolean"}
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_context", "delegated_mandate", "purpose", "resource_scope"],
+      "properties": {
+        "principal_context": {"type": "object"},
+        "delegated_mandate": {"type": ["object", "null"]},
+        "purpose": {"type": "string"},
+        "resource_scope": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_kind", "candidate_revision", "producer_revision", "candidate_hash"],
+      "properties": {
+        "input_kind": {"enum": ["direct_sql", "forge_json"]},
+        "candidate_revision": {"type": "string"},
+        "producer_revision": {"type": "string"},
+        "candidate_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sql", "sql_hash", "assurance_report_hash", "enforcement_context_hash", "expires_at"],
+      "properties": {
+        "sql": {"type": ["string", "null"]},
+        "sql_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "assurance_report_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "enforcement_context_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "policy_decision": {"type": "object"},
+    "assurance": {"type": ["object", "null"]},
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_revision",
+        "candidate_hash",
+        "assurance_revision",
+        "assurance_report_hash",
+        "policy_revision",
+        "policy_decision_hash",
+        "registry_revision",
+        "enforcement_context_hash"
+      ],
+      "properties": {
+        "candidate_revision": {"type": "string"},
+        "candidate_hash": {"type": "string"},
+        "assurance_revision": {"type": ["string", "null"]},
+        "assurance_report_hash": {"type": ["string", "null"]},
+        "policy_revision": {"type": ["string", "null"]},
+        "policy_decision_hash": {"type": "string"},
+        "registry_revision": {"type": "string"},
+        "enforcement_context_hash": {"type": "string"}
+      }
+    },
+    "result": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["columns", "rows", "row_count", "truncated", "execution_ms", "executed_at"],
+          "properties": {
+            "columns": {"type": "array", "items": {"type": "string"}},
+            "rows": {"type": "array", "items": {"type": "array"}},
+            "row_count": {"type": "integer", "minimum": 0},
+            "truncated": {"type": "boolean"},
+            "execution_ms": {"type": ["integer", "null"], "minimum": 0},
+            "executed_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      ]
+    },
+    "failure": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stage", "code", "retryable"],
+          "properties": {
+            "stage": {"type": "string"},
+            "code": {"type": "string"},
+            "retryable": {"type": "boolean"}
+          }
+        }
+      ]
+    }
+  }
+}

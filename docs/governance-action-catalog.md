@@ -1,6 +1,6 @@
 # Forge Governance Action Catalog
 
-> 状态：M0 v1.1.0 Contract 修订基线；尚未接入 v1 运行时授权 · Last updated: 2026-08-24
+> 状态：M0 v1.2.0；Query prepare/approve/execute 已接入公开 Enforce PEP · Last updated: 2026-09-03
 >
 > 机器可读目录：[`../agent/contracts/governance-action-catalog.v1.json`](../agent/contracts/governance-action-catalog.v1.json)；Schema：[`../agent/contracts/governance-action-catalog-v1.schema.json`](../agent/contracts/governance-action-catalog-v1.schema.json)。
 
@@ -28,13 +28,13 @@ Runtime Governance Coverage
 
 现有系统可能已有 SQL hash、ACL、审批等领域控制；`not_integrated` 仅表示新的 Principal/Mandate/Policy v1 Contract 尚未接入，不否认既有控制，也不把既有控制冒充新 Contract 已执行。
 
-## 2. v1.1.0 支持范围
+## 2. v1.2.0 支持范围
 
 | Action | Owner | Executor | 风险 | Human Decision | Truth Source | v1 Runtime |
 |---|---|---|---|---|---|---|
-| `query.prepare` | Forge | Forge | medium | not required | Forge Query Store | not integrated |
-| `query.approve` | Forge | Forge | high | required | Forge Query Store | not integrated |
-| `query.execute` | Forge | Forge | high | required | Forge Query Store | not integrated |
+| `query.prepare` | Forge | Forge | medium | not required | Forge Query Store | enforced |
+| `query.approve` | Forge | Forge | high | required | Forge Query Store | enforced |
+| `query.execute` | Forge | Forge | high | required | Forge Query Store | enforced |
 | `query.cancel` | Pi | Forge | medium | conditional | Forge Query Store | not integrated |
 | `registry.publish` | Forge | Forge | high | required | Forge Registry Store | not integrated |
 | `registry.rollback` | Forge | Forge | high | required | Forge Registry Store | not integrated |
@@ -47,7 +47,7 @@ Runtime Governance Coverage
 | `memory_proposal.confirm` | Pi Governance | Forge | medium | required | Forge Memory Store | not integrated |
 | `memory_proposal.forget` | Pi Governance | Forge | medium | required | Forge Memory Store | not integrated |
 
-当前 14 个 supported Action 的 **Contract Coverage 为 100%**，**v1 Runtime Governance Coverage 为 0%**。运行时比例只能随 M1 PEP 实施和负向验收逐项提升。
+当前 14 个 supported Action 的 **Contract Coverage 为 100%**，其中 `query.prepare`、`query.approve`、`query.execute` 已由公开 Enforce PEP 执行 Principal/Mandate/Policy/Approval/Drift/Read-only 负向门禁，**v1 Runtime Governance Coverage 为 3/14（21.4%）**。其余 11 个 Action 仍是 `not_integrated`；不能从查询链覆盖率推断它们已治理，也不能把本地实现表述为生产部署已完成。
 
 ## 3. 变更规则
 

@@ -1,6 +1,6 @@
 # Forge 企业演进阶段性实施计划 v1.2
 
-> 状态：`REQ-2026-09-03-025` 为当前产品主线；`REQ-2026-08-26-024` SQL Accuracy Benchmark 已验证并作为反证基线；`REQ-2026-08-25-023` 已吸收为历史短期切口。当前阶段为 R0 Open-source Trust Runtime Product Cut / Adoption Baseline；Runtime Governance Coverage 仍为 0% · Last updated: 2026-09-03
+> 状态：`REQ-2026-09-03-025` 为当前产品主线；`REQ-2026-08-26-024` SQL Accuracy Benchmark 已验证并作为反证基线；`REQ-2026-08-25-023` 已吸收为历史短期切口。当前阶段为 R0 Open-source Trust Runtime Product Cut / Adoption Baseline，R0.1–R0.5 已完成，当前切片为 R0.6 External Adoption Evidence；Runtime Governance Coverage 为 3/14（21.4%） · Last updated: 2026-09-03
 >
 > 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；当前产品决策见 [`requirements-pool.md`](requirements-pool.md#req-2026-09-03-025以开源-trust-runtime-收敛-forge-产品方向)。
 >
@@ -104,7 +104,7 @@ GTM：Open-source Developer First
 | N2 产品设计与路线重建 | 方向已形成；短期顺序由 REQ-017 修订 | `REQ-2026-08-25-016`：三产品面与对象模型保留；不再由 fixture W3A 主导近期实施 |
 | SP0–SP5 短期 Product Spine | 两个 Atlas P0 已验证，等待用户继续复验 | `REQ-2026-08-25-019`：Table 已存在于 Pi Presentation/Product Projection，Web Conversation Renderer 未消费。统一复用 `renderPresentation` 后，真实 107 行任务显示 2 列、20 行有界预览、总行数与截断提示；最终 candidate `product-spine-6a23e71276e5` 以 `product-pages.js?v=2` 强制缓存刷新。性能 P0 保持通过 |
 | F0–F2 完整未来 Product Shell | 闪烁 P0 已修复，待用户 Atlas 确认 | `REQ-2026-08-25-022`：Sidebar 语义 fingerprint 排除易变 projection metadata；相同轮询 no-op，真实变化保留 scroll 后更新，失败保留最后有效状态；candidate `product-spine-beb59d1a56f7` |
-| R0 Open-source Trust Runtime | R0.1–R0.2 已完成，当前进入 R0.3 Enforce | `REQ-2026-09-03-025`：Direct SQL/Forge JSON 已共享版本化单次 Evaluate、持久 suite/run manifest、可复算 aggregate、不可比失败关闭与跨 producer 版本 Regression release gate；下一步公开化 Policy/Assurance/Read-only/Approval Enforce 路径 |
+| R0 Open-source Trust Runtime | R0.1–R0.5 已完成；R0.6 证据采集入口已准备，等待公开 revision 与外部回执 | `REQ-2026-09-03-025`：README 与 `forge quickstart` 已把 Direct SQL 的 Evaluate → Enforce → Explain 收敛为无需 Pi、Forge JSON、模型 Key 或已有数据库的单一路径；Quickstart 现同时证明 `assurance/readonly_violation` 失败关闭并生成隐私有界回执，公开 Issue 表单收集 setup time、摩擦与独立解释。内部 smoke、维护者提交与 stars/forks 均不关闭 R0.6 |
 | S0–S4 真实用户短期产品闭环 | 已被 R0 吸收为历史验证路线 | `REQ-2026-08-25-023`：Design Partner、Enterprise Reference 与 Thin Founder Sandbox 的证据分工继续有效，但不再是唯一主动计划 |
 | W3 Web 产品骨架与交互框架 | 已吸收进 SP3–SP5 | `REQ-2026-08-24-014`：`821065f` 隔离 Product Shell 已证明页面骨架，但错误移除了连续 Chat；“分析工作台”修订也被判定过窄。先以 N1 北极星重建产品地图，确认后再修订原型；W3B 不进入 |
 | H1 Analysis 延迟与进度修复 | 已完成 | `REQ-2026-08-24-005`：Artifact-first Adapter、Provider failure 分类、StageAttempt deadline/phase 时间元数据和 Web elapsed/slow 提示；107 行真实 smoke 从临界 229/240s 降至 119s，不改变 SQL、审批或 Task 真相源 |
@@ -1057,15 +1057,23 @@ M0.1–M0.5、N1/N2、SP0–SP5 与 Benchmark v2 已形成可复用工程资产�
 ```text
 R0.1 Unified Input Contract：Direct SQL / Forge JSON（已完成）
   → R0.2 Evaluate：Exact Result / Regression / Failure Taxonomy（已完成）
-  → R0.3 Enforce：Policy / Assurance / Read-only / Approval（当前）
-  → R0.4 Explain：Evidence / Lineage / Limitations
-  → R0.5 Public Golden Path：README / Quickstart / CLI-API / Dashboard
-  → R0.6 External Adoption Evidence
+  → R0.3 Enforce：Policy / Assurance / Read-only / Approval（已完成）
+  → R0.4 Explain：Evidence / Lineage / Limitations（已完成）
+  → R0.5 Public Golden Path：README / Quickstart / CLI-API / Dashboard（已完成）
+  → R0.6 External Adoption Evidence（当前）
 ```
 
 R0.1 关闭证据：共享 JSON Schema `query-candidate-v1` 定义互斥的 `direct_sql` / `forge_json` 输入；Python 与 Pi 均传递并校验该契约。Direct SQL 通过 `sqlglot` 解析与限定，执行只读、Registry/ACL 和字段校验；两类输入持久化 `input_kind` 与 candidate revision，并进入同一 QueryRun 审批、执行和 SQL/Assurance hash 绑定链。相同 SQL 的两条路径共享 assurance/policy/registry/candidate revision 和 SQL hash，来源身份保持可追溯。Python 全套 `612 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 通过；R0 外部采用门禁仍未通过。
 
 R0.2 关闭证据：版本化 `POST /api/v1/evaluate` 与 `forge evaluate` 复用 `query-candidate-v1`、Registry Assurance 和 `benchmark-failure-v1`，统一返回 Policy verdict、有界失败、Exact Result、lineage 与响应内 Evidence refs；`evaluation-suite-v1` 和 `evaluation-run-manifest-v1` 持久化 dataset/producer/prompt/retrieval/retry/timeout/evaluator/metric/Registry 等修订、完整 suite、原始 outcomes 与可复算 aggregate。相同 evaluation basis 可跨 producer 版本执行 Regression release gate；dataset、case selection、evaluation basis、Policy、evaluator、Registry 或 dialect 漂移时标记 `not_comparable` 并失败关闭。入口始终不执行 SQL，`execution_authorized` 为 false。公开 fixture 的持久运行、suite revision 回放、baseline gate 和 manifest 导出实际 CLI/API smoke 均通过；R0.2 聚焦测试 `42 passed`，Python 全套 `649 passed / 28 skipped`。R0.2 完成，当前进入 R0.3 Enforce；外部采用门禁仍未通过。
+
+R0.3 关闭证据：新增 `enforce-query-request-v1`、`enforce-query-approval-v1`、`enforce-query-response-v1`，以及版本化 `POST /api/v1/enforce/query-runs`、`GET /api/v1/enforce/query-runs/{query_run_id}`、`POST /api/v1/enforce/query-runs/{query_run_id}/approve` 和 `forge enforce`。现有 QueryRun 继续作为唯一执行真相源，持久化 Principal、Purpose、Task、可选 Agent/Service DelegatedMandate、Resource Scope、Policy/Assurance/Registry、candidate/SQL 及其 hashes；创建阶段只生成 `review_required`，只有独立 reviewer credential 提交匹配 SQL、Assurance 与 Enforcement Context hashes 后才执行。Policy、Registry、授权上下文、范围、候选、审批或只读凭证漂移均失败关闭；Direct SQL 与 Forge JSON 不互相转换。Governance Action Catalog v1.2.0 仅将 `query.prepare`、`query.approve`、`query.execute` 标为 enforced，Runtime Coverage 为 3/14。聚焦回归 `67 passed`，Python 全套 `663 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 通过；公开 API/CLI 创建、审批执行、结果截断与回读实际 smoke 通过。该证据关闭 R0.3，不代表 R0.4 Explain、公共 Golden Path 或外部采用门禁已通过。
+
+R0.4 关闭证据：新增版本化 `explain-query-response-v1`、`GET /api/v1/explain/query-runs/{query_run_id}` 与 `forge explain`。Explain 不创建新存储或状态机，而从同一 QueryRun 稳定投影实际 SQL/结果、Registry 表列语义与数据源、Principal/Purpose/Policy/Approval、Assurance、版本、Evidence、lineage 和显式 limitations；创建、审批和完成阶段分别持久化来源上下文、approval 与 result hash。持久证据篡改返回有界错误并失败关闭；历史未锚定 QueryRun 只返回 `integrity=partial` 和对应限制，当前 Registry 漂移不会改写历史解释。读取继续绑定创建凭证，响应不披露 session hash、内部存储或原始数据库错误。Explain/Enforce 聚焦测试 `24 passed`，Python 全套 `673 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 通过；真实本地服务经 CLI 完成 Enforce 创建 → 审批执行 → Explain，验证 2 行截断结果、7 类 Evidence 与 3 项显式限制。Explain 是只读证据投影，不扩大 Governance Action Catalog 的 Runtime Enforcement，覆盖仍为 3/14（21.4%）。R0.4 关闭，当前进入 R0.5。
+R0.5 关闭证据：默认英文 README 与中文本地化入口均以 `forge quickstart` 作为首个可运行路径。Quickstart 创建隔离合成 SQLite/Registry、启动真实本地 Forge 服务，并只通过公开 HTTP API 完成 Direct SQL Evaluate exact-result → Enforce review/hash-bound approve/只读执行 → Explain integrity/Evidence/limitations；默认展示实际 SQL 并等待人工批准，`--yes --json` 提供机器可读 CI 证明，`--serve` 在验证完成后保持 Dashboard 可浏览。Dashboard 从 QueryRun 真相源读取最近治理运行，并用同一 Explain 投影显示状态、Evidence 数与 integrity；Evidence 漂移只显示失败关闭，不创建第二状态。实际 CLI smoke 验证两行上限截断、七类 Evidence、三项显式限制及 Dashboard 同一 QueryRun；Browser 在 1440px 与 390px 页面验证无水平溢出。聚焦回归 `69 passed`，Python 全套 `675 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过。该内部证明只关闭 R0.5 工程收敛，不构成 R0.6 外部开发者采用证据；Runtime Governance Coverage 保持 3/14（21.4%）。
+
+R0.6 当前证据状态：公开采用入口已收敛为“fresh clone → `forge quickstart --workdir ...` → 人工审核 SQL → 提交 GitHub Quickstart adoption report”。Quickstart 先验证写 SQL 以 `assurance/readonly_violation` 失败关闭，再完成只读 Evaluate → Enforce → Explain → Dashboard，并把版本、有限环境字段、阶段结果、显式限制和 SHA-256 checksum 写入 `run_receipt`；Forge 不发送 telemetry，checksum 只用于漂移检测/去重，不证明提交者身份。内部人工批准和 `--yes --json` smoke 均通过；聚焦测试 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过。公开 GitHub 清单中的 8 个 Issue 与 1 个 Pull Request 均为维护者身份，stars/forks 不计入采用证据；本轮入口尚未发布，亦无合格外部回执，因此 R0.6 与 R0 退出门禁保持未通过。
+
 R0 未通过前，不恢复 M1A、G1、Q1、H6 或更广企业平台实现。Atlas candidate 可在不扩张产品范围的前提下单独复验；不得因产品切割删除已有 Contract、测试、审计或失败关闭边界。
 
 明确假设：

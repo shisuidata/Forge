@@ -26,11 +26,15 @@ Forge 当前验证的是：
 
 - 当前有效产品需求：`REQ-2026-09-03-025`；`REQ-2026-08-25-023` 已吸收为历史短期切口，`REQ-2026-08-26-024` Benchmark 工作包已验证完成。
 - 唯一主动计划：`forge-enterprise-evolution-plan.md`。
-- 当前产品主线：**R0 Open-source Trust Runtime Product Cut / Adoption Baseline**；R0.2 Evaluate 已完成，当前实施切片为 **R0.3 Enforce**。
+- 当前产品主线：**R0 Open-source Trust Runtime Product Cut / Adoption Baseline**；R0.1–R0.5 已完成，当前实施切片为 **R0.6 External Adoption Evidence**。
 - R0.1 Unified Input Contract 已完成：`query-candidate-v1` 将 Direct SQL 与 Forge JSON 建模为互斥候选；两者进入同一 QueryRun 审批/执行链并绑定 `input_kind`、candidate/assurance/policy/registry revision 与 SQL hash。Direct SQL 在服务端执行只读、语法、Registry/ACL 和字段校验，不经 Forge JSON 转换。
 - R0.2 Evaluate 已完成：版本化 `POST /api/v1/evaluate` 与 `forge evaluate` 统一 Direct SQL/Forge JSON 的 Policy、Failure Taxonomy、Exact Result、lineage 与响应内 Evidence refs；`evaluation-suite-v1` 和 `evaluation-run-manifest-v1` 持久化完整输入修订、原始 outcomes 与可复算聚合，并提供不可比失败关闭和跨 producer 版本 Regression release gate。所有 Evaluate 路径均不执行 SQL、不授予执行权。
-- 当前已完成工程证据：Accuracy Lab 完整 Run `pbr_1f735d433a284366bfe6526146511792` 完成 500/500 cases、1000/1000 calls：Forge EA 45.40%、Direct SQL 56.40%，Forge Delta -11.00pp。R0.2 聚焦测试 42 passed、Python 全套 649 passed / 28 skipped；公开 fixture 的持久运行、suite revision 回放、baseline release gate 和 run manifest 导出实际 CLI/API smoke 均通过。
-- 当前切入要求：R0.3 必须把现有 Policy/Assurance/只读/Approval 能力收敛为外部开发者可理解、失败关闭且不绕过人工责任的 Enforce 路径；Direct SQL 不得被迫先转换为 Forge JSON。
+- R0.3 Enforce 已完成：版本化 `POST /api/v1/enforce/query-runs`、`GET /api/v1/enforce/query-runs/{query_run_id}`、`POST /api/v1/enforce/query-runs/{query_run_id}/approve` 与 `forge enforce` 将 Principal、Purpose、Task、可选 DelegatedMandate、Resource Scope、Policy、Assurance、Registry 和只读凭证绑定进 QueryRun；回读绑定创建凭证，只有独立 reviewer credential 提交匹配 SQL/Assurance/Enforcement hashes 后才能执行。上下文、Policy、Registry、权限或只读条件漂移均失败关闭。
+- R0.4 Explain 已完成：版本化 `GET /api/v1/explain/query-runs/{query_run_id}`、`forge explain` 与 `explain-query-response-v1` 从同一 QueryRun 投影结果、实际 SQL、Registry 语义/来源、Principal/Policy/Approval、Assurance、Evidence、lineage、版本和显式限制。来源上下文、审批与结果在写入时 hash-bound；篡改失败关闭，历史未锚定 QueryRun 只返回 `integrity=partial`，不伪造证据。
+- R0.5 Public Golden Path 已完成：`forge quickstart` 使用隔离 SQLite 与真实本地服务串联公开 Evaluate → Enforce → Explain API，无需 API Key、LLM、Embedding、Pi、Forge JSON、已有数据库或 `.env`；默认展示实际 SQL 并等待批准，`--serve` 保持 Dashboard 可浏览，`--yes --json` 提供合成数据 CI 证明。Dashboard 只读投影同一 QueryRun 的执行状态与 Evidence integrity，不复制真相源。
+- 当前已完成工程证据：Accuracy Lab 完整 Run `pbr_1f735d433a284366bfe6526146511792` 完成 500/500 cases、1000/1000 calls：Forge EA 45.40%、Direct SQL 56.40%，Forge Delta -11.00pp。R0.6 采用入口聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过；实际人工批准与 `--yes --json` 两条 `forge quickstart` 均完成失败关闭、Evaluate、Enforce、Explain 与 Dashboard 链路。
+- R0.6 证据采集准备已完成：Quickstart 先用写 SQL 证明 `assurance/readonly_violation` 失败关闭，再运行已审核只读查询；`summary.json` 生成不含 hostname、username、路径、SQL rows、凭证或私有 schema 的 `run_receipt` 与 SHA-256 漂移校验。公开 Quickstart adoption Issue 表单收集 tested revision、fresh-clone setup time、首个失败/困惑点、回执及开发者对 Policy、Evidence 和限制的独立解释；Forge 不发送 telemetry，checksum 不证明身份。
+- 当前切入要求：R0.6 必须取得外部开发者独立完成 Golden Path 或提交 Adapter、Rule、Dataset、真实 failure case 的采用证据，并记录 setup time、失败点与修复闭环；内部 smoke、页面数量、自有题集和测试通过不能替代外部证据。本轮入口尚未发布到公开 revision，发布前无法启动合格的 fresh-clone 外部试跑。
 - 当前不扩张通用 Product Shell、SaaS Connector、非 SQL Action、Economics/Outcome Ledger 或完整企业权限平台；真实客户数据、生产凭证和高风险数据源仍需单独授权。
 
 ## 4. 已完成且可复用的工程基础
@@ -46,10 +50,10 @@ Forge 当前验证的是：
 
 ## 5. 未关闭的验收与采用事实
 
-- 尚无外部开发者独立完成新 Trust Runtime Golden Path 的证据，也没有外部 Adapter、Rule、Dataset 或真实 failure case 贡献。
-- R0.3 尚未把现有 QueryRun、Policy/Assurance、只读执行和 hash-bound Approval 收敛为稳定公开 Enforce 工作流。
+- 公开 GitHub 信号盘点中，现有 8 个 Issue 与 1 个 Pull Request 均由维护者身份提交；11 stars 与 1 fork 仅是传播信号。尚无可确认的外部开发者 Golden Path 回执，也没有外部 Adapter、Rule、Dataset 或真实 failure case 贡献。
+- R0.6 的失败关闭样例、隐私有界回执与公开提交表单已准备并通过内部 smoke，但尚未发布可测试 revision，也没有外部独立完成记录；R0.6 外部采用门禁未通过。
 - W2 主体内容规则、Product Spine 与完整 Product Shell 的 Atlas candidate 仍有历史人工复验项，但不再主导当前产品路线。
-- Runtime Governance Coverage 仍为 0%；Contract Coverage 不能替代生产执行覆盖。
+- Governance Action Catalog 的 14 个 supported Action 中仅 `query.prepare`、`query.approve`、`query.execute` 已完成 v1 Runtime Enforcement，覆盖率为 3/14（21.4%）；Explain 是只读证据投影，不新增 Action Runtime Enforcement，Contract Coverage 不能替代其余运行时执行覆盖。
 
 这些事实必须保留为反证；不得用页面数量、内部测试、自有题集或 stars/forks 代替真实外部运行与采用证据。
 

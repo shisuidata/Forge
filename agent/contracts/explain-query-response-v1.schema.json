@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/explain-query-response-v1.schema.json",
+  "title": "ExplainQueryResponseV1",
+  "description": "A stable, evidence-bound explanation of one governed QueryRun. QueryRun remains the execution truth source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "query_run_id",
+    "task_run_id",
+    "status",
+    "statement",
+    "semantics",
+    "sources",
+    "governance",
+    "assurance",
+    "lineage",
+    "evidence",
+    "limitations",
+    "integrity",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "query_run_id": {"type": "string", "pattern": "^qr_[a-f0-9]{32}$"},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
+    "status": {
+      "enum": ["review_required", "denied", "executing", "completed", "failed", "cancelled", "expired"]
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "purpose", "actual_sql", "dialect", "result", "failure"],
+      "properties": {
+        "question": {"type": "string", "minLength": 1, "maxLength": 10000},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "actual_sql": {"type": ["string", "null"]},
+        "dialect": {
+          "enum": ["auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake", ""]
+        },
+        "result": {"$ref": "#/$defs/result"},
+        "failure": {"$ref": "#/$defs/failure"}
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_kind",
+        "candidate_revision",
+        "producer_revision",
+        "candidate",
+        "bindings",
+        "extraction_status"
+      ],
+      "properties": {
+        "input_kind": {"enum": ["direct_sql", "forge_json"]},
+        "candidate_revision": {"type": "string", "minLength": 1},
+        "producer_revision": {"type": "string", "minLength": 1},
+        "candidate": {"type": "object"},
+        "bindings": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["binding_type", "identifier", "description", "registry_revision"],
+            "properties": {
+              "binding_type": {"enum": ["table", "column"]},
+              "identifier": {"type": "string", "minLength": 1},
+              "description": {"type": ["string", "null"]},
+              "registry_revision": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "extraction_status": {"enum": ["complete", "partial", "unavailable"]}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "datasource_id",
+        "resource_scope",
+        "physical_tables",
+        "registry_revision",
+        "context_hash",
+        "data_snapshot_ref"
+      ],
+      "properties": {
+        "datasource_id": {"type": "string", "minLength": 1},
+        "resource_scope": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {"type": "object"}
+        },
+        "physical_tables": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "registry_revision": {"type": "string", "minLength": 1},
+        "context_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "data_snapshot_ref": {"type": ["string", "null"], "minLength": 1}
+      }
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_principal",
+        "accountable_principal",
+        "mandate_id",
+        "policy_decision",
+        "approval"
+      ],
+      "properties": {
+        "actor_principal": {"$ref": "#/$defs/principal"},
+        "accountable_principal": {"$ref": "#/$defs/principal"},
+        "mandate_id": {"type": ["string", "null"], "minLength": 1},
+        "policy_decision": {"type": "object"},
+        "approval": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "approver_principal",
+                "approved_at",
+                "sql_hash",
+                "assurance_report_hash",
+                "enforcement_context_hash",
+                "approval_hash"
+              ],
+              "properties": {
+                "approver_principal": {"$ref": "#/$defs/humanPrincipal"},
+                "approved_at": {"type": "string", "format": "date-time"},
+                "sql_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+                "assurance_report_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+                "enforcement_context_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+                "approval_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "assurance": {"type": ["object", "null"]},
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "explain_revision",
+        "candidate_hash",
+        "sql_hash",
+        "assurance_report_hash",
+        "policy_decision_hash",
+        "registry_revision",
+        "enforcement_context_hash",
+        "explain_context_hash",
+        "approval_hash",
+        "result_hash"
+      ],
+      "properties": {
+        "explain_revision": {"const": "explain-query-v1"},
+        "candidate_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "sql_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "assurance_report_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "policy_decision_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "registry_revision": {"type": "string", "minLength": 1},
+        "enforcement_context_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "explain_context_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "approval_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "result_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "evidence_type", "summary", "source_ref", "content_hash"],
+        "properties": {
+          "evidence_id": {"type": "string", "pattern": "^ev_[a-f0-9]{24}$"},
+          "evidence_type": {
+            "enum": ["candidate", "query", "assurance", "policy", "source", "approval", "result"]
+          },
+          "summary": {"type": "string", "minLength": 1, "maxLength": 500},
+          "source_ref": {"type": "string", "minLength": 1, "maxLength": 500},
+          "content_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "description"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+          "severity": {"enum": ["info", "warning"]},
+          "description": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "explanation_hash", "verified_hashes", "unverified_components"],
+      "properties": {
+        "status": {"enum": ["verified", "partial"]},
+        "explanation_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "verified_hashes": {
+          "type": "array",
+          "items": {
+            "enum": ["candidate", "sql", "assurance", "policy", "enforcement_context", "source_context", "approval", "result"]
+          },
+          "uniqueItems": true
+        },
+        "unverified_components": {
+          "type": "array",
+          "items": {"enum": ["source_context", "approval", "result"]},
+          "uniqueItems": true
+        }
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"enum": ["human", "service", "agent"]}
+      }
+    },
+    "humanPrincipal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "principal_type": {"const": "human"}
+      }
+    },
+    "result": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["columns", "rows", "row_count", "truncated", "execution_ms", "executed_at"],
+          "properties": {
+            "columns": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "rows": {"type": "array", "items": {"type": "array"}},
+            "row_count": {"type": "integer", "minimum": 0},
+            "truncated": {"type": "boolean"},
+            "execution_ms": {"type": ["integer", "null"], "minimum": 0},
+            "executed_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      ]
+    },
+    "failure": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stage", "code", "retryable"],
+          "properties": {
+            "stage": {"type": "string", "minLength": 1},
+            "code": {"type": "string", "minLength": 1},
+            "retryable": {"type": "boolean"}
+          }
+        }
+      ]
+    }
+  }
+}

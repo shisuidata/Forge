@@ -23,6 +23,8 @@ Forge sits between an upstream agent and a database. It accepts Direct SQL or co
 - constrained Forge JSON intermediate representation and deterministic SQL compilation;
 - a shared candidate, QueryRun review, and execution path for Direct SQL and Forge JSON;
 - versioned, non-executing Evaluate API/CLI with persistent suites, manifests, replay, and regression gates;
+- versioned Enforce API/CLI that binds Principal, Purpose, Task, Resource Scope, Policy, Assurance, Registry, and hash-bound human approval;
+- versioned Explain API/CLI that projects actual SQL/results, persisted Registry semantics, governance, Evidence, lineage, integrity, and explicit limitations from the same QueryRun;
 - Registry-backed schema and semantic constraints, relationship checks, and grain checks;
 - read-only SQL, table/column scope, approval hashes, timeouts, and result limits;
 - automated compatibility checks for SQLite, PostgreSQL, and MySQL;
@@ -525,10 +527,39 @@ The reality of self-hosted deployments is that many data teams run local small/m
 
 ## Getting Started
 
+### Public Golden Path
+
 ```bash
 git clone https://github.com/shisuidata/Forge
 cd Forge
 bash scripts/bootstrap-dev.sh
+source .venv/bin/activate
+forge quickstart
+```
+
+That command is the complete public Trust Runtime path: it starts an isolated local Forge server and SQLite datasource, submits a **Direct SQL** candidate to `Evaluate`, stops at `Enforce` review, executes only after you approve the displayed SQL, reads the same QueryRun through `Explain`, and verifies its Dashboard projection. No API key, LLM, embedding service, Pi knowledge, Forge JSON, existing database, or `.env` file is required.
+
+Expected proof: the first `Evaluate` request rejects write SQL with `assurance/readonly_violation`; the read-only request passes exact-result comparison; `Enforce` returns two rows and reports row-limit truncation; `Explain` reports `integrity=verified` with seven Evidence types and explicit limitations; Dashboard contains the same QueryRun ID; and `run_receipt.receipt_hash` provides a stable checksum for the sanitized receipt.
+
+```bash
+# Keep the isolated server open and print its Dashboard URL.
+forge quickstart --serve
+
+# Non-interactive CI output; safe only because the command creates synthetic local data.
+forge quickstart --yes --json
+
+# Preserve the demo database, QueryRuns, log, and summary instead of deleting them.
+forge quickstart --yes --workdir .forge/quickstart-proof
+```
+
+`--yes` is a demo-only convenience. Real Enforce deployments still require authenticated creator/reviewer separation and matching immutable review hashes.
+Ran this independently? Submit the sanitized `run_receipt`, fresh-clone setup time, first failure or confusing step, and your interpretation through the [Quickstart adoption report](https://github.com/shisuidata/Forge/issues/new?template=quickstart-adoption.yml). Forge sends no telemetry. The checksum detects receipt drift and supports deduplication; it is not an identity attestation—the GitHub-authored report provides public provenance.
+
+### Full natural-language development demo (optional)
+
+The broader NLQ demo requires LLM and embedding configuration and is not part of the Trust Runtime Golden Path:
+
+```bash
 cp .env.example .env
 bash scripts/demo-setup.sh
 uvicorn main:app --host 0.0.0.0 --port 8000
@@ -607,6 +638,42 @@ forge evaluate --run-id "evr_<run-id>"
 
 The `evaluation-suite-v1` manifest records dataset, producer/model, prompt, retrieval, retry, and timeout revisions. The persisted `evaluation-run-manifest-v1` adds evaluator, metric, candidate contract, Assurance, Policy, Registry, dialect, raw case outcomes, and recomputable aggregates. The default release gate allows no new failed cases and no pass-rate drop. A changed dataset, case selection, expected evaluation basis, policy, evaluator, Registry, or dialect is marked `not_comparable` and fails closed; producer/model/prompt revisions may differ because those are the intended comparison variables.
 
+### Enforce a reviewed query
+
+`POST /api/v1/enforce/query-runs` prepares a governed QueryRun; it never executes during creation. The request follows [`enforce-query-request-v1`](agent/contracts/enforce-query-request-v1.schema.json) and binds the candidate to a Principal, Purpose, Task, Resource Scope, Policy, Assurance report, Registry revision, and read-only datasource. A direct human principal is accountable for the request. An Agent or Service principal must provide one active [Delegated Mandate](agent/contracts/delegated-mandate-v1.schema.json) matching its actor, accountable human, task, purpose, capabilities, and scope.
+
+```bash
+# Prepare only. Returns status=review_required plus immutable review hashes.
+forge enforce enforce-request.json --idempotency-key prepare-001
+
+# Read the same governed QueryRun with the creator credential.
+forge enforce --run-id "qr_<query-run-id>"
+
+# A separate reviewer credential submits the reviewed hashes and executes once.
+FORGE_API_KEY="$FORGE_REVIEWER_API_KEY" forge enforce approval.json \
+  --approve "qr_<query-run-id>" \
+  --idempotency-key approve-001
+```
+
+`approval.json` follows [`enforce-query-approval-v1`](agent/contracts/enforce-query-approval-v1.schema.json): copy `sql_hash`, `assurance_report_hash`, and `enforcement_context_hash` from the prepare response and identify the accountable human reviewer. With API authentication enabled, configure ordinary create/read credentials in `AUTH_API_KEYS` and separate approval credentials in `ENFORCE_REVIEWER_API_KEYS`. Policy, Registry, candidate, authorization context, scope, approval, or read-only drift fails closed. Responses follow [`enforce-query-response-v1`](agent/contracts/enforce-query-response-v1.schema.json) and expose bounded failure codes instead of raw database errors.
+
+This v1 path governs Direct SQL and Forge JSON query preparation, approval, and execution. It does not claim a complete IAM system, production deployment, or governance coverage for non-query actions.
+
+### Explain a governed QueryRun
+
+`GET /api/v1/explain/query-runs/{query_run_id}` returns the stable [`explain-query-response-v1`](agent/contracts/explain-query-response-v1.schema.json) projection for any governed QueryRun. It uses the creator credential and reads the same QueryRun truth source as Enforce:
+
+```bash
+# FORGE_API_KEY must be the credential that created the QueryRun when auth is enabled.
+forge explain "qr_<query-run-id>"
+
+curl --fail-with-body -sS   -H "X-API-Key: $FORGE_API_KEY"   "$FORGE_BASE_URL/api/v1/explain/query-runs/qr_<query-run-id>"
+```
+
+The response includes the candidate, actual reviewed SQL, bounded result or failure, persisted table/column descriptions, datasource and resource scope, Principal/Policy/Approval, Assurance gates, version/hash lineage, deterministic Evidence references, and limitations. Source context, approval, and completed results are hash-bound. Tampering fails closed with a bounded Explain error; older QueryRuns without those anchors return `integrity.status: "partial"` and name each unverified component instead of fabricating proof.
+
+Every explanation states applicable epistemic and runtime limits, including that live execution has no captured database snapshot and that Registry bindings plus deterministic gates do not prove open-world business correctness. Explain does not expose credential hashes, storage layout, or raw database errors.
+
 ---
 
 ## Project Structure
@@ -617,7 +684,7 @@ forge/
   ├── compiler.py          — Deterministic compiler: Forge JSON → SQL (3 dialects, 14 coerce fixes)
   ├── retriever.py         — Schema vector retriever (embedding + BM25-lite fallback)
   ├── schema_builder.py    — Dynamically builds tool schema (injects enum constraints)
-  └── cli.py               — CLI entry point (evaluate / compile / sync / doctor)
+  └── cli.py               — CLI entry point (evaluate / enforce / explain / compile / sync / doctor)
 
 registry/
   └── sync.py              — forge sync: connects to database and generates Registry
