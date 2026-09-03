@@ -2,6 +2,7 @@
 Forge 命令行入口。
 
 子命令：
+    forge evaluate <file.json>  通过公共 API 评测 Direct SQL 或 Forge JSON 候选
     forge compile <file.json>   将 Forge JSON 文件编译为 SQL 并打印到 stdout
     forge compile -             从 stdin 读取 Forge JSON 并编译
     forge sync                  连接数据库，将表结构同步到 schema.registry.json
@@ -49,11 +50,108 @@ Forge 命令行入口。
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from .compiler import compile_query
 
+def _read_json_input(path: str) -> dict:
+    try:
+        if path == "-":
+            payload = json.load(sys.stdin)
+        else:
+            with open(path, encoding="utf-8") as source:
+                payload = json.load(source)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Unable to read evaluation request: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    if not isinstance(payload, dict):
+        print("Evaluation request must be a JSON object", file=sys.stderr)
+        raise SystemExit(2)
+    return payload
+
+
+def _cmd_evaluate(args: argparse.Namespace) -> None:
+    import httpx
+
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if args.api_key:
+        headers["X-API-Key"] = args.api_key
+    base_url = args.url.rstrip("/")
+
+    payload: dict | None = None
+    if args.run_id:
+        if (
+            args.input
+            or args.baseline_run
+            or args.max_new_failures
+            or args.max_pass_rate_drop
+        ):
+            print(
+                "--run-id cannot be combined with input or regression options",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        endpoint = f"{base_url}/api/v1/evaluation-runs/{args.run_id}"
+    elif args.suite or args.suite_revision:
+        if args.suite and not args.input:
+            print("--suite requires an evaluation suite JSON path", file=sys.stderr)
+            raise SystemExit(2)
+        if args.suite_revision and args.input:
+            print("input path cannot be combined with --suite-revision", file=sys.stderr)
+            raise SystemExit(2)
+        payload = {
+            "schema_version": 1,
+            "suite": _read_json_input(args.input) if args.suite else None,
+            "suite_revision": args.suite_revision,
+            "baseline_run_id": args.baseline_run,
+            "regression_gate": {
+                "max_new_failures": args.max_new_failures,
+                "max_pass_rate_drop": args.max_pass_rate_drop,
+            },
+        }
+        endpoint = f"{base_url}/api/v1/evaluation-runs"
+    else:
+        if not args.input:
+            print("evaluate requires an input path", file=sys.stderr)
+            raise SystemExit(2)
+        if args.baseline_run or args.max_new_failures or args.max_pass_rate_drop:
+            print("regression options require --suite or --suite-revision", file=sys.stderr)
+            raise SystemExit(2)
+        payload = _read_json_input(args.input)
+        endpoint = f"{base_url}/api/v1/evaluate"
+
+    try:
+        if payload is None:
+            response = httpx.get(endpoint, headers=headers, timeout=args.timeout)
+        else:
+            response = httpx.post(
+                endpoint, json=payload, headers=headers, timeout=args.timeout
+            )
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"Evaluate request failed: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+    if not isinstance(body, dict):
+        print("Evaluate response must be a JSON object", file=sys.stderr)
+        raise SystemExit(2)
+
+    output = json.dumps(body, ensure_ascii=False, indent=2)
+    if response.is_error:
+        print(output, file=sys.stderr)
+        raise SystemExit(1)
+    print(output)
+    if body.get("status") == "completed":
+        aggregate_failed = body.get("aggregate", {}).get("failed_cases", 0) > 0
+        regression_failed = (
+            body.get("regression", {}).get("release_gate") == "failed"
+        )
+        if aggregate_failed or regression_failed:
+            raise SystemExit(1)
+    elif body.get("status") != "passed":
+        raise SystemExit(1)
 
 def _cmd_config(args: argparse.Namespace) -> None:
     """查看或修改配置。"""
@@ -195,6 +293,62 @@ def main() -> None:
         help="Forge JSON 文件路径，或 - 表示从 stdin 读取",
     )
 
+    # ── evaluate subcommand ───────────────────────────────────────────────────
+    evaluate_parser = subparsers.add_parser(
+        "evaluate",
+        help="Evaluate an external Direct SQL or Forge JSON candidate",
+    )
+    evaluate_parser.add_argument(
+        "input",
+        nargs="?",
+        help="Evaluate request JSON path, or - to read from stdin",
+    )
+    evaluate_mode = evaluate_parser.add_mutually_exclusive_group()
+    evaluate_mode.add_argument(
+        "--suite",
+        action="store_true",
+        help="Treat input as an evaluation-suite-v1 manifest and persist the run",
+    )
+    evaluate_mode.add_argument(
+        "--suite-revision",
+        help="Replay a previously persisted suite revision",
+    )
+    evaluate_mode.add_argument(
+        "--run-id",
+        help="Export a persisted evaluation run manifest",
+    )
+    evaluate_parser.add_argument(
+        "--baseline-run",
+        help="Compare a suite run against this persisted run",
+    )
+    evaluate_parser.add_argument(
+        "--max-new-failures",
+        type=int,
+        default=0,
+        help="Regression gate allowance (default: 0)",
+    )
+    evaluate_parser.add_argument(
+        "--max-pass-rate-drop",
+        type=float,
+        default=0.0,
+        help="Regression gate pass-rate drop allowance from 0 to 1 (default: 0)",
+    )
+    evaluate_parser.add_argument(
+        "--url",
+        default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"),
+        help="Forge server base URL (default: FORGE_BASE_URL or http://127.0.0.1:8000)",
+    )
+    evaluate_parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FORGE_API_KEY", ""),
+        help="Forge API key (prefer FORGE_API_KEY to avoid shell history)",
+    )
+    evaluate_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="HTTP timeout in seconds (default: 30)",
+    )
     # ── sync 子命令 ───────────────────────────────────────────────────────────
     sync_parser = subparsers.add_parser("sync", help="Sync schema from database")
     sync_parser.add_argument(
@@ -286,6 +440,10 @@ def main() -> None:
             with open(args.input) as f:
                 forge = json.load(f)
         print(compile_query(forge))
+
+    # ── evaluate handling ─────────────────────────────────────────────────────
+    elif args.command == "evaluate":
+        _cmd_evaluate(args)
 
     # ── sync 处理 ────────────────────────────────────────────────────────────
     elif args.command == "sync":

@@ -22,6 +22,7 @@ Forge sits between an upstream agent and a database. It accepts Direct SQL or co
 
 - constrained Forge JSON intermediate representation and deterministic SQL compilation;
 - a shared candidate, QueryRun review, and execution path for Direct SQL and Forge JSON;
+- versioned, non-executing Evaluate API/CLI with persistent suites, manifests, replay, and regression gates;
 - Registry-backed schema and semantic constraints, relationship checks, and grain checks;
 - read-only SQL, table/column scope, approval hashes, timeouts, and result limits;
 - automated compatibility checks for SQLite, PostgreSQL, and MySQL;
@@ -525,25 +526,86 @@ The reality of self-hosted deployments is that many data teams run local small/m
 ## Getting Started
 
 ```bash
-# Install
 git clone https://github.com/shisuidata/Forge
 cd Forge
-pip install -e .
-
-# Configure
+bash scripts/bootstrap-dev.sh
 cp .env.example .env
-# Fill in: LLM_API_KEY, LLM_BASE_URL, DATABASE_URL
-
-# Sync database schema
-forge sync --db sqlite:///your.db
-
-# Run proprietary tests
-python tests/text-to-sql-failures/create_db.py
-python tests/text-to-sql-failures/run_ea.py
-
-# Run Spider2 subset test
-python tests/spider2/runner.py --limit 20
+bash scripts/demo-setup.sh
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
+
+### Evaluate an existing agent output
+
+`POST /api/v1/evaluate` accepts either Direct SQL or Forge JSON through one versioned envelope. It applies deterministic candidate, Registry, scope, read-only, and result-contract checks. It **does not execute SQL** and never grants execution authority; `allowed_tables` is an evaluation criterion, not an access grant.
+
+Create `evaluation.json`:
+
+```json
+{
+  "schema_version": 1,
+  "question": "Return the value 1",
+  "dialect": "sqlite",
+  "candidate": {
+    "kind": "direct_sql",
+    "sql": "SELECT 1 AS value",
+    "producer_revision": "example-agent-v1"
+  },
+  "expected_result": {"columns": ["value"], "rows": [[1]]},
+  "actual_result": {"columns": ["value"], "rows": [[1]]}
+}
+```
+
+Run it with the CLI:
+
+```bash
+export FORGE_BASE_URL=http://127.0.0.1:8000
+# Set FORGE_API_KEY only when API authentication is enabled.
+forge evaluate evaluation.json
+```
+
+The same request with curl:
+
+```bash
+curl --fail-with-body -sS "$FORGE_BASE_URL/api/v1/evaluate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $FORGE_API_KEY" \
+  --data @evaluation.json
+```
+
+Or Python:
+
+```python
+import json
+import os
+
+import httpx
+
+request = json.load(open("evaluation.json", encoding="utf-8"))
+headers = {"X-API-Key": os.environ["FORGE_API_KEY"]} if os.getenv("FORGE_API_KEY") else {}
+response = httpx.post(
+    os.getenv("FORGE_BASE_URL", "http://127.0.0.1:8000") + "/api/v1/evaluate",
+    json=request,
+    headers=headers,
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())
+```
+
+A passed response returns `policy.verdict: "allow_review"`, immutable lineage hashes, and response-local `evidence_refs`. A failed gate returns the same envelope with a bounded `failure.stage` and `failure.code`; the CLI exits non-zero. To evaluate Forge JSON, replace `candidate` with `{"kind":"forge_json","forge_json":{...}}`.
+
+For a persistent suite, reproducible manifest, and regression release gate, use the public fixture:
+
+```bash
+# Persist the suite and its raw outcomes.
+forge evaluate examples/evaluation-suite-v1.json --suite
+
+# Replay the immutable suite, compare it with a baseline, or export a run.
+forge evaluate --suite-revision "sha256:<suite-revision>" --baseline-run "evr_<baseline>"
+forge evaluate --run-id "evr_<run-id>"
+```
+
+The `evaluation-suite-v1` manifest records dataset, producer/model, prompt, retrieval, retry, and timeout revisions. The persisted `evaluation-run-manifest-v1` adds evaluator, metric, candidate contract, Assurance, Policy, Registry, dialect, raw case outcomes, and recomputable aggregates. The default release gate allows no new failed cases and no pass-rate drop. A changed dataset, case selection, expected evaluation basis, policy, evaluator, Registry, or dialect is marked `not_comparable` and fails closed; producer/model/prompt revisions may differ because those are the intended comparison variables.
 
 ---
 
@@ -555,7 +617,7 @@ forge/
   ├── compiler.py          — Deterministic compiler: Forge JSON → SQL (3 dialects, 14 coerce fixes)
   ├── retriever.py         — Schema vector retriever (embedding + BM25-lite fallback)
   ├── schema_builder.py    — Dynamically builds tool schema (injects enum constraints)
-  └── cli.py               — CLI entry point
+  └── cli.py               — CLI entry point (evaluate / compile / sync / doctor)
 
 registry/
   └── sync.py              — forge sync: connects to database and generates Registry

@@ -22,6 +22,7 @@ Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束�
 
 - Forge JSON 受约束中间表示与确定性 SQL 编译；
 - Direct SQL / Forge JSON 统一候选、QueryRun 审核和执行链；
+- 版本化、非执行的 Evaluate API/CLI，以及持久 suite、manifest、回放与 Regression gate；
 - Registry 结构与语义约束、关系和粒度校验；
 - 只读 SQL、字段/表范围、审批 hash、超时和结果上限；
 - SQLite、PostgreSQL、MySQL 的自动化兼容性检查；
@@ -95,6 +96,77 @@ pytest tests/ -v
 pip install playwright && playwright install chromium
 FORGE_BASE_URL=http://localhost:8000 pytest tests/test_e2e.py -v
 ```
+
+---
+
+## 评测已有 Agent 输出
+
+公开版本化接口 `POST /api/v1/evaluate` 使用同一请求信封接收 Direct SQL 或 Forge JSON，执行候选契约、Registry、范围、只读和结果契约校验。它**不会执行 SQL**，也不会授予执行权限；`allowed_tables` 只是本次评测条件，不是访问授权。
+
+创建 `evaluation.json`：
+
+```json
+{
+  "schema_version": 1,
+  "question": "返回数字 1",
+  "dialect": "sqlite",
+  "candidate": {
+    "kind": "direct_sql",
+    "sql": "SELECT 1 AS value",
+    "producer_revision": "example-agent-v1"
+  },
+  "expected_result": {"columns": ["value"], "rows": [[1]]},
+  "actual_result": {"columns": ["value"], "rows": [[1]]}
+}
+```
+
+通过 CLI 或 curl 调用：
+
+```bash
+export FORGE_BASE_URL=http://127.0.0.1:8000
+# 仅在开启 API 鉴权时设置 FORGE_API_KEY。
+forge evaluate evaluation.json
+
+curl --fail-with-body -sS "$FORGE_BASE_URL/api/v1/evaluate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $FORGE_API_KEY" \
+  --data @evaluation.json
+```
+
+通过 Python 调用：
+
+```python
+import json
+import os
+
+import httpx
+
+request = json.load(open("evaluation.json", encoding="utf-8"))
+headers = {"X-API-Key": os.environ["FORGE_API_KEY"]} if os.getenv("FORGE_API_KEY") else {}
+response = httpx.post(
+    os.getenv("FORGE_BASE_URL", "http://127.0.0.1:8000") + "/api/v1/evaluate",
+    json=request,
+    headers=headers,
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())
+```
+
+通过时返回 `policy.verdict: "allow_review"`、不可变 lineage hash 和响应内 `evidence_refs`；失败时仍返回同一信封，并提供有界的 `failure.stage` 与 `failure.code`，CLI 以非零状态退出。评测 Forge JSON 时，将 `candidate` 替换为 `{"kind":"forge_json","forge_json":{...}}`。
+
+需要持久评测集合、可复算运行清单和 Regression release gate 时，使用仓库内公开样例：
+
+```bash
+# 持久化集合及其原始 case outcomes。
+forge evaluate examples/evaluation-suite-v1.json --suite
+
+# 回放不可变集合、对比基线，或导出运行清单。
+forge evaluate --suite-revision "sha256:<suite-revision>" --baseline-run "evr_<baseline>"
+forge evaluate --run-id "evr_<run-id>"
+```
+
+`evaluation-suite-v1` 记录数据集、producer/model、Prompt、检索、重试和超时版本；持久化的 `evaluation-run-manifest-v1` 继续绑定 evaluator、metric、候选契约、Assurance、Policy、Registry、dialect、原始 case outcomes 和可复算聚合。默认 release gate 不允许新增失败或通过率下降。数据集、case selection、预期评测基准、Policy、evaluator、Registry 或 dialect 变化时标记为 `not_comparable` 并失败关闭；producer/model/Prompt 版本允许变化，因为它们正是被比较变量。
 
 ---
 
@@ -178,7 +250,7 @@ forge/
   ├── lint.py              — 业务/字段/结果契约检查
   ├── cache.py             — 查询缓存（精确 + 模糊匹配）
   ├── chart.py             — 图表生成（ECharts）
-  └── cli.py               — CLI 入口（compile / sync / doctor）
+  └── cli.py               — CLI 入口（evaluate / compile / sync / doctor）
 
 agent/
   ├── agent.py             — Agent 调度（查询 / 指标定义 / 缓存反馈）

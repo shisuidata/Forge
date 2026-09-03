@@ -26,10 +26,11 @@ Forge 当前验证的是：
 
 - 当前有效产品需求：`REQ-2026-09-03-025`；`REQ-2026-08-25-023` 已吸收为历史短期切口，`REQ-2026-08-26-024` Benchmark 工作包已验证完成。
 - 唯一主动计划：`forge-enterprise-evolution-plan.md`。
-- 当前产品主线：**R0 Open-source Trust Runtime Product Cut / Adoption Baseline**；当前实施切片为 **R0.2 Evaluate**。
+- 当前产品主线：**R0 Open-source Trust Runtime Product Cut / Adoption Baseline**；R0.2 Evaluate 已完成，当前实施切片为 **R0.3 Enforce**。
 - R0.1 Unified Input Contract 已完成：`query-candidate-v1` 将 Direct SQL 与 Forge JSON 建模为互斥候选；两者进入同一 QueryRun 审批/执行链并绑定 `input_kind`、candidate/assurance/policy/registry revision 与 SQL hash。Direct SQL 在服务端执行只读、语法、Registry/ACL 和字段校验，不经 Forge JSON 转换。
-- 当前已完成工程证据：Accuracy Lab 支持持久 snapshot、SSE、重启恢复、Pi-native 双 AgentSession、共享 ContextSnapshot、Official EA 与 ResultContract 双评价。完整 Run `pbr_1f735d433a284366bfe6526146511792` 完成 500/500 cases、1000/1000 calls：Forge EA 45.40%、Direct SQL 56.40%，Forge Delta -11.00pp。
-- 当前切入要求：公开入口必须让外部开发者沿单一 Golden Path 完成“现有 Agent/样例输出 → Evaluate → 失败定位 → Policy Gate → Evidence”；Direct SQL 不得被迫先转换为 Forge JSON。
+- R0.2 Evaluate 已完成：版本化 `POST /api/v1/evaluate` 与 `forge evaluate` 统一 Direct SQL/Forge JSON 的 Policy、Failure Taxonomy、Exact Result、lineage 与响应内 Evidence refs；`evaluation-suite-v1` 和 `evaluation-run-manifest-v1` 持久化完整输入修订、原始 outcomes 与可复算聚合，并提供不可比失败关闭和跨 producer 版本 Regression release gate。所有 Evaluate 路径均不执行 SQL、不授予执行权。
+- 当前已完成工程证据：Accuracy Lab 完整 Run `pbr_1f735d433a284366bfe6526146511792` 完成 500/500 cases、1000/1000 calls：Forge EA 45.40%、Direct SQL 56.40%，Forge Delta -11.00pp。R0.2 聚焦测试 42 passed、Python 全套 649 passed / 28 skipped；公开 fixture 的持久运行、suite revision 回放、baseline release gate 和 run manifest 导出实际 CLI/API smoke 均通过。
+- 当前切入要求：R0.3 必须把现有 Policy/Assurance/只读/Approval 能力收敛为外部开发者可理解、失败关闭且不绕过人工责任的 Enforce 路径；Direct SQL 不得被迫先转换为 Forge JSON。
 - 当前不扩张通用 Product Shell、SaaS Connector、非 SQL Action、Economics/Outcome Ledger 或完整企业权限平台；真实客户数据、生产凭证和高风险数据源仍需单独授权。
 
 ## 4. 已完成且可复用的工程基础
@@ -46,7 +47,7 @@ Forge 当前验证的是：
 ## 5. 未关闭的验收与采用事实
 
 - 尚无外部开发者独立完成新 Trust Runtime Golden Path 的证据，也没有外部 Adapter、Rule、Dataset 或真实 failure case 贡献。
-- R0.2 尚未把 Exact Result、Regression 和 Failure Taxonomy 收敛为面向 Direct SQL/Forge JSON 的统一公开 Evaluate 接口。
+- R0.3 尚未把现有 QueryRun、Policy/Assurance、只读执行和 hash-bound Approval 收敛为稳定公开 Enforce 工作流。
 - W2 主体内容规则、Product Spine 与完整 Product Shell 的 Atlas candidate 仍有历史人工复验项，但不再主导当前产品路线。
 - Runtime Governance Coverage 仍为 0%；Contract Coverage 不能替代生产执行覆盖。
 

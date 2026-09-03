@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.dev/contracts/evaluation-suite-v1.schema.json",
+  "title": "Evaluation Suite v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "suite_id",
+    "name",
+    "dataset",
+    "producer",
+    "retry_policy_revision",
+    "timeout_policy_revision",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "suite_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "name": {"type": "string", "minLength": 1, "maxLength": 256},
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "revision", "prompt_revision", "retrieval_revision"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1, "maxLength": 256},
+        "model": {"type": "string", "minLength": 1, "maxLength": 256},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 256},
+        "prompt_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+        "retrieval_revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "retry_policy_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+    "timeout_policy_revision": {"type": "string", "minLength": 1, "maxLength": 256},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "result_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["columns", "rows"],
+      "properties": {
+        "columns": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {"type": "string"}
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {"type": "array"}
+        }
+      }
+    },
+    "expected_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "failure_code"],
+      "properties": {
+        "status": {"enum": ["passed", "failed"]},
+        "failure_code": {"type": ["string", "null"]}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "schema_version",
+        "question",
+        "candidate",
+        "dialect",
+        "allowed_tables",
+        "expected_result",
+        "actual_result",
+        "expected_outcome"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "schema_version": {"const": 1},
+        "question": {"type": "string", "minLength": 1, "maxLength": 10000},
+        "candidate": {"type": "object"},
+        "dialect": {"type": "string", "minLength": 1, "maxLength": 32},
+        "allowed_tables": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "array", "maxItems": 10000, "items": {"type": "string"}}
+          ]
+        },
+        "expected_result": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/result_set"}]
+        },
+        "actual_result": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/result_set"}]
+        },
+        "expected_outcome": {"$ref": "#/$defs/expected_outcome"}
+      }
+    }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.dev/contracts/evaluation-run-manifest-v1.schema.json",
+  "title": "Evaluation Run Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "status",
+    "suite_revision",
+    "suite",
+    "configuration",
+    "aggregate",
+    "regression",
+    "outcomes",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "^evr_[a-f0-9]{32}$"},
+    "status": {"const": "completed"},
+    "suite_revision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "suite": {"type": "object"},
+    "configuration": {"$ref": "#/$defs/configuration"},
+    "aggregate": {"$ref": "#/$defs/aggregate"},
+    "regression": {"$ref": "#/$defs/regression"},
+    "outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {"$ref": "#/$defs/outcome"}
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset",
+        "case_selection_revision",
+        "evaluation_basis_revision",
+        "producer",
+        "retry_policy_revision",
+        "timeout_policy_revision",
+        "evaluator_revision",
+        "metric_revision",
+        "candidate_contract_revision",
+        "assurance_revision",
+        "policy_revision",
+        "registry_revisions",
+        "dialects"
+      ],
+      "properties": {
+        "dataset": {"type": "object"},
+        "case_selection_revision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "evaluation_basis_revision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "producer": {"type": "object"},
+        "retry_policy_revision": {"type": "string"},
+        "timeout_policy_revision": {"type": "string"},
+        "evaluator_revision": {"type": "string"},
+        "metric_revision": {"type": "string"},
+        "candidate_contract_revision": {"type": "string"},
+        "assurance_revision": {"type": "string"},
+        "policy_revision": {"type": "string"},
+        "registry_revisions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "dialects": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_cases",
+        "passed_cases",
+        "failed_cases",
+        "pass_rate",
+        "evaluation_status_counts",
+        "failure_code_counts"
+      ],
+      "properties": {
+        "total_cases": {"type": "integer", "minimum": 1},
+        "passed_cases": {"type": "integer", "minimum": 0},
+        "failed_cases": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "evaluation_status_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "failure_code_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_new_failures", "max_pass_rate_drop"],
+      "properties": {
+        "max_new_failures": {"type": "integer", "minimum": 0},
+        "max_pass_rate_drop": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "regression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "release_gate",
+        "baseline_run_id",
+        "comparable",
+        "incompatible_dimensions",
+        "new_failures",
+        "recovered_cases",
+        "pass_rate_delta",
+        "gate"
+      ],
+      "properties": {
+        "status": {"enum": ["not_requested", "passed", "failed", "not_comparable"]},
+        "release_gate": {"enum": ["not_evaluated", "passed", "failed"]},
+        "baseline_run_id": {"type": ["string", "null"]},
+        "comparable": {"type": ["boolean", "null"]},
+        "incompatible_dimensions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "new_failures": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "recovered_cases": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "pass_rate_delta": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+        "gate": {"$ref": "#/$defs/gate"}
+      }
+    },
+    "expected_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "failure_code"],
+      "properties": {
+        "status": {"enum": ["passed", "failed"]},
+        "failure_code": {"type": ["string", "null"]}
+      }
+    },
+    "observed_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "failure_code"],
+      "properties": {
+        "status": {"enum": ["passed", "failed"]},
+        "failure_code": {"type": ["string", "null"]}
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "status", "expected", "observed", "evaluation"],
+      "properties": {
+        "case_id": {"type": "string"},
+        "status": {"enum": ["passed", "failed"]},
+        "expected": {"$ref": "#/$defs/expected_outcome"},
+        "observed": {"$ref": "#/$defs/observed_outcome"},
+        "evaluation": {"type": "object"}
+      }
+    }
+  }
+}

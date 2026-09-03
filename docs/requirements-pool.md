@@ -1467,6 +1467,15 @@ Forge 已形成 Registry、Compiler、Assurance、只读执行、QueryRun、Appr
 - 非只读 SQL、未授权表、未知字段、歧义或附加字段候选均失败关闭；既有自然语言 → Forge JSON 路径保持兼容。
 - 验证：Python 全套 `612 passed / 28 skipped`；Pi `118 passed`；TypeScript typecheck 通过。该证据只关闭 R0.1，不代表 R0 Golden Path 或外部采用门禁已通过。
 
+### R0.2 Evaluate 实施与关闭证据（2026-09-03）
+
+- 新增版本化 `POST /api/v1/evaluate` 与 `forge evaluate`；Direct SQL 和 Forge JSON 使用同一请求/响应信封，上游调用方不需要理解 Pi 或迁移到 Forge JSON。
+- Evaluate 复用 `query-candidate-v1`、Registry Assurance 与 `benchmark-failure-v1`，输出 Policy verdict、有界失败分类、编译 SQL、request/SQL/Assurance lineage 和响应内 Evidence refs；非法、非只读、越界和结果不一致均失败关闭。
+- 调用方可提交 expected/actual result 执行 Exact Result Comparison；入口不连接数据源、不执行 SQL，`execution_authorized` 固定为 false，`allowed_tables` 仅是本次评测条件而非授权。
+- 新增 `evaluation-suite-v1` 与 `evaluation-run-manifest-v1`：持久化完整 suite、dataset/producer/prompt/retrieval/retry/timeout/evaluator/metric/Registry 等修订、原始 case outcomes 和可复算 aggregate；可按 suite revision 回放，按 run ID 导出。
+- 跨 producer/model/Prompt 版本可使用 baseline release gate；dataset、case selection、evaluation basis、Policy、evaluator、Registry 或 dialect 不一致时明确标记 `not_comparable` 并失败关闭。默认不允许新增失败或 pass rate 下降。
+- README、Benchmark 文档和公开本地 fixture `examples/evaluation-suite-v1.json` 已提供完整 CLI 路径。持久运行、suite revision 回放、baseline gate 和 manifest 导出实际 CLI/API smoke 均通过；R0.2 聚焦测试 `42 passed`，Python 全套 `649 passed / 28 skipped`。
+- 该证据关闭 R0.2 Evaluate，当前进入 R0.3 Enforce；R0 Golden Path、外部独立 Quickstart 与真实采用证据仍未关闭。
 ---
 
 ## REQ-2026-09-03-026：默认英文 README 与中文本地化入口

@@ -2,6 +2,18 @@
 
 Forge 当前同时使用三类证据：BIRD Mini-Dev 官方 challenging 公共基准、自有 40 题回归集，以及 Spider2-Lite 陌生数据库基准。公共基准优先用于判断泛化，自有题集只用于版本回归。
 
+## 版本化 Evaluate 运行清单
+
+公共 `evaluation-suite-v1` 将问题、Direct SQL/Forge JSON 候选、expected/actual result、预期失败和 dataset/producer/prompt/retrieval/retry/timeout revision 固定为不可变输入。`POST /api/v1/evaluation-runs` 运行集合并持久化 `evaluation-run-manifest-v1`；`GET /api/v1/evaluation-runs/{run_id}` 导出完整 suite、原始 outcomes、Policy/Assurance/Evidence lineage 和聚合。公开本地样例位于 [`examples/evaluation-suite-v1.json`](../examples/evaluation-suite-v1.json)。
+
+聚合只从原始 outcomes 计算，可用 `forge.evaluation_runs.recompute_aggregate` 复算。跨版本 release gate 默认不允许新增失败或 pass rate 下降。以下不变量必须一致，否则结果标记 `not_comparable` 且 gate 失败：dataset、case selection、evaluation basis、retry/timeout policy、evaluator、metric、candidate contract、Assurance、Policy、Registry 与 dialect。producer/model/prompt/retrieval revision 单独完整记录并允许变化，用于比较这些被测变量。
+
+```bash
+forge evaluate examples/evaluation-suite-v1.json --suite
+forge evaluate --suite-revision "sha256:<suite-revision>" --baseline-run "evr_<baseline>"
+forge evaluate --run-id "evr_<run-id>"
+```
+
 ---
 
 ## 当前得分

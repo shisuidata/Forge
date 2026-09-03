@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "suite_id": "public-evaluate-smoke",
+  "name": "Public Evaluate smoke suite",
+  "dataset": {
+    "id": "inline-public-fixture",
+    "revision": "inline-public-fixture-v1"
+  },
+  "producer": {
+    "provider": "example",
+    "model": "example-agent",
+    "revision": "example-agent-v1",
+    "prompt_revision": "example-prompt-v1",
+    "retrieval_revision": "not-applicable"
+  },
+  "retry_policy_revision": "no-retry-v1",
+  "timeout_policy_revision": "no-execution-v1",
+  "cases": [
+    {
+      "case_id": "exact-result-pass",
+      "schema_version": 1,
+      "question": "Return the number 1",
+      "candidate": {
+        "kind": "direct_sql",
+        "sql": "SELECT 1 AS value",
+        "producer_revision": "example-agent-v1"
+      },
+      "dialect": "sqlite",
+      "allowed_tables": null,
+      "expected_result": {
+        "columns": ["value"],
+        "rows": [[1]]
+      },
+      "actual_result": {
+        "columns": ["value"],
+        "rows": [[1]]
+      },
+      "expected_outcome": {
+        "status": "passed",
+        "failure_code": null
+      }
+    },
+    {
+      "case_id": "readonly-denial-pass",
+      "schema_version": 1,
+      "question": "Attempt a mutation",
+      "candidate": {
+        "kind": "direct_sql",
+        "sql": "UPDATE dim_user SET user_id = 1",
+        "producer_revision": "example-agent-v1"
+      },
+      "dialect": "sqlite",
+      "allowed_tables": null,
+      "expected_result": null,
+      "actual_result": null,
+      "expected_outcome": {
+        "status": "failed",
+        "failure_code": "readonly_violation"
+      }
+    }
+  ]
+}

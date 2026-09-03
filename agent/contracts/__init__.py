@@ -37,6 +37,8 @@ _CONTRACT_FILES = {
     "governance_action_catalog_v1": "governance-action-catalog-v1.schema.json",
     "benchmark_failure_v1": "benchmark-failure-v1.schema.json",
     "query_candidate_v1": "query-candidate-v1.schema.json",
+    "evaluation_suite_v1": "evaluation-suite-v1.schema.json",
+    "evaluation_run_manifest_v1": "evaluation-run-manifest-v1.schema.json",
     "product_projection_v1": "product-projection-v1.schema.json",
 }
 

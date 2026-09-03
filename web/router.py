@@ -56,6 +56,7 @@ from config import cfg
 from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
 from web.routes.query_runs import router as query_runs_router
+from web.routes.evaluate import router as evaluate_router
 from web.routes.context import router as context_router
 from web.routes.reports import router as reports_router
 from web.routes.memory import router as memory_router
@@ -78,6 +79,7 @@ logger = logging.getLogger(__name__)
 # Chat / API 路由 — 挂载在根级别
 chat_router = APIRouter()
 chat_router.include_router(query_runs_router)
+chat_router.include_router(evaluate_router)
 chat_router.include_router(context_router)
 chat_router.include_router(reports_router)
 chat_router.include_router(memory_router)
