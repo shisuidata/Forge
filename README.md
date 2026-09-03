@@ -271,7 +271,7 @@ tests/
 
 ## 参与维护
 
-贡献入口与复现要求见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。[`shisuidata/Forge`](https://github.com/shisuidata/Forge) 是项目主仓库；仓库历史中出现的 [`rockythink`](https://github.com/rockythink) 与 [`shisuidata`](https://github.com/shisuidata) 标识属于同一维护者/团队上下文。
+贡献入口与复现要求见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。[`shisuidata/Forge`](https://github.com/shisuidata/Forge) 是项目主仓库，由 [`shisuidata`](https://github.com/shisuidata) 组织维护；[`rockythink`](https://github.com/rockythink) 是组织管理员和主要维护者。历史提交中原 `shisuidata` 个人账号现为 [`shisuidata-legacy`](https://github.com/shisuidata-legacy)，仅保留历史归属，不再参与项目维护。
 
 ## License
 

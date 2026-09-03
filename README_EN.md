@@ -594,7 +594,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, testing, benchmark, pull req
 
 ## Maintainer context
 
-[`shisuidata/Forge`](https://github.com/shisuidata/Forge) is the canonical repository. The [`rockythink`](https://github.com/rockythink) and [`shisuidata`](https://github.com/shisuidata) identities appearing in project history refer to the same maintainer/team context.
+[`shisuidata/Forge`](https://github.com/shisuidata/Forge) is the canonical repository under the [`shisuidata`](https://github.com/shisuidata) organization. [`rockythink`](https://github.com/rockythink) is the organization administrator and primary maintainer. Historical commits attributed to the former `shisuidata` user now appear under [`shisuidata-legacy`](https://github.com/shisuidata-legacy); that account is retained only for history and is no longer used for project operations.
 
 ## License
 
