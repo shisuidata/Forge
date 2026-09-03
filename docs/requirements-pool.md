@@ -1514,7 +1514,7 @@ Forge 已形成 Registry、Compiler、Assurance、只读执行、QueryRun、Appr
 - `summary.json` 新增 `run_receipt`：记录 Forge version、OS/arch/Python、起止时间、运行时长及有界阶段结果，并用 canonical JSON 的 SHA-256 checksum 检测回执漂移。回执排除 hostname、username、文件路径、SQL rows、凭证和私有 schema；Forge 不发送 telemetry。Checksum 不证明身份，公开 GitHub 提交者才提供 provenance。
 - 新增 Quickstart adoption Issue 表单，并在 README、中文 README、CONTRIBUTING 和 CLI 终态指向同一提交入口。表单要求 tested release/commit、fresh-clone setup time、首个失败或困惑步骤、回执、开发者对 Policy verdict/Evidence integrity/limitations 的独立解释，以及 fresh clone、非实现者、SQL 审核和无敏感信息确认。
 - 实际人工批准与 `--yes --json` Quickstart 均完成失败关闭、exact-result Evaluate、hash-bound Enforce、七类 Evidence、三项限制和 Dashboard 投影；聚焦回归 `14 passed`，Python 全套 `676 passed / 28 skipped`，Pi `118 passed`，TypeScript typecheck、Python compileall 与 Issue YAML 结构检查通过。
-- 上述均是采用准备和内部工程证据，不是外部采用证据。本轮入口尚未发布到公开 revision，且没有非维护者 fresh-clone 回执；R0.6 与 R0 退出门禁保持未通过。下一动作是在用户明确授权后发布可测试 revision，并由未参与实现的外部开发者独立试跑、提交回执和摩擦；若失败，必须完成 issue → fix → rerun 闭环后再评估门禁。
+- 上述代码与入口已发布为公开 revision `0b4fd36b7175c09dc3375d839c5aba888aacb900`，但发布和内部验证不是外部采用证据。当前仍没有非维护者 fresh-clone 回执，R0.6 与 R0 退出门禁保持未通过。下一动作是由未参与实现的外部开发者独立试跑、提交回执和摩擦；若失败，必须完成 issue → fix → rerun 闭环后再评估门禁。
 
 ---
 
