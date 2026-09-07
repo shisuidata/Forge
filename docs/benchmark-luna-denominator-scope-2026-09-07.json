@@ -1,0 +1,449 @@
+{
+  "schema_version": "benchmark-luna-denominator-scope-experiment-v1",
+  "date": "2026-09-07",
+  "timezone": "Asia/Shanghai",
+  "requirement": "REQ-2026-09-07-056",
+  "status": "completed_not_adopted",
+  "conclusion": "Target and overall Forge scores improved in this exposed four-case pair, but a previously correct Forge control regressed. The predeclared no-regression gate failed; retain the default prompt, no retries, expansion, or automatic repair.",
+  "authorization": {
+    "status": "closed_budget_exhausted",
+    "authorized_model_calls": 16,
+    "actual_dispatched_calls": 16,
+    "returned_candidates": 16,
+    "unknown_usage_arms": 0,
+    "observed_total_tokens": 53058,
+    "extra_calls": 0,
+    "replacement_calls": 0,
+    "provider_retries_policy": 0,
+    "raw_response_hashes_verified": 16,
+    "remaining_authorization": 0,
+    "runs": [
+      "pbr_eb3c228f529e47bbb14e7a5e78e14554",
+      "pbr_9450b18fa549445ea38d1c38b6468ed6"
+    ],
+    "decision": "retain_default_do_not_adopt_no_retries_or_expansion"
+  },
+  "model": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+    "temperature": null,
+    "max_output_tokens": null
+  },
+  "case_ids": [
+    "md-259",
+    "md-079",
+    "md-000",
+    "md-312"
+  ],
+  "cohort": "D_exposed_development_not_H",
+  "conditions": {
+    "control": {
+      "protocol_revision": "sha256:ecbf3b80a754006b2cb79330f812616c9070adde94eb14ae4ffebbc65d743a97",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "frozen_file": ".forge/benchmarks/denominator-scope-ready-20260907/control.frozen.json",
+      "max_model_calls": 8
+    },
+    "treatment": {
+      "protocol_revision": "sha256:2fb285844df27318335d69e950725bc1da172e95b63e3dbb9e3ab16058d6d8f0",
+      "forge_prompt_revision": "forge-structured-benchmark-denominator-v1",
+      "frozen_file": ".forge/benchmarks/denominator-scope-ready-20260907/treatment.frozen.json",
+      "max_model_calls": 8
+    }
+  },
+  "generation_contracts": {
+    "control": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:91818e121d5f8a42412d31f6b3495de55cca95df822e9f912c5471b6800d6ffa",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    },
+    "treatment": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-denominator-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:91818e121d5f8a42412d31f6b3495de55cca95df822e9f912c5471b6800d6ffa",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    }
+  },
+  "summary": {
+    "control": {
+      "run_id": "pbr_eb3c228f529e47bbb14e7a5e78e14554",
+      "status": "completed",
+      "dispatched_calls": 8,
+      "arms": {
+        "forge": {
+          "ex": 2,
+          "contract": 2,
+          "denominator": 4,
+          "execution_passed": 3,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 17449,
+          "tokens_per_correct_ex": 8724.5,
+          "mean_generation_ms": 15104.975,
+          "p95_generation_ms": 21679.7,
+          "generation_ms": [
+            18487.6,
+            14282,
+            21679.7,
+            5970.6
+          ]
+        },
+        "direct": {
+          "ex": 2,
+          "contract": 2,
+          "denominator": 4,
+          "execution_passed": 4,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 8304,
+          "tokens_per_correct_ex": 4152,
+          "mean_generation_ms": 7247.675,
+          "p95_generation_ms": 11380.1,
+          "generation_ms": [
+            5781.5,
+            11380.1,
+            9745.2,
+            2083.9
+          ]
+        }
+      },
+      "total_tokens": 25753
+    },
+    "treatment": {
+      "run_id": "pbr_9450b18fa549445ea38d1c38b6468ed6",
+      "status": "completed",
+      "dispatched_calls": 8,
+      "arms": {
+        "forge": {
+          "ex": 3,
+          "contract": 3,
+          "denominator": 4,
+          "execution_passed": 3,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 18999,
+          "tokens_per_correct_ex": 6333,
+          "mean_generation_ms": 11680.275,
+          "p95_generation_ms": 16925.5,
+          "generation_ms": [
+            11589.8,
+            13131.4,
+            16925.5,
+            5074.4
+          ]
+        },
+        "direct": {
+          "ex": 2,
+          "contract": 2,
+          "denominator": 4,
+          "execution_passed": 4,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 8306,
+          "tokens_per_correct_ex": 4153,
+          "mean_generation_ms": 6969.224999999999,
+          "p95_generation_ms": 11391.6,
+          "generation_ms": [
+            3833.7,
+            9909.3,
+            11391.6,
+            2742.3
+          ]
+        }
+      },
+      "total_tokens": 27305
+    }
+  },
+  "paired": [
+    {
+      "case_id": "md-000",
+      "forge": {
+        "control": {
+          "EX": false,
+          "contract": false,
+          "error": "unknown_schema_reference"
+        },
+        "treatment": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        }
+      },
+      "direct": {
+        "control": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        },
+        "treatment": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        }
+      }
+    },
+    {
+      "case_id": "md-079",
+      "forge": {
+        "control": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        },
+        "treatment": {
+          "EX": false,
+          "contract": false,
+          "error": "unknown_schema_reference"
+        }
+      },
+      "direct": {
+        "control": {
+          "EX": false,
+          "contract": false,
+          "error": "result_value_mismatch"
+        },
+        "treatment": {
+          "EX": false,
+          "contract": false,
+          "error": "result_value_mismatch"
+        }
+      }
+    },
+    {
+      "case_id": "md-259",
+      "forge": {
+        "control": {
+          "EX": false,
+          "contract": false,
+          "error": "result_column_count_mismatch"
+        },
+        "treatment": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        }
+      },
+      "direct": {
+        "control": {
+          "EX": false,
+          "contract": false,
+          "error": "result_value_mismatch"
+        },
+        "treatment": {
+          "EX": false,
+          "contract": false,
+          "error": "result_value_mismatch"
+        }
+      }
+    },
+    {
+      "case_id": "md-312",
+      "forge": {
+        "control": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        },
+        "treatment": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        }
+      },
+      "direct": {
+        "control": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        },
+        "treatment": {
+          "EX": true,
+          "contract": true,
+          "error": null
+        }
+      }
+    }
+  ],
+  "predeclared_gates": {
+    "complete_16_candidates_scores_usage": true,
+    "target_both_metrics_improve": true,
+    "no_correct_control_regressions": false,
+    "direct_stability": true,
+    "total_tokens": {
+      "ratio": 1.0602648235157068,
+      "limit": 1.2,
+      "passed": true
+    },
+    "forge_tokens_per_correct_ex": {
+      "ratio": 0.725886870307754,
+      "limit": 1,
+      "passed": true
+    },
+    "forge_generation_p95": {
+      "ratio": 0.7807072976102067,
+      "limit": 1.25,
+      "passed": true
+    },
+    "regressions": [
+      {
+        "case_id": "md-079",
+        "arm": "forge",
+        "metric": "EX"
+      },
+      {
+        "case_id": "md-079",
+        "arm": "forge",
+        "metric": "contract"
+      }
+    ],
+    "development_gate_passed": false,
+    "decision": "retain_default_do_not_adopt_no_retries_or_expansion"
+  },
+  "changes_observed": {
+    "forge_newly_passed": [
+      "md-259",
+      "md-000"
+    ],
+    "forge_regressed": [
+      "md-079"
+    ],
+    "direct_newly_passed": [],
+    "direct_regressed": [],
+    "target": {
+      "control": "Returned three counts (741,212,118), not the requested percentage/count pair; joins reduced the population from 750 to 741.",
+      "treatment": "Independent total CTE preserves all 750 heroes; bad counts use appropriate joins; final output is percentage plus Marvel bad count.",
+      "independent_population": {
+        "all_heroes": 750,
+        "after_control_inner_joins": 741,
+        "bad_heroes": 212,
+        "marvel_bad_heroes": 118,
+        "expected_answer": [
+          28.266666666666666,
+          118
+        ]
+      },
+      "complete_answer": [
+        28.266666666666666,
+        118
+      ]
+    },
+    "ratio_control": {
+      "case_id": "md-000",
+      "control": "Emitted select:[\"1\"] in the root and unused CTE rather than a ratio; Assurance rejected the unknown field. SQLite double-quoted-string fallback can execute this SQL, but returns an incorrect answer.",
+      "treatment": "Separate EUR and CZK scalar counts with 1.0 * eur.n / NULLIF(czk.n,0); no percentage multiplier; EX/Contract pass."
+    },
+    "regression": {
+      "case_id": "md-079",
+      "stage": "assurance",
+      "error_code": "unknown_schema_reference",
+      "denominator_scope": "Still restricted to Patient.SEX = F; no evidence of switching to the full patient population.",
+      "alias_declared": "n_last_presence_placeholder_wrong? no",
+      "alias_selected": "n",
+      "independent_sqlite_error": "no such column: n",
+      "interpretation": "Original generated CTE aggregate alias does not match its selected column. Raw response hash and persisted/exported candidates agree; not repaired or rescored as correct."
+    },
+    "direct_remaining_errors": {
+      "md-079": "Both outputs return a fraction without ×100; independently confirmed result ×100 matches Gold.",
+      "md-259": "Both outputs keep INNER JOIN alignment in the denominator; the all-hero population is reduced. Direct instructions were unchanged."
+    }
+  },
+  "cost_and_latency": {
+    "observed_total_tokens": 53058,
+    "unknown_usage_arms": 0,
+    "treatment_vs_control_total_tokens_change_percent": 6.026482351570683,
+    "forge_tokens_per_correct_ex_change_percent": -27.4113129692246,
+    "forge_p95_generation_change_percent": -21.929270238979328,
+    "p95_sample_size_per_condition": 4,
+    "p95_method": "nearest rank",
+    "money": "Not measured; observed tokens are not a billing quote.",
+    "interpretation": "The token and P95 guards pass for this sample. No stable throughput, monetary savings, or general accuracy conclusion."
+  },
+  "verification": {
+    "real_pi_runs_completed": 2,
+    "dispatched_calls": 16,
+    "returned_candidates": 16,
+    "one_dispatch_per_arm_verified": true,
+    "provider_retries_policy": 0,
+    "replacement_calls": 0,
+    "raw_response_hashes_verified": 16,
+    "complete_native_log_entries": 218,
+    "original_candidates_replayed": 16,
+    "replay_outputs_sql_scores_status_usage_unchanged": true,
+    "independent_sqlite_candidate_checks": 16,
+    "independent_sqlite_successful_executions": 15,
+    "independent_sqlite_errors": 1,
+    "independent_labels_all_agree": true,
+    "original_refusals_not_overridden": true,
+    "prepared_artifact_hashes_unchanged": 25,
+    "source_dataset_and_frozen_contexts_unchanged": true,
+    "model_runtime_sdk_fixed": true,
+    "direct_reconstructed_prompts_identical": true,
+    "prompt_proof_limit": "Reconstructed from frozen/run inputs and assembly, checked against recorded character lengths; not a captured complete provider payload.",
+    "native_snapshot_matches_exported_arms": 16,
+    "snapshot_integrity": "ok"
+  },
+  "scope": {
+    "runtime_source_changed": false,
+    "default_prompt_revision": "forge-structured-benchmark-v1",
+    "optional_date_grain_value_context": "off",
+    "gold_and_historical_scores_changed": false,
+    "rolling_parent": "seed48",
+    "new_rolling_run": false,
+    "H_or_external_adoption_gate_changed": false,
+    "additional_model_calls_authorized": 0,
+    "next_candidate": "Assess CTE aggregate alias / intermediate projection consistency as a separate generation-stage hypothesis. No new prompt change, repair loop, or budget authorized."
+  },
+  "limitations": [
+    "Four exposed development cases and one generation per arm are not an independent holdout or proof of stable causal gains.",
+    "The md-079 regression is a generated alias/projection error, not evidence that the example invariably changes denominator scope.",
+    "A net increase in correct answers cannot override the predeclared zero-regression gate."
+  ],
+  "evidence": {
+    "authorization": ".forge/benchmarks/denominator-scope-ready-20260907/generation-authorization.json",
+    "budget": ".forge/benchmarks/denominator-scope-ready-20260907/generation-budget-receipt.json",
+    "control_run": ".forge/benchmarks/denominator-scope-ready-20260907/control.run.json",
+    "treatment_run": ".forge/benchmarks/denominator-scope-ready-20260907/treatment.run.json",
+    "control_replay": ".forge/benchmarks/denominator-scope-ready-20260907/control.replay.json",
+    "treatment_replay": ".forge/benchmarks/denominator-scope-ready-20260907/treatment.replay.json",
+    "compare": ".forge/benchmarks/denominator-scope-ready-20260907/generation-compare-command.json",
+    "gate": ".forge/benchmarks/denominator-scope-ready-20260907/generation-gate-result.json",
+    "independent_sqlite": ".forge/benchmarks/denominator-scope-ready-20260907/generation-independent-sqlite.json",
+    "response_hash_and_replay_validation": ".forge/benchmarks/denominator-scope-ready-20260907/generation-evidence-validation.json",
+    "input_preservation": ".forge/benchmarks/denominator-scope-ready-20260907/generation-final-input-validation.json",
+    "native_snapshot": ".forge/benchmarks/denominator-scope-ready-20260907/generation-state.snapshot.sqlite3",
+    "native_snapshot_validation": ".forge/benchmarks/denominator-scope-ready-20260907/generation-snapshot-validation.json",
+    "cleanup": ".forge/benchmarks/denominator-scope-ready-20260907/generation-cleanup.json"
+  },
+  "cleanup": {
+    "services_stopped": true,
+    "ports_closed": [
+      18776,
+      18777
+    ],
+    "throwaway_scripts": "Reproduction commands stored in JSON only; no new executable script files.",
+    "original_pi_state_and_snapshot_retained": true
+  }
+}

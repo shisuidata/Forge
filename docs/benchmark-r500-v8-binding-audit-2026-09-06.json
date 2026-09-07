@@ -1,0 +1,719 @@
+{
+  "schema_version": 1,
+  "requirement": "REQ-2026-09-06-053",
+  "date": "2026-09-06",
+  "investigation_status": "complete",
+  "benchmark_model_calls": 0,
+  "decision": {
+    "runtime_regression": "No previously EX/Contract-correct candidate was rejected by the current shared SQL gates; no scored false↔true change.",
+    "binding": "Proceed only to proposing a source-bound categorical-value evidence treatment; not implemented or enabled.",
+    "next_experiment": {
+      "status": "proposed_not_authorized_or_implemented",
+      "kind": "single_variable_development_diagnostic",
+      "model_calls_authorized": 0,
+      "precondition": "Complete REQ-053 replay review and verify enum information is genuinely missing from current inputs; do not proceed if current-stack false rejections remain unexplained.",
+      "targets": [
+        "md-009",
+        "md-026"
+      ],
+      "correct_controls": [
+        {
+          "case_id": "md-002",
+          "reason": "Historical both-arm EX/Contract-v2 correct; customers.Segment=SME tests that gasstations.Segment values do not leak across same-named columns."
+        },
+        {
+          "case_id": "md-018",
+          "reason": "Historical both-arm EX/Contract-v2 correct; gasstations.ChainID query tests unrelated logic under the same table metadata."
+        }
+      ],
+      "selection_source": "docs/benchmark-sol-metric-replay-2026-09-05.json and original saved SQL in error-triage report; selection is not based on current R500 outcomes.",
+      "variable": "Only source-bound observed values for one qualified categorical column; no answer, Gold SQL, per-question manual SQL changes, new enforcement rule or runtime database-probing permission.",
+      "conditions": [
+        "current baseline context",
+        "same context plus audited observed categorical values"
+      ],
+      "arms": [
+        "forge",
+        "direct"
+      ],
+      "logical_generation_requests_if_later_approved": 16,
+      "request_accounting": "4 cases × 2 conditions × 2 arms; any canary must be inside this total, retries0. Actual model revision and cost/latency acceptance thresholds must be frozen before separate authorization.",
+      "metrics": [
+        "EX and Contract separately",
+        "newly correct and newly wrong cases",
+        "qualified column/literal mechanism",
+        "tokens and latency; no claimed inference cost until observed"
+      ],
+      "decision": "Development signal only. No generalization claim, no automatic expansion, no automatic model call, no current Prompt/Schema/source changes."
+    },
+    "status_of_generation_authorization": "none"
+  },
+  "replay": {
+    "source_run": "pbr_6778bf9d34ae42fba0b070a5f9c154ba",
+    "source_model": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "revision": "sha256:64aabcc80506d63ad711bdc89b9f3a29fe8a275d62dab5b97c04d5af222724a0",
+      "temperature": 0,
+      "max_output_tokens": 8192
+    },
+    "protocol_revision": "sha256:43f0e1fe90b55d8470e0f5a589d1417e41fa5415200075bbdb63b06170790ebb",
+    "diagnostic": true,
+    "complete": false,
+    "denominator_per_arm": 500,
+    "candidates": 1000,
+    "scored_arms": 996,
+    "summary": {
+      "forge": {
+        "denominator": 500,
+        "historical": {
+          "execution_success": 496,
+          "official_ex": {
+            "pass": 313,
+            "fail": 187,
+            "unknown": 0
+          },
+          "contract": {
+            "pass": 284,
+            "fail": 216,
+            "unknown": 0
+          }
+        },
+        "current": {
+          "execution_success": 496,
+          "official_ex": {
+            "pass": 311,
+            "fail": 187,
+            "unknown": 2
+          },
+          "contract": {
+            "pass": 282,
+            "fail": 216,
+            "unknown": 2
+          },
+          "failure_stages": {
+            "passed": 280,
+            "result_contract": 212,
+            "assurance": 3,
+            "official_ea": 2,
+            "gold": 2,
+            "execution": 1
+          },
+          "failure_codes": {
+            "passed": 280,
+            "result_value_mismatch": 88,
+            "unknown_schema_reference": 3,
+            "result_row_count_mismatch": 93,
+            "result_column_count_mismatch": 31,
+            "official_ea_mismatch": 2,
+            "gold_execution_failed": 2,
+            "execution_failed": 1
+          }
+        },
+        "preexecution_rejections": 3,
+        "previously_ex_correct_rejected": 0,
+        "previously_contract_correct_rejected": 0,
+        "previously_ex_or_contract_correct_rejected": 0,
+        "previously_ex_and_contract_incorrect_rejected": 3,
+        "previously_executable_rejected": 0,
+        "newly_executable": 0,
+        "still_executable_wrong": {
+          "official_ex": 183,
+          "contract": 212,
+          "both": 181
+        },
+        "unchanged_sql_still_executable_wrong": {
+          "official_ex": 182,
+          "contract": 211,
+          "both": 180
+        },
+        "changed_arms": 9,
+        "sql_changed": [
+          "md-159",
+          "md-340"
+        ],
+        "score_transitions": {
+          "ex": {
+            "pass->pass": 311,
+            "fail->fail": 187,
+            "pass->unknown": 2
+          },
+          "contract": {
+            "pass->pass": 282,
+            "fail->fail": 216,
+            "pass->unknown": 2
+          }
+        }
+      },
+      "direct": {
+        "denominator": 500,
+        "historical": {
+          "execution_success": 500,
+          "official_ex": {
+            "pass": 314,
+            "fail": 186,
+            "unknown": 0
+          },
+          "contract": {
+            "pass": 294,
+            "fail": 206,
+            "unknown": 0
+          }
+        },
+        "current": {
+          "execution_success": 500,
+          "official_ex": {
+            "pass": 312,
+            "fail": 186,
+            "unknown": 2
+          },
+          "contract": {
+            "pass": 292,
+            "fail": 206,
+            "unknown": 2
+          },
+          "failure_stages": {
+            "passed": 289,
+            "result_contract": 206,
+            "official_ea": 3,
+            "gold": 2
+          },
+          "failure_codes": {
+            "passed": 289,
+            "result_value_mismatch": 94,
+            "result_row_count_mismatch": 82,
+            "result_column_count_mismatch": 29,
+            "official_ea_mismatch": 3,
+            "result_order_or_value_mismatch": 1,
+            "gold_execution_failed": 2
+          }
+        },
+        "preexecution_rejections": 0,
+        "previously_ex_correct_rejected": 0,
+        "previously_contract_correct_rejected": 0,
+        "previously_ex_or_contract_correct_rejected": 0,
+        "previously_ex_and_contract_incorrect_rejected": 0,
+        "previously_executable_rejected": 0,
+        "newly_executable": 0,
+        "still_executable_wrong": {
+          "official_ex": 186,
+          "contract": 206,
+          "both": 183
+        },
+        "unchanged_sql_still_executable_wrong": {
+          "official_ex": 186,
+          "contract": 206,
+          "both": 183
+        },
+        "changed_arms": 5,
+        "sql_changed": [],
+        "score_transitions": {
+          "ex": {
+            "pass->pass": 312,
+            "fail->fail": 186,
+            "pass->unknown": 2
+          },
+          "contract": {
+            "pass->pass": 292,
+            "fail->fail": 206,
+            "pass->unknown": 2
+          }
+        }
+      }
+    },
+    "changed_arms": [
+      {
+        "case_id": "md-006",
+        "arm": "forge",
+        "classification": "earlier_rejection_of_already_invalid_sql",
+        "finding": "Saved SQL is unchanged and independently fails SQLite with no such column: consumption_rank. ranked_customers explicitly omits its window output, but downstream CTE references it. Assurance qualification now rejects before execution; not a historically correct rejection."
+      },
+      {
+        "case_id": "md-109",
+        "arm": "direct",
+        "classification": "diagnostic_field_only_official_ex_mismatch",
+        "finding": "Candidate and SQL unchanged, execution passed, Contract remains true while Official EX remains false. Baseline recorded only Contract failure_code=null; current unified evaluator additionally reports official_ea_mismatch. No new rejection or score change."
+      },
+      {
+        "case_id": "md-119",
+        "arm": "forge",
+        "classification": "earlier_rejection_of_already_invalid_sql",
+        "finding": "Saved SQL is unchanged and independently fails SQLite with no such column: patient_count. disease_counts explicitly projects Diagnosis but outer ORDER BY refers to unprojected patient_count. Not a false rejection."
+      },
+      {
+        "case_id": "md-159",
+        "arm": "forge",
+        "classification": "compiler_sql_changed_scores_still_false",
+        "finding": "Unmodified candidate defines MIN(ka.date) AS date. Current compiler emits this aggregate; historical SQL emitted ka.date and three dates. Public SQLite probe confirms current one-row 2013-02-15 versus Gold 2016-04-21. EX and Contract remain false; Contract diagnostic changes row_count_mismatch -> value_mismatch. Historical triage rationale saying candidate lacks earliest-date selection is stale with respect to current compilation; preserve historical label and do not claim Gold/model gain."
+      },
+      {
+        "case_id": "md-319",
+        "arm": "forge",
+        "classification": "diagnostic_field_only_official_ex_mismatch",
+        "finding": "Candidate and SQL unchanged, execution passed, Contract remains true while Official EX remains false. Baseline recorded only Contract failure_code=null; current unified evaluator additionally reports official_ea_mismatch. No new rejection or score change."
+      },
+      {
+        "case_id": "md-319",
+        "arm": "direct",
+        "classification": "diagnostic_field_only_official_ex_mismatch",
+        "finding": "Candidate and SQL unchanged, execution passed, Contract remains true while Official EX remains false. Baseline recorded only Contract failure_code=null; current unified evaluator additionally reports official_ea_mismatch. No new rejection or score change."
+      },
+      {
+        "case_id": "md-339",
+        "arm": "forge",
+        "classification": "earlier_rejection_of_already_invalid_sql",
+        "finding": "Saved SQL is unchanged and independently fails SQLite with no such column: comment_rank. Filter refers to unavailable window output; no automatic candidate repair was made. Not a false rejection."
+      },
+      {
+        "case_id": "md-340",
+        "arm": "forge",
+        "classification": "gold_unknown_and_compiler_materialization",
+        "finding": "Current SQL adds AS MATERIALIZED to max_rep. Supplemental original/current SQL probes both execute and return the same 0.6644518272425249; this is not newly executable relative to baseline. Fresh Gold times out at 30s in preflight and replay, so EX/Contract stay unknown, never replaced with baseline/cache answers."
+      },
+      {
+        "case_id": "md-340",
+        "arm": "direct",
+        "classification": "gold_unknown_only",
+        "finding": "Candidate SQL unchanged and executes. Fresh Gold fails under 30s current protocol; historical EX/Contract true become unknown, not false and not candidate rejection. No cache or timeout enlargement."
+      },
+      {
+        "case_id": "md-393",
+        "arm": "forge",
+        "classification": "gold_unknown_only",
+        "finding": "Candidate SQL unchanged and executes. Fresh Gold fails under 30s current protocol; historical EX/Contract true become unknown, not false and not candidate rejection. No cache or timeout enlargement."
+      },
+      {
+        "case_id": "md-393",
+        "arm": "direct",
+        "classification": "gold_unknown_only",
+        "finding": "Candidate SQL unchanged and executes. Fresh Gold fails under 30s current protocol; historical EX/Contract true become unknown, not false and not candidate rejection. No cache or timeout enlargement."
+      },
+      {
+        "case_id": "md-405",
+        "arm": "forge",
+        "classification": "unchanged_runtime_invalid_sql_diagnostic_relabel",
+        "finding": "Saved SQL remains unchanged and fails SQLite with misuse of aggregate function COUNT(). Same-layer MAX(COUNT(*)) is invalid. SQL safety/parse/registry qualification pass, but this benchmark path does not guarantee runtime aggregate validity. Existing failure, not a newly discovered regression."
+      },
+      {
+        "case_id": "md-459",
+        "arm": "forge",
+        "classification": "diagnostic_field_only_official_ex_mismatch",
+        "finding": "Candidate and SQL unchanged, execution passed, Contract remains true while Official EX remains false. Baseline recorded only Contract failure_code=null; current unified evaluator additionally reports official_ea_mismatch. No new rejection or score change."
+      },
+      {
+        "case_id": "md-459",
+        "arm": "direct",
+        "classification": "diagnostic_field_only_official_ex_mismatch",
+        "finding": "Candidate and SQL unchanged, execution passed, Contract remains true while Official EX remains false. Baseline recorded only Contract failure_code=null; current unified evaluator additionally reports official_ea_mismatch. No new rejection or score change."
+      }
+    ],
+    "parent_verified_score_transitions": [
+      {
+        "case_id": "md-340",
+        "arm": "forge",
+        "old_ex": true,
+        "new_ex": null,
+        "old_contract": true,
+        "new_contract": null,
+        "scored": false,
+        "failure": {
+          "stage": "gold",
+          "code": "gold_execution_failed",
+          "retryable": false
+        }
+      },
+      {
+        "case_id": "md-340",
+        "arm": "direct",
+        "old_ex": true,
+        "new_ex": null,
+        "old_contract": true,
+        "new_contract": null,
+        "scored": false,
+        "failure": {
+          "stage": "gold",
+          "code": "gold_execution_failed",
+          "retryable": false
+        }
+      },
+      {
+        "case_id": "md-393",
+        "arm": "forge",
+        "old_ex": true,
+        "new_ex": null,
+        "old_contract": true,
+        "new_contract": null,
+        "scored": false,
+        "failure": {
+          "stage": "gold",
+          "code": "gold_execution_failed",
+          "retryable": false
+        }
+      },
+      {
+        "case_id": "md-393",
+        "arm": "direct",
+        "old_ex": true,
+        "new_ex": null,
+        "old_contract": true,
+        "new_contract": null,
+        "scored": false,
+        "failure": {
+          "stage": "gold",
+          "code": "gold_execution_failed",
+          "retryable": false
+        }
+      }
+    ],
+    "integrity": {
+      "candidate_and_replay_hashes_verified": 1000,
+      "historical_sql_hashes_verified": 1000,
+      "gold_sql_hashes_verified": 500,
+      "candidate_keys_unique": true,
+      "protocol_revision_valid": true,
+      "protocols_equal": true,
+      "current_sources_unchanged": true,
+      "current_public_data_unchanged_and_repository_pinned": true,
+      "source_files": {
+        "docs/benchmark-sol-error-triage-2026-09-05.json": "sha256:ec2b3aa8b1aae93b55a2a03e884e408a7e74780e04f880681856aec396f92c36",
+        "docs/benchmark-sol-metric-replay-2026-09-05.json": "sha256:2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796"
+      },
+      "unversioned_candidate_origin": true,
+      "diagnostic": true,
+      "model_calls": 0,
+      "all_arms_evaluated": 1000,
+      "scored_arms": 996,
+      "unknown_arm_ids": [
+        "md-340:forge",
+        "md-340:direct",
+        "md-393:forge",
+        "md-393:direct"
+      ],
+      "errors": []
+    },
+    "coverage": {
+      "runner": "forge.bird_benchmark.replay → web.routes.benchmark_v2.evaluate_candidate",
+      "checks": [
+        "query-candidate-v1",
+        "current Compiler for Forge JSON",
+        "assure_compiled_sql",
+        "read-only public SQLite execution",
+        "Official EX and semantic-result-compare-v2"
+      ],
+      "not_exercised": [
+        "public assure_query JSON relationship/convention/intent prechecks",
+        "production approval or real data-source authorization",
+        "new model generation"
+      ],
+      "public_source_route": "forge.evaluate.evaluate_query_candidate uses assure_query for Forge JSON; it is a separate caller of the same SQL gate, not identical to Benchmark."
+    },
+    "attribution_limits": [
+      "1000 preserved candidates, not1000 new model calls.",
+      "Historical baseline has no Assurance rerun; current rejection cannot automatically be attributed to v8.",
+      "Current default30s and live Gold execution versus historical120s/cache can cause resource-related status changes; not model or compiler accuracy loss.",
+      "Current stack has multiple revisions since historical source; fixed candidates isolate generation, not individual maintenance changes.",
+      "Current context revisions may differ; old generated inputs remain historical, no claim that candidates were produced using current context.",
+      "R500 is exposed regression data; no independent generalization or business silent-error estimate."
+    ],
+    "cli_outcomes": {
+      "freeze": "exit0",
+      "replay": "exit1 after all1000 records written because four Gold-unknown arms make complete=false; not a process interruption"
+    },
+    "frozen_generation_contract_not_authorization": {
+      "max_model_calls": 996,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "timeout_seconds": 120,
+      "sampling": "provider_default",
+      "max_output_tokens": null
+    }
+  },
+  "binding": {
+    "decision": {
+      "genuine_missing_evidence_treatment_exists": true,
+      "incremental_evidence_relative_to_current_model_context": true,
+      "new_discovery_relative_to_historical_public_probe_reports": false,
+      "reason": "Current public CSV and executed context API contain only chain segment, with no value_description. Both arms lack exact Discount/Premium spellings. A full public read-only domain probe independently supplies five exact stored spellings. This is genuine input evidence absent from current model context, not a new discovery of those values or proof of ignored historical evidence.",
+      "recommended_next_candidate_only": "A separately authorized, single-mechanism observed categorical-domain evidence treatment for this selected low-cardinality column, supplied symmetrically to both arms with source hash/query/full-scan coverage; no automatic rewrite. Freeze full delivered context bytes and compare unchanged generation settings against control. No experiment or generation is authorized/performed here.",
+      "not_recommended": [
+        "Repeat format+PK treatment rejected by REQ037",
+        "Claim historical prompts contained or omitted enums from snapshot hashes alone",
+        "Automatic canonicalization or lower/LIKE",
+        "Generic RAG",
+        "Treat corrected candidate executions as model gain"
+      ],
+      "future_evidence_content_only_not_applied_to_prompt": {
+        "relation": "gasstations",
+        "column": "Segment",
+        "observed_stored_text_values": [
+          "Discount",
+          "Noname",
+          "Other",
+          "Premium",
+          "Value for money"
+        ],
+        "coverage": "Complete distinct values of this frozen public DB; not an authoritative exhaustive future/business domain",
+        "comparison_semantics": "Existing Segment equality is case-sensitive BINARY for stored text; preserve exact observed spellings",
+        "origin_probe": "segment_domain_full"
+      }
+    },
+    "current_metadata": {
+      "original_column_name": "Segment",
+      "column_name": "chain segment",
+      "column_description": "chain segment",
+      "data_format": "text",
+      "value_description": ""
+    },
+    "observations": {
+      "public_rows": 5716,
+      "distinct_non_null_values": 5,
+      "values": [
+        "Discount",
+        "Noname",
+        "Other",
+        "Premium",
+        "Value for money"
+      ],
+      "exact_lowercase_discount_premium_match_count": 0
+    },
+    "original_candidate_totals": {
+      "arms": 4,
+      "original_correct": 1,
+      "current_original_correct": 1,
+      "new_generation_calls": 0,
+      "corrected_only_counterfactuals": 3,
+      "counterfactuals_matching_gold": 3,
+      "counterfactuals_are_not_actual_score_or_accuracy_gain": true
+    },
+    "counterfactual_only": [
+      {
+        "case_id": "md-009",
+        "arm": "direct",
+        "original_result": [
+          [
+            null
+          ]
+        ],
+        "literal_only_result": [
+          [
+            176
+          ]
+        ]
+      },
+      {
+        "case_id": "md-026",
+        "arm": "forge",
+        "original_result": [
+          [
+            0
+          ]
+        ],
+        "literal_only_result": [
+          [
+            35.68181818181818
+          ]
+        ]
+      },
+      {
+        "case_id": "md-026",
+        "arm": "direct",
+        "original_result": [
+          [
+            0
+          ]
+        ],
+        "literal_only_result": [
+          [
+            35.68181818181818
+          ]
+        ]
+      }
+    ],
+    "limits": [
+      "Original-candidate execution uses current compiler/comparator/public DB; it is a current-stack diagnostic, not isolated v8, generation gain, new benchmark result, or independent generalization.",
+      "No assurance effect is measured here; parent R500 replay owns that diagnostic.",
+      "Both cases were chosen from existing value_grounding labels before the current replay, not sampled independently or representative of all wrong answers.",
+      "The exact original generation full prompt, hidden SDK messages, original CSV bytes and full schema text are unavailable in the inspected public evidence. The triage preserves candidates, SQL, output, question/evidence, and ContextSnapshot hash only.",
+      "REQ037 D50-inputs.json contains real frozen offline reconstructed input text, not original model-submission proof. Its target excerpts agree with current execution; historical full prompt equality remains unknown.",
+      "Current TS source persists ContextSnapshot and prompt character counts, uses SessionManager.inMemory, and passes branch instructions plus question/snapshot. This is current source provenance, not proof of historical implementation identity.",
+      "Snapshot content hash indirectly depends on metadata through retrieval, but is not a complete hash of descriptions/values or delivered instructions. Equal hash cannot prove enum delivery.",
+      "No public case-fold collisions in this DB snapshot does not justify globally changing exact-match semantics; synthetic legitimate Premium/premium categories are distinct."
+    ],
+    "shared_assurance_boundary": "All four original saved SQL candidates pass sql_safety/sql_parse/registry_acl. These gates do not establish literal correctness. Public JSON prechecks are not part of this witness.",
+    "automatic_canonicalization": "Not adopted; synthetic case-sensitive categories prove lower/LIKE can merge distinct valid values.",
+    "historical_prompt": "Unavailable; current context was executed and matched the new R500 freeze. Prior reconstructed input is not an original model request."
+  },
+  "process_closure": {
+    "processes": [
+      {
+        "text": "r500-v8-offline-freeze: exited exit=0 uptime=1m11s restarts=0\nCommand: .venv/bin/python -m forge.cli benchmark bird freeze --cohort R --provider openai-codex --model gpt-5.6-sol --gold-policy skip_unscorable --out .forge/benchmarks/r500-v8-binding-audit-20260906/replay/current-stack.frozen.json\nCwd: ~/Desktop/Workspace/90_Dev/Forge\nPTY: true; restart=no; persist=false; detached=false",
+        "details": {
+          "op": "describe",
+          "daemon": {
+            "name": "r500-v8-offline-freeze",
+            "id": "f930fdde-17ca-4aca-a983-1b8a307b0bed",
+            "state": "exited",
+            "createdAt": 1788701584872,
+            "startedAt": 1788701584874,
+            "exitedAt": 1788701655961,
+            "exitCode": 0,
+            "restartCount": 0,
+            "outputBytes": 0,
+            "owner": "01a076ea-1e82-7568-8587-428007491b58",
+            "persist": false,
+            "detached": false
+          },
+          "spec": {
+            "name": "r500-v8-offline-freeze",
+            "application": ".venv/bin/python",
+            "args": [
+              "-m",
+              "forge.cli",
+              "benchmark",
+              "bird",
+              "freeze",
+              "--cohort",
+              "R",
+              "--provider",
+              "openai-codex",
+              "--model",
+              "gpt-5.6-sol",
+              "--gold-policy",
+              "skip_unscorable",
+              "--out",
+              ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/current-stack.frozen.json"
+            ],
+            "env": {
+              "FORGE_DISABLE_DOTENV": "true"
+            },
+            "cwd": ".",
+            "pty": true,
+            "restart": "no",
+            "persist": false,
+            "detached": false
+          }
+        }
+      },
+      {
+        "text": "r500-v8-offline-replay: failed exit=1 uptime=3m23s restarts=0\nCommand: .venv/bin/python -m forge.cli benchmark bird replay .forge/benchmarks/r500-v8-binding-audit-20260906/replay/saved-candidates.unversioned.json --protocol .forge/benchmarks/r500-v8-binding-audit-20260906/replay/current-stack.frozen.json --diagnostic --out .forge/benchmarks/r500-v8-binding-audit-20260906/replay/all-arms.replay.json\nCwd: ~/Desktop/Workspace/90_Dev/Forge\nPTY: true; restart=no; persist=false; detached=false",
+        "details": {
+          "op": "describe",
+          "daemon": {
+            "name": "r500-v8-offline-replay",
+            "id": "d884f438-cc3e-4f15-9a3b-e22f610b5319",
+            "state": "failed",
+            "createdAt": 1788701679544,
+            "startedAt": 1788701679545,
+            "exitedAt": 1788701883286,
+            "exitCode": 1,
+            "restartCount": 0,
+            "outputBytes": 0,
+            "owner": "01a076ea-1e82-7568-8587-428007491b58",
+            "persist": false,
+            "detached": false
+          },
+          "spec": {
+            "name": "r500-v8-offline-replay",
+            "application": ".venv/bin/python",
+            "args": [
+              "-m",
+              "forge.cli",
+              "benchmark",
+              "bird",
+              "replay",
+              ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/saved-candidates.unversioned.json",
+              "--protocol",
+              ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/current-stack.frozen.json",
+              "--diagnostic",
+              "--out",
+              ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/all-arms.replay.json"
+            ],
+            "env": {
+              "FORGE_DISABLE_DOTENV": "true"
+            },
+            "cwd": ".",
+            "pty": true,
+            "restart": "no",
+            "persist": false,
+            "detached": false
+          }
+        }
+      }
+    ],
+    "services_started": 0,
+    "model_calls": 0,
+    "all_owned_processes_exited": true
+  },
+  "verification": {
+    "kind": "Actual offline CLI and read-only SQL/API-function execution; no new production feature, no new permanent tests or full-suite rerun.",
+    "unchanged": [
+      "production source",
+      "Prompt",
+      "Schema",
+      "Gold",
+      "scoring",
+      "timeouts/retries",
+      "historical reports/candidates",
+      "rolling parent seed48",
+      "H/R0.6 gates"
+    ],
+    "source_fingerprints": {
+      "prompt": {
+        "agent/prompts.py": "sha256:8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2"
+      },
+      "schema": {
+        "agent/contracts/query-candidate-v1.schema.json": "sha256:2ff6c4447f8f516bdec9fb877c6deff696fae7a822efdbe27559d151b8ec652d",
+        "forge/schema.json": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723"
+      },
+      "compiler": {
+        "forge/compiler.py": "sha256:3d5b4f0bebacb6df431b29e593cbd4b9ab956b06e35b72fa1611c55fb1d9b697"
+      },
+      "context": {
+        "forge/benchmark_metadata.py": "sha256:023d44164b168f463ddd004bec8118ef5f62b0d69bb970419fdd1d6acc7384bb",
+        "forge/benchmark_v2.py": "sha256:74b689dd3de3fbf4c51dda6e23be1b4193cc377c3e1e6d1794b2b7867f1c967e"
+      },
+      "safety": {
+        "forge/executor.py": "sha256:2bdd20d047586e568c23bf6da778179b080ffeb9e89223eefbbcdbf77ef8a462",
+        "forge/lint.py": "sha256:e327274f54b70ef18aadb208b608a3df66305de9b3d70324cc57709405d801fe",
+        "registry/relationships.py": "sha256:d2d109af1e2b11fd661c6140a10c37d3e1e5619538088f9d4c6a65867191135a"
+      },
+      "official_snapshot": {
+        "tests/datasets/bird_mini_dev_standard.json": "sha256:0886f203ad6f41412b66ef843d3e87f939f565bc5cddbe7232b1ebe24d11698f"
+      },
+      "evaluator": {
+        "agent/contracts/__init__.py": "sha256:20090e6a89aad989e78aaf853f85be59d4f4f8927ca61d8c595848e650deb7a1",
+        "agent/contracts/benchmark-failure-v1.schema.json": "sha256:539d4d39960aab8ea69ea37255d409e7cac9bd35165170f28a67e17175d2a314",
+        "forge/assurance.py": "sha256:95cbb185180dad1aede93c5cdfd57740262b484648f21a359024fe9e42acac21",
+        "forge/benchmark_methods.py": "sha256:b4aac88acf4da307e0889daace80c0216e0287ec907cab71734a5304ab731b68",
+        "forge/bird_benchmark.py": "sha256:93f9cadb3a0b5eacfc16dd3905617f8312e44d9a0a5533bf5e4b48e5bf7967bb",
+        "forge/hard_accuracy_benchmark.py": "sha256:215e2ede143e4c525227d53afad3357e392d5d3c90c5df4b9e6b97fd2d50634b",
+        "pyproject.toml": "sha256:7481a98c149210154951f96e6e678693de5b0f57e377b2a6b30d92c09cfe80e6",
+        "web/routes/benchmark_v2.py": "sha256:982e088a5145be93042b29921edc9dcb67af98e93853fae48bb2d7df8c6eefd5"
+      }
+    },
+    "artifact_sha256": {
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/experiment-card.json": "sha256:103e5d1e25be2e6d0f753b9fec24e5868835017154ed11678d9bbab1ba5bd6d6",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/comparison-frame.json": "sha256:9d2c0ec58b75ab3fb59e3b9bcd8ece2b1035785336ed8ebb1973206bb567ee64",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/assurance-boundary-input.json": "sha256:78ab76551b4fa6c0635383771cabb7e76fdf1bfa9045cb67157e98a021c9db7d",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/assurance-boundary-final.json": "sha256:b7a36cbcf007fba6d1672bbc14dafbb9a01006e62daaeab4444230ca585b2905",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/parent-score-verification.json": "sha256:74151872617514fb8fc05871ee548c24bfd07e9231715fe869ea1d8f5b183759",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/next-experiment-proposal.json": "sha256:4246114ba786cc160b8017a5c5ee447c4ab632866a138f00ec65d2597a98b431",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/current-stack.frozen.json": "sha256:ad509b4d390aa61de87f301d13fe82f5f70eeeb8171637820cc80541adf0368b",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/saved-candidates.unversioned.json": "sha256:a776e775eaf09be51ecf1287605d4772f41423c4e0a6be27af9a1953e3267225",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/all-arms.replay.json": "sha256:dff09b46dd4ee5251dbebaa23e13de8f696e0ba68ba835a7e1fac03cc0eddfb4",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/candidate-integrity.json": "sha256:08f8797f94e5dc8d54b8decf3af2ea0c420482234814e330cc431725e48f3447",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/delta-report.json": "sha256:2482ec2b4f3f346cb6630f270027fc1b060cc23491e17c07773edc3a6673a2e6",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/changed-arm-review.json": "sha256:fb54b9ed0f76b4dd83b01ee99b6b8fe7a86512ca4f2cb7a0fcd441e29924761d",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/original-sql-review-probes.json": "sha256:044c699c92e04cbc0814cdfa511540ac4e16c88e05f3c1479263086d5080a861",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/source-data-input-fingerprints.json": "sha256:f04fd21bf4d42ec5ad6a45002f928f99d5f8a2b95413f3cda9d1e7884a162b70",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/final-integrity.json": "sha256:4fdc530916187ac159ac564f8be7e2841078af60a26e038f35e1933544ff8949",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/freeze-cli-outcome.json": "sha256:26394884956aa25302f374a39fb7b195b5518f2a5e6c1b6bbe56bc5afb19b954",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/replay-cli-outcome.json": "sha256:ab492879e5710b13c16262a742d5b7e8baf8e92c978e70aaf3f1162949abf68c",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/replay/process-closure.json": "sha256:67004b4f4b386d90f9b50e68bf4cf971a5b2c722324123a074654090d78cedcc",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/binding/evidence.json": "sha256:a796d423e139fb2c441affb31c1d5ba406767d835f4a6f21bfde1e5401debe2a",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/binding/cross-artifact-verification.json": "sha256:6b612336b692dc13858231071fb6a27f2907c6c230c78813eb4ea2f684422b85",
+      ".forge/benchmarks/r500-v8-binding-audit-20260906/binding/run-audit.py": "sha256:9572a9d24d84719832643ab2bec9af7b48daeca79db5e432feba59e432ecb6d6"
+    }
+  },
+  "artifacts_root": ".forge/benchmarks/r500-v8-binding-audit-20260906"
+}

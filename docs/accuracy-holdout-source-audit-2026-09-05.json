@@ -1,0 +1,407 @@
+{
+  "schema_version": 1,
+  "report_type": "public_holdout_source_and_overlap_audit",
+  "date": "2026-09-05",
+  "status": "candidate_pool",
+  "independent_review_status": "independent_review_pending",
+  "independent_ACC1_validation_gate_complete": false,
+  "summary": {
+    "official_full_dev_cases": 1534,
+    "MiniDev_exposed_rows": 500,
+    "MiniDev_unique_question_ids": 498,
+    "identity_resolved_exposed_ids": 499,
+    "excluded_candidate_ids": 523,
+    "eligible_candidate_ids": 1011,
+    "dependency_component_count": 964,
+    "multi_case_dependency_components": 38,
+    "maximum_dependency_component_size": 4,
+    "final_H_sample_count": 0,
+    "target_case_count": null,
+    "labels_ready": false
+  },
+  "scope": {
+    "production_changes": false,
+    "prompt_compiler_metric_changes": false,
+    "deployment": false,
+    "benchmark_model_calls": 0,
+    "benchmark_generation_calls": 0,
+    "new_database_download_bytes": 0,
+    "customer_data_read_or_cached": false,
+    "dotenv_disabled": true,
+    "credential_or_env_file_access": false,
+    "saved_assets": "Only this report and public-source audit assets under .forge/benchmarks/accuracy-holdout-source/. No existing manifest or document modified."
+  },
+  "primary_source": {
+    "name": "BIRD-SQL full Dev",
+    "official_site": "https://bird-bench.github.io/",
+    "primary_candidate_version": "20251106",
+    "pinned_author_repository": "https://huggingface.co/datasets/birdsql/bird_sql_dev_20251106",
+    "pinned_commit": "3c11fb193e5439b338e23677fa0aae11e8b85db9",
+    "license": "CC-BY-SA-4.0",
+    "authority_verification": "The original author project site links both the OSS dev.zip and birdsql updated release. The project site explicitly announces CC BY-SA 4.0 on 2024-04-27; pinned author dataset card agrees. Not a third-party mirror provenance claim.",
+    "original_archive_version": "dev_20240627",
+    "raw_metadata_assets": [
+      {
+        "path": ".forge/benchmarks/accuracy-holdout-source/bird-dev-20240627-dev.json",
+        "bytes": 741332,
+        "sha256": "630272f2b1c44d8cef2c3b246f623355cf0bbc1e832c81061df895530dfc2f06",
+        "access_note": "Public source-curator metadata; contains question/Gold/labels. Do not open in generator-tuning context."
+      },
+      {
+        "path": ".forge/benchmarks/accuracy-holdout-source/bird-dev-20240627-dev_tables.json",
+        "bytes": 158350,
+        "sha256": "35e7f73f2bc3a3bc4def9466215f7617ff8b37e9b2837f03539a42c9e9c69d97",
+        "access_note": "Public source-curator metadata; contains question/Gold/labels. Do not open in generator-tuning context."
+      },
+      {
+        "path": ".forge/benchmarks/accuracy-holdout-source/bird-dev-20251106-at-3c11fb193e5439b338e23677fa0aae11e8b85db9.json",
+        "bytes": 946793,
+        "sha256": "ffd8018378ddb1a8794753e0a31cfc81862ff7318a5184c22f3dc4ce03a03feb",
+        "access_note": "Public source-curator metadata; contains question/Gold/labels. Do not open in generator-tuning context."
+      }
+    ],
+    "provenance_asset": {
+      "path": ".forge/benchmarks/accuracy-holdout-source/official-source-provenance-v1.json",
+      "bytes": 12617,
+      "sha256": "413cb2be1d70fb927eef6f4c53c848a273532dd0d4346b324f4a77f35a3d6ca9"
+    },
+    "access_result": "Original metadata acquired successfully from official archive; no fallback dataset used.",
+    "archive_bytes_total": 346207293,
+    "archive_bytes_received_via_range": 181671,
+    "archive_download_fraction": 0.00052475
+  },
+  "Gold_revision_policy": {
+    "old_and_updated_id_sets_equal": true,
+    "old_and_updated_unique_ids": 1534,
+    "fields_changed_counts": {
+      "question": 182,
+      "SQL": 452,
+      "evidence": 381,
+      "difficulty": 86
+    },
+    "already_exposed_identity_gold_revisions": 150,
+    "same_id_is_not_a_new_question": true,
+    "audit_exclusion_policy": "Exclude stable exposed IDs even when Gold/question/evidence changed. Compare both legacy and updated question/template forms, expand exact-question identity closure, and retain union of exclusions from both AST normalizers. Never treat fewer exclusions from changed standardization as independence.",
+    "MiniDev_duplicate_id_values": [
+      137,
+      138
+    ],
+    "additional_official_identity_from_exact_question_matching": [
+      863
+    ],
+    "MiniDev_rows_without_exact_question_match_to_either_version": 4,
+    "interpretation": "1534 minus 500 rows is not a valid identity calculation: MiniDev has duplicated IDs and an additional recoverable official identity. Full identity/overlap union is 523 exclusions, not a nominal 1034 pool."
+  },
+  "exposure_audit": {
+    "R_source": "docs/benchmark-sol-error-triage-2026-09-05.json",
+    "D_source": "docs/accuracy-evaluation-cohorts-2026-09-05.json",
+    "R_scope": "All 500 MiniDev metadata rows are exposed; the 209 triaged rows, D50 and S27 are contained in that rejection set.",
+    "R_triage_rows": 500,
+    "D_case_count": 50,
+    "S_case_count": 27,
+    "scan_ledger": {
+      "path": ".forge/benchmarks/accuracy-holdout-source/exposure-scan-ledger-v1.json",
+      "bytes": 168043,
+      "sha256": "c4ebd497df2b1810278e124d741b7199a569b74fe60d5523fc28cfbf38a07ad8"
+    },
+    "decision_asset": {
+      "path": ".forge/benchmarks/accuracy-holdout-source/overlap-decisions-v1.json",
+      "bytes": 3690123,
+      "sha256": "6a09c25cbc98fcbe8838d7a9175f6aa8e91fe2e82aad56772968fbbfce692b4b"
+    },
+    "source_files_read": 810,
+    "source_files_missing": [
+      {
+        "path": "tests/fixtures/large_registry.json",
+        "error_type": "FileNotFoundError"
+      }
+    ],
+    "Spider2_question_metadata_rows": 547,
+    "Spider2_official_SQL_files_audited": 256,
+    "Spider2_saved_SQL_files_audited": 258,
+    "canonical_question_method": "NFKC+casefold; Unicode word tokens; punctuation/whitespace collapsed.",
+    "sql_template_method": "sqlglot 29.0.1, dialect parse + scope-aware qualification; literals/boolean/null -> placeholders; preserve table/column names and AST topology; canonicalize table, projection, derived-source and CTE aliases. Union with conservative first normalizer retained. Exact executable method is frozen in decision asset.",
+    "near_question_method": "Outcome-blind rule set before matching: canonical nonexact >=20 chars and >=5 distinct tokens, shared-token blocking, token-set Jaccard >=0.80 OR character-trigram Dice >=0.92. No model embeddings.",
+    "exclusion_waterfall": [
+      {
+        "stage": "stable_question_id",
+        "newly_excluded": 498,
+        "remaining": 1036
+      },
+      {
+        "stage": "canonical_question_and_identity_revision_closure",
+        "newly_excluded": 1,
+        "remaining": 1035
+      },
+      {
+        "stage": "sql_ast_template_union_v1_v2_both_official_revisions",
+        "newly_excluded": 23,
+        "remaining": 1012
+      },
+      {
+        "stage": "near_question_overlap",
+        "newly_excluded": 1,
+        "remaining": 1011
+      },
+      {
+        "stage": "unresolved_candidate_parse",
+        "newly_excluded": 0,
+        "remaining": 1011
+      }
+    ],
+    "exclusion_reasons_nonexclusive": {
+      "canonical_question_overlap": 499,
+      "exposed_stable_question_id": 498,
+      "resolved_exposed_identity": 499,
+      "sql_ast_template_overlap": 522,
+      "sql_ast_template_v2_overlap": 522,
+      "near_question_overlap": 16
+    },
+    "candidate_SQL_versions_parsed": 3068,
+    "candidate_parse_failures": 0,
+    "exposure_SQL_parse_or_qualification_failure_records": 159,
+    "semantic_paraphrase_review_complete": false,
+    "human_exposure_certification_complete": false
+  },
+  "frozen_candidate_pool": {
+    "asset": {
+      "path": ".forge/benchmarks/accuracy-holdout-source/candidate-pool-v1.json",
+      "bytes": 33435,
+      "sha256": "2aca392c1c0cae280d21e8510a01385477e3a0cee985c78c53cd2a9bb929cfb9"
+    },
+    "eligible_ids_sha256": "7df226cd67dcdc84224e174781ecf10eacc4f373330da656598974436ad45319",
+    "eligible_case_count": 1011,
+    "candidate_pool_frozen": true,
+    "status": "candidate_pool",
+    "independent_review_status": "independent_review_pending",
+    "final_H_sample_selected": false,
+    "target_case_count": null,
+    "sampling_seed": null,
+    "sampling_algorithm": null,
+    "all_eligible_ids_included": true,
+    "within_pool_dependency_components": 964,
+    "dependency_handling": "No final sampling/stratum allocation. Parent must pre-register unit/cluster policy and effect/power/precision before any H draw; 964 components are not certified independent units."
+  },
+  "domain_overlap": {
+    "same_database_domains_as_R_D": true,
+    "exposed_database_count": 11,
+    "candidate_database_count": 11,
+    "shared_database_count": 11,
+    "shared_database_ids": [
+      "california_schools",
+      "card_games",
+      "codebase_community",
+      "debit_card_specializing",
+      "european_football_2",
+      "financial",
+      "formula_1",
+      "student_club",
+      "superhero",
+      "thrombosis_prediction",
+      "toxicology"
+    ],
+    "claim_boundary": "Potentially new question/SQL-instance evaluation within already-exposed database domains. Not new-domain generalization and not proof against training contamination."
+  },
+  "verification": {
+    "normalizer_synthetic_alias_and_structure_probes_passed": 11,
+    "normalizer_keeps_distinct_tables_and_columns": true,
+    "raw_zip_member_crc32_and_size_checked": true,
+    "public_SQLite_schema_checks": [
+      {
+        "db_id": "california_schools",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/california_schools/california_schools.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "2afe7640457115499808374e80806d042bb5d85e340e90de2e67170076a81b37",
+        "db_bytes": 11116544,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "card_games",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/card_games.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "e9198ce46439b3c18fb4fb5bfd25e03a8b001ffc8edab831738b82807a05a943",
+        "db_bytes": 261820416,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "codebase_community",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/codebase_community.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "bd5ffc2ab71e6216c197c48c3171699cebc411eda28accba7957d9e5657912ab",
+        "db_bytes": 481419264,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "debit_card_specializing",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/debit_card_specializing/debit_card_specializing.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "b7c58de5b06cbc769739a539ba612f0f3e851a5dcaf8d4b70c717220de0a3e39",
+        "db_bytes": 34635776,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "european_football_2",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/european_football_2.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "57412dac25e5b9da04274cf683abc04fb7237e05748d085ce72bd6ad13f1c050",
+        "db_bytes": 597754880,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "financial",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/financial.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "fa611edfebf0f83134dd186ea60309681f4ebc05689f4db9f2e8702ac8765518",
+        "db_bytes": 71294976,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "formula_1",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/formula_1.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "8470bb30267cc51ced36a17847b0994701e6b2672cf54a4c43897d242f5ecd7b",
+        "db_bytes": 22360064,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "student_club",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/student_club.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "f77e20072ee9bb3b27587d518cbbf8ee3ff27f03c1e27246eef292cdd966eae4",
+        "db_bytes": 2641920,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "superhero",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/superhero.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "934f76bdb783863a7c070944067966c09e8c3893ac3f34f1323f1e8ccd52fa50",
+        "db_bytes": 237568,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "thrombosis_prediction",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/thrombosis_prediction/thrombosis_prediction.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "2f8c006053bb3a58e545ce4140884a79ba75ede389c89ecb1899aee6d8d62de4",
+        "db_bytes": 7327744,
+        "db_full_file_hash_performed": false
+      },
+      {
+        "db_id": "toxicology",
+        "path": ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/toxicology.sqlite",
+        "mode": "mode=ro&immutable=1; PRAGMA query_only=ON",
+        "deadline_seconds": 2,
+        "metadata_schema_match": true,
+        "missing_tables": [],
+        "missing_columns": {},
+        "actual_schema_sha256": "fb02b55bcd6cdeb665cc5a2fd738953c1efab2ceefc978c727195b0f15a5fd5a",
+        "db_bytes": 2678784,
+        "db_full_file_hash_performed": false
+      }
+    ],
+    "schema_match_count": 11,
+    "Gold_execution_smoke": [
+      {
+        "question_id": 0,
+        "version": "20251106",
+        "status": "completed",
+        "error_type": null,
+        "deadline_seconds": 2,
+        "elapsed_ms": 97.0,
+        "result_rows_not_stored": true,
+        "is_final_H_selection": false
+      },
+      {
+        "question_id": 90,
+        "version": "20251106",
+        "status": "completed",
+        "error_type": null,
+        "deadline_seconds": 2,
+        "elapsed_ms": 2.8,
+        "result_rows_not_stored": true,
+        "is_final_H_selection": false
+      },
+      {
+        "question_id": 196,
+        "version": "20251106",
+        "status": "completed",
+        "error_type": null,
+        "deadline_seconds": 2,
+        "elapsed_ms": 18.1,
+        "result_rows_not_stored": true,
+        "is_final_H_selection": false
+      }
+    ],
+    "Gold_execution_smoke_selection": "Deterministically take the first eligible ID from each of the first three distinct database domains in ascending ID order, solely for source/runtime feasibility; not a final H sample.",
+    "Gold_execution_smoke_limitations": "3 current official SQL queries completed readonly under 2-second deadlines. No result rows saved and no correctness, data-snapshot identity or full-pool execution claim.",
+    "production_or_project_wide_tests_run": false
+  },
+  "blinding_and_access": {
+    "report_contains_unexposed_question_gold_or_label_text": false,
+    "raw_source_assets_contain_answers": true,
+    "source_curation_context_only": true,
+    "generator_should_not_open_raw_metadata_or_query_results": true,
+    "technical_access_control_enforced": false,
+    "instruction": "Keep raw metadata and overlap computation in curator/reviewer context; send generator only IDs/counts/hashes/method/limitations. An isolated audit agent is not independent human adjudication. Register and enforce reviewer/generator access separation before H."
+  },
+  "independent_review_prerequisites_missing": [
+    "Independent reviewer must certify project-level non-use against private/manual/deleted/external development exposure; current scoped filesystem scan alone cannot certify absence of human exposure.",
+    "Resolve 159 unnormalized exposure SQL records and dynamic prompt/SQL extraction limits; outcome-blind semantic/entity/paraphrase review and cluster adjudication are still needed.",
+    "Independent outcome-blind review of question intent, schema/data snapshot, Gold/Evidence consistency and result contracts; official author quality-control does not replace project-independent labels.",
+    "Bind row-level public database snapshots to hashes/runtime policy. Schema matching and 3 Gold smoke queries are insufficient for a full reproducible evaluation data contract.",
+    "Parent pre-registration of primary endpoint, minimum useful paired effect, power/precision, CI procedure, sample size/repeats, dependence/stratification policy, deterministic seed/algorithm, coverage/false-rejection/safety/cost budgets and acceptance thresholds.",
+    "Freeze candidate configuration and enforce curator/reviewer/generator access separation before drawing H or running either arm. If H informs tuning, retire it and obtain a new holdout."
+  ],
+  "claim_limits": [
+    "candidate_pool means mechanically eligible under this frozen audit, not ready/certified H.",
+    "No corrected-score, accuracy-gain, independent-human-review, new-domain or no-pretraining-contamination claim.",
+    "The full eligible pool was frozen; no best-looking subset, final sample, label-based filtering or candidate outcome was used."
+  ],
+  "hash_conventions": {
+    "file_sha256": "Exact file UTF-8 bytes for written assets; original source bytes for downloaded metadata.",
+    "eligible_ids_sha256": "SHA256 of UTF-8 json.dumps(sorted integer IDs, ensure_ascii=False, sort_keys=True, separators=(\",\",\":\")), no newline.",
+    "report_content_sha256": "Canonical JSON of report excluding report_content_sha256, same serializer."
+  },
+  "report_content_sha256": "51705a63106f33fe47ba69df9326134a6b1bbee08387a69d775a1278d57ad5c9"
+}

@@ -22,6 +22,22 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+  pi-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/pi-orchestrator/package-lock.json
+      - name: Install Pi dependencies
+        run: npm --prefix services/pi-orchestrator ci
+      - name: Check Pi contracts
+        run: npm --prefix services/pi-orchestrator run typecheck
+      - name: Run Pi behavioral tests without model credentials
+        run: npm --prefix services/pi-orchestrator test
+
   compatibility:
     runs-on: ubuntu-latest
     services:

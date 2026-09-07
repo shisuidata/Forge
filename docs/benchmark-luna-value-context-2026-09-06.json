@@ -1,0 +1,594 @@
+{
+  "schema_version": "forge-experiment-brief-v1",
+  "requirement": "REQ-2026-09-06-054",
+  "date": "2026-09-06",
+  "purpose": "Predeclared four-case categorical value context paired development canary; not rolling seed49",
+  "status": "completed_acceptance_failed",
+  "decision": "Keep value_context default off. No retry, resampling, threshold adjustment, deployment or H/R0.6 promotion.",
+  "authorization": {
+    "user_response": "批准16次对照",
+    "max_model_calls": 16,
+    "artifact": ".forge/benchmarks/categorical-value-context-20260906/generation-authorization.json"
+  },
+  "model": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+    "temperature": null,
+    "max_output_tokens": null
+  },
+  "generation_contract": {
+    "forge_output_mode": "pi_tool_schema",
+    "forge_prompt_revision": "forge-structured-benchmark-v1",
+    "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "provider_json_schema_request": "required",
+    "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+    "direct_output_mode": "text_sql",
+    "sampling": "provider_default",
+    "transport": "sse",
+    "max_output_tokens": null,
+    "timeout_seconds": 120,
+    "provider_retries": 0,
+    "max_agent_turns_per_arm": 1,
+    "isolation_revision": "pi-benchmark-isolation-v1",
+    "pi_runtime_revision": "sha256:651dcb2085eca69c3b3adcb6f97c9c037e1492cf9cb33f08b7992fe4e63b4c50",
+    "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+  },
+  "protocol": {
+    "schema_version": "bird-protocol-v4",
+    "only_changed_factor": "value_context.mode",
+    "field": [
+      "debit_card_specializing",
+      "gasstations",
+      "Segment"
+    ],
+    "max_values": 16,
+    "date_context": "off",
+    "grain_context": "off",
+    "gold_policy": "require_all",
+    "control": "sha256:dc6cd1a7c04fdb847b263238553e57cc7389b46d2976716aa15df18b1a93d05a",
+    "treatment": "sha256:26631020a73758cf3c40e8318ab3f272cb597790c34cdb61faa83d67e455e66f",
+    "request_case_order": [
+      "md-009",
+      "md-026",
+      "md-002",
+      "md-018"
+    ],
+    "native_execution_order": [
+      "md-002",
+      "md-009",
+      "md-018",
+      "md-026"
+    ],
+    "native_execution_order_same_both_conditions": true,
+    "condition_order": [
+      "control",
+      "treatment"
+    ],
+    "concurrency_cases": 1
+  },
+  "runs": {
+    "control": {
+      "run_id": "pbr_dbbf2c855da043d89f05580b968b8436",
+      "task_run_id": "tr_5b37fc54217943b4b95348054dc72d58",
+      "status": "completed",
+      "started_at": "2026-09-06T15:13:55.405Z",
+      "completed_at": "2026-09-06T15:14:35.992Z",
+      "dispatched_calls": 8,
+      "completed_calls": 8,
+      "metrics": {
+        "forge": {
+          "total_cases": 4,
+          "scored_cases": 4,
+          "unscored_cases": 0,
+          "official_ea": 0.5,
+          "official_ea_correct_cases": 2,
+          "official_ea_observed_cases": 4,
+          "official_ea_missing_cases": 0,
+          "contract_accuracy": 0.5,
+          "contract_accuracy_correct_cases": 2,
+          "contract_accuracy_observed_cases": 4,
+          "contract_accuracy_missing_cases": 0,
+          "execution_success": 1,
+          "execution_success_cases": 4,
+          "execution_observed_cases": 4,
+          "execution_missing_cases": 0,
+          "total_tokens": 12359,
+          "observed_total_tokens": 12359,
+          "usage_observed": true,
+          "unobserved_usage_arms": 0,
+          "average_generation_ms": 10084.075,
+          "generation_observed_cases": 4,
+          "generation_missing_cases": 0
+        },
+        "direct": {
+          "total_cases": 4,
+          "scored_cases": 4,
+          "unscored_cases": 0,
+          "official_ea": 0.75,
+          "official_ea_correct_cases": 3,
+          "official_ea_observed_cases": 4,
+          "official_ea_missing_cases": 0,
+          "contract_accuracy": 0.75,
+          "contract_accuracy_correct_cases": 3,
+          "contract_accuracy_observed_cases": 4,
+          "contract_accuracy_missing_cases": 0,
+          "execution_success": 1,
+          "execution_success_cases": 4,
+          "execution_observed_cases": 4,
+          "execution_missing_cases": 0,
+          "total_tokens": 3970,
+          "observed_total_tokens": 3970,
+          "usage_observed": true,
+          "unobserved_usage_arms": 0,
+          "average_generation_ms": 5682.075,
+          "generation_observed_cases": 4,
+          "generation_missing_cases": 0
+        },
+        "delta_ea": -0.25
+      }
+    },
+    "treatment": {
+      "run_id": "pbr_75f5e2a5c2f24bb2b29dc1c581f3eb2f",
+      "task_run_id": "tr_60b885ad441842cda08556c5ce86caec",
+      "status": "completed",
+      "started_at": "2026-09-06T15:15:17.692Z",
+      "completed_at": "2026-09-06T15:16:10.428Z",
+      "dispatched_calls": 8,
+      "completed_calls": 8,
+      "metrics": {
+        "forge": {
+          "total_cases": 4,
+          "scored_cases": 4,
+          "unscored_cases": 0,
+          "official_ea": 0.75,
+          "official_ea_correct_cases": 3,
+          "official_ea_observed_cases": 4,
+          "official_ea_missing_cases": 0,
+          "contract_accuracy": 0.75,
+          "contract_accuracy_correct_cases": 3,
+          "contract_accuracy_observed_cases": 4,
+          "contract_accuracy_missing_cases": 0,
+          "execution_success": 0.75,
+          "execution_success_cases": 3,
+          "execution_observed_cases": 4,
+          "execution_missing_cases": 0,
+          "total_tokens": 14187,
+          "observed_total_tokens": 14187,
+          "usage_observed": true,
+          "unobserved_usage_arms": 0,
+          "average_generation_ms": 13098.575,
+          "generation_observed_cases": 4,
+          "generation_missing_cases": 0
+        },
+        "direct": {
+          "total_cases": 4,
+          "scored_cases": 4,
+          "unscored_cases": 0,
+          "official_ea": 1,
+          "official_ea_correct_cases": 4,
+          "official_ea_observed_cases": 4,
+          "official_ea_missing_cases": 0,
+          "contract_accuracy": 1,
+          "contract_accuracy_correct_cases": 4,
+          "contract_accuracy_observed_cases": 4,
+          "contract_accuracy_missing_cases": 0,
+          "execution_success": 1,
+          "execution_success_cases": 4,
+          "execution_observed_cases": 4,
+          "execution_missing_cases": 0,
+          "total_tokens": 5056,
+          "observed_total_tokens": 5056,
+          "usage_observed": true,
+          "unobserved_usage_arms": 0,
+          "average_generation_ms": 6551.125,
+          "generation_observed_cases": 4,
+          "generation_missing_cases": 0
+        },
+        "delta_ea": -0.25
+      }
+    }
+  },
+  "totals": {
+    "authorized_calls": 16,
+    "dispatched_calls": 16,
+    "completed_generations": 16,
+    "scored_arms": 16,
+    "execution_successful_arms": 15,
+    "unknown_labels": 0,
+    "unknown_usage_arms": 0,
+    "total_tokens": 35572,
+    "control_tokens": 16329,
+    "treatment_tokens": 19243,
+    "token_increase_percent": 17.845550860432358,
+    "currency_cost": null,
+    "extra_calls": 0
+  },
+  "cases": [
+    {
+      "case_id": "md-002",
+      "role": "control",
+      "value_evidence_added_bytes": 0,
+      "arms": {
+        "forge": {
+          "control": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 3074,
+            "generation_ms": 10094.2
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 3269,
+            "generation_ms": 12594.7
+          },
+          "newly_passed": false,
+          "regressed": false
+        },
+        "direct": {
+          "control": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 1026,
+            "generation_ms": 6193.8
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 1032,
+            "generation_ms": 5984.3
+          },
+          "newly_passed": false,
+          "regressed": false
+        }
+      }
+    },
+    {
+      "case_id": "md-009",
+      "role": "target",
+      "value_evidence_added_bytes": 1642,
+      "arms": {
+        "forge": {
+          "control": {
+            "official_ex": false,
+            "contract": false,
+            "execution": "passed",
+            "tokens": 3485,
+            "generation_ms": 15027.1
+          },
+          "treatment": {
+            "official_ex": false,
+            "contract": false,
+            "execution": "failed",
+            "tokens": 3788,
+            "generation_ms": 13000.2
+          },
+          "newly_passed": false,
+          "regressed": false
+        },
+        "direct": {
+          "control": {
+            "official_ex": false,
+            "contract": false,
+            "execution": "passed",
+            "tokens": 1022,
+            "generation_ms": 3651.1
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 1428,
+            "generation_ms": 5967.2
+          },
+          "newly_passed": true,
+          "regressed": false
+        }
+      }
+    },
+    {
+      "case_id": "md-018",
+      "role": "control",
+      "value_evidence_added_bytes": 1642,
+      "arms": {
+        "forge": {
+          "control": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 2840,
+            "generation_ms": 6570.3
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 3297,
+            "generation_ms": 6951.9
+          },
+          "newly_passed": false,
+          "regressed": false
+        },
+        "direct": {
+          "control": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 871,
+            "generation_ms": 4694.9
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 1317,
+            "generation_ms": 4051.5
+          },
+          "newly_passed": false,
+          "regressed": false
+        }
+      }
+    },
+    {
+      "case_id": "md-026",
+      "role": "target",
+      "value_evidence_added_bytes": 1642,
+      "arms": {
+        "forge": {
+          "control": {
+            "official_ex": false,
+            "contract": false,
+            "execution": "passed",
+            "tokens": 2960,
+            "generation_ms": 8644.7
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 3833,
+            "generation_ms": 19847.5
+          },
+          "newly_passed": true,
+          "regressed": false
+        },
+        "direct": {
+          "control": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 1051,
+            "generation_ms": 8188.5
+          },
+          "treatment": {
+            "official_ex": true,
+            "contract": true,
+            "execution": "passed",
+            "tokens": 1279,
+            "generation_ms": 10201.5
+          },
+          "newly_passed": false,
+          "regressed": false
+        }
+      }
+    }
+  ],
+  "acceptance": {
+    "target_treatment_both_metrics_correct": 3,
+    "target_required": 4,
+    "newly_correct_target_arms": [
+      "md-026/forge",
+      "md-009/direct"
+    ],
+    "target_score_regressions": [],
+    "controls_all_both_conditions_correct": true,
+    "all_16_scored": true,
+    "all_usage_observed": true,
+    "token_ratio": 1.1784555086043236,
+    "token_ratio_limit": 1.25,
+    "execution_regression": [
+      "md-009/forge: passed wrong-result -> execution failed unknown_column"
+    ],
+    "accepted": false,
+    "decision": "Keep value_context off; target 4/4 gate failed despite two newly correct arms. No retry, new sample, threshold change or production adoption."
+  },
+  "binding_observations": {
+    "control_wrong_literals": [
+      "md-009/forge: discount",
+      "md-009/direct: discount",
+      "md-026/forge: premium"
+    ],
+    "treatment_exact_literals": "All target arms use Discount/Premium, including the remaining invalid Forge query.",
+    "newly_correct": [
+      "md-009/direct",
+      "md-026/forge"
+    ],
+    "unchanged_input_control": "md-002 gets no suffix; both conditions remain correct; no gain attributed to identical-input variation."
+  },
+  "remaining_failure": {
+    "case_id": "md-009",
+    "arm": "forge",
+    "output": {
+      "scan": "gasstations",
+      "select": [
+        "cze.cnt - svk.cnt"
+      ],
+      "cte": [
+        {
+          "name": "cze",
+          "query": {
+            "scan": "gasstations",
+            "filter": [
+              {
+                "col": "Country",
+                "op": "eq",
+                "val": "CZE"
+              },
+              {
+                "col": "Segment",
+                "op": "eq",
+                "val": "Discount"
+              }
+            ],
+            "agg": [
+              {
+                "fn": "count_distinct",
+                "col": "GasStationID",
+                "as": "cnt"
+              }
+            ],
+            "select": [
+              "cnt"
+            ]
+          }
+        },
+        {
+          "name": "svk",
+          "query": {
+            "scan": "gasstations",
+            "filter": [
+              {
+                "col": "Country",
+                "op": "eq",
+                "val": "SVK"
+              },
+              {
+                "col": "Segment",
+                "op": "eq",
+                "val": "Discount"
+              }
+            ],
+            "agg": [
+              {
+                "fn": "count_distinct",
+                "col": "GasStationID",
+                "as": "cnt"
+              }
+            ],
+            "select": [
+              "cnt"
+            ]
+          }
+        }
+      ]
+    },
+    "sql": "WITH cze AS (\n  SELECT COUNT(DISTINCT GasStationID) AS cnt\n  FROM gasstations\n  WHERE Country = 'CZE' AND Segment = 'Discount'\n),\nsvk AS (\n  SELECT COUNT(DISTINCT GasStationID) AS cnt\n  FROM gasstations\n  WHERE Country = 'SVK' AND Segment = 'Discount'\n)\nSELECT cze.cnt - svk.cnt\nFROM gasstations",
+    "sqlite_error": "no such column: cze.cnt",
+    "assurance": {
+      "status": "passed",
+      "assurance_revision": "query-assurance-v8",
+      "policy_revision": "convention-policy-v9",
+      "registry_revision": "sha256:a760d18546df5b159b6c7603fd1497ebb45320752f3126ef5d42d6d0d7f09c5e",
+      "model_revision": "benchmark-v2",
+      "gates": [
+        {
+          "gate": "sql_safety",
+          "status": "passed",
+          "revision": "query-assurance-v8",
+          "diagnostics": []
+        },
+        {
+          "gate": "sql_parse",
+          "status": "passed",
+          "revision": "query-assurance-v8",
+          "diagnostics": []
+        },
+        {
+          "gate": "registry_acl",
+          "status": "passed",
+          "revision": "sha256:a760d18546df5b159b6c7603fd1497ebb45320752f3126ef5d42d6d0d7f09c5e",
+          "diagnostics": []
+        }
+      ],
+      "sql": "WITH cze AS (\n  SELECT COUNT(DISTINCT GasStationID) AS cnt\n  FROM gasstations\n  WHERE Country = 'CZE' AND Segment = 'Discount'\n),\nsvk AS (\n  SELECT COUNT(DISTINCT GasStationID) AS cnt\n  FROM gasstations\n  WHERE Country = 'SVK' AND Segment = 'Discount'\n)\nSELECT cze.cnt - svk.cnt\nFROM gasstations",
+      "sql_hash": "sha256:aafc55c933613b1aaf6453f5dc785c4514c2b7d2328b5d22e70d3e3ad850b870",
+      "input_kind": "forge_json",
+      "candidate_revision": "query-candidate-v1"
+    },
+    "interpretation": "Correct Discount spelling, but outer scan remains gasstations and omits FROM/JOIN bindings for cze and svk. Compiler reflects the supplied query; shared Assurance v8 passes this sample, SQLite rejects it. Do not auto-add joins.",
+    "score": "EX=0, Contract=0, original candidate retained; prior control executed but was already incorrect.",
+    "next_candidate": "Separate offline FROM-scope validation investigation, not implemented in this experiment."
+  },
+  "verification": {
+    "raw_response_hashes_verified": 16,
+    "replay_candidate_sql_scores_unchanged": 16,
+    "native_logs_complete": 216,
+    "model_and_generation_contract_equal": true,
+    "official_and_contract_independent_sqlite_agree": 16,
+    "independent_scope": "Four one-column cases; fresh readonly original Gold and original SQL, exact set/multiset comparison without compiler/scorer/assurance.",
+    "frozen_full_instructions_preserved": true,
+    "prompt_evidence": "16 deterministic reconstructions from native persisted contexts/runtime, native logged char counts match. Not captured original provider payload bodies; wire payload hashes retained by Pi.",
+    "comparison": {
+      "comparable": true,
+      "generation_provenance_known": true,
+      "comparison_scope": "saved_candidates_offline",
+      "generative_gain_claim": false,
+      "limitation": "CLI compares saved candidates only; native runs/logs establish actual generation provenance. Tiny single-shot public development sample is not generalized causal proof."
+    },
+    "python": "873 passed / 26 skipped before generation; no further runtime changes",
+    "pi": "151 passed / typecheck passed before generation; no further runtime changes"
+  },
+  "runtime": {
+    "python": "3.14.7",
+    "sqlite": "3.53.4",
+    "sqlglot": "29.0.1",
+    "jsonschema": "4.26.0",
+    "numpy": "2.5.2",
+    "pydantic": "2.13.5"
+  },
+  "environment": {
+    "same_final_runtime_both_conditions": true,
+    "dependency_sync_disclosed_in_ready_report": true,
+    "authentication": "Reuse previously explicit agentDir through native SDK; agent did not read/copy credential contents. Initial default empty auth directory was replaced before any run/dispatch."
+  },
+  "cleanup": {
+    "all_services_stopped": true,
+    "ports": [
+      {
+        "port": 18772,
+        "closed": true
+      },
+      {
+        "port": 18773,
+        "closed": true
+      }
+    ],
+    "state_snapshot": ".forge/benchmarks/categorical-value-context-20260906/generation-state.snapshot.sqlite3",
+    "sqlite_integrity": "ok",
+    "no_commit_push_deploy": true
+  },
+  "historical_protection": {
+    "ready_report_is_pre_authorization_snapshot": true,
+    "rolling_parent": "pbr_f24226875eaf4a56b5fb560d61b94dc2",
+    "no_seed49": true,
+    "no_candidate_or_gold_rewrite": true
+  },
+  "evidence_root": ".forge/benchmarks/categorical-value-context-20260906",
+  "artifacts": [
+    "generation-authorization.json",
+    "generation-preflight.json",
+    "control.start-request.json",
+    "treatment.start-request.json",
+    "control.start-response.json",
+    "treatment.start-response.json",
+    "control.run.json",
+    "treatment.run.json",
+    "control.logs.json",
+    "treatment.logs.json",
+    "control.replay.json",
+    "treatment.replay.json",
+    "generation-compare-command.json",
+    "generation-evidence-validation.json",
+    "generation-prompts.reconstructed.json",
+    "generation-independent-sqlite.json",
+    "generation-gate-result.json",
+    "generation-history.final.json",
+    "generation-state.snapshot.sqlite3",
+    "generation-cleanup.json"
+  ]
+}

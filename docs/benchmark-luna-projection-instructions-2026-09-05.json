@@ -1,0 +1,3006 @@
+{
+  "requirement": "REQ-2026-09-05-044",
+  "date": "2026-09-05",
+  "status": "completed_original_responses_independently_replayed",
+  "decision": {
+  "adopt_candidate": false,
+  "reason": "No Forge EX or Contract gain: 4/5 to 4/5, zero newly correct and zero correct-to-wrong cases. Three fixed correct controls preserved; both probes show no new EX win attributable to candidate.",
+  "observations": [
+    {
+      "case_id": "md-436",
+      "finding": "Both conditions now produce identical correct Forge ratio SQL; recovery relative to older run is not treatment evidence."
+    },
+    {
+      "case_id": "md-259",
+      "finding": "Control Forge outputs percentage/count with a join-restricted denominator; treatment outputs three intermediate counts (741,212,118), omitting requested percentage. Both remain incorrect."
+    },
+    {
+      "arm": "direct",
+      "finding": "Identical instructions and context produce 4/5 versus 5/5; this is observed run-to-run variability, not a treatment improvement."
+    }
+  ],
+  "production_prompt_changed": false,
+  "compiler_schema_gold_metric_changed": false,
+  "new_generation_requests_after_authorized_20": 0,
+  "accuracy_claim": "Development paired sample only; no stable gain, overall accuracy or generalization claim."
+},
+  "official_ex_replay": {
+  "path": ".forge/benchmarks/luna-projection-instructions-20260905/official-alignment.json",
+  "official_commit": "b3d4bcbbae9a96934ad812551eb400c7a3b23c12",
+  "functions": [
+    "calculate_ex",
+    "execute_sql",
+    "connect_db(SQLite)"
+  ],
+  "comparisons": 20,
+  "disagreements": 0,
+  "summary": {
+    "control": {
+      "forge": {
+        "correct": 4,
+        "total": 5
+      },
+      "direct": {
+        "correct": 4,
+        "total": 5
+      }
+    },
+    "treatment": {
+      "forge": {
+        "correct": 4,
+        "total": 5
+      },
+      "direct": {
+        "correct": 5,
+        "total": 5
+      }
+    }
+  },
+  "sqlite_version": "3.53.4",
+  "source_cases_sha256": "4ba5fa8de55856222f484d380d2ba872b380bf79d825de70478e2120cb0fc43b",
+  "scope": "Unmodified official calculate_ex, execute_sql and SQLite branch of connect_db, not complete multiprocessing CLI; optional MySQL/PostgreSQL imports not loaded; func_timeout package absent. All executed query pairs finished under 30 seconds. No claim of equivalent timeout enforcement."
+},
+  "model": "openai-codex/gpt-5.6-luna",
+  "model_revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+  "generation_contracts": [
+    {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "direct_output_mode": "text_sql"
+    },
+    {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-projection-candidate-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "direct_output_mode": "text_sql"
+    }
+  ],
+  "metric_revision": "semantic-result-compare-v2",
+  "experiment_card": {
+    "requirement": "REQ-2026-09-05-044",
+    "status": "authorized_before_generation",
+    "hypothesis": "Making per-query projection semantics and requested-output completeness explicit may reduce generated omission without changing output shape or rejecting legitimate hidden expressions.",
+    "single_changed_factor": "Forge compact generation instructions only",
+    "control_instructions": "你是 Forge 查询规划器。Forge JSON 的结构由 `emit_forge_query` 工具 Schema 提供；最终只调用该工具一次，不输出解释或 SQL。\n\n## 语义约束\n\n- 只使用当前数据库结构与 Evidence 中出现的表、字段、关系和业务定义，不猜测隐藏 schema。\n- 最终 `select` 只包含问题要求的列，严格保持要求的列顺序；计算辅助列、分母、内部 ID 和排名列除非被要求，否则只留在 CTE 内。\n- 严格遵守要求的行粒度、去重、排序和 Top N 范围。一对多 JOIN 后统计实体数量时，对实体主键去重。\n- 行级条件放 `filter`，聚合结果条件放 `having`；维度和聚合并存时按准确的展示粒度分组。\n- 百分比才乘 100；比率不自动乘 100。除非问题、Evidence 或 ResultContract 明确要求小数位或舍入，否则绝不使用 `ROUND`。\n- `expr`、`agg.col` 和字段引用会进入 SQLite SQL：只写有效 SQLite 表达式。使用 SQLite 日期函数，不使用 `YEAR()`、`SUBTRACT()` 等其他方言函数。\n- 含空格、标点或 SQLite 关键字的表名/列名必须用双引号逐段引用；有 JOIN 时限定可能歧义的字段。\n- 累计、排名、每组 Top N、前后行或多阶段聚合才使用必要的 window/CTE；不要为了展示辅助数据增加最终结果列。",
+    "candidate_instructions": "你是 Forge 查询规划器。Forge JSON 的结构由 `emit_forge_query` 工具 Schema 提供；最终只调用该工具一次，不输出解释或 SQL。\n\n## 语义约束\n\n- 只使用当前数据库结构与 Evidence 中出现的表、字段、关系和业务定义，不猜测隐藏 schema。\n- 最终 `select` 只包含问题要求的列，严格保持要求的列顺序；计算辅助列、分母、内部 ID 和排名列除非被要求，否则只留在 CTE 内。\n- 严格遵守要求的行粒度、去重、排序和 Top N 范围。一对多 JOIN 后统计实体数量时，对实体主键去重。\n- 行级条件放 `filter`，聚合结果条件放 `having`；维度和聚合并存时按准确的展示粒度分组。\n- 百分比才乘 100；比率不自动乘 100。除非问题、Evidence 或 ResultContract 明确要求小数位或舍入，否则绝不使用 `ROUND`。\n- `expr`、`agg.col` 和字段引用会进入 SQLite SQL：只写有效 SQLite 表达式。使用 SQLite 日期函数，不使用 `YEAR()`、`SUBTRACT()` 等其他方言函数。\n- 含空格、标点或 SQLite 关键字的表名/列名必须用双引号逐段引用；有 JOIN 时限定可能歧义的字段。\n- 累计、排名、每组 Top N、前后行或多阶段聚合才使用必要的 window/CTE；不要为了展示辅助数据增加最终结果列。\n- 每层 `select` 决定该层实际输出；仅声明 `agg` 或 `window` 不会自动输出它们。问题要求的每个维度和指标都必须由最终 `select` 的字段、别名或 `expr` 表达；外层使用的中间量必须由对应 CTE 的 `select` 导出。\n- 仅用于 `having`、`sort` 或 `qualify` 的辅助表达式可以不出现在可见结果中；不要机械地把全部聚合或窗口别名追加到输出。",
+    "control_sha256": "2a6547fe57fedcbe463496d2a819d57a030b108a64953ce5163963da87d0ac25",
+    "candidate_sha256": "c351b0e1d9a88e9f7f885f15eb728641fe4b7f79688efa2a86b1102b240f6483",
+    "candidate_prompt_revision": "forge-structured-benchmark-projection-candidate-v1",
+    "unchanged": [
+      "Compiler",
+      "canonical and native strict Schema",
+      "Gold",
+      "ResultContract and EX comparator",
+      "official structure and Evidence",
+      "Direct instructions",
+      "Provider and sampling"
+    ],
+    "proposed_cases": [
+      {
+        "case_id": "md-436",
+        "role": "known projection failure probe"
+      },
+      {
+        "case_id": "md-259",
+        "role": "known projection failure probe"
+      },
+      {
+        "case_id": "md-085",
+        "role": "frozen correct moderate control"
+      },
+      {
+        "case_id": "md-312",
+        "role": "frozen correct moderate control"
+      },
+      {
+        "case_id": "md-386",
+        "role": "frozen correct challenging control"
+      }
+    ],
+    "proposed_generation_request_cap": 20,
+    "design": "Five exposed development cases × control/candidate instructions × Forge/Direct, one generation each through unchanged Pi paired runtime; Direct is an unchanged negative-control arm.",
+    "authorization": "User selected 执行20次配对验证",
+    "acceptance": "Report all case-level changes, original EX/Contract/execute, wrong-to-right/right-to-wrong and tokens; independently inspect requested-expression presence. Preserve disagreements/unknowns and all original candidates. No regrading, replacement, adaptive sample changes, or generalization claim.",
+    "rationale": "Prefer testing clearer expression of existing semantics over changing valid projection behavior, appending columns or increasing rejection.",
+    "actual_generation_requests": 0,
+    "retries": 0,
+    "replacements": 0,
+    "cases": [
+      {
+        "case_id": "md-436",
+        "role": "known projection failure probe",
+        "db_id": "toxicology",
+        "difficulty": "challenging"
+      },
+      {
+        "case_id": "md-259",
+        "role": "known projection failure probe",
+        "db_id": "superhero",
+        "difficulty": "challenging"
+      },
+      {
+        "case_id": "md-085",
+        "role": "frozen correct moderate control",
+        "db_id": "thrombosis_prediction",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-312",
+        "role": "frozen correct moderate control",
+        "db_id": "codebase_community",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-386",
+        "role": "frozen correct challenging control",
+        "db_id": "card_games",
+        "difficulty": "challenging"
+      }
+    ],
+    "control_prompt_revision": "forge-structured-benchmark-v1",
+    "treatment_prompt_revision": "forge-structured-benchmark-projection-candidate-v1",
+    "model": "openai-codex/gpt-5.6-luna",
+    "max_generation_requests": 20
+  },
+  "actual_generation_requests": 20,
+  "http200": 20,
+  "provider_retries": 0,
+  "replacement_requests": 0,
+  "metrics": {
+    "control": {
+      "forge": {
+        "cases": 5,
+        "official_ea": 4,
+        "contract_accuracy": 4,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": 5,
+        "total_tokens": 23660,
+        "input_tokens": 20809,
+        "output_tokens": 2851,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 13457.640000000003,
+        "p95_generation_ms": 28119.6
+      },
+      "direct": {
+        "cases": 5,
+        "official_ea": 4,
+        "contract_accuracy": 4,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": null,
+        "total_tokens": 12624,
+        "input_tokens": 11494,
+        "output_tokens": 1130,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 7149.26,
+        "p95_generation_ms": 10485.9
+      }
+    },
+    "treatment": {
+      "forge": {
+        "cases": 5,
+        "official_ea": 4,
+        "contract_accuracy": 4,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": 5,
+        "total_tokens": 23719,
+        "input_tokens": 21414,
+        "output_tokens": 2305,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 10802.12,
+        "p95_generation_ms": 21148.3
+      },
+      "direct": {
+        "cases": 5,
+        "official_ea": 5,
+        "contract_accuracy": 5,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": null,
+        "total_tokens": 12543,
+        "input_tokens": 11494,
+        "output_tokens": 1049,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 6039.460000000001,
+        "p95_generation_ms": 10447.4
+      }
+    }
+  },
+  "paired": [
+    {
+      "case_id": "md-436",
+      "role": "known projection failure probe",
+      "arms": {
+        "forge": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        },
+        "direct": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        }
+      }
+    },
+    {
+      "case_id": "md-259",
+      "role": "known projection failure probe",
+      "arms": {
+        "forge": {
+          "control": {
+            "ea": false,
+            "contract": false,
+            "failure": {
+              "stage": "result_contract",
+              "code": "result_value_mismatch",
+              "retryable": true
+            }
+          },
+          "treatment": {
+            "ea": false,
+            "contract": false,
+            "failure": {
+              "stage": "result_contract",
+              "code": "result_column_count_mismatch",
+              "retryable": true
+            }
+          }
+        },
+        "direct": {
+          "control": {
+            "ea": false,
+            "contract": false,
+            "failure": {
+              "stage": "result_contract",
+              "code": "result_value_mismatch",
+              "retryable": true
+            }
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        }
+      }
+    },
+    {
+      "case_id": "md-085",
+      "role": "frozen correct moderate control",
+      "arms": {
+        "forge": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        },
+        "direct": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        }
+      }
+    },
+    {
+      "case_id": "md-312",
+      "role": "frozen correct moderate control",
+      "arms": {
+        "forge": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        },
+        "direct": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        }
+      }
+    },
+    {
+      "case_id": "md-386",
+      "role": "frozen correct challenging control",
+      "arms": {
+        "forge": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        },
+        "direct": {
+          "control": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          },
+          "treatment": {
+            "ea": true,
+            "contract": true,
+            "failure": null
+          }
+        }
+      }
+    }
+  ],
+  "token_cost": {
+    "control": 36284,
+    "treatment": 36262,
+    "total": 72546,
+    "treatment_control_ratio": 0.9993936721419909,
+    "forge_treatment_control_ratio": 1.002493660185968,
+    "currency": null
+  },
+  "outcomes": [
+    {
+      "condition": "control",
+      "case_id": "md-436",
+      "role": "known projection failure probe",
+      "db_id": "toxicology",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_37327593f958491e81019059d7a0bc72",
+      "candidate": {
+        "scan": "atom",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "molecule",
+            "on": {
+              "left": "atom.molecule_id",
+              "right": "molecule.molecule_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "atom.molecule_id",
+            "op": "eq",
+            "val": "TR006"
+          }
+        ],
+        "group": [
+          "molecule.label"
+        ],
+        "select": [
+          {
+            "expr": "SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element)",
+            "as": "ratio"
+          },
+          "molecule.label"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0,
+          1
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element) AS ratio, molecule.label\nFROM atom\nINNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\nWHERE atom.molecule_id = 'TR006'\nGROUP BY molecule.label",
+        "forge_json": {
+          "scan": "atom",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "molecule",
+              "on": {
+                "left": "atom.molecule_id",
+                "right": "molecule.molecule_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "atom.molecule_id",
+              "op": "eq",
+              "val": "TR006"
+            }
+          ],
+          "group": [
+            "molecule.label"
+          ],
+          "select": [
+            {
+              "expr": "SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element)",
+              "as": "ratio"
+            },
+            "molecule.label"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element) AS ratio, molecule.label\nFROM atom\nINNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\nWHERE atom.molecule_id = 'TR006'\nGROUP BY molecule.label",
+          "sql_hash": "sha256:38ffd4809ae56e628a992e2e662a4851b85789a380fe2d995680285d154e233d",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ratio",
+            "label"
+          ],
+          "rows": [
+            [
+              0.3617021276595745,
+              "+"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3017,
+        "output": 475,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3492
+      },
+      "generation_ms": 15280.7
+    },
+    {
+      "condition": "control",
+      "case_id": "md-436",
+      "role": "known projection failure probe",
+      "db_id": "toxicology",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_37327593f958491e81019059d7a0bc72",
+      "candidate": "SELECT CAST(SUM(CASE WHEN a.element = 'h' THEN 1 ELSE 0 END) AS REAL) / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0,
+          1
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT CAST(SUM(CASE WHEN a.element = 'h' THEN 1 ELSE 0 END) AS REAL) / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT CAST(SUM(CASE WHEN a.element = 'h' THEN 1 ELSE 0 END) AS REAL) / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label",
+          "sql_hash": "sha256:8cdbfd406e3189204059a775b0d76e2973c689224e81122d9f37abac84a35c68",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ratio",
+            "label"
+          ],
+          "rows": [
+            [
+              0.3617021276595745,
+              "+"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 1154,
+        "output": 277,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1431
+      },
+      "generation_ms": 7911.2
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-436",
+      "role": "known projection failure probe",
+      "db_id": "toxicology",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_1c778c184a5a4b96a609026d476618fe",
+      "candidate": {
+        "scan": "atom",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "molecule",
+            "on": {
+              "left": "atom.molecule_id",
+              "right": "molecule.molecule_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "atom.molecule_id",
+            "op": "eq",
+            "val": "TR006"
+          }
+        ],
+        "group": [
+          "molecule.label"
+        ],
+        "select": [
+          {
+            "expr": "SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element)",
+            "as": "ratio"
+          },
+          "molecule.label"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0,
+          1
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element) AS ratio, molecule.label\nFROM atom\nINNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\nWHERE atom.molecule_id = 'TR006'\nGROUP BY molecule.label",
+        "forge_json": {
+          "scan": "atom",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "molecule",
+              "on": {
+                "left": "atom.molecule_id",
+                "right": "molecule.molecule_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "atom.molecule_id",
+              "op": "eq",
+              "val": "TR006"
+            }
+          ],
+          "group": [
+            "molecule.label"
+          ],
+          "select": [
+            {
+              "expr": "SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element)",
+              "as": "ratio"
+            },
+            "molecule.label"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT SUM(CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END) * 1.0 / COUNT(atom.element) AS ratio, molecule.label\nFROM atom\nINNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\nWHERE atom.molecule_id = 'TR006'\nGROUP BY molecule.label",
+          "sql_hash": "sha256:38ffd4809ae56e628a992e2e662a4851b85789a380fe2d995680285d154e233d",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ratio",
+            "label"
+          ],
+          "rows": [
+            [
+              0.3617021276595745,
+              "+"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3138,
+        "output": 482,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3620
+      },
+      "generation_ms": 11069.9
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-436",
+      "role": "known projection failure probe",
+      "db_id": "toxicology",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_1c778c184a5a4b96a609026d476618fe",
+      "candidate": "SELECT 1.0 * SUM(a.element = 'h') / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0,
+          1
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT 1.0 * SUM(a.element = 'h') / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT 1.0 * SUM(a.element = 'h') / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label",
+          "sql_hash": "sha256:2c0014fd56b9d0ef5b007d1d90a7295caba15f2a5ece37c67976d1ea2d406492",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ratio",
+            "label"
+          ],
+          "rows": [
+            [
+              0.3617021276595745,
+              "+"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 1154,
+        "output": 280,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1434
+      },
+      "generation_ms": 6950
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-259",
+      "role": "known projection failure probe",
+      "db_id": "superhero",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_4e697e22e1174979a829dab87c81e373",
+      "candidate": {
+        "scan": "superhero",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "alignment",
+            "on": {
+              "left": "superhero.alignment_id",
+              "right": "alignment.id"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "publisher",
+            "on": {
+              "left": "superhero.publisher_id",
+              "right": "publisher.id"
+            }
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "total_count"
+          },
+          {
+            "fn": "count",
+            "col": "superhero.id",
+            "as": "bad_count",
+            "filter": [
+              {
+                "col": "alignment.alignment",
+                "op": "eq",
+                "val": "Bad"
+              }
+            ]
+          },
+          {
+            "fn": "count",
+            "col": "superhero.id",
+            "as": "marvel_bad_count",
+            "filter": [
+              {
+                "col": "alignment.alignment",
+                "op": "eq",
+                "val": "Bad"
+              },
+              {
+                "col": "publisher.publisher_name",
+                "op": "eq",
+                "val": "Marvel Comics"
+              }
+            ]
+          }
+        ],
+        "select": [
+          "total_count",
+          "bad_count",
+          "marvel_bad_count"
+        ],
+        "cte": [
+          {
+            "name": "stats",
+            "query": {
+              "scan": "superhero",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "alignment",
+                  "on": {
+                    "left": "superhero.alignment_id",
+                    "right": "alignment.id"
+                  }
+                },
+                {
+                  "type": "inner",
+                  "table": "publisher",
+                  "on": {
+                    "left": "superhero.publisher_id",
+                    "right": "publisher.id"
+                  }
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "count_all",
+                  "as": "total_count"
+                },
+                {
+                  "fn": "count",
+                  "col": "superhero.id",
+                  "as": "bad_count",
+                  "filter": [
+                    {
+                      "col": "alignment.alignment",
+                      "op": "eq",
+                      "val": "Bad"
+                    }
+                  ]
+                },
+                {
+                  "fn": "count",
+                  "col": "superhero.id",
+                  "as": "marvel_bad_count",
+                  "filter": [
+                    {
+                      "col": "alignment.alignment",
+                      "op": "eq",
+                      "val": "Bad"
+                    },
+                    {
+                      "col": "publisher.publisher_name",
+                      "op": "eq",
+                      "val": "Marvel Comics"
+                    }
+                  ]
+                }
+              ],
+              "select": [
+                "total_count",
+                "bad_count",
+                "marvel_bad_count"
+              ]
+            },
+            "recursive": false
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "column_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_column_count_mismatch",
+        "sql": "WITH stats AS (\n  SELECT COUNT(*) AS total_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad') AS bad_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics') AS marvel_bad_count\n  FROM superhero\n  INNER JOIN alignment ON superhero.alignment_id = alignment.id\n  INNER JOIN publisher ON superhero.publisher_id = publisher.id\n)\nSELECT COUNT(*) AS total_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad') AS bad_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics') AS marvel_bad_count\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+        "forge_json": {
+          "scan": "superhero",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "alignment",
+              "on": {
+                "left": "superhero.alignment_id",
+                "right": "alignment.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "publisher",
+              "on": {
+                "left": "superhero.publisher_id",
+                "right": "publisher.id"
+              }
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "total_count"
+            },
+            {
+              "fn": "count",
+              "col": "superhero.id",
+              "as": "bad_count",
+              "filter": [
+                {
+                  "col": "alignment.alignment",
+                  "op": "eq",
+                  "val": "Bad"
+                }
+              ]
+            },
+            {
+              "fn": "count",
+              "col": "superhero.id",
+              "as": "marvel_bad_count",
+              "filter": [
+                {
+                  "col": "alignment.alignment",
+                  "op": "eq",
+                  "val": "Bad"
+                },
+                {
+                  "col": "publisher.publisher_name",
+                  "op": "eq",
+                  "val": "Marvel Comics"
+                }
+              ]
+            }
+          ],
+          "select": [
+            "total_count",
+            "bad_count",
+            "marvel_bad_count"
+          ],
+          "cte": [
+            {
+              "name": "stats",
+              "query": {
+                "scan": "superhero",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "alignment",
+                    "on": {
+                      "left": "superhero.alignment_id",
+                      "right": "alignment.id"
+                    }
+                  },
+                  {
+                    "type": "inner",
+                    "table": "publisher",
+                    "on": {
+                      "left": "superhero.publisher_id",
+                      "right": "publisher.id"
+                    }
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "count_all",
+                    "as": "total_count"
+                  },
+                  {
+                    "fn": "count",
+                    "col": "superhero.id",
+                    "as": "bad_count",
+                    "filter": [
+                      {
+                        "col": "alignment.alignment",
+                        "op": "eq",
+                        "val": "Bad"
+                      }
+                    ]
+                  },
+                  {
+                    "fn": "count",
+                    "col": "superhero.id",
+                    "as": "marvel_bad_count",
+                    "filter": [
+                      {
+                        "col": "alignment.alignment",
+                        "op": "eq",
+                        "val": "Bad"
+                      },
+                      {
+                        "col": "publisher.publisher_name",
+                        "op": "eq",
+                        "val": "Marvel Comics"
+                      }
+                    ]
+                  }
+                ],
+                "select": [
+                  "total_count",
+                  "bad_count",
+                  "marvel_bad_count"
+                ]
+              },
+              "recursive": false
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+              "diagnostics": []
+            }
+          ],
+          "sql": "WITH stats AS (\n  SELECT COUNT(*) AS total_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad') AS bad_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics') AS marvel_bad_count\n  FROM superhero\n  INNER JOIN alignment ON superhero.alignment_id = alignment.id\n  INNER JOIN publisher ON superhero.publisher_id = publisher.id\n)\nSELECT COUNT(*) AS total_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad') AS bad_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics') AS marvel_bad_count\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+          "sql_hash": "sha256:05adebde5c1375f1b62ea2182dc023ce99cc17271d92a4e91b5228026f7941db",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "total_count",
+            "bad_count",
+            "marvel_bad_count"
+          ],
+          "rows": [
+            [
+              741,
+              212,
+              118
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4164,
+        "output": 1027,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 5191
+      },
+      "generation_ms": 21148.3
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-259",
+      "role": "known projection failure probe",
+      "db_id": "superhero",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_4e697e22e1174979a829dab87c81e373",
+      "candidate": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS bad_percentage, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s LEFT JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0,
+          1
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS bad_percentage, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s LEFT JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS bad_percentage, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s LEFT JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+          "sql_hash": "sha256:52705ebfb24b95e2cbb3ea0d5a8d7ca95c3702fd6d3ad8553d7d21b326d4d108",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "bad_percentage",
+            "marvel_bad_count"
+          ],
+          "rows": [
+            [
+              28.266666666666666,
+              118
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2180,
+        "output": 402,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2582
+      },
+      "generation_ms": 10447.4
+    },
+    {
+      "condition": "control",
+      "case_id": "md-259",
+      "role": "known projection failure probe",
+      "db_id": "superhero",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_ddba909cbb5945cebf227e4e72f2ff13",
+      "candidate": {
+        "scan": "superhero",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "alignment",
+            "on": {
+              "left": "superhero.alignment_id",
+              "right": "alignment.id"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "publisher",
+            "on": {
+              "left": "superhero.publisher_id",
+              "right": "publisher.id"
+            }
+          }
+        ],
+        "select": [
+          {
+            "expr": "100.0 * SUM(CASE WHEN alignment.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(superhero.id)",
+            "as": "percentage"
+          },
+          {
+            "expr": "SUM(CASE WHEN alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END)",
+            "as": "marvel_bad_count"
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "value_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_value_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_value_mismatch",
+        "sql": "SELECT 100.0 * SUM(CASE WHEN alignment.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(superhero.id) AS percentage, SUM(CASE WHEN alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+        "forge_json": {
+          "scan": "superhero",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "alignment",
+              "on": {
+                "left": "superhero.alignment_id",
+                "right": "alignment.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "publisher",
+              "on": {
+                "left": "superhero.publisher_id",
+                "right": "publisher.id"
+              }
+            }
+          ],
+          "select": [
+            {
+              "expr": "100.0 * SUM(CASE WHEN alignment.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(superhero.id)",
+              "as": "percentage"
+            },
+            {
+              "expr": "SUM(CASE WHEN alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END)",
+              "as": "marvel_bad_count"
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT 100.0 * SUM(CASE WHEN alignment.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(superhero.id) AS percentage, SUM(CASE WHEN alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+          "sql_hash": "sha256:f7c62d61d6fc6fdd2d4abd0ee6d1c63148155542acb312593caf3ff50935f8bb",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "percentage",
+            "marvel_bad_count"
+          ],
+          "rows": [
+            [
+              28.60998650472335,
+              118
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4043,
+        "output": 1460,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 5503
+      },
+      "generation_ms": 28119.6
+    },
+    {
+      "condition": "control",
+      "case_id": "md-259",
+      "role": "known projection failure probe",
+      "db_id": "superhero",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_ddba909cbb5945cebf227e4e72f2ff13",
+      "candidate": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage_bad, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "value_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_value_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_value_mismatch",
+        "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage_bad, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage_bad, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+          "sql_hash": "sha256:b3c69565de0f428003449c55feff2fd8c8e2746b53504bdc44e9f31a758b1aac",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "percentage_bad",
+            "marvel_bad_count"
+          ],
+          "rows": [
+            [
+              28.49462365591398,
+              118
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2180,
+        "output": 485,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2665
+      },
+      "generation_ms": 10485.9
+    },
+    {
+      "condition": "control",
+      "case_id": "md-085",
+      "role": "frozen correct moderate control",
+      "db_id": "thrombosis_prediction",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_7fce35ee2a50497e9a26e2899c4065fb",
+      "candidate": {
+        "scan": "Patient",
+        "filter": [
+          {
+            "col": "SEX",
+            "op": "eq",
+            "val": "F"
+          },
+          {
+            "col": "Admission",
+            "op": "eq",
+            "val": "-"
+          },
+          {
+            "col": "strftime('%Y', \"Description\")",
+            "op": "eq",
+            "val": "1997"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "count"
+          }
+        ],
+        "select": [
+          "count"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) AS count\nFROM Patient\nWHERE SEX = 'F' AND Admission = '-' AND strftime('%Y', \"Description\") = '1997'",
+        "forge_json": {
+          "scan": "Patient",
+          "filter": [
+            {
+              "col": "SEX",
+              "op": "eq",
+              "val": "F"
+            },
+            {
+              "col": "Admission",
+              "op": "eq",
+              "val": "-"
+            },
+            {
+              "col": "strftime('%Y', \"Description\")",
+              "op": "eq",
+              "val": "1997"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "count"
+            }
+          ],
+          "select": [
+            "count"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) AS count\nFROM Patient\nWHERE SEX = 'F' AND Admission = '-' AND strftime('%Y', \"Description\") = '1997'",
+          "sql_hash": "sha256:bf3df8604828817018f5d8fba4a09511cc17a7d43b23936328550e1f9f8e4dd1",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "count"
+          ],
+          "rows": [
+            [
+              161
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3922,
+        "output": 247,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4169
+      },
+      "generation_ms": 8354.6
+    },
+    {
+      "condition": "control",
+      "case_id": "md-085",
+      "role": "frozen correct moderate control",
+      "db_id": "thrombosis_prediction",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_7fce35ee2a50497e9a26e2899c4065fb",
+      "candidate": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+          "sql_hash": "sha256:22db484fc857ae79dcde5fed9f6986779bdb9c0c1063296744fc7d397bd9925f",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "COUNT(*)"
+          ],
+          "rows": [
+            [
+              161
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2059,
+        "output": 125,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2184
+      },
+      "generation_ms": 8137.7
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-085",
+      "role": "frozen correct moderate control",
+      "db_id": "thrombosis_prediction",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_813afc6d7d8043009a679a1ca3d6743e",
+      "candidate": {
+        "scan": "Patient",
+        "filter": [
+          {
+            "col": "SEX",
+            "op": "eq",
+            "val": "F"
+          },
+          {
+            "col": "Admission",
+            "op": "eq",
+            "val": "-"
+          },
+          {
+            "col": "Description",
+            "op": "like",
+            "val": "1997%"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_distinct",
+            "col": "ID",
+            "as": "patient_count"
+          }
+        ],
+        "select": [
+          "patient_count"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(DISTINCT ID) AS patient_count\nFROM Patient\nWHERE SEX = 'F' AND Admission = '-' AND Description LIKE '1997%'",
+        "forge_json": {
+          "scan": "Patient",
+          "filter": [
+            {
+              "col": "SEX",
+              "op": "eq",
+              "val": "F"
+            },
+            {
+              "col": "Admission",
+              "op": "eq",
+              "val": "-"
+            },
+            {
+              "col": "Description",
+              "op": "like",
+              "val": "1997%"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_distinct",
+              "col": "ID",
+              "as": "patient_count"
+            }
+          ],
+          "select": [
+            "patient_count"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(DISTINCT ID) AS patient_count\nFROM Patient\nWHERE SEX = 'F' AND Admission = '-' AND Description LIKE '1997%'",
+          "sql_hash": "sha256:eb9462cd438ab40edeee9a7d9eef7281498ade9e604c9a0177ba45e1b42401e5",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "patient_count"
+          ],
+          "rows": [
+            [
+              161
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4043,
+        "output": 332,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4375
+      },
+      "generation_ms": 8383.3
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-085",
+      "role": "frozen correct moderate control",
+      "db_id": "thrombosis_prediction",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_813afc6d7d8043009a679a1ca3d6743e",
+      "candidate": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+          "sql_hash": "sha256:22db484fc857ae79dcde5fed9f6986779bdb9c0c1063296744fc7d397bd9925f",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "COUNT(*)"
+          ],
+          "rows": [
+            [
+              161
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2059,
+        "output": 118,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2177
+      },
+      "generation_ms": 4192.2
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-312",
+      "role": "frozen correct moderate control",
+      "db_id": "codebase_community",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_2fdd824b623b41c790a536d3252c3b87",
+      "candidate": {
+        "scan": "posts",
+        "filter": [
+          {
+            "col": "Title",
+            "op": "eq",
+            "val": "Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer"
+          }
+        ],
+        "select": [
+          "ViewCount"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT ViewCount\nFROM posts\nWHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+        "forge_json": {
+          "scan": "posts",
+          "filter": [
+            {
+              "col": "Title",
+              "op": "eq",
+              "val": "Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer"
+            }
+          ],
+          "select": [
+            "ViewCount"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT ViewCount\nFROM posts\nWHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+          "sql_hash": "sha256:dfab63336a65afb9e8da3208bf017992ea60cf24837b2931d35f60d8caf7d698",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ViewCount"
+          ],
+          "rows": [
+            [
+              60
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4217,
+        "output": 158,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4375
+      },
+      "generation_ms": 5755.3
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-312",
+      "role": "frozen correct moderate control",
+      "db_id": "codebase_community",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_2fdd824b623b41c790a536d3252c3b87",
+      "candidate": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+          "sql_hash": "sha256:fc48952c2fe78f65653f22ad9c534b6c18cc29461ae822d60383b8d8913247fc",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ViewCount"
+          ],
+          "rows": [
+            [
+              60
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2233,
+        "output": 29,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2262
+      },
+      "generation_ms": 2727.5
+    },
+    {
+      "condition": "control",
+      "case_id": "md-312",
+      "role": "frozen correct moderate control",
+      "db_id": "codebase_community",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_8605d47242054217a08eca71395dafd0",
+      "candidate": {
+        "scan": "posts",
+        "filter": [
+          {
+            "col": "posts.Title",
+            "op": "eq",
+            "val": "Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer"
+          }
+        ],
+        "select": [
+          "posts.ViewCount"
+        ],
+        "distinct": false
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT posts.ViewCount\nFROM posts\nWHERE posts.Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+        "forge_json": {
+          "scan": "posts",
+          "filter": [
+            {
+              "col": "posts.Title",
+              "op": "eq",
+              "val": "Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer"
+            }
+          ],
+          "select": [
+            "posts.ViewCount"
+          ],
+          "distinct": false
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT posts.ViewCount\nFROM posts\nWHERE posts.Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+          "sql_hash": "sha256:a2e80be2dbb2981196b44cce495a3b94c45636fe4b3777916e7274d48f4d420e",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ViewCount"
+          ],
+          "rows": [
+            [
+              60
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4096,
+        "output": 134,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4230
+      },
+      "generation_ms": 4182.8
+    },
+    {
+      "condition": "control",
+      "case_id": "md-312",
+      "role": "frozen correct moderate control",
+      "db_id": "codebase_community",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_8605d47242054217a08eca71395dafd0",
+      "candidate": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+          "sql_hash": "sha256:fc48952c2fe78f65653f22ad9c534b6c18cc29461ae822d60383b8d8913247fc",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ViewCount"
+          ],
+          "rows": [
+            [
+              60
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2233,
+        "output": 50,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2283
+      },
+      "generation_ms": 2856
+    },
+    {
+      "condition": "control",
+      "case_id": "md-386",
+      "role": "frozen correct challenging control",
+      "db_id": "card_games",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_ce7cbd06ecdd401cb2c4d4cc8bf87f23",
+      "candidate": {
+        "scan": "cards",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "sets",
+            "on": {
+              "left": "cards.setCode",
+              "right": "sets.code"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "cards.artist",
+            "op": "in",
+            "val": [
+              "Jeremy Jarvis",
+              "Aaron Miller",
+              "Chippy"
+            ]
+          },
+          {
+            "col": "sets.name",
+            "op": "eq",
+            "val": "Coldsnap"
+          }
+        ],
+        "select": [
+          "cards.artist"
+        ],
+        "distinct": true
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT DISTINCT cards.artist\nFROM cards\nINNER JOIN sets ON cards.setCode = sets.code\nWHERE cards.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy') AND sets.name = 'Coldsnap'",
+        "forge_json": {
+          "scan": "cards",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "sets",
+              "on": {
+                "left": "cards.setCode",
+                "right": "sets.code"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "cards.artist",
+              "op": "in",
+              "val": [
+                "Jeremy Jarvis",
+                "Aaron Miller",
+                "Chippy"
+              ]
+            },
+            {
+              "col": "sets.name",
+              "op": "eq",
+              "val": "Coldsnap"
+            }
+          ],
+          "select": [
+            "cards.artist"
+          ],
+          "distinct": true
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT DISTINCT cards.artist\nFROM cards\nINNER JOIN sets ON cards.setCode = sets.code\nWHERE cards.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy') AND sets.name = 'Coldsnap'",
+          "sql_hash": "sha256:fc9c5de147e10244964597e144dd0b8b937150403628270721eb8eed2d2344f6",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "artist"
+          ],
+          "rows": [
+            [
+              "Jeremy Jarvis"
+            ],
+            [
+              "Chippy"
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 5731,
+        "output": 535,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 6266
+      },
+      "generation_ms": 11350.5
+    },
+    {
+      "condition": "control",
+      "case_id": "md-386",
+      "role": "frozen correct challenging control",
+      "db_id": "card_games",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_ce7cbd06ecdd401cb2c4d4cc8bf87f23",
+      "candidate": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy');",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+          "sql_hash": "sha256:5f043c0cfe8bcb54138b0c178d34365dd35f19879d37f137361f7f41f071cf7c",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "artist"
+          ],
+          "rows": [
+            [
+              "Jeremy Jarvis"
+            ],
+            [
+              "Chippy"
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3868,
+        "output": 193,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4061
+      },
+      "generation_ms": 6355.5
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-386",
+      "role": "frozen correct challenging control",
+      "db_id": "card_games",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_c9c583307d0149c28e6a0cc1fd307b6d",
+      "candidate": {
+        "scan": "cards",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "sets",
+            "on": {
+              "left": "cards.setCode",
+              "right": "sets.code"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "sets.name",
+            "op": "eq",
+            "val": "Coldsnap"
+          },
+          {
+            "col": "cards.artist",
+            "op": "in",
+            "val": [
+              "Jeremy Jarvis",
+              "Aaron Miller",
+              "Chippy"
+            ]
+          }
+        ],
+        "select": [
+          "cards.artist"
+        ],
+        "distinct": true
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT DISTINCT cards.artist\nFROM cards\nINNER JOIN sets ON cards.setCode = sets.code\nWHERE sets.name = 'Coldsnap' AND cards.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+        "forge_json": {
+          "scan": "cards",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "sets",
+              "on": {
+                "left": "cards.setCode",
+                "right": "sets.code"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "sets.name",
+              "op": "eq",
+              "val": "Coldsnap"
+            },
+            {
+              "col": "cards.artist",
+              "op": "in",
+              "val": [
+                "Jeremy Jarvis",
+                "Aaron Miller",
+                "Chippy"
+              ]
+            }
+          ],
+          "select": [
+            "cards.artist"
+          ],
+          "distinct": true
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT DISTINCT cards.artist\nFROM cards\nINNER JOIN sets ON cards.setCode = sets.code\nWHERE sets.name = 'Coldsnap' AND cards.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+          "sql_hash": "sha256:4328a5326fc1345545d21b5ca0975ab40fcd47e8ee52de66b497fbd1270caa6c",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "artist"
+          ],
+          "rows": [
+            [
+              "Jeremy Jarvis"
+            ],
+            [
+              "Chippy"
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 5852,
+        "output": 306,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 6158
+      },
+      "generation_ms": 7653.8
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-386",
+      "role": "frozen correct challenging control",
+      "db_id": "card_games",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_c9c583307d0149c28e6a0cc1fd307b6d",
+      "candidate": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy');",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+          "sql_hash": "sha256:5f043c0cfe8bcb54138b0c178d34365dd35f19879d37f137361f7f41f071cf7c",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "artist"
+          ],
+          "rows": [
+            [
+              "Jeremy Jarvis"
+            ],
+            [
+              "Chippy"
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3868,
+        "output": 220,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4088
+      },
+      "generation_ms": 5880.2
+    }
+  ],
+  "requests": [
+    {
+      "condition": "control",
+      "case_id": "md-436",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:13:08.316Z",
+      "payload_sha256": "5f400a4802e432566eccdb856ae1024362d5936d3a427cfe7e73c3d34c114905",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-436",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:13:08.317Z",
+      "payload_sha256": "97f40dcbaac3a45f590abdf88be8d24df10d40bb1ccaca898917179b23f178fb",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-436",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:13:23.876Z",
+      "payload_sha256": "7ce4c74326813770de494c6e1289485fe019b2385c315309822525011a80df97",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-436",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:13:23.878Z",
+      "payload_sha256": "bdf391fb3a7a6ff503f35510a25dddfd359b071634817acaebab5636d79c489c",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-259",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:13:38.969Z",
+      "payload_sha256": "97575ec4055b858bb7d1a56826773b3d2f45d0bcdcf0d9242b4c9e03c59ca625",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-259",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:13:38.970Z",
+      "payload_sha256": "dd50c872ec2fd0f9151156cd34c3b94ff79e700d56efd9792ca8645040b48701",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-259",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:00.567Z",
+      "payload_sha256": "0f8e27f1432452fc66d0bde37faefe466273fecf337c931bb937a56a63160d5e",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-259",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:00.569Z",
+      "payload_sha256": "a8c6c230f5f9ac7148dfca64ce07b06a0523534ebd19dea40c570647ec4258a9",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-085",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:32.720Z",
+      "payload_sha256": "e25e75149c98bd7a7c454cb46193ed99e34035b21e6a1d4b7e298cd4cb2f2996",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-085",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:32.722Z",
+      "payload_sha256": "dbca0da4c20b48712072a077ea391d20709ef75a43e2b904ebee472793c3835f",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-085",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:41.247Z",
+      "payload_sha256": "6cd923929d29999c75e4e756b09749cd8f37adb2dfc6b0db81a3bb71d09b38aa",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-085",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:41.248Z",
+      "payload_sha256": "0ea658622e058fcd777cf1777c3055ce84d18ccb2da9085f4a8563159eafd7d3",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-312",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:49.969Z",
+      "payload_sha256": "cd0a32b07a75c1b66dc9f648c4c85e1c03d531a72544c347b470d0b9befb235c",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-312",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:49.971Z",
+      "payload_sha256": "12b9ead26ef4404fc3794135d97c6e50ffba864146691b5bb67fe128970854c6",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-312",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:55.981Z",
+      "payload_sha256": "c74ebe2cac2248959f2d4fa497c0be4e24ea64bf6af90bbcecd9dedf5efe70e9",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-312",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:14:55.982Z",
+      "payload_sha256": "792fcbd4b32d7206796687d486f2d7e334c6d6e4e7598968b35bbb3716f95782",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-386",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:15:00.525Z",
+      "payload_sha256": "842fee3ffcf13f3e04a2289625086f07e28c805f118727bdfaa34a8b325c943a",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-386",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:15:00.527Z",
+      "payload_sha256": "0e9d57c89712e337f8ebea72b73e36a06d5ac54c6ba5c928a90d82514a0c698b",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-386",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:15:12.060Z",
+      "payload_sha256": "1425e23cbee1210c74e382faa682a526dedce3b985eddd5528c5ba90e1bf675c",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-386",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T08:15:12.061Z",
+      "payload_sha256": "afb3ad57d95c88fb204cca30b8d022ac1a5230e820b088307a54dc4812737012",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    }
+  ],
+  "verification": {
+    "original_candidates_replayed": 20,
+    "raw_strict_and_native_pi_checks": 10,
+    "source_and_database_hashes_unchanged": true,
+    "only_forge_instructions_and_matching_prompt_revision_differ": true,
+    "per_arm_one_agent_turn_and_one_provider_request": true,
+    "stored_scores_and_tokens_match": true
+  },
+  "source_preflight": {
+    "model": "openai-codex/gpt-5.6-luna",
+    "ready": true,
+    "frozen_contexts_verified": 10,
+    "frozen_user_prompts_verified": 20,
+    "local_auth_denial_verified": true,
+    "max_generation_requests": 20,
+    "prior_rejected_requests": 0,
+    "automatic_retries": 0,
+    "agent_turns_per_arm": 1,
+    "temperature_requested": null,
+    "sampling": "provider_default",
+    "output_token_hard_cap": null,
+    "global_extensions_or_context_files_loaded": false,
+    "real_auth_handled_only_by_sdk": true,
+    "source_sha256": {
+      "services/pi-orchestrator/src/benchmark-runtime.ts": "9e24552df12bc4e22566f8357edf989ada76e09eeaca3dde5005106a52a08ba8",
+      "services/pi-orchestrator/src/strict-forge-output.ts": "33f42cb95d71eb723428ac5de5f210af70c4464dc45b8c05da6ebf2deeb4bac3",
+      "forge/compiler.py": "5e4845e7151158b21e11b3032411e253670efe67fd942545ccd07f788a194a59",
+      "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "forge/hard_accuracy_benchmark.py": "008d8a3fba2f83998592d2b77cd1f6c5865ae57092176fd35dd611f892e27ba1",
+      "forge/benchmark_v2.py": "966683a76b20e3e8f92f945c76b48b56124254fbcf27ece081811a843cb72777",
+      "agent/prompts.py": "8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2",
+      "web/routes/benchmark_v2.py": "c761cbc3c44bdf7744eee82880dc59604c341670f09309378bc4304e080fb1f1"
+    },
+    "generation_calls": 0
+  },
+  "runtime_variant": {
+    "scope": "Only in-memory Prompt revision literal differs; checks remain enabled",
+    "control_loaded_source_sha256": "245ea17acb444af2e3bd45aa901cda9d965eb5da04417937bea4f2cf97c72efa",
+    "candidate_loaded_source_sha256": "954d9672e098d27798b8df83a328437df6b2b768a20b47284b9d1337c88e29cb",
+    "control_revision": "forge-structured-benchmark-v1",
+    "candidate_revision": "forge-structured-benchmark-projection-candidate-v1"
+  },
+  "database_snapshots": {
+    "toxicology": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/toxicology.sqlite",
+      "sha256": "35ef27ae6bdfda530e125ed369666ac0abb8bc8c0bcc0ad09407f547ecb61a93"
+    },
+    "superhero": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/superhero.sqlite",
+      "sha256": "75e94a2c3236ee3bb2c01fb97a1c4b4c1c269bcefd4eab1d04be323d2d0825b1"
+    },
+    "thrombosis_prediction": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/thrombosis_prediction/thrombosis_prediction.sqlite",
+      "sha256": "87583183c3dc472fba04de702965560a9d7c0a548836613f242317e0eeb83f00"
+    },
+    "codebase_community": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/codebase_community.sqlite",
+      "sha256": "92101be6d2a9f6adceea59d38f6d1c556087f9eea1432432a21268cb1348036d"
+    },
+    "card_games": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/card_games.sqlite",
+      "sha256": "c98bdb57fe7474da798b407785544b9af0daaad5d61fd21e2a73309493bc1227"
+    }
+  },
+  "limitations": [
+    "Five exposed development cases, two old failure probes and three old correct controls; not a holdout or overall accuracy estimate.",
+    "One generation per condition; unchanged Direct arm exposes sampling variability. No replacement or adaptive selection.",
+    "Candidate Prompt remains isolated; not installed into repository production source.",
+    "Original Gold and official EX preserved; Contract is custom and reported separately.",
+    "Latency is existing generation_ms and can include local evaluation/handoff overhead."
+  ]
+}

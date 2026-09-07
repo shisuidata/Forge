@@ -2,6 +2,7 @@
 Tests for window function support in the Forge compiler.
 Covers WindowRanking, WindowAgg, WindowNav, and schema validation.
 """
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -345,8 +346,8 @@ def test_qualify_does_not_affect_non_qualify_queries():
     assert result.startswith("SELECT")
 
 
-def test_joined_cte_window_partition_keeps_cte_prefix():
-    """JOIN 多个 CTE 时，window partition 不能剥掉主 CTE 前缀。"""
+def test_joined_cte_window_keeps_output_aliases_and_topn():
+    """CTE qualification must not hide window aliases or change the visible Top-N."""
     result = compile_query({
         "cte": [
             {"name": "category_sales", "query": {
@@ -378,5 +379,11 @@ def test_joined_cte_window_partition_keeps_cte_prefix():
         "qualify": [{"col": "rn", "op": "lte", "val": 3}],
     })
 
-    assert "PARTITION BY category_sales.category_id" in result
-    assert "PARTITION BY category_id" not in result
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE order_items (category_id INTEGER, product_id INTEGER, amount INTEGER)")
+        connection.executemany("INSERT INTO order_items VALUES (?, ?, ?)", [
+            (1, 11, 10), (1, 11, 2), (1, 12, 5), (1, 13, 20), (1, 14, 1), (2, 21, 7),
+        ])
+        cursor = connection.execute(result)
+        assert [column[0] for column in cursor.description] == ["category_id", "product_id", "product_sales", "rn"]
+        assert sorted(cursor.fetchall()) == [(1, 11, 12, 2), (1, 12, 5, 3), (1, 13, 20, 1), (2, 21, 7, 1)]

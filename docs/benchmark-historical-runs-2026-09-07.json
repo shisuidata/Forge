@@ -1,0 +1,522 @@
+{
+  "schema_version": 1,
+  "report_type": "documentation_reconstructed_historical_runs",
+  "date": "2026-09-07",
+  "requirements": [
+    "REQ-2026-09-03-028",
+    "REQ-2026-09-04-029",
+    "REQ-2026-09-04-030",
+    "REQ-2026-09-04-031",
+    "REQ-2026-09-04-032",
+    "REQ-2026-09-04-033"
+  ],
+  "status": "historical_documentation_reconstruction_not_new_validation",
+  "new_model_calls": 0,
+  "raw_databases_read": false,
+  "source_documents": [
+    {
+      "path": "docs/requirements-pool.md",
+      "sections": [
+        "REQ-2026-09-03-028",
+        "REQ-2026-09-04-029",
+        "REQ-2026-09-04-030",
+        "REQ-2026-09-04-031",
+        "REQ-2026-09-04-032",
+        "REQ-2026-09-04-033"
+      ]
+    },
+    {
+      "path": "docs/benchmarks.md",
+      "sections": [
+        "DeepSeek Structured 500 题复验失败关闭（2026-09-04）",
+        "BIRD-SQL 官方 Mini-Dev 500 题 Structured GPT-5.6 完整复验（2026-09-04）",
+        "BIRD-SQL 官方 Mini-Dev 500 题 GPT-5.6 双臂对照（2026-09-04）",
+        "GPT-5.6 Structured Tool 历史失分题定向复测（2026-09-04）",
+        "Structured Forge Compiler 确定性修复复算（2026-09-04）"
+      ]
+    },
+    {
+      "path": "docs/current-project-state.md",
+      "section": "3. 当前需求与计划"
+    }
+  ],
+  "interpretation": {
+    "null": "Not stated or not independently established by the permitted source documents; never zero or a success.",
+    "generation_counts": "Historical logical calls or arm records as described by source documents, not independently observed HTTP request counts. Provider retries are separate.",
+    "tokens": "Historical reported token counts, not settled billing. Partial-run observed tokens do not establish complete cost.",
+    "scope": "BIRD Mini-Dev public benchmark; diagnostic selected subsets do not estimate generalization. No customer database, credentials, third-party dataset or raw session copied.",
+    "hashes": "No original raw candidate or report hash is synthesized. Source sections are provenance, not proof of raw-run public reproducibility.",
+    "source_conflict": "REQ-033 records a completed Luna 500-case run and a later interrupted repetition, while current-project-state retains only three effective 500-case dual-arm rounds and no Luna/Terra/Sol completed matrix. Preserve both documentary statements; do not certify a fourth comparable run or invent missing scores/IDs."
+  },
+  "experiments": [
+    {
+      "requirement": "REQ-028",
+      "kind": "new_generation_full",
+      "status": "historically_completed",
+      "runs": [
+        {
+          "run_id": "pbr_76da9a18d96c4e13b2b810ba111bd599",
+          "cases": 500,
+          "logical_model_calls": 1000
+        }
+      ],
+      "model": "openai-codex/gpt-5.6-sol",
+      "provider_retries": 3,
+      "metrics": {
+        "forge": {
+          "denominator": 500,
+          "official_ea": 266,
+          "contract": 240,
+          "execution": 472,
+          "total_tokens": 5443601,
+          "mean_generation_ms": 9269.59,
+          "p95_generation_ms": 19637.05
+        },
+        "direct": {
+          "denominator": 500,
+          "official_ea": 311,
+          "contract": 284,
+          "execution": 499,
+          "total_tokens": 3558117,
+          "mean_generation_ms": 6650.82,
+          "p95_generation_ms": 14129.74
+        }
+      },
+      "conclusion": "Forge -9pp; no broad accuracy advantage. Higher Forge token and latency cost.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-03-028",
+        "benchmark_section": "BIRD-SQL 官方 Mini-Dev 500 题 GPT-5.6 双臂对照（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-029",
+      "kind": "new_generation_selected_diagnostic",
+      "status": "historically_completed",
+      "runs": [
+        {
+          "run_id": "pbr_d14f45bf31df4dfdb536c39f0fa75905",
+          "cases": 1,
+          "logical_model_calls": 2,
+          "per_run_metrics": null
+        },
+        {
+          "run_id": "pbr_00295fcb34f1474a9f5d33253c4a3efa",
+          "cases": 19,
+          "logical_model_calls": 38,
+          "per_run_metrics": null
+        }
+      ],
+      "model": "openai-codex/gpt-5.6-sol",
+      "aggregate_cases": 20,
+      "aggregate_calls": 40,
+      "provider_retries": null,
+      "metrics": {
+        "forge": {
+          "official_ea": 9,
+          "contract": 10,
+          "execution": 15,
+          "total_tokens": 214051,
+          "mean_generation_ms": 10184.95
+        },
+        "direct": {
+          "official_ea": 17,
+          "contract": 16,
+          "execution": 20,
+          "total_tokens": 141775,
+          "mean_generation_ms": 7348.08
+        }
+      },
+      "historical_selected_control": {
+        "forge": {
+          "official_ea": 0,
+          "contract": 2,
+          "execution": 14,
+          "total_tokens": 224188
+        },
+        "direct": {
+          "official_ea": 20,
+          "contract": 19,
+          "execution": 20,
+          "total_tokens": 141261
+        }
+      },
+      "conclusion": "Selected historical Forge failures; 20/20 tool-validated objects, not provider-native strict. Not a full benchmark or population accuracy estimate.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-029",
+        "benchmark_section": "GPT-5.6 Structured Tool 历史失分题定向复测（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-030",
+      "kind": "saved_candidate_offline_replay",
+      "status": "historically_verified",
+      "source_run_ids": [
+        "pbr_d14f45bf31df4dfdb536c39f0fa75905",
+        "pbr_00295fcb34f1474a9f5d33253c4a3efa"
+      ],
+      "new_model_calls": 0,
+      "cases": 20,
+      "forge_before": {
+        "official_ea": 9,
+        "contract": 10,
+        "execution": 15,
+        "compile": 18
+      },
+      "forge_after": {
+        "official_ea": 14,
+        "contract": 15,
+        "execution": 20,
+        "compile": 20
+      },
+      "new_generation_tokens": 0,
+      "conclusion": "Same saved candidates isolate deterministic compiler repair; historical run remains unchanged.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-030",
+        "benchmark_section": "Structured Forge Compiler 确定性修复复算（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-030",
+      "kind": "new_generation_selected_diagnostic_with_later_saved_candidate_replay",
+      "status": "historically_completed",
+      "runs": [
+        {
+          "run_id": "pbr_cdfe12f9e77745eb8a81dd37b0e56571",
+          "cases": null,
+          "logical_model_calls": null,
+          "per_run_metrics": null
+        },
+        {
+          "run_id": "pbr_e91cc3b0ba4645d2a2447daf9732e2cc",
+          "cases": null,
+          "logical_model_calls": null,
+          "per_run_metrics": null
+        }
+      ],
+      "aggregate_cases": 20,
+      "aggregate_calls": 40,
+      "model": "openai-codex/gpt-5.6-sol",
+      "provider_retries": null,
+      "forge_runtime": {
+        "official_ea": 15,
+        "contract": 16,
+        "execution": 18,
+        "compile": 20
+      },
+      "forge_same_new_candidates_final_compiler": {
+        "official_ea": 17,
+        "contract": 18,
+        "execution": 20,
+        "compile": 20,
+        "total_tokens_from_original_generation": 194561,
+        "total_generation_ms": 205872.3
+      },
+      "direct": {
+        "official_ea": 14,
+        "contract": 14,
+        "execution": 20,
+        "total_tokens": 121188,
+        "total_generation_ms": 124689
+      },
+      "conclusion": "9→17 crosses generations and subsequent deterministic replay; not pure compiler causality or full-population accuracy.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-030",
+        "benchmark_section": "Structured Forge Compiler 确定性修复复算（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-031",
+      "kind": "saved_candidate_offline_historical_text_replay",
+      "status": "historically_verified",
+      "source_run_ids": [
+        "pbr_76da9a18d96c4e13b2b810ba111bd599"
+      ],
+      "new_model_calls": 0,
+      "cases": 500,
+      "forge_official_ea_before": 266,
+      "forge_official_ea_after": 269,
+      "direct_official_ea": 311,
+      "conclusion": "Old textual candidates under the final compiler; not a new full generation run.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-031",
+        "benchmark_section": "BIRD-SQL 官方 Mini-Dev 500 题 Structured GPT-5.6 完整复验（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-031",
+      "kind": "new_generation_full_with_separate_saved_candidate_replay",
+      "status": "historically_completed",
+      "runs": [
+        {
+          "run_id": "pbr_6778bf9d34ae42fba0b070a5f9c154ba",
+          "cases": 500,
+          "logical_model_calls": 1000
+        }
+      ],
+      "model": "openai-codex/gpt-5.6-sol",
+      "provider_retries": null,
+      "forge_runtime_sealed": {
+        "official_ea": 287,
+        "contract": 257,
+        "execution": 439,
+        "compile": 482
+      },
+      "forge_same_candidate_replay": {
+        "new_model_calls": 0,
+        "official_ea": 313,
+        "contract": 280,
+        "execution": 496,
+        "compile": 500
+      },
+      "generation_cost": {
+        "forge": {
+          "total_tokens": 4905368,
+          "mean_generation_ms": 9791.49,
+          "p95_generation_ms": 18269.9
+        },
+        "direct": {
+          "total_tokens": 3074132,
+          "mean_generation_ms": 6454.98,
+          "p95_generation_ms": 13601.8
+        }
+      },
+      "direct_unchanged": {
+        "official_ea": 314,
+        "contract": 291,
+        "execution": 500
+      },
+      "conclusion": "Final same-candidate result 313/500 vs314/500, paired exact p=1.0. No Forge advantage; Forge uses 59.57% more tokens and 51.69% more mean generation time.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-031",
+        "benchmark_section": "BIRD-SQL 官方 Mini-Dev 500 题 Structured GPT-5.6 完整复验（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-032",
+      "run_id": "pbr_e553889ad3c9461286286d2378422ecb",
+      "model": "deepseek/deepseek-v4-flash",
+      "kind": "failed_partial_full_attempt",
+      "status": "failed_incomplete",
+      "planned_cases": 500,
+      "processed_cases": 48,
+      "arm_records": 96,
+      "candidates_returned": 0,
+      "reported_tokens": 0,
+      "complete_token_total": null,
+      "provider_retries": null,
+      "formal_accuracy": null,
+      "reason": "96 arm records with zero visible stream events/tokens and no candidates; no complete provider usage proof.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-032",
+        "benchmark_section": "DeepSeek Structured 500 题复验失败关闭（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-032",
+      "run_id": "pbr_3027e7668ed44c09a1dc0bc8c2ecf89f",
+      "model": "volc-ark-coding/deepseek-v4-flash-ga-260731",
+      "kind": "failed_canary",
+      "status": "quota_blocked",
+      "planned_cases": 1,
+      "processed_cases": 1,
+      "arm_records": 2,
+      "candidates_returned": 0,
+      "reported_tokens": null,
+      "complete_token_total": null,
+      "provider_retries": null,
+      "formal_accuracy": null,
+      "reason": "Independent CLI probe returned 429 AccountQuotaExceeded; no valid candidates.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-032",
+        "benchmark_section": "DeepSeek Structured 500 题复验失败关闭（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-032",
+      "run_id": "pbr_2d8dc382f81d4147af4678a53951b92a",
+      "model": "deepseek-official/deepseek-v4-flash",
+      "kind": "new_generation_canary",
+      "status": "historically_completed_diagnostic",
+      "planned_cases": 1,
+      "processed_cases": 1,
+      "arm_records": 2,
+      "candidates_returned": 2,
+      "reported_tokens": null,
+      "complete_token_total": null,
+      "provider_retries": null,
+      "official_ea": {
+        "forge": 1,
+        "direct": 1,
+        "denominator_per_arm": 1
+      },
+      "formal_full_accuracy": null,
+      "reason": "One case both arms generated/executed/correct; only a canary.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-032",
+        "benchmark_section": "DeepSeek Structured 500 题复验失败关闭（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-032",
+      "run_id": "pbr_d4520dabc41d450fb724bc8192a06e80",
+      "model": "deepseek-official/deepseek-v4-flash",
+      "kind": "failed_partial_full_attempt",
+      "status": "failed_incomplete",
+      "concurrency": 4,
+      "planned_cases": 500,
+      "processed_cases": 10,
+      "arm_records": null,
+      "candidates_returned": null,
+      "reported_tokens": null,
+      "complete_token_total": null,
+      "provider_retries": 27,
+      "formal_accuracy": null,
+      "reason": "Candidate gaps and provider instability; stopped, not a full benchmark.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-032",
+        "benchmark_section": "DeepSeek Structured 500 题复验失败关闭（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-032",
+      "run_id": "pbr_743b905dc5d644499b7976996bc752d2",
+      "model": "deepseek-official/deepseek-v4-flash",
+      "kind": "new_generation_pilot",
+      "status": "historically_completed_diagnostic",
+      "concurrency": 1,
+      "planned_cases": 10,
+      "processed_cases": 10,
+      "arm_records": 20,
+      "candidates_returned": 20,
+      "reported_tokens": null,
+      "complete_token_total": null,
+      "provider_retries": 4,
+      "formal_full_accuracy": null,
+      "official_ea": null,
+      "reason": "10-case completed pilot, not complete 500-case accuracy.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-032",
+        "benchmark_section": "DeepSeek Structured 500 题复验失败关闭（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-032",
+      "run_id": "pbr_9d5e4263afdb46cd8636d4b6599f0708",
+      "model": "deepseek-official/deepseek-v4-flash",
+      "kind": "failed_nominal_full_attempt",
+      "status": "failed_candidate_completeness_despite_store_completed",
+      "concurrency": 1,
+      "planned_cases": 500,
+      "processed_cases": 500,
+      "arm_records": 1000,
+      "candidates_returned": 156,
+      "missing_candidates_per_arm": 422,
+      "reported_tokens": 3112949,
+      "complete_token_total": null,
+      "provider_retries": 32,
+      "formal_accuracy": null,
+      "partial_candidate_audit_only": {
+        "forge": {
+          "candidate_count": 78,
+          "official_ea_hits": 48,
+          "contract_hits": 44,
+          "execution": 69,
+          "compile": 75,
+          "reported_tokens": 2419491,
+          "mean_generation_ms": 66414.25,
+          "p95_generation_ms": 214191.9
+        },
+        "direct": {
+          "candidate_count": 78,
+          "official_ea_hits": 54,
+          "contract_hits": 49,
+          "execution": 77,
+          "reported_tokens": 693458,
+          "mean_generation_ms": 44903.37,
+          "p95_generation_ms": 195143.6
+        }
+      },
+      "reason": "Independent post-run probe returned 402 Insufficient Balance. 844 missing candidates; 48/500 vs54/500 forbidden as comparable accuracy. Offline replay of saved candidates did not repair completeness.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-032",
+        "benchmark_section": "DeepSeek Structured 500 题复验失败关闭（2026-09-04）"
+      }
+    },
+    {
+      "requirement": "REQ-033",
+      "kind": "documented_full_run_not_independently_certified",
+      "status": "source_reports_completed_but_public_run_identity_and_metrics_missing",
+      "run_id": null,
+      "model": "openai-codex/gpt-5.6-luna",
+      "planned_cases": 500,
+      "reported_completed_cases": 500,
+      "reported_duration_minutes": 47.3,
+      "logical_model_calls": null,
+      "candidates_returned": null,
+      "provider_retries": null,
+      "total_tokens": null,
+      "formal_accuracy": null,
+      "conclusion": "Requirement history says first Luna 500-case run completed. Public source does not provide raw identity/scores/invariants; current state does not count this as a fourth effective comparable run. Do not infer scores or validation.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-033",
+        "benchmark_section": null
+      }
+    },
+    {
+      "requirement": "REQ-033",
+      "kind": "interrupted_repeated_full_attempt",
+      "status": "stopped_before_completion",
+      "run_id": null,
+      "model": "openai-codex/gpt-5.6-luna",
+      "planned_cases": 500,
+      "reported_progress_cases": 276,
+      "logical_model_calls": null,
+      "candidates_returned": null,
+      "provider_retries": null,
+      "total_tokens": null,
+      "formal_accuracy": null,
+      "conclusion": "User stopped repeated full testing due to waiting time; moved to a 50-case deterministic stratified plan. Not a completed run.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-033",
+        "benchmark_section": null
+      }
+    },
+    {
+      "requirement": "REQ-033",
+      "kind": "preparation_and_documented_projection_plan_not_completed_matrix",
+      "status": "implementing_in_requirement_history",
+      "run_ids": {
+        "luna": null,
+        "terra": null,
+        "sol": null
+      },
+      "cohort": {
+        "cases": 50,
+        "simple": 15,
+        "moderate": 25,
+        "challenging": 10,
+        "databases": 11,
+        "seed": "gpt-5.6-luna-terra-sol-bird50-v1"
+      },
+      "arms": [
+        "forge",
+        "direct"
+      ],
+      "concurrency": 2,
+      "plan": {
+        "luna": "Project fixed 50 cases from documented prior Luna 500 run; no new generation inferred.",
+        "terra": "New 50-case dual-arm run planned; completion not established.",
+        "sol": "New 50-case dual-arm run planned; older Sol schema revision cannot be used as this strict matrix."
+      },
+      "completed_matrix": false,
+      "logical_model_calls": null,
+      "total_tokens": null,
+      "formal_accuracy": null,
+      "conclusion": "No completed public three-model matrix established by permitted documents; unknown values remain null. No new authorization or execution implied.",
+      "sources": {
+        "requirement_section": "docs/requirements-pool.md#REQ-2026-09-04-033",
+        "benchmark_section": null
+      }
+    }
+  ]
+}

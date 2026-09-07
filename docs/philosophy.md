@@ -70,7 +70,7 @@ SQL 标准不允许在同层 SELECT 中引用同层定义的 agg alias：
 SELECT repeat_users * 1.0 / total_users AS repurchase_rate
 ```
 
-解决方案：`_expand_aliases()` 在编译前将 expr 里的 alias 替换为完整表达式，消灭整类此类错误。
+解决方案：`_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。这是限定范围的编译规则，不是对任意别名错误的修复保证。
 
 ### 新能力文档导致过拟合
 

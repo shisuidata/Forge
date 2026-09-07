@@ -66,7 +66,7 @@ DSL 用 `type: "anti"` 明确表达排除关系，Compiler 生成 anti/NOT EXIST
 SELECT COUNT(*) AS cnt, cnt * 2 AS double_cnt
 ```
 
-许多数据库不允许同层 SELECT 引用同层 alias。`_expand_aliases()` 将 `cnt` 展开为原表达式，再生成合法 SQL。
+许多数据库不允许同层 SELECT 引用同层 alias。`_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。
 
 ## 5. 能力边界
 

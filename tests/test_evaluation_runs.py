@@ -78,8 +78,6 @@ async def test_public_suite_persists_replays_and_exports_recomputable_manifest(
     }
     assert recompute_aggregate(manifest["outcomes"]) == manifest["aggregate"]
     assert manifest["regression"]["status"] == "not_requested"
-    assert manifest["configuration"]["evaluator_revision"] == "evaluate-v1"
-    assert manifest["configuration"]["metric_revision"] == "semantic-result-compare-v1"
     assert manifest["configuration"]["registry_revisions"]
 
     exported = await client.get(f"/api/v1/evaluation-runs/{manifest['run_id']}")
@@ -171,6 +169,75 @@ async def test_regression_gate_marks_changed_evaluation_basis_not_comparable(
     assert regression["release_gate"] == "failed"
     assert regression["comparable"] is False
     assert regression["incompatible_dimensions"] == ["dataset"]
+
+
+@pytest.mark.asyncio
+async def test_metric_upgrade_is_not_comparable_and_does_not_rewrite_history(
+    client, evaluation_run_env, monkeypatch
+):
+    from forge import benchmark_v2
+    from forge.evaluation_runs import EvaluationRunStore
+
+    baseline = (await client.post(
+        "/api/v1/evaluation-runs", json=_run_request(evaluation_run_env),
+    )).json()
+    store = EvaluationRunStore()
+    with store._connect() as db:
+        raw_before = db.execute(
+            "SELECT manifest_json FROM evaluation_runs WHERE run_id=?", (baseline["run_id"],),
+        ).fetchone()[0]
+    monkeypatch.setattr(benchmark_v2, "RESULT_COMPARATOR_REVISION", "test-comparator-upgrade")
+    response = await client.post("/api/v1/evaluation-runs", json=_run_request(
+        evaluation_run_env, baseline_run_id=baseline["run_id"],
+    ))
+    assert response.status_code == 200
+    current = response.json()
+    assert current["aggregate"] == baseline["aggregate"]
+    assert current["regression"]["status"] == "not_comparable"
+    assert current["regression"]["release_gate"] == "failed"
+    assert current["regression"]["incompatible_dimensions"] == ["metric_revision"]
+    assert current["regression"]["pass_rate_delta"] is None
+    assert current["configuration"]["metric_revision"] != baseline["configuration"]["metric_revision"]
+    assert current["outcomes"][0]["evaluation"]["evaluation_id"] != baseline["outcomes"][0]["evaluation"]["evaluation_id"]
+    assert (await client.get(f"/api/v1/evaluation-runs/{baseline['run_id']}" )).json() == baseline
+    with store._connect() as db:
+        assert db.execute(
+            "SELECT manifest_json FROM evaluation_runs WHERE run_id=?", (baseline["run_id"],),
+        ).fetchone()[0] == raw_before
+
+
+@pytest.mark.asyncio
+async def test_historical_result_comparison_projects_unknown_without_backfilling(
+    client, evaluation_run_env
+):
+    from forge.evaluation_runs import EvaluationRunStore
+
+    baseline = (await client.post(
+        "/api/v1/evaluation-runs", json=_run_request(evaluation_run_env),
+    )).json()
+    baseline["configuration"]["metric_revision"] = "semantic-result-compare-v1"
+    for outcome in baseline["outcomes"]:
+        del outcome["evaluation"]["result_comparison"]["metric_revision"]
+    raw = json.dumps(baseline)
+    store = EvaluationRunStore()
+    with store._connect() as db:
+        db.execute("UPDATE evaluation_runs SET manifest_json=? WHERE run_id=?", (raw, baseline["run_id"]))
+    projected = await client.get(f"/api/v1/evaluation-runs/{baseline['run_id']}")
+    assert projected.status_code == 200
+    validate_contract("evaluation_run_manifest_v1", projected.json())
+    assert projected.json()["configuration"] == baseline["configuration"]
+    assert all(
+        outcome["evaluation"]["result_comparison"]["metric_revision"] is None
+        for outcome in projected.json()["outcomes"]
+    )
+    current = (await client.post("/api/v1/evaluation-runs", json=_run_request(
+        evaluation_run_env, baseline_run_id=baseline["run_id"],
+    ))).json()
+    assert current["regression"]["incompatible_dimensions"] == ["metric_revision"]
+    with store._connect() as db:
+        assert db.execute(
+            "SELECT manifest_json FROM evaluation_runs WHERE run_id=?", (baseline["run_id"],),
+        ).fetchone()[0] == raw
 
 
 @pytest.mark.asyncio

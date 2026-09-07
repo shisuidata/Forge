@@ -1,7 +1,7 @@
 """Unified Forge JSON assurance pipeline used before SQL review."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 from pathlib import Path
@@ -9,8 +9,10 @@ import re
 from typing import Any
 
 from sqlglot import exp, parse_one
-from sqlglot.errors import SqlglotError
+from sqlglot.errors import OptimizeError, SqlglotError
 from sqlglot.optimizer.qualify import qualify
+from sqlglot.optimizer.scope import Scope, build_scope
+from sqlglot.schema import MappingSchema
 
 from config import cfg
 from forge.compiler import compile_query, validate_query_contract
@@ -22,7 +24,7 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v7"
+ASSURANCE_REVISION = "query-assurance-v10"
 POLICY_REVISION = "convention-policy-v9"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 QUERY_CANDIDATE_REVISION = "query-candidate-v1"
@@ -141,25 +143,19 @@ def assure_query(
     gates.append(GateResult("scope_type_compile", "passed", ASSURANCE_REVISION))
 
     try:
-        validate_readonly_sql(sql)
-    except ValueError as exc:
-        gates.append(GateResult("sql_safety", "failed", ASSURANCE_REVISION, (str(exc),)))
+        compiled_report = assure_compiled_sql(
+            sql,
+            dialect=dialect,
+            input_kind="forge_json",
+            producer_revision=model_revision,
+            registry_snapshot=scoped_registry,
+            registry_revision=registry_revision,
+        )
+    except QueryAssuranceError as exc:
         raise QueryAssuranceError(
-            _failed_report(gates, registry_revision, model_revision)
+            replace(exc.report, gates=(*gates, *exc.report.gates))
         ) from exc
-    gates.append(GateResult("sql_safety", "passed", ASSURANCE_REVISION))
-
-    return QueryAssuranceReport(
-        status="passed",
-        assurance_revision=ASSURANCE_REVISION,
-        policy_revision=POLICY_REVISION,
-        registry_revision=registry_revision,
-        model_revision=model_revision,
-        gates=tuple(gates),
-        sql=sql,
-        sql_hash="sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest(),
-        input_kind="forge_json",
-    )
+    return replace(compiled_report, gates=(*gates, *compiled_report.gates))
 
 
 def assure_compiled_sql(
@@ -225,22 +221,6 @@ def assure_compiled_sql(
 
     scoped_registry = _scope_registry(registry, allowed_tables)
     registry_tables = scoped_registry.get("tables", scoped_registry)
-    cte_names = {cte.alias_or_name for cte in expression.find_all(exp.CTE)}
-    physical_tables = {
-        table.name
-        for table in expression.find_all(exp.Table)
-        if table.name not in cte_names
-    }
-    if not physical_tables.issubset(registry_tables):
-        gates.append(GateResult(
-            "registry_acl", "failed", resolved_registry_revision,
-            ("Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。",),
-        ))
-        raise QueryAssuranceError(
-            _failed_report(
-                gates, resolved_registry_revision, producer_revision, input_kind=input_kind
-            )
-        )
 
     schema = {
         table_name: {
@@ -251,13 +231,15 @@ def assure_compiled_sql(
         if isinstance(table_info, dict)
     }
     try:
-        qualify(
-            expression.copy(),
+        qualified_schema = MappingSchema(schema, dialect=read_dialect)
+        expression = qualify(
+            expression,
             dialect=read_dialect,
-            schema=schema,
+            schema=qualified_schema,
             identify=False,
             validate_qualify_columns=True,
         )
+        _validate_relation_scopes(expression, qualified_schema)
         gates.append(GateResult("registry_acl", "passed", resolved_registry_revision))
     except SqlglotError as exc:
         gates.append(GateResult(
@@ -578,6 +560,41 @@ def _validate_registry_fields(query: dict, registry: dict) -> None:
     )
     if unknown:
         raise ValueError("Registry/权限校验失败：查询使用了未授权或不存在的表/字段。")
+
+
+def _validate_relation_scopes(expression: exp.Expression, schema: MappingSchema) -> None:
+    root = build_scope(expression)
+    if root is None:
+        return
+    for scope in root.traverse():
+        for source in scope.sources.values():
+            if isinstance(source, exp.Table):
+                # Registry keys authorize unqualified physical names, not other schemas/catalogs.
+                # CTE/derived sources are Scopes, resolved independently at every use site.
+                if source.db or source.catalog or schema.find(source) is None:
+                    raise OptimizeError("Unauthorized physical SQL relation")
+    pending = [(root, frozenset())]
+    visited: set[tuple[Scope, frozenset[str]]] = set()
+    while pending:
+        scope, inherited = pending.pop()
+        state = (scope, inherited)
+        if state in visited:
+            continue
+        visited.add(state)
+        visible = inherited.union(
+            scope.selected_sources, scope.lateral_sources, scope.semi_or_anti_join_tables,
+        )
+        # Available CTE definitions are not FROM bindings. Correlation follows each use site.
+        for node in scope.walk():
+            if isinstance(node, exp.Column) and node.table and node.table not in visible:
+                raise OptimizeError("Unbound SQL relation")
+        pending.extend((child, visible) for child in scope.subquery_scopes)
+        pending.extend((child, inherited) for child in scope.union_scopes)
+        for name, _ in scope.references:
+            source = scope.sources.get(name)
+            if isinstance(source, Scope):
+                pending.append((source, inherited))
+
 
 
 def _validate_select_symbols(query: dict, registry: dict) -> None:

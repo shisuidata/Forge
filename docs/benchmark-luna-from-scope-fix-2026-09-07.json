@@ -1,0 +1,884 @@
+{
+  "schema_version": 1,
+  "requirement": "REQ-2026-09-06-055",
+  "date": "2026-09-07",
+  "status": "verified_zero_model_call_maintenance",
+  "model_calls": 0,
+  "decision": "Reject unbound qualified FROM-scope references in shared Assurance; do not repair candidates or claim accuracy gain.",
+  "revision": {
+    "before": "query-assurance-v8",
+    "after": "query-assurance-v9",
+    "policy": "convention-policy-v9",
+    "changed_frozen_source_groups": [
+      "evaluator"
+    ]
+  },
+  "implementation": {
+    "runtime_paths": [
+      "forge/assurance.py"
+    ],
+    "regression_paths": [
+      "tests/test_assurance.py",
+      "tests/test_evaluate.py"
+    ],
+    "binding": "Qualified SQLGlot scopes; actual selected sources plus legal correlation environments; CTEs validated per use site.",
+    "no_sql_rewrite": true,
+    "no_auto_join": true,
+    "compiler_prompt_schema_gold_metric_unchanged": true
+  },
+  "historical_gates": {
+    "before": {
+      "r500": {
+        "sql_count": 1000,
+        "passed": 997,
+        "failed": 3,
+        "original_official_ea_correct": 627,
+        "original_contract_correct": 571,
+        "original_either_correct": 632,
+        "original_either_correct_rejected": []
+      },
+      "req054-control": {
+        "sql_count": 8,
+        "passed": 8,
+        "failed": 0,
+        "original_official_ea_correct": 5,
+        "original_contract_correct": 5,
+        "original_either_correct": 5,
+        "original_either_correct_rejected": []
+      },
+      "req054-treatment": {
+        "sql_count": 8,
+        "passed": 8,
+        "failed": 0,
+        "original_official_ea_correct": 7,
+        "original_contract_correct": 7,
+        "original_either_correct": 7,
+        "original_either_correct_rejected": []
+      },
+      "all": {
+        "sql_count": 1016,
+        "passed": 1013,
+        "failed": 3,
+        "original_official_ea_correct": 639,
+        "original_contract_correct": 583,
+        "original_either_correct": 644,
+        "original_either_correct_rejected": []
+      }
+    },
+    "after": {
+      "r500": {
+        "sql_count": 1000,
+        "passed": 997,
+        "failed": 3,
+        "original_official_ea_correct": 627,
+        "original_contract_correct": 571,
+        "original_either_correct": 632,
+        "original_either_correct_rejected": []
+      },
+      "req054-control": {
+        "sql_count": 8,
+        "passed": 8,
+        "failed": 0,
+        "original_official_ea_correct": 5,
+        "original_contract_correct": 5,
+        "original_either_correct": 5,
+        "original_either_correct_rejected": []
+      },
+      "req054-treatment": {
+        "sql_count": 8,
+        "passed": 7,
+        "failed": 1,
+        "original_official_ea_correct": 7,
+        "original_contract_correct": 7,
+        "original_either_correct": 7,
+        "original_either_correct_rejected": []
+      },
+      "all": {
+        "sql_count": 1016,
+        "passed": 1012,
+        "failed": 4,
+        "original_official_ea_correct": 639,
+        "original_contract_correct": 583,
+        "original_either_correct": 644,
+        "original_either_correct_rejected": []
+      }
+    },
+    "comparison": {
+      "baseline": ".forge/benchmarks/from-scope-assurance-20260906/historical-v8-baseline.json",
+      "baseline_sha256": "dc1ed3ae672820a0da43729be57ed5ba2c88d1a7c5a7d84486a77f307c91fa2f",
+      "status_changes": [
+        {
+          "id": "req054-treatment:md-009:forge",
+          "before": "passed",
+          "after": "failed"
+        }
+      ]
+    },
+    "input_sha256": "44cb1bfc58ac85316a758f8a8a4fc75d97520434054c6733bee97e2887ea03b4",
+    "scope": "Fixed saved SQL passed through shared Assurance only; no R500 SQL/Gold re-execution or score rewriting."
+  },
+  "req054_diagnostic": {
+    "records": 16,
+    "changed": [
+      {
+        "id": "treatment:md-009:forge",
+        "differences": [
+          "execution_status",
+          "error_code"
+        ],
+        "before": {
+          "compile_status": "passed",
+          "execution_status": "failed",
+          "error_code": "unknown_column"
+        },
+        "after": {
+          "compile_status": "passed",
+          "execution_status": "skipped",
+          "error_code": "unknown_schema_reference"
+        }
+      }
+    ],
+    "unchanged_sql": 16,
+    "unchanged_output": 16,
+    "unchanged_scores": 16,
+    "summaries": {
+      "control": {
+        "forge": {
+          "official": 2,
+          "contract": 2,
+          "scored": 4
+        },
+        "direct": {
+          "official": 3,
+          "contract": 3,
+          "scored": 4
+        }
+      },
+      "treatment": {
+        "forge": {
+          "official": 3,
+          "contract": 3,
+          "scored": 4
+        },
+        "direct": {
+          "official": 4,
+          "contract": 4,
+          "scored": 4
+        }
+      }
+    }
+  },
+  "boundaries": {
+    "sqlite": {
+      "cases": [
+        {
+          "id": "scalar_outer",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "exists_outer",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "scalar_grandparent",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "exists_grandparent",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "scalar_missing_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "unused_cte_reference_root",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "unused_cte_reference_scalar",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_local_definition_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_outer_correlated_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_nested_local_definition_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_nested_grandparent_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_root_definition_scalar_use",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_root_definition_exists_use",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_nested_definition_scalar_use",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_body_scalar_local_definition_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_body_scalar_outer_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "derived_local_sibling_before",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "derived_local_sibling_after",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "derived_outer_correlated_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "derived_nested_local_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "derived_nested_grandparent_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "derived_body_scalar_local_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "derived_body_scalar_outer_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "derived_two_barriers_outer_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "union_outer_each_branch",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "union_sibling_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "union_inner_sibling_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "union_cte_local_definition_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "union_cte_outer_correlated_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "recursive_cte_joined_self",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "recursive_cte_unselected_self",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "recursive_cte_outer_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "recursive_cte_local_definition_alias",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_renamed_old_name",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_renamed_new_name",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_renamed_old_name_scalar",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_renamed_new_name_scalar",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "local_alias_shadows_outer",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "local_alias_missing_column_shadows_outer",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "local_alias_missing_column_shadows_outer_derived",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_name_shadows_outer_alias_unselected",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_name_local_alias_shadows",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_name_local_alias_missing_column",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "derived_hidden_local_same_name_outer",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_hidden_local_same_name_outer",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_nested_use_site_alias_values",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_nested_use_site_two_alias_values",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_definition_outer_use_local_alias_shadows",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_definition_outer_direct_use_ignores_local_alias",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_root_multiple_use_valid_and_invalid",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_unreferenced_invalid_body",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_nested_two_uses_different_binding",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_indirect_reference_site",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "cte_nested_indirect_reference_site",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "recursive_cte_renamed_old_name",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "recursive_cte_renamed_new_name",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "recursive_cte_scalar_self_unselected",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "recursive_cte_scalar_self_selected",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "union_cte_definition_root_scalar_use",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "union_derived_outer_correlated",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "union_derived_local_forbidden",
+          "sqlite_accepted": false,
+          "baseline_qualify_accepted": false,
+          "current_assurance_accepted": false,
+          "sql_unchanged": null
+        },
+        {
+          "id": "outer_cte_selected_old_name_still_visible",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "outer_cte_selected_local_alias_shadows",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "cte_name_shadow_outer_same_column",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        },
+        {
+          "id": "derived_sibling_alias_same_column_ignored",
+          "sqlite_accepted": true,
+          "baseline_qualify_accepted": true,
+          "current_assurance_accepted": true,
+          "sql_unchanged": true
+        }
+      ],
+      "new_legal_rejections": [],
+      "model_calls": 0,
+      "scope": "Full shared assurance on the independent 65-case SQLite fixture; prior qualify-only outcomes are not standalone v8 runtime evidence."
+    },
+    "static": {
+      "checks": [
+        {
+          "id": "lateral_prior_source",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "id": "lateral_later_source",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "id": "lateral_before_and_after",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "id": "lateral_correlated_outer",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "id": "lateral_inner_derived_prior_source",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "id": "lateral_inner_scalar_later_source",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "sqlite",
+          "name": "valid",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "sqlite",
+          "name": "unbound",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "mysql",
+          "name": "valid",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "mysql",
+          "name": "unbound",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "postgresql",
+          "name": "valid",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "postgresql",
+          "name": "unbound",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "bigquery",
+          "name": "valid",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "bigquery",
+          "name": "unbound",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "snowflake",
+          "name": "valid",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "snowflake",
+          "name": "unbound",
+          "accepted": false,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "duckdb",
+          "name": "semi_or_anti_join",
+          "accepted": true,
+          "runtime_executed": false
+        },
+        {
+          "dialect": "duckdb",
+          "name": "semi_or_anti_join",
+          "accepted": true,
+          "runtime_executed": false
+        }
+      ],
+      "limits": "Parser/Scope/API checks only. No external SQL engine installed or executed; SQLite runtime proof recorded separately."
+    },
+    "limitations": [
+      "Existing SQLGlot qualification limitations are not relaxed.",
+      "Non-SQLite dialect and explicit LATERAL checks are static only; no external SQL engine was installed or executed.",
+      "Historical fixed-candidate coverage is not proof of complete SQL semantic validation."
+    ]
+  },
+  "public_smoke": {
+    "cli_cases": [
+      "invalid-forge",
+      "invalid-direct",
+      "valid-cte"
+    ],
+    "invalid_exit_code": 1,
+    "valid_exit_code": 0,
+    "invalid_failure": "assurance/unknown_schema_reference",
+    "assurance_revision": "query-assurance-v9",
+    "valid_execution_authorized": false,
+    "valid_returned_sql_readonly_execution": {
+      "rows": [
+        [
+          44
+        ],
+        [
+          45
+        ]
+      ],
+      "matches_independent_select": true
+    },
+    "unauthenticated_http_status": 401,
+    "old_protocol_http_status": 409
+  },
+  "protocol_guards": {
+    "old_versioned_replay_rejected": true,
+    "unmodified_outputs_extracted_for_explicit_diagnostic": true,
+    "diagnostic_compare_rejected": true,
+    "diagnostic_runs": {
+      "control": "sha256:79b807e1ba855fd84161ce3523ecc423c905fc8d47dca5f8939c3a8ab8bbd6f9",
+      "treatment": "sha256:7f5a75e4579219a7326a980f5f6ef1b4ff4ecdbd6bba58db82344709b33e612a"
+    },
+    "original_run_protocols": {
+      "control": "sha256:dc6cd1a7c04fdb847b263238553e57cc7389b46d2976716aa15df18b1a93d05a",
+      "treatment": "sha256:26631020a73758cf3c40e8318ab3f272cb597790c34cdb61faa83d67e455e66f"
+    }
+  },
+  "verification": {
+    "focused": "56 passed",
+    "python": "887 passed, 26 skipped",
+    "pi": "151 passed",
+    "typescript_typecheck": "passed",
+    "warnings": [
+      "Existing protobuf UTC deprecation warning",
+      "Node experimental SQLite warnings"
+    ],
+    "historical_source_files_verified_unchanged": 13,
+    "commands": [
+      "FORGE_DISABLE_DOTENV=true .venv/bin/python -m pytest tests -q",
+      "npm --prefix services/pi-orchestrator run typecheck",
+      "npm --prefix services/pi-orchestrator test"
+    ],
+    "source_code_hashes": {
+      "forge/assurance.py": "7ee3ca6f29c308485cb5d96f26127cfa40a84dd69e5e03ae85fedfda93ba9259",
+      "forge/compiler.py": "3d5b4f0bebacb6df431b29e593cbd4b9ab956b06e35b72fa1611c55fb1d9b697",
+      "web/routes/benchmark_v2.py": "7cd2dc5cbf514120d79bb6e20450ea77a3222ed24cd5764d541a152c05739624"
+    }
+  },
+  "cleanup": {
+    "removed": [
+      {
+        "path": ".forge/benchmarks/from-scope-assurance-20260906/historical-gates.py",
+        "sha256": "4310680c8ee1464ed093498b5a0765809b274f01ce77841703540e56671e4dd1"
+      },
+      {
+        "path": ".forge/benchmarks/from-scope-assurance-20260906/public-registry.json",
+        "sha256": "ecd3046f5a3ba8b4128013f387dd00ab6d50d8fc82d8b74507db09e51a9246a9"
+      },
+      {
+        "path": ".forge/benchmarks/from-scope-assurance-20260906/invalid-forge.request.json",
+        "sha256": "8da9904537ea1c87589373a3f6e8e6e32d2d25458958d986c205d771399a4b26"
+      },
+      {
+        "path": ".forge/benchmarks/from-scope-assurance-20260906/invalid-direct.request.json",
+        "sha256": "30a4d807396872447304583460d940b9e6ba0cd689fa7a4c89273729e102011d"
+      },
+      {
+        "path": ".forge/benchmarks/from-scope-assurance-20260906/valid-cte.request.json",
+        "sha256": "ebfb66d85dbe37356a32f83788990ff0da788ac1b36feb86bb41b399be4dfbc9"
+      },
+      {
+        "path": ".forge/benchmarks/from-scope-assurance-20260906/valid-returned-sql.json",
+        "sha256": "569970e21cba69335335bc4845c1bd613a6d8c2a2a5deb0764245b7b49b84422"
+      }
+    ],
+    "reproduction_preserved_in": [
+      "historical-reproduction.json",
+      "smoke-fixtures.json"
+    ],
+    "service_closed": true
+  },
+  "remaining_boundaries": {
+    "value_context_default": "off",
+    "rolling_parent": "seed48",
+    "new_generation_authorized": false,
+    "seed49_started": false,
+    "h_or_external_adoption_advanced": false
+  },
+  "evidence_root": ".forge/benchmarks/from-scope-assurance-20260906",
+  "artifact_sha256": {
+    ".forge/benchmarks/from-scope-assurance-20260906/after-focused-regression.json": "6489e03b28d6abe281c80533aaee65e73234809278cd8514ea68afc32d60e647",
+    ".forge/benchmarks/from-scope-assurance-20260906/before-http-regression.json": "12eae6e2319ff36f43910ff1d48a3b2128cf96895c95079d2e76e7cc5b6d3030",
+    ".forge/benchmarks/from-scope-assurance-20260906/before-regression.json": "6722a2da12300708cfea57144afa1f3d3f533dc8fdcad895a25d6e9193b4c751",
+    ".forge/benchmarks/from-scope-assurance-20260906/boundary-validation-command.json": "f69beaf33c065e07402e0afffc1807ccc34d494fa0e885edf59b4334f3b533ef",
+    ".forge/benchmarks/from-scope-assurance-20260906/cleanup-receipt.json": "c2649f6cc43d4080d37e0dd24d80120a9d869fe45898a88bd78f6d9b6e89df8b",
+    ".forge/benchmarks/from-scope-assurance-20260906/control.diagnostic-candidates.json": "9ed1a4cf72f1b656c83235694983ccbd8a3f4c9277dd7685d0654849cab8017f",
+    ".forge/benchmarks/from-scope-assurance-20260906/control.frozen.json": "a98b0ac205bb091fe5cfb542e5f37cfe069bcc1550a5ce4d5449f54c80e292db",
+    ".forge/benchmarks/from-scope-assurance-20260906/control.replay.json": "2c3059c8da3d60d920d41d1ab7879a4708721e7995e1399e03d17485b563a253",
+    ".forge/benchmarks/from-scope-assurance-20260906/current-boundary-validation.json": "a30e437128053312a16b1898901e2c7b2413bab4bf6afce40c77e4d118e63f70",
+    ".forge/benchmarks/from-scope-assurance-20260906/diagnostic-compare-guard.json": "0d45ad0eec8228163be8e22a5e0bd84838204d2c6744b7a7f25ef0907d78e802",
+    ".forge/benchmarks/from-scope-assurance-20260906/diagnostic-invariants.json": "8bf7fcfd002bd813375ae02f0087c4d25a8fa7798c063da4c0931535c91a7510",
+    ".forge/benchmarks/from-scope-assurance-20260906/diagnostic-replay-commands.json": "67243e7a88f76fcfd2c49563da5b48b181d62ad3ad09132f9da01f615c21660c",
+    ".forge/benchmarks/from-scope-assurance-20260906/dialect-static-command.json": "61b2900750a2299206c89374866842a0f7b51ff91e35a341cdc6494755fdbc4a",
+    ".forge/benchmarks/from-scope-assurance-20260906/dialect-static-smoke.json": "2a80caeef6662cedc2d850e61b6e629b2e726b99f90f41698b3301d18047bc00",
+    ".forge/benchmarks/from-scope-assurance-20260906/extracted-diagnostic-replay-commands.json": "65022d1e179a91b17f4fcf2f62cc91f0c5468703d2960135d86c30f8fbbd83f1",
+    ".forge/benchmarks/from-scope-assurance-20260906/final-diagnostic-replay-commands.json": "d78f505a28f7d01de17b11d8635abfd4e80beabad5df5cc34a8e42ed0c3f8c55",
+    ".forge/benchmarks/from-scope-assurance-20260906/fresh-freeze-commands.json": "fd085b7a8a1588142f35c9c5e2a87634d8af98a4a1384bc3bbd44007ff8ff7c3",
+    ".forge/benchmarks/from-scope-assurance-20260906/full-regression.json": "1a7a9555a396bb627a8a5427adb33e62a08fe9dc98252cb3149841a337025af1",
+    ".forge/benchmarks/from-scope-assurance-20260906/historical-current-gates.json": "899042f7e44e294a64b9c90acfd244ead5e29f2108d7a481b00a4d7a875aac91",
+    ".forge/benchmarks/from-scope-assurance-20260906/historical-fixed-sql-input.json": "44cb1bfc58ac85316a758f8a8a4fc75d97520434054c6733bee97e2887ea03b4",
+    ".forge/benchmarks/from-scope-assurance-20260906/historical-integrity.json": "62fdb43420f5ded13d348fe81004358fde81236b75a3cde0980d9438d510f5da",
+    ".forge/benchmarks/from-scope-assurance-20260906/historical-reproduction.json": "08e8d0a0ba7db251e1e783ea61f0328b823b4fe5c02a63e03b2a1763d2e7ad72",
+    ".forge/benchmarks/from-scope-assurance-20260906/historical-v8-baseline.json": "dc1ed3ae672820a0da43729be57ed5ba2c88d1a7c5a7d84486a77f307c91fa2f",
+    ".forge/benchmarks/from-scope-assurance-20260906/historical-v8-repeat.json": "0506be65260556c27103ce422930bced1d3410830cc9e60a9c0cc9f986c9197a",
+    ".forge/benchmarks/from-scope-assurance-20260906/initial-verification-wave.json": "a2e1efc9deb4f3235c982be1eb9f17005a6b362292456ea6c65d27760de1c741",
+    ".forge/benchmarks/from-scope-assurance-20260906/live-http-smoke.json": "17d8b28cbaddb4619a2925b93e6bedc45fdc5b97f77dca01817a28db8e1e7bad",
+    ".forge/benchmarks/from-scope-assurance-20260906/maintenance-card.json": "56196674a37a08d95c5f4370b7bb6218f2143887bfdfa7bdd93e0c885f1d9c82",
+    ".forge/benchmarks/from-scope-assurance-20260906/public-cli-smoke.json": "a3ba0010121da2c48c428589eec689611f3cf9c18eaebc74626a04ee138d7896",
+    ".forge/benchmarks/from-scope-assurance-20260906/returned-sql-smoke.json": "344eaef6849246de092b61fc46a90020da694f71399e25f3ee0d0c27027fb6db",
+    ".forge/benchmarks/from-scope-assurance-20260906/service-cleanup.json": "b65e6db0e7d9233c29049f8331d6860bc93d8f9289d2d25bfdb10cc81b52f08c",
+    ".forge/benchmarks/from-scope-assurance-20260906/smoke-fixtures.json": "174e7cc4457e11c8e965e3553a199e1c6c8800d99424613d219bcb09deec6bad",
+    ".forge/benchmarks/from-scope-assurance-20260906/sqlite-ancestor-scope-boundaries.json": "28c6e1af0d44dc5dd38caca7a54538a8e74a3c2e7616a9f1f25b7159c5b116c5",
+    ".forge/benchmarks/from-scope-assurance-20260906/treatment.diagnostic-candidates.json": "92bab9d46245f1d7e8957c01f448c3966e0020041e2bc72e9ebc90aabf60ef1b",
+    ".forge/benchmarks/from-scope-assurance-20260906/treatment.frozen.json": "b9bf4e7695134c1f1cdacb15b88a5c5afa8c2bede6441dd464dafa1db85e7478",
+    ".forge/benchmarks/from-scope-assurance-20260906/treatment.replay.json": "5677ab99c9620a1a9059f559be2d1588ccf0a2f05c78e1b63954faa37b8b1d0e"
+  }
+}

@@ -42,7 +42,7 @@
 - Task/Step/Activity 使用不同权重；
 - 收口 Assurance/Artifact 等用户文案。
 
-复审结果：无 P0；后续文案 P1 已同步修正“取消任务或离开不会执行 SQL”和“当前输出”。截图：`/tmp/forge-sp4-task-detail.png`。
+复审结果：无 P0；后续文案 P1 已同步修正“取消任务或离开不会执行 SQL”和“当前输出”。截图：`<local-temp>/forge-sp4-task-detail.png`。
 
 ## 验证
 

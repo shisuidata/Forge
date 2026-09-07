@@ -56,10 +56,10 @@ Playwright 覆盖：
 
 Screenshots:
 
-- `/tmp/forge-web-shell-atlas-1600/01-workspace.png`
-- `/tmp/forge-web-shell-atlas-1600/02-sql-approval.png`
-- `/tmp/forge-web-shell-atlas-1600/03-report-detail.png`
-- `/tmp/forge-web-shell-atlas-1600/04-admin.png`
+- `<local-temp>/01-workspace.png`
+- `<local-temp>/02-sql-approval.png`
+- `<local-temp>/03-report-detail.png`
+- `<local-temp>/04-admin.png`
 
 ## Automated regression
 

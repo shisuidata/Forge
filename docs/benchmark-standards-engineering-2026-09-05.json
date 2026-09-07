@@ -1,0 +1,184 @@
+{
+  "requirement": "REQ-2026-09-05-045",
+  "date": "2026-09-05",
+  "status": "implemented_and_verified",
+  "external_model_calls": 0,
+  "commit_push_deploy": false,
+  "standard": "docs/benchmarks.md",
+  "dataset": {
+    "catalog": "tests/datasets/bird_mini_dev_standard.json",
+    "cases": 500,
+    "databases": 11,
+    "assets": 88,
+    "official_ex_revision": "bird_execution_accuracy_exact_set_v1",
+    "exposure": "public_development_not_holdout"
+  },
+  "protocols": {
+    "development": {
+      "revision": "sha256:2a51c34c70216d7dd71f7dce166d43cd2128c5d4d2a1ead76ba0287d03175f9b",
+      "case_ids": [
+        "md-436",
+        "md-259",
+        "md-085",
+        "md-312",
+        "md-386"
+      ]
+    },
+    "regression": {
+      "revision": "sha256:e811396e0c060e93826e8cffea1e367363b220d91655bbc565da480741d9ac1c",
+      "cases": 500,
+      "contexts": 500,
+      "action": "freeze_and_validate_only_not_model_generation"
+    }
+  },
+  "verification": {
+    "python": {
+      "command": ".venv/bin/python -m pytest tests -q",
+      "passed": 786,
+      "skipped": 26,
+      "warnings": 1,
+      "warning_scope": "Existing lark_oapi utcfromtimestamp deprecation"
+    },
+    "pi": {
+      "command": "npm --prefix services/pi-orchestrator test",
+      "passed": 143,
+      "failed": 0,
+      "typecheck": "passed"
+    },
+    "ci": {
+      "python": "pytest -q",
+      "pi": [
+        "npm ci",
+        "npm run typecheck",
+        "npm test"
+      ],
+      "configured": true,
+      "remote_ci_run": false
+    },
+    "http": {
+      "protocol": 200,
+      "context": 200,
+      "evaluation": 200,
+      "official_ex": true,
+      "contract_accuracy": true,
+      "scored": true,
+      "unauthenticated": 401,
+      "wrong_budget": 409,
+      "tampered_context": 409,
+      "model_calls": 0
+    },
+    "browser": {
+      "surface": "Current Jinja template and actual benchmark JavaScript on isolated local HTTP fixtures",
+      "cancel_posts": 0,
+      "accepted_posts": 1,
+      "confirmed_cases": 20,
+      "confirmed_model_calls": 40,
+      "accepted_request_generation_blocked": true,
+      "unknown_usage_card": "未知 / 未知",
+      "unknown_usage_forge_cell": "未知",
+      "unknown_usage_direct_cell": "未知",
+      "unknown_usage_cost_chart": true,
+      "screenshot": ".forge/benchmarks/standards-engineering/qa/unknown-usage.png"
+    }
+  },
+  "original_replay": {
+    "source": "docs/benchmark-luna-projection-instructions-2026-09-05.json",
+    "condition": "control",
+    "original_candidates": 10,
+    "new_generations": 0,
+    "case_count": 5,
+    "forge": {
+      "official_ex": 4,
+      "contract": 4
+    },
+    "direct": {
+      "official_ex": 4,
+      "contract": 4
+    },
+    "complete": true,
+    "diagnostic": true,
+    "comparison_rejected": true,
+    "compare_exit_code": 1
+  },
+  "synthetic_negative_replay": {
+    "source": "Hand-authored SELECT 1 and invalid Forge projection; not model outputs",
+    "complete": true,
+    "compile_failure_scored": true,
+    "denominator_preserved": 1,
+    "comparison": true,
+    "generation_provenance_known": false,
+    "generative_gain_claim": false
+  },
+  "quality_smoke": {
+    "label_basis": "official_ex",
+    "requests": 5,
+    "correct_completion": {
+      "count": 4,
+      "observed_count": 4,
+      "denominator": 5,
+      "rate": 0.8,
+      "known_count": 5,
+      "missing_count": 0,
+      "state": "known"
+    },
+    "silent_error": null,
+    "token_cost": {
+      "total": 23660,
+      "observed_total": 23660,
+      "per_correct_completion": 5915,
+      "known_count": 5,
+      "missing_count": 0,
+      "state": "known"
+    },
+    "cost_scope": "Historical reported usage from original control Forge candidates, not new consumption or billing"
+  },
+  "date_audit": {
+    "candidate_fields": 37,
+    "status_counts": {
+      "compatible_sample": 1,
+      "conflict": 3,
+      "missing_layout": 33
+    },
+    "sampling": {
+      "max_non_null_rows_per_field": 100,
+      "method": "first_non_null_storage_scan",
+      "random": false,
+      "column_wide_claim": false
+    },
+    "scope": "Supported ISO/compact layout patterns only; diagnostic, no metadata or prompt rewrite"
+  },
+  "artifacts": {
+    "directory": ".forge/benchmarks/standards-engineering",
+    "files": [
+      "control-freeze.json",
+      "regression-freeze.json",
+      "regression-validation.json",
+      "original-control-candidates.json",
+      "control-replay.json",
+      "synthetic-freeze.json",
+      "synthetic-candidates.json",
+      "synthetic-replay.json",
+      "synthetic-comparison.json",
+      "quality-forge.json",
+      "quality-report.json",
+      "date-audit.json",
+      "protocol-http-proof.json",
+      "qa/unknown-usage.png"
+    ]
+  },
+  "limits": [
+    "No new model accuracy gain claimed; projection candidate remains rejected",
+    "Official EX is execution-result coincidence, not independent business semantic truth",
+    "R500 frozen and validated only; no new full model run",
+    "H review and R0.6 external adoption remain open",
+    "SDK/Provider reported tokens and dispatch/payload evidence are not billing or observed HTTP status",
+    "UI transport fixtures intentionally prevent model generation"
+  ],
+  "cleanup": {
+    "isolated_api_server_stopped": true,
+    "browser_tabs_released": true,
+    "local_ui_servers_stopped": true,
+    "temporary_rendered_html_removed": true,
+    "evidence_artifacts_preserved": true
+  }
+}

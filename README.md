@@ -30,7 +30,9 @@ Forge sits between an upstream agent and a database. It accepts Direct SQL or co
 - automated compatibility checks for SQLite, PostgreSQL, and MySQL;
 - replayable accuracy benchmarks, exact-result comparison, and bounded failure diagnostics.
 
-> **Project status: early-stage and actively maintained.** Forge is suitable for evaluation, contribution, and controlled deployments with human review and read-only database credentials. It is not feature-complete or HA-ready. In the latest complete 500-case BIRD run, Forge reached **45.4% EA** versus **56.4%** for Direct SQL; the historical Spider2-Lite SQLite subset remains at **9.2% EA**. Results are specific to the dataset, model, provider, prompt, Registry, and run configuration—not a universal performance claim. See [Current project state](docs/current-project-state.md) and [Benchmark boundaries](docs/benchmarks.md).
+> **Project status: early-stage and actively maintained.** Suitable for evaluation and controlled deployments with human review and read-only credentials; not feature-complete or HA-ready. The latest complete structured GPT-5.6 BIRD run was sealed at **57.4% EA vs 62.8% Direct SQL**. A later compiler replay of the **same candidates** reached **62.6% vs 62.8%**, not a new generation result or demonstrated accuracy advantage. Results are version- and dataset-specific. See [current state](docs/current-project-state.md), [benchmark results](#benchmark-results), and the [report index](docs/README.md).
+
+**Upgrade note (2026-09-07):** shared Assurance is now `query-assurance-v10`. Physical-table authorization follows each SQL scope; a nested same-name CTE cannot hide an unauthorized table. The current flat Registry does not authorize schema/catalog-qualified sources. Old v9 QueryRuns fail approval with `assurance_revision_drift`: prepare and review a new QueryRun rather than upgrading old evidence in place. See the [release verification](docs/release-verification-2026-09-07.json).
 
 ---
 
@@ -67,17 +69,11 @@ AI data querying becomes unreliable when the model owns the whole chain: busines
 
 ## Core Philosophy
 
-### 1. Constraints enable freedom
+### 1. Constraints make failures inspectable
 
-Asking an LLM to write unconstrained SQL is asking it to random-walk through an infinite error space. **LLM error rate scales with output space size.**
+Provider-enforced strict output can constrain the shape of a Forge JSON candidate. Deterministic compilation and shared Assurance then check supported semantics, read-only SQL, Registry access, and source bindings.
 
-Forge radically narrows the output space:
-
-- Only table/column names registered in the Registry are valid tokens
-- JOIN type must be chosen from an enum — physically impossible to emit bare `JOIN` (no type)
-- `filter` must be an array, `count_all` cannot have a `col` field…
-
-When syntactic errors are physically blocked at generation time, only semantic errors remain.
+These layers do not eliminate all generation errors: expression fields still require validation, compiler bugs need regression coverage, and syntactically valid queries can answer the wrong question. A constrained object is a candidate—not proof of correctness or permission to execute.
 
 ### 2. Intent and execution are separated
 
@@ -108,13 +104,11 @@ Semantic layer (maintained conversationally, more accurate with each use)
 
 The more it's used, the more accurate Registry becomes, the lower the error rate. **This is a positive flywheel.**
 
-### 4. Compiler fixes beat prompt fixes
+### 4. Fix deterministic bugs without guessing intent
 
-When the model's semantic intent is correct but the DSL format is slightly off, adding a `_coerce` fix in the compiler is more stable than changing the prompt:
+A compiler fix should preserve the meaning of a valid candidate, not infer missing CTE exports, silently add result columns, or repair a model answer using Gold. Local alias expansion and qualified source bindings are covered by behavioral regressions.
 
-- Prompt fixes have butterfly effects — fixing one problem often breaks another
-- Compiler fixes are deterministic, don't affect other paths, fully testable
-- 14 `_coerce` fixes accumulated, each from a real failure case
+Prompt changes are separate, budgeted experiments. A gain on one probe does not outweigh a correct-answer regression; unknown usage and incomplete scoring remain explicit.
 
 ---
 
@@ -218,7 +212,7 @@ JSON Schema enforces constraints at the token generation level: `fn` can only be
 compile_query(forge_json)  # same input always produces same SQL
 ```
 
-Before compilation, `_expand_aliases()` expands agg aliases referenced in SELECT into their full expressions, eliminating SQL alias scope traps:
+During compilation, `_expand_aliases()` expands unqualified local aggregate/window column references. SQLGlot AST locations enable a single source-preserving replacement pass; qualified source columns, literals, comments, function/type names and nested SQL scopes are not rewritten. For example:
 
 ```sql
 WITH user_orders AS (
@@ -327,126 +321,46 @@ MiniMax distinguishes `db` (index documents) from `query` (query text) embedding
 
 ## Benchmark Results
 
-### Proprietary Test Set: 40 Cases
+### Public BIRD Mini-Dev: keep generation and replay separate
 
-Test schema: `users / orders / order_items / products` (SQLite, covering real business query scenarios)
+The repository records three complete 500-case, 1,000-call paired runs. These are historical measurements under their recorded model, Prompt, compiler, and evaluator revisions—not a fresh benchmark of every later commit.
 
-#### Version Evolution (LLM Judge 0–10, 5-run average per case)
+| Evidence | Forge Official EX / EA | Direct SQL Official EX / EA | Interpretation |
+|---|---:|---:|---|
+| DeepSeek V4 Flash, complete generation | 227/500 (45.4%) | 282/500 (56.4%) | Historical run; not the latest result |
+| GPT-5.6, text generation | 266/500 (53.2%) | 311/500 (62.2%) | Complete paired generation |
+| GPT-5.6, structured tool generation as originally sealed | 287/500 (57.4%) | 314/500 (62.8%) | Original runtime verdicts retained |
+| Same structured candidates, deterministic compiler replay | 313/500 (62.6%) | 314/500 (62.8%) | Offline replay, not new generation |
 
-| Version | Core change | Score | Compile err | vs prev |
-|---|---|---|---|---|
-| **A** | Baseline (SQL-style DSL) | 7.63 | 3.8% | — |
-| **B** | Control: direct SQL generation | 8.38 | 0.0% | — |
-| **D** | New DSL + enum schema constraints | 8.46 | 1.2% | +0.83 |
-| **E** | Prompt refinement (HAVING alias, LIMIT, ranking) | 8.41 | 0.0% | −0.05 |
-| **F** | Semantic precision (semi→EXISTS, JOIN completeness) | 8.43 | 0.6% | +0.02 |
-| **G** | Rule robustness (quantifier semantics, positive rules) | 8.69 | 0.0% | **+0.26** |
-| **H** | New capabilities (CASE WHEN, $preset, CTE, expr) | 8.45 | 0.5% | −0.24 |
-| **I** | Stability fixes (compiler fix 7, CTE boundary) | 8.45 | 2.0% | 0.00 |
-| **J** | HAVING precision + avg-per-X pattern | 8.65 | 0.5% | **+0.20** |
-| **J+Sem** | J + runtime semantic disambiguation library | **8.82** | **0.0%** | **+0.17** |
+For the last row, the discordant pairs are Forge-only 22 and Direct-only 23 (two-sided exact p=1.0): **no demonstrated Forge JSON accuracy advantage**. The original structured generation also used 59.57% more Forge tokens and 51.69% more average generation time. A later result-comparator correction gives Contract 284/500 versus 294/500 on the same candidates; Official EX remains unchanged. Contract is a separate metric, not a replacement for Official EX.
 
-> A/D/E/F/G tested on 32 cases. H onwards expanded to all 40 cases (new capability cases 33–40).
+The attempted additional DeepSeek run is **incomplete**: only 78 candidates per arm, with 422 missing per arm and quota/balance failures. Its nominal 500 terminal cases are not a fourth valid full run.
 
-#### EA Comparison (Execution Accuracy, cross-model)
+### Development experiments through 2026-09-07
 
-Same 40 cases, Forge DSL mode vs direct SQL generation mode, on two models:
+The BIRD snapshot has been exposed during development and is now **R**, a regression set. Small **D** probes diagnose failures; **S** fixtures test logical and safety boundaries. Independently audited **H** evidence and external-adoption evidence remain open gates.
 
-**MiniMax-M2.5 (mid-tier model)**
+| Recent paired experiment | New model calls | Forge EX / Contract, control → treatment | Decision |
+|---|---:|---|---|
+| Denominator example (REQ-056) | 16 | 2/4 → 3/4 | Rejected: previously correct md-079 regressed |
+| CTE interface example (REQ-058) | 16 | 3/4 → 3/4 | Rejected: md-199 improved, md-079 regressed |
 
-| Method | EA | Correct | Execution errors | Compile/other errors | Avg latency |
-|---|---|---|---|---|---|
-| **Forge (DSL)** | **65.0%** | 26/40 | 2 | 0 | ~10s |
-| **Direct SQL** | **57.5%** | 23/40 | 16 | 1 | 4.2s |
+REQ-058 also had Direct 3/4 → 2/4 with identical Direct inputs. Its 67,367 total tokens were fully observed; treatment total tokens rose 8.57%, Forge tokens per correct answer rose 13.11%, and four-observation generation P95 rose 41.53%. The latter two cost/latency gates failed. Neither prompt example is enabled by default; date, grain, and value context options remain off. No replacement calls or automatic repair are implied.
 
-**GLM-5 via SiliconFlow (strong reasoning model, 35/39 cases each, 5 cases timed out)**
+**Every published report—including preparation, offline replay, negative results, and incomplete runs—is indexed in the [documentation index](docs/README.md).** Start with the [historical run ledger](docs/benchmark-historical-runs-2026-09-07.json), [CTE experiment](docs/benchmark-luna-cte-interface-2026-09-07.json), and [benchmark protocol](docs/benchmarks.md). The [publication manifest](docs/report-publication-2026-09-07.json) distinguishes public redacted copies from preserved originals. Private runtime databases, provider sessions, and third-party dataset files are not included in a clone; local artifact paths are not public download links.
 
-| Method | EA | Correct | Avg latency |
-|---|---|---|---|
-| **Forge (DSL)** | **74.3%** | 26/35 | 10–660s (reasoning model) |
-| **Direct SQL** | **74.4%** | 29/39 | ~15s |
+### Historical suites are not a leaderboard
 
-Category breakdown (GLM-5, completed cases):
-
-| Category | Forge | Direct | Δ |
-|---|---|---|---|
-| Basic filter / Multi-table JOIN / Window functions | tied | tied | — |
-| Aggregation+GROUPBY / Time series | **100%** | 80% | **+20pp** |
-| Ranking TopN | 60% | **80%** | -20pp |
-| CTE multi-step / Complex composite | weaker | stronger | -15~25pp |
-
-> Note: MiniMax API output has irreducible randomness (temperature=0 still has ~±5pp single-run variance); figures above are representative single-run measurements. GLM-5's 5 timeouts stem from the reasoning model's extremely long inference time on complex CTEs (up to 660s per case).
-
-#### Forge J+Sem vs Direct SQL (Claude Sonnet, LLM Judge, historical data)
-
-| Category | Cases | Direct SQL | Forge J+Sem | Δ |
-|---|---|---|---|---|
-| Multi-table JOIN + agg | 6 | 8.53 | **8.73** | +0.20 |
-| Complex filter | 4 | 9.00 | **9.25** | +0.25 |
-| GROUP BY + HAVING | 5 | 8.60 | **8.80** | +0.20 |
-| Ranking & TopN | 5 | 8.36 | **9.00** | +0.64 |
-| Window aggregation | 4 | 8.40 | **8.75** | +0.35 |
-| Time navigation | 3 | 8.40 | **9.00** | +0.60 |
-| ANTI/SEMI JOIN | 3 | 7.80 | **8.60** | **+0.80** |
-| Complex composite | 2 | 7.60 | **8.00** | +0.40 |
-| **Overall** | **40** | **8.38** | **8.82** | **+0.44** |
-
-ANTI/SEMI JOIN has the largest gap (+0.80): direct SQL models frequently produce `NOT IN`, which silently returns wrong results on NULLs. Forge's `anti` join primitive eliminates this error class at the root.
+The earlier 40-case in-house suite and Spider2-Lite SQLite experiments remain in [benchmark history](docs/benchmarks.md). Spider2 reported 11/119 scored answers (9.2%) after 123 generated cases and a different fallback/retry protocol. Different denominators, LLM-judge scores, and completed-only subsets must not be combined with BIRD Official EX or used to claim general accuracy.
 
 ---
 
-### Spider2-Lite SQLite Subset Test
-
-Spider2-Lite is an academic text-to-SQL benchmark containing complex analytical queries from real data warehouses. We ran a systematic test on its 123 SQLite cases to validate Forge's generalization to unfamiliar databases and query patterns.
-
-#### Test Iteration History
-
-```mermaid
-timeline
-    title Spider2-Lite Test Iterations
-    Round 1 : 123 SQL files generated
-            : compile success rate 82%
-            : EA 5.9% (only 17 cases had gold SQL)
-            : issue: gold CSV path errors, many cases evaluated as no_gold
-    Fix EA evaluation : gold CSV supports multi-subfile (_a/_b/_c)
-                     : condition_cols dual-format parsing (per-subfile / flat)
-                     : added raw SQL fallback (escape hatch when DSL is insufficient)
-                     : all 123 cases now have gold reference answers
-    Full re-run : compile success rate 97.6%
-               : EA 9.2% (11/119)
-               : raw SQL fallback triggered 26 times, 6 passed
-```
-
-#### Final Results
-
-| Metric | Value |
-|---|---|
-| Test cases | 123 SQLite cases |
-| **Compile success rate** | **97.6%** (120/123) |
-| **EA (Execution Accuracy)** | **9.2%** (11/119) |
-| Raw SQL fallback triggered | 26 times |
-| Fallback passed | 6 times |
-
-#### Why Is Spider2 EA Low?
-
-Forge is designed to solve **generation errors** and **business logic errors** — not academic benchmark algorithm puzzles. Spider2's query distribution is systematically misaligned with Forge's design targets:
-
-- Date series generation (generate_series / recursive CTE)
-- Complex self-joins and multi-level nested subqueries
-- Period-over-period calculation (DATE_TRUNC + self-join)
-- Statistical modeling (linear regression, moving average)
-
-These all fall into "algorithm logic errors" — even human analysts need to know the specific algorithm to answer them.
-
-In real enterprise data query scenarios, over 80% of daily analytical queries fall within Forge DSL's coverage. Spider2's low EA is an **honest boundary label**, not a product defect.
-
----
 
 ## Engineering Lessons
 
-### Compiler fixes beat prompt fixes
+### Separate compiler corrections from generation gains
 
-The single highest-impact improvement in the benchmark was a compiler fix (Case 39: 3.0 → 9.0), not any prompt change. Prompts have butterfly effects; compiler fixes are surgical.
+The structured 500-case candidate set improved from 287 to 313 Official EX passes after deterministic compiler fixes. That is an offline result on unchanged candidates—not evidence that a newly generated answer or a Prompt revision improved.
 
 ### Alias scope is SQL's hidden reef
 
@@ -457,73 +371,27 @@ The SQL standard does not allow referencing same-level agg aliases within the sa
 SELECT repeat_users * 1.0 / total_users AS repurchase_rate
 ```
 
-Solution: `_expand_aliases()` replaces aliases in expr with their full expressions before compilation, eliminating this entire error class.
+Solution: expand unqualified local aggregate/window column references, not arbitrary matching text. Qualified source columns and nested SQL scopes keep their meaning; missing CTE outputs are not inferred or added. This resolves supported same-level alias references, not every alias error.
 
-### New capability docs cause overfitting
+### Prompt changes need paired controls
 
-Every new capability added to the prompt risks the model over-applying it. After adding CTE docs, the model started wrapping simple GROUP BY queries in CTEs. Mitigation: every new capability **must** be paired with a "when NOT to use" counter-example.
+A synthetic CTE example can pass structural fixtures yet cause a fresh percentage query to return two counts instead of the requested answer. Preserve the full paired denominator, regressions, and costs; successful compilation is not complete-answer success.
 
-### Semantic enrichment is additive
+Semantic context also needs verified provenance. Date, grain, and value observations remain opt-in and version-bound; a heuristic is not an organization-confirmed business definition.
 
-The semantic library injects disambiguations before the LLM call ("more than N times" → `op: "gt"` not `"gte"`), without touching the core prompt or adding extra API calls. J → J+Sem improved by 0.17, compile failure rate dropped from 0.5% to 0.0%.
 
 ---
 
 ## An Honest Question We're Wrestling With
 
-> **This section is active self-doubt, not a conclusion.**
+**Does constrained generation itself justify its cost? Current public evidence does not establish that advantage.** The fixed-candidate BIRD replay is 313/500 versus 314/500, while the Forge branch's original generation cost more tokens and time. Small prompt experiments can repair one answer and break another.
 
-The GLM-5 benchmark results made us re-examine Forge's core premise.
+Forge therefore treats Direct SQL and Forge JSON as alternative candidate formats, not a hierarchy of trust. The product boundary is **Evaluate → Enforce → Explain**: reproducible assessment, a shared rejectable execution path, hash-bound approval, and evidence from the same QueryRun. Deterministic checks cannot settle an unknown business definition or prove a correct answer on every future database state.
 
-### The Core Premise
-
-Forge's logic chain is:
-
-```
-LLM writing unconstrained SQL → high error rate
-↓
-DSL + Structured Output narrows the output space → generation errors physically impossible
-↓
-Forge EA clearly beats direct SQL generation
-```
-
-MiniMax (a mid-tier model) supports this: Forge 65.0% vs Direct SQL 57.5%, a gap of **+7.5pp**.
-
-### Where the Question Arises
-
-GLM-5 (a strong reasoning model) returned a different picture: Forge 74.3% vs Direct SQL 74.4% — **essentially identical**.
-
-This points to an uncomfortable hypothesis:
-
-**As models get stronger, the "generation error" category itself shrinks.** Strong models don't need DSL constraints to avoid the `NOT IN` NULL trap, or to remember that JOINs need a type — they just don't make these mistakes.
-
-If this holds, Forge's DSL constraint layer may deliver diminishing returns as foundation models continue to improve.
-
-### What Still Holds
-
-After reflection, several things we believe remain true regardless of model capability:
-
-**1. The Registry semantic layer's value is model-agnostic**
-
-Whether "repurchase rate" counts all users or only users who placed at least one order is a business definition problem, not a reasoning problem. No matter how strong the LLM, it cannot know your organization's metric definitions from thin air. The Registry as an accumulation of organizational knowledge is a real moat.
-
-**2. The audit trail's value is model-agnostic**
-
-The SQL the user reviews is the SQL that gets executed — no runtime transformation. In enterprise data environments, this "auditable, traceable" property is a hard requirement regardless of LLM capability.
-
-**3. Weak-model deployments remain widespread**
-
-The reality of self-hosted deployments is that many data teams run local small/mid models (Qwen 7B, Llama 8B), not GPT-4-class models. In weak-model scenarios, DSL constraints still provide measurable value.
-
-### What We Don't Know Yet
-
-- Is GLM-5's "74.3% parity" a real signal or sampling noise (5 timeouts skew the comparison)?
-- If foundation models keep improving, should Forge's value proposition shift from "DSL constraints reduce generation errors" to "Registry semantic layer + audit trail"?
-- Should the DSL become thinner — keeping only semantic disambiguation, relaxing SQL syntax constraints?
-
-**These questions don't have answers yet. We're actively looking for them.** If you have thoughts, open an Issue.
+The remaining questions need independent evidence: does this runtime catch meaningful failures in an external team's workflow, at acceptable cost and user effort? Do independently audited holdout cases support the same conclusions? Internal tests, exposed benchmarks, maintainer demos, and stars do not answer those questions. See [current project state](docs/current-project-state.md) for the open adoption gates.
 
 ---
+
 
 ## Getting Started
 
@@ -705,17 +573,13 @@ tests/
 
 ## Current Scores
 
-| Benchmark | Cases | Metric | Score |
-|---|---:|---|---:|
-| BIRD complete run | 500 | Forge Execution Accuracy | **45.4%** |
-| BIRD complete run | 500 | Direct SQL Execution Accuracy | **56.4%** |
-| Historical proprietary Method J | 40 | LLM Judge | **8.65 / 10** |
-| Historical proprietary Method J+Sem | 40 | LLM Judge | **8.82 / 10** |
-| Historical proprietary MiniMax run | 40 | Execution Accuracy | **65.0%** |
-| Spider2-Lite SQLite | 123 | Execution Accuracy | **9.2%** |
-| Spider2-Lite SQLite | 123 | Compile success rate | **97.6%** |
+| Evidence | Cases | Metric | Forge / Direct SQL |
+|---|---:|---|---|
+| Structured GPT-5.6 generation, original | 500 | Official EX / EA | 57.4% / 62.8% |
+| Same candidates, compiler replay | 500 | Official EX / EA | 62.6% / 62.8% |
+| Same candidates, comparator v2 | 500 | Contract | 56.8% / 58.8% |
 
-These rows are retained as versioned evidence, not as directly comparable scores. Dataset, case selection, model, provider, prompt, Registry, retry policy, evaluator, and metric must match before two runs are compared.
+These are historical, version-bound measurements. See [Benchmark Results](#benchmark-results) for costs, incomplete runs, historical suites, and every report; none establishes general accuracy or external adoption.
 
 ## Contributing
 

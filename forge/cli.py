@@ -435,6 +435,64 @@ def _cmd_poc(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _cmd_benchmark(args: argparse.Namespace) -> None:
+    from . import bird_benchmark as bird
+
+    try:
+        if args.benchmark_command == "quality":
+            from .benchmark_quality import summarize_quality
+            data = _read_json_input(args.input)
+            result = summarize_quality(data["records"], label_basis=data["label_basis"])
+        elif args.bird_command == "freeze":
+            if args.history and not args.previous_run:
+                raise ValueError("--history requires --previous-run")
+            repeat = bird.repeat_history(_read_json_input(args.previous_run),
+                                         [_read_json_input(path) for path in args.history or []],
+                                         provider=args.provider, model=args.model) if args.previous_run else None
+            result = bird.freeze(cohort=args.cohort, provider=args.provider, model=args.model,
+                                 case_ids=args.case_ids, seed=args.seed, size=args.size, variable=args.variable,
+                                 repeat=repeat, gold_policy=args.gold_policy,
+                                 date_context=args.date_context, date_max_rows=args.date_max_rows,
+                                 grain_context=args.grain_context, value_context=args.value_context,
+                                 value_field=args.value_field, value_max_values=args.value_max_values,
+                                 forge_prompt_revision=args.forge_prompt_revision)
+            bird.persist(result["manifest"])
+        elif args.bird_command == "preflight":
+            protocol = _read_json_input(args.input)
+            manifest = bird.unwrap(protocol)
+            checked = bird.preflight(provider=manifest["model"]["provider"], model=manifest["model"]["model"],
+                                     case_ids=manifest["case_ids"], confirm_model_calls=manifest["generation"]["max_model_calls"],
+                                     protocol_manifest=manifest)
+            result = {"ready": True, "protocol_revision": checked["protocol_revision"],
+                      "case_ids": checked["case_ids"], "gold_readiness": checked["gold_readiness"],
+                      "maximum_model_calls": checked["generation"]["max_model_calls"], "model_calls": 0}
+        elif args.bird_command == "validate":
+            frozen = bird.validate(_read_json_input(args.input))
+            result = {"valid": True, "protocol_revision": frozen["protocol_revision"],
+                      "case_ids": frozen["case_ids"], "model_calls": 0}
+        elif args.bird_command == "replay":
+            protocol = _read_json_input(args.protocol) if args.protocol else None
+            result = bird.replay(_read_json_input(args.input), protocol, diagnostic=args.diagnostic)
+        elif args.bird_command == "compare":
+            result = bird.compare(_read_json_input(args.left), _read_json_input(args.right))
+        else:
+            from .benchmark_metadata import audit_metadata
+            result = audit_metadata(Path(args.dataset_root) if args.dataset_root else bird.hard._BIRD_RUNTIME,
+                                    max_rows=args.max_rows)
+        text = json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False)
+        if getattr(args, "out", None):
+            # Never silently replace a frozen input or historical replay artifact.
+            with Path(args.out).open("x", encoding="utf-8") as stream:
+                stream.write(text + "\n")
+        else:
+            print(text)
+        if result.get("comparable") is False or result.get("complete") is False:
+            raise SystemExit(1)
+    except (ValueError, OSError, RuntimeError, KeyError, TypeError) as exc:
+        print(json.dumps({"error": str(exc), "comparable": False}, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(2) from exc
+
+
 def main() -> None:
     """CLI 入口函数，由 pyproject.toml 的 [project.scripts] 注册为 forge 命令。"""
     parser = argparse.ArgumentParser(prog="forge", description="Forge DSL compiler & config")
@@ -671,6 +729,62 @@ def main() -> None:
     config_parser.add_argument("key", nargs="?", default=None, help="配置项（如 llm.model）")
     config_parser.add_argument("value", nargs="?", default=None, help="新值")
 
+    benchmark = subparsers.add_parser("benchmark", help="Versioned offline benchmark engineering")
+    benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
+    quality = benchmark_sub.add_parser("quality", help="Summarize labeled business-quality records")
+    quality.add_argument("input", help="JSON {label_basis, records}, or - for stdin")
+    bird = benchmark_sub.add_parser("bird", help="BIRD D/R freeze, validate and saved-candidate replay (no model calls)")
+    bird_sub = bird.add_subparsers(dest="bird_command", required=True)
+    freeze = bird_sub.add_parser("freeze", help="Freeze gold-free inputs; R is all 500, exposed Mini-Dev is never H")
+    from agent.prompts import STRUCTURED_BENCHMARK_PROMPT_REVISION, STRUCTURED_BENCHMARK_PROMPT_REVISIONS
+    freeze.add_argument("--forge-prompt-revision", choices=STRUCTURED_BENCHMARK_PROMPT_REVISIONS,
+                        default=STRUCTURED_BENCHMARK_PROMPT_REVISION,
+                        help="Registered Forge prompt; nondefault revisions require --variable prompt")
+    freeze.add_argument("--cohort", choices=("D", "R"), required=True)
+    freeze.add_argument("--provider", required=True)
+    freeze.add_argument("--model", required=True)
+    freeze.add_argument("--case-ids", nargs="+")
+    freeze.add_argument("--seed", type=int)
+    freeze.add_argument("--size", type=int)
+    freeze.add_argument("--variable", choices=("model", "prompt", "compiler", "schema", "date_context", "grain_context", "value_context"),
+                        help="The sole predeclared factor allowed to vary in compare")
+    freeze.add_argument("--out", help="New immutable JSON output path; defaults to stdout")
+    freeze.add_argument("--previous-run", help="Terminal Pi run: carry every failed or unscored case forward")
+    freeze.add_argument("--history", nargs="+", help="All earlier same-model Pi runs/candidate ledgers; remaining slots sample 70%% unseen/30%% seen")
+    freeze.add_argument("--gold-policy", choices=("require_all", "skip_unscorable"), default="require_all",
+                        help="Explicit skip policy checks Gold during freeze, preserves blocked cases and reduces generation budget")
+    freeze.add_argument("--date-context", choices=("off", "observed"), default="off",
+                        help="Explicitly append bounded date-layout observations to both arms")
+    freeze.add_argument("--date-max-rows", type=int, default=100,
+                        help="Fixed non-NULL sample bound per date field (1..10000), not a whole-column guarantee")
+    freeze.add_argument("--grain-context", choices=("off", "question_heuristic"), default="off",
+                        help="Explicit grain_context ablation only: unconfirmed question heuristic versus no hint")
+    freeze.add_argument("--value-context", choices=("off", "observed"), default="off",
+                        help="Explicit value_context ablation: identical qualified-column observations for both arms")
+    freeze.add_argument("--value-field", nargs=3, metavar=("DB", "TABLE", "COLUMN"),
+                        help="One exact qualified text column; required for observed mode and bound in off control")
+    freeze.add_argument("--value-max-values", type=int, default=16,
+                        help="Fixed distinct-value cap (1..100); no partial values on overflow")
+    validate = bird_sub.add_parser("validate", help="Reject input, source, sample or budget drift")
+    validate.add_argument("input")
+    preflight = bird_sub.add_parser("preflight", help="Validate frozen protocol and execute every Gold read-only before any model call")
+    preflight.add_argument("input")
+    replay = bird_sub.add_parser("replay", help="Re-evaluate original candidates through compiler/assurance/EX/Contract",
+        description="Ledger: {schema_version: bird-candidates-v1, protocol_revision: sha256:..., candidates: "
+                    "[{case_id, arm: forge|direct, output}]}. Exactly one record per frozen case/arm; "
+                    "output:null preserves failed generation unless scored:false explicitly records an unscored arm. "
+                    "Pi cases[].{forge,direct} exports preserve these states as well.")
+    replay.add_argument("input")
+    replay.add_argument("--protocol", help="Frozen manifest/response file; otherwise use exported or local manifest")
+    replay.add_argument("--diagnostic", action="store_true", help="Allow old unversioned candidates, never comparable")
+    replay.add_argument("--out")
+    compare = bird_sub.add_parser("compare", help="Compare two versioned replay results; incomparable exits nonzero")
+    compare.add_argument("left")
+    compare.add_argument("right")
+    audit = bird_sub.add_parser("audit-context", help="Read-only metadata/sample consistency audit")
+    audit.add_argument("--dataset-root")
+    audit.add_argument("--max-rows", type=int, default=100)
+
     args = parser.parse_args()
 
     # ── compile 处理 ─────────────────────────────────────────────────────────
@@ -681,6 +795,9 @@ def main() -> None:
             with open(args.input) as f:
                 forge = json.load(f)
         print(compile_query(forge))
+
+    elif args.command == "benchmark":
+        _cmd_benchmark(args)
 
     # ── evaluate handling ─────────────────────────────────────────────────────
     elif args.command == "evaluate":

@@ -1,0 +1,5289 @@
+{
+  "schema_version": "luna-offline-triage-v1",
+  "source_run_id": "pbr_d6db1ab5661b46b892238df238303dd3",
+  "source_protocol_revision": "sha256:b94ec84dc5345d0288803e52eba634dbe4deb18bfc3acdf722aba79603ffbd70",
+  "authorization": {
+    "user_text": "好的，那就继续",
+    "interpretation": "停止同配置盲抽，继续离线归因；仅在有证据且无需猜业务口径时采用通用确定性修复",
+    "generation_calls_authorized_or_made": 0
+  },
+  "scope": {
+    "carryover_cases": 17,
+    "scorable_cases": 16,
+    "gold_blocked_cases": [
+      "md-340"
+    ],
+    "primary_categories_are_not_accuracy": true
+  },
+  "primary_case_counts": {
+    "output_contract_ambiguity": 4,
+    "reference_conflict": 6,
+    "candidate_error": 6,
+    "gold_blocked": 1
+  },
+  "cases": [
+    {
+      "case_id": "md-020",
+      "primary_case_category": "output_contract_ambiguity",
+      "reason": "币种集合相同，3行与1行去重粒度不同",
+      "question": "What kind of currency did the customer paid at 16:25:00 in 2012/8/24?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": true,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": true,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-020",
+        "db_id": "debit_card_specializing",
+        "question": "What kind of currency did the customer paid at 16:25:00 in 2012/8/24?",
+        "evidence": "'2012/8/24' can be represented by '2012-08-24'; ",
+        "forge_output": {
+          "scan": "transactions_1k",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "customers",
+              "on": {
+                "left": "transactions_1k.CustomerID",
+                "right": "customers.CustomerID"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "transactions_1k.Date",
+              "op": "eq",
+              "val": "2012-08-24"
+            },
+            {
+              "col": "transactions_1k.Time",
+              "op": "eq",
+              "val": "16:25:00"
+            }
+          ],
+          "select": [
+            "customers.Currency"
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT customers.Currency\nFROM transactions_1k\nINNER JOIN customers ON transactions_1k.CustomerID = customers.CustomerID\nWHERE transactions_1k.Date = '2012-08-24' AND transactions_1k.Time = '16:25:00'",
+            "result": {
+              "columns": [
+                "Currency"
+              ],
+              "rows": [
+                [
+                  "CZK"
+                ],
+                [
+                  "CZK"
+                ],
+                [
+                  "CZK"
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": true,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 0,
+            "classification": "output_contract_ambiguity",
+            "rationale": "币种集合正确，但返回3条CZK，而非1个币种类别。问题未明示去重，保守归为重复/输出粒度契约差异，不归为实体或日期错误。"
+          },
+          "direct": {
+            "sql": "SELECT c.Currency\nFROM transactions_1k AS t\nJOIN customers AS c ON t.CustomerID = c.CustomerID\nWHERE t.Date = '2012-08-24'\n  AND t.Time = '16:25:00'",
+            "result": {
+              "columns": [
+                "Currency"
+              ],
+              "rows": [
+                [
+                  "CZK"
+                ],
+                [
+                  "CZK"
+                ],
+                [
+                  "CZK"
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": true,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 0,
+            "classification": "output_contract_ambiguity",
+            "rationale": "与Forge相同，3笔不同客户交易均为CZK；非错误币种，也非漏gasstations导致差异。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT DISTINCT T3.Currency FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID INNER JOIN customers AS T3 ON T1.CustomerID = T3.CustomerID WHERE T1.Date = '2012-08-24' AND T1.Time = '16:25:00'",
+          "result": {
+            "columns": [
+              "Currency"
+            ],
+            "rows": [
+              [
+                "CZK"
+              ]
+            ],
+            "row_count": 1,
+            "truncated": false,
+            "column_count": 1,
+            "distinct_row_count": 1
+          },
+          "assessment": "Gold返回去重币种。额外gasstations内连接在这3笔交易上都能匹配，不改变答案；题面不要求该表。"
+        },
+        "intent": "按指定日期和时间找支付客户的币种类别；不是交易明细清单。",
+        "diagnostics": [
+          {
+            "name": "matching_transactions",
+            "sql": "SELECT t.TransactionID,t.CustomerID,t.GasStationID,t.Date,t.Time,c.Currency, g.GasStationID AS matched_station FROM transactions_1k t JOIN customers c ON t.CustomerID=c.CustomerID LEFT JOIN gasstations g ON t.GasStationID=g.GasStationID WHERE t.Date='2012-08-24' AND t.Time='16:25:00'",
+            "result": {
+              "columns": [
+                "TransactionID",
+                "CustomerID",
+                "GasStationID",
+                "Date",
+                "Time",
+                "Currency",
+                "matched_station"
+              ],
+              "rows": [
+                [
+                  20,
+                  18399,
+                  636,
+                  "2012-08-24",
+                  "16:25:00",
+                  "CZK",
+                  636
+                ],
+                [
+                  363,
+                  22994,
+                  4431,
+                  "2012-08-24",
+                  "16:25:00",
+                  "CZK",
+                  4431
+                ],
+                [
+                  470,
+                  40705,
+                  168,
+                  "2012-08-24",
+                  "16:25:00",
+                  "CZK",
+                  168
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 7,
+              "distinct_row_count": 3
+            }
+          },
+          {
+            "name": "currency_multiplicity",
+            "sql": "SELECT c.Currency,COUNT(*) AS transaction_rows,COUNT(DISTINCT t.CustomerID) AS customers,COUNT(g.GasStationID) AS matched_stations FROM transactions_1k t JOIN customers c ON t.CustomerID=c.CustomerID LEFT JOIN gasstations g ON t.GasStationID=g.GasStationID WHERE t.Date='2012-08-24' AND t.Time='16:25:00' GROUP BY c.Currency",
+            "result": {
+              "columns": [
+                "Currency",
+                "transaction_rows",
+                "customers",
+                "matched_stations"
+              ],
+              "rows": [
+                [
+                  "CZK",
+                  3,
+                  3,
+                  3
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 1
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "matching_transactions",
+          "currency_multiplicity"
+        ],
+        "caveats": [],
+        "possible_general_system_issue": {
+          "possible": true,
+          "area": "输出实体粒度与SQL bag/set差异",
+          "confidence": "已证实重复；将其认定为业务错误取决于输出契约。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    },
+    {
+      "case_id": "md-032",
+      "primary_case_category": "reference_conflict",
+      "reason": "题目求会议数量；Gold排除会议并返回名称，候选=4",
+      "question": "Among the events attended by more than 10 members of the Student_Club, how many of them are meetings?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-032",
+        "db_id": "student_club",
+        "question": "Among the events attended by more than 10 members of the Student_Club, how many of them are meetings?",
+        "evidence": "meetings events refers to type = 'Meeting'; attended by more than 10 members refers to COUNT(event_id) > 10",
+        "forge_output": {
+          "scan": "event",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "qualified_events",
+              "on": {
+                "left": "event.event_id",
+                "right": "qualified_events.event_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "event.type",
+              "op": "eq",
+              "val": "Meeting"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "meeting_count"
+            }
+          ],
+          "select": [
+            "meeting_count"
+          ],
+          "cte": [
+            {
+              "name": "qualified_events",
+              "query": {
+                "scan": "attendance",
+                "group": [
+                  "attendance.link_to_event"
+                ],
+                "agg": [
+                  {
+                    "fn": "count_all",
+                    "as": "member_count"
+                  }
+                ],
+                "having": [
+                  {
+                    "col": "member_count",
+                    "op": "gt",
+                    "val": 10
+                  }
+                ],
+                "select": [
+                  {
+                    "expr": "attendance.link_to_event",
+                    "as": "event_id"
+                  }
+                ]
+              },
+              "recursive": false
+            }
+          ]
+        },
+        "assessment": {
+          "reference_assessment": "确定参考冲突：题目问人数超过10的会议数量；Gold却EXCEPT排除Meeting并返回非会议名称集合，既反转类型又改变输出粒度。",
+          "forge": {
+            "classification": "reference_conflict",
+            "candidate_correctness": "supported",
+            "reason": "按event_id聚合出席记录>10后只计Meeting，返回4；4个会议的出席记录数与独立成员数均一致。"
+          },
+          "direct": {
+            "classification": "reference_conflict",
+            "candidate_correctness": "supported",
+            "reason": "Meeting内按event_id分组后计符合>10者，返回4，与独立成员诊断一致。"
+          },
+          "system_defect": {
+            "possible": false,
+            "reason": "当前Forge输出与SQL语义一致；两臂均忠于问题，失败源于参考SQL。"
+          },
+          "evidence_summary": "Gold为9个非会议名称；符合条件的非会议有10个event_id、9个不同名称；会议为4个。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT T1.event_name FROM event AS T1  INNER JOIN attendance AS T2 ON T1.event_id = T2.link_to_event GROUP BY T1.event_id  HAVING COUNT(T2.link_to_event) > 10 EXCEPT SELECT T1.event_name  FROM event AS T1  WHERE T1.type = 'Meeting'",
+            "result": {
+              "columns": [
+                "event_name"
+              ],
+              "rows": [
+                [
+                  "Community Theater"
+                ],
+                [
+                  "Food Bank"
+                ],
+                [
+                  "Football game"
+                ],
+                [
+                  "Laugh Out Loud"
+                ],
+                [
+                  "November Speaker"
+                ]
+              ],
+              "row_count": 9,
+              "truncated": true,
+              "column_count": 1,
+              "distinct_row_count": 9
+            }
+          },
+          "forge": {
+            "sql": "WITH qualified_events AS (\n  SELECT attendance.link_to_event AS event_id\n  FROM attendance\n  GROUP BY attendance.link_to_event\n  HAVING COUNT(*) > 10\n)\nSELECT COUNT(*) AS meeting_count\nFROM event\nINNER JOIN qualified_events ON event.event_id = qualified_events.event_id\nWHERE event.type = 'Meeting'",
+            "result": {
+              "columns": [
+                "meeting_count"
+              ],
+              "rows": [
+                [
+                  4
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 9,
+              "candidate_only_sample": [
+                [
+                  4
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  "Women's Soccer"
+                ],
+                [
+                  "Community Theater"
+                ],
+                [
+                  "Food Bank"
+                ],
+                [
+                  "Football game"
+                ],
+                [
+                  "Laugh Out Loud"
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT COUNT(*) FROM (SELECT e.event_id FROM event AS e JOIN attendance AS a ON a.link_to_event = e.event_id WHERE e.type = 'Meeting' GROUP BY e.event_id HAVING COUNT(e.event_id) > 10)",
+            "result": {
+              "columns": [
+                "COUNT(*)"
+              ],
+              "rows": [
+                [
+                  4
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 9,
+              "candidate_only_sample": [
+                [
+                  4
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  "Women's Soccer"
+                ],
+                [
+                  "Community Theater"
+                ],
+                [
+                  "Food Bank"
+                ],
+                [
+                  "Football game"
+                ],
+                [
+                  "Laugh Out Loud"
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "qualified_event_types",
+            "sql": "SELECT e.type, COUNT(*) AS events, MIN(n) AS min_attendance, MAX(n) AS max_attendance FROM event e JOIN (SELECT link_to_event,COUNT(*) n FROM attendance GROUP BY link_to_event HAVING COUNT(*)>10) a ON a.link_to_event=e.event_id GROUP BY e.type",
+            "result": {
+              "columns": [
+                "type",
+                "events",
+                "min_attendance",
+                "max_attendance"
+              ],
+              "rows": [
+                [
+                  "Community Service",
+                  1,
+                  11,
+                  11
+                ],
+                [
+                  "Game",
+                  3,
+                  12,
+                  17
+                ],
+                [
+                  "Guest Speaker",
+                  3,
+                  27,
+                  29
+                ],
+                [
+                  "Meeting",
+                  4,
+                  23,
+                  30
+                ],
+                [
+                  "Registration",
+                  1,
+                  30,
+                  30
+                ],
+                [
+                  "Social",
+                  2,
+                  17,
+                  20
+                ]
+              ],
+              "row_count": 6,
+              "truncated": false,
+              "column_count": 4
+            }
+          },
+          {
+            "name": "qualifying_meetings_unique_members",
+            "sql": "SELECT e.event_name,COUNT(*) AS attendance_rows,COUNT(DISTINCT a.link_to_member) AS unique_members FROM event e JOIN attendance a ON a.link_to_event=e.event_id WHERE e.type='Meeting' GROUP BY e.event_id HAVING COUNT(*)>10",
+            "result": {
+              "columns": [
+                "event_name",
+                "attendance_rows",
+                "unique_members"
+              ],
+              "rows": [
+                [
+                  "October Meeting",
+                  23,
+                  23
+                ],
+                [
+                  "November Meeting",
+                  25,
+                  25
+                ],
+                [
+                  "Yearly Kickoff",
+                  30,
+                  30
+                ],
+                [
+                  "September Meeting",
+                  27,
+                  27
+                ]
+              ],
+              "row_count": 4,
+              "truncated": false,
+              "column_count": 3
+            }
+          },
+          {
+            "name": "nonmeeting_rows_and_names",
+            "sql": "SELECT COUNT(*) AS events,COUNT(DISTINCT event_name) AS distinct_names FROM event e JOIN (SELECT link_to_event FROM attendance GROUP BY link_to_event HAVING COUNT(*)>10) a ON a.link_to_event=e.event_id WHERE e.type<>'Meeting'",
+            "result": {
+              "columns": [
+                "events",
+                "distinct_names"
+              ],
+              "rows": [
+                [
+                  10,
+                  9
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        }
+      }
+    },
+    {
+      "case_id": "md-082",
+      "primary_case_category": "candidate_error",
+      "reason": "Forge患者清单1281行/103人；Direct已通过",
+      "question": "List the patient ID, sex and birthday of patient with LDH beyond normal range.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": true,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": true,
+          "contract_accuracy": true
+        }
+      },
+      "detail": {
+        "case_id": "md-082",
+        "db_id": "thrombosis_prediction",
+        "question": "List the patient ID, sex and birthday of patient with LDH beyond normal range.",
+        "evidence": "LDH beyond normal range refers to LDH > '500';",
+        "forge_output": {
+          "scan": "Patient",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "Laboratory",
+              "on": {
+                "left": "Patient.ID",
+                "right": "Laboratory.ID"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "Laboratory.LDH",
+              "op": "gt",
+              "val": 500
+            }
+          ],
+          "select": [
+            "Patient.ID",
+            "Patient.SEX",
+            "Patient.Birthday"
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT Patient.ID, Patient.SEX, Patient.Birthday\nFROM Patient\nINNER JOIN Laboratory ON Patient.ID = Laboratory.ID\nWHERE Laboratory.LDH > 500",
+            "result": {
+              "columns": [
+                "ID",
+                "SEX",
+                "Birthday"
+              ],
+              "rows": [
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ]
+              ],
+              "row_count": 1281,
+              "truncated": true,
+              "column_count": 3,
+              "distinct_row_count": 103
+            },
+            "set_equal_gold": true,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 0,
+            "classification": "confirmed_candidate_error",
+            "rationale": "患者清单被一对多化验JOIN放大为1281行，仅103个不同患者；例如4425292重复68次。确定缺少患者粒度去重/存在性语义，不是LDH阈值或患者绑定错误。该结论限于患者清单输出契约；其值集合仍与Gold相同。"
+          },
+          "direct": {
+            "sql": "SELECT DISTINCT p.ID, p.SEX, p.Birthday\nFROM Patient AS p\nJOIN Laboratory AS l ON l.ID = p.ID\nWHERE l.LDH > 500",
+            "result": {
+              "columns": [
+                "ID",
+                "SEX",
+                "Birthday"
+              ],
+              "rows": [
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  57266,
+                  "M",
+                  "1923-07-25"
+                ],
+                [
+                  81043,
+                  "M",
+                  "1967-03-25"
+                ],
+                [
+                  540520,
+                  "F",
+                  "1941-11-21"
+                ],
+                [
+                  912147,
+                  "F",
+                  "1975-02-17"
+                ],
+                [
+                  944797,
+                  "F",
+                  "1975-01-31"
+                ]
+              ],
+              "row_count": 103,
+              "truncated": true,
+              "column_count": 3,
+              "distinct_row_count": 103
+            },
+            "set_equal_gold": true,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 0,
+            "classification": "supported_correct",
+            "rationale": "DISTINCT后103行、3列与Gold一致，也与EXISTS患者查询一致。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT DISTINCT T1.ID, T1.SEX, T1.Birthday FROM Patient AS T1 INNER JOIN Laboratory AS T2 ON T1.ID = T2.ID WHERE T2.LDH > 500",
+          "result": {
+            "columns": [
+              "ID",
+              "SEX",
+              "Birthday"
+            ],
+            "rows": [
+              [
+                27654,
+                "F",
+                "1936-03-25"
+              ],
+              [
+                57266,
+                "M",
+                "1923-07-25"
+              ],
+              [
+                81043,
+                "M",
+                "1967-03-25"
+              ],
+              [
+                540520,
+                "F",
+                "1941-11-21"
+              ],
+              [
+                912147,
+                "F",
+                "1975-02-17"
+              ],
+              [
+                944797,
+                "F",
+                "1975-01-31"
+              ]
+            ],
+            "row_count": 103,
+            "truncated": true,
+            "column_count": 3,
+            "distinct_row_count": 103
+          },
+          "assessment": "Gold DISTINCT与患者EXISTS诊断均返回103个患者，题面及Evidence支持该口径。"
+        },
+        "intent": "列出曾有LDH>500化验记录的患者ID、性别、生日，实体粒度为患者。",
+        "diagnostics": [
+          {
+            "name": "patient_grain",
+            "sql": "SELECT COUNT(*) AS patient_rows,COUNT(DISTINCT ID) AS unique_ids FROM Patient",
+            "result": {
+              "columns": [
+                "patient_rows",
+                "unique_ids"
+              ],
+              "rows": [
+                [
+                  1238,
+                  1238
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "repeated_labs",
+            "sql": "SELECT p.ID,p.SEX,p.Birthday,COUNT(*) AS abnormal_labs,MIN(l.LDH) AS min_ldh,MAX(l.LDH) AS max_ldh FROM Patient p JOIN Laboratory l ON p.ID=l.ID WHERE l.LDH>500 GROUP BY p.ID,p.SEX,p.Birthday ORDER BY abnormal_labs DESC,p.ID LIMIT 5",
+            "result": {
+              "columns": [
+                "ID",
+                "SEX",
+                "Birthday",
+                "abnormal_labs",
+                "min_ldh",
+                "max_ldh"
+              ],
+              "rows": [
+                [
+                  4425292,
+                  "F",
+                  "1954-12-23",
+                  68,
+                  510,
+                  1034
+                ],
+                [
+                  5126587,
+                  "F",
+                  "1964-01-01",
+                  67,
+                  591,
+                  1119
+                ],
+                [
+                  4878272,
+                  "F",
+                  "1945-12-04",
+                  49,
+                  555,
+                  956
+                ],
+                [
+                  1078741,
+                  "F",
+                  "1937-12-18",
+                  45,
+                  503,
+                  889
+                ],
+                [
+                  5176755,
+                  "F",
+                  "1931-05-27",
+                  44,
+                  501,
+                  1030
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 6,
+              "distinct_row_count": 5
+            }
+          },
+          {
+            "name": "existential_patient_query",
+            "sql": "SELECT p.ID,p.SEX,p.Birthday FROM Patient p WHERE EXISTS (SELECT 1 FROM Laboratory l WHERE l.ID=p.ID AND l.LDH>500)",
+            "result": {
+              "columns": [
+                "ID",
+                "SEX",
+                "Birthday"
+              ],
+              "rows": [
+                [
+                  27654,
+                  "F",
+                  "1936-03-25"
+                ],
+                [
+                  57266,
+                  "M",
+                  "1923-07-25"
+                ],
+                [
+                  81043,
+                  "M",
+                  "1967-03-25"
+                ],
+                [
+                  540520,
+                  "F",
+                  "1941-11-21"
+                ],
+                [
+                  912147,
+                  "F",
+                  "1975-02-17"
+                ],
+                [
+                  944797,
+                  "F",
+                  "1975-01-31"
+                ]
+              ],
+              "row_count": 103,
+              "truncated": true,
+              "column_count": 3,
+              "distinct_row_count": 103
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "patient_grain",
+          "repeated_labs",
+          "existential_patient_query"
+        ],
+        "caveats": [],
+        "possible_general_system_issue": {
+          "possible": true,
+          "area": "实体清单经一对多连接后的粒度保持",
+          "confidence": "候选级证据充分；无编译器改写证据，不可据此对所有JOIN机械加DISTINCT。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    },
+    {
+      "case_id": "md-127",
+      "primary_case_category": "reference_conflict",
+      "reason": "Gold把1名患者的7次检验计为7人；两臂去重=1",
+      "question": "For the patients with a normal range of creatinine phosphokinase, how many of them have a positive measure of degree of coagulation?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-127",
+        "db_id": "thrombosis_prediction",
+        "question": "For the patients with a normal range of creatinine phosphokinase, how many of them have a positive measure of degree of coagulation?",
+        "evidence": "normal range of creatinine phosphokinase refers to CPK < 250; positive measure of degree of coagulation refers to KCT = '+' or RVVT = '+' or LAC = '+' ;",
+        "forge_output": {
+          "scan": "Examination",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "Laboratory",
+              "on": {
+                "left": "Examination.ID",
+                "right": "Laboratory.ID"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "Laboratory.CPK",
+              "op": "lt",
+              "val": 250
+            },
+            {
+              "or": [
+                {
+                  "col": "Examination.KCT",
+                  "op": "eq",
+                  "val": "+"
+                },
+                {
+                  "col": "Examination.RVVT",
+                  "op": "eq",
+                  "val": "+"
+                },
+                {
+                  "col": "Examination.LAC",
+                  "op": "eq",
+                  "val": "+"
+                }
+              ]
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_distinct",
+              "col": "Examination.ID",
+              "as": "count_patients"
+            }
+          ],
+          "select": [
+            "count_patients"
+          ]
+        },
+        "assessment": {
+          "reference_assessment": "确定计数粒度冲突：题目问patients数量，Evidence仅限定CPK和阳性条件，未要求重复检验计数；Gold COUNT(T1.ID)按患者×检验记录计数。",
+          "forge": {
+            "classification": "reference_conflict",
+            "candidate_correctness": "supported",
+            "reason": "COUNT(DISTINCT Examination.ID)=1；虽省略Patient连接，诊断证明符合条件的ID均存在Patient，无人口集合差异。"
+          },
+          "direct": {
+            "classification": "reference_conflict",
+            "candidate_correctness": "supported",
+            "reason": "COUNT(DISTINCT p.ID)=1，正确患者粒度。"
+          },
+          "system_defect": {
+            "possible": false,
+            "reason": "无编译语义差异，不能把Gold的重复记录计数归因于生成错误。"
+          },
+          "evidence_summary": "唯一患者1567380有7个CPK<250的实验室日期、1个阳性检查日期；Gold=7，两臂=1。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT COUNT(T1.ID) FROM Patient AS T1 INNER JOIN Laboratory AS T2 ON T1.ID = T2.ID INNER JOIN Examination AS T3 ON T1.ID = T3.ID WHERE T2.CPK < 250 AND (T3.KCT = '+' OR T3.RVVT = '+' OR T3.LAC = '+')",
+            "result": {
+              "columns": [
+                "COUNT(T1.ID)"
+              ],
+              "rows": [
+                [
+                  7
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            }
+          },
+          "forge": {
+            "sql": "SELECT COUNT(DISTINCT Examination.ID) AS count_patients\nFROM Examination\nINNER JOIN Laboratory ON Examination.ID = Laboratory.ID\nWHERE Laboratory.CPK < 250 AND (Examination.KCT = '+' OR Examination.RVVT = '+' OR Examination.LAC = '+')",
+            "result": {
+              "columns": [
+                "count_patients"
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [
+                [
+                  1
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  7
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT COUNT(DISTINCT p.ID) FROM Patient AS p JOIN Laboratory AS l ON l.ID = p.ID JOIN Examination AS e ON e.ID = p.ID WHERE l.CPK < 250 AND (e.KCT = '+' OR e.RVVT = '+' OR e.LAC = '+')",
+            "result": {
+              "columns": [
+                "COUNT(DISTINCT p.ID)"
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [
+                [
+                  1
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  7
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "patient_join_multiplicity",
+            "sql": "SELECT p.ID, COUNT(*) AS joined_rows,COUNT(DISTINCT l.Date) AS lab_dates,COUNT(DISTINCT e.\"Examination Date\") AS exam_dates FROM Patient p JOIN Laboratory l ON l.ID=p.ID JOIN Examination e ON e.ID=p.ID WHERE l.CPK<250 AND (e.KCT='+' OR e.RVVT='+' OR e.LAC='+') GROUP BY p.ID",
+            "result": {
+              "columns": [
+                "ID",
+                "joined_rows",
+                "lab_dates",
+                "exam_dates"
+              ],
+              "rows": [
+                [
+                  1567380,
+                  7,
+                  7,
+                  1
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 4
+            }
+          },
+          {
+            "name": "qualifying_lab_measurements",
+            "sql": "SELECT l.ID,l.Date,l.CPK FROM Laboratory l WHERE l.CPK<250 AND EXISTS(SELECT 1 FROM Examination e WHERE e.ID=l.ID AND (e.KCT='+' OR e.RVVT='+' OR e.LAC='+')) ORDER BY l.ID,l.Date",
+            "result": {
+              "columns": [
+                "ID",
+                "Date",
+                "CPK"
+              ],
+              "rows": [
+                [
+                  1567380,
+                  "1981-05-25",
+                  5
+                ],
+                [
+                  1567380,
+                  "1981-06-24",
+                  6
+                ],
+                [
+                  1567380,
+                  "1983-05-30",
+                  6
+                ],
+                [
+                  1567380,
+                  "1983-10-17",
+                  6
+                ],
+                [
+                  1567380,
+                  "1983-11-14",
+                  7
+                ],
+                [
+                  1567380,
+                  "1984-12-17",
+                  13
+                ],
+                [
+                  1567380,
+                  "1985-05-13",
+                  11
+                ]
+              ],
+              "row_count": 7,
+              "truncated": false,
+              "column_count": 3
+            }
+          },
+          {
+            "name": "candidate_patient_membership",
+            "sql": "SELECT COUNT(DISTINCT e.ID) AS ids_without_patient FROM Examination e JOIN Laboratory l ON l.ID=e.ID LEFT JOIN Patient p ON p.ID=e.ID WHERE l.CPK<250 AND (e.KCT='+' OR e.RVVT='+' OR e.LAC='+') AND p.ID IS NULL",
+            "result": {
+              "columns": [
+                "ids_without_patient"
+              ],
+              "rows": [
+                [
+                  0
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        }
+      }
+    },
+    {
+      "case_id": "md-153",
+      "primary_case_category": "candidate_error",
+      "reason": "Forge历史评分24×12笛卡尔积；同时SUM/最新/均值口径未指定",
+      "question": "How much higher in percentage is Ariel Borysiuk's overall rating than that of Paulin Puel?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-153",
+        "db_id": "european_football_2",
+        "question": "How much higher in percentage is Ariel Borysiuk's overall rating than that of Paulin Puel?",
+        "evidence": "how much higher in percentage = MULTIPLY(DIVIDE(SUBTRACT(overall_rating WHERE player_name = 'Ariel Borysiuk', overall_rating WHERE player_name = 'Paulin Puel'), overall_rating WHERE player_name = 'Paulin Puel'), 100);",
+        "forge_output": {
+          "scan": "ariel_rating",
+          "joins": [
+            {
+              "type": "cross",
+              "table": "paulin_rating"
+            }
+          ],
+          "select": [
+            {
+              "expr": "(ariel_rating.rating - paulin_rating.rating) * 100.0 / paulin_rating.rating",
+              "as": "percentage_higher"
+            }
+          ],
+          "cte": [
+            {
+              "name": "ariel_rating",
+              "query": {
+                "scan": "Player_Attributes",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "Player",
+                    "on": {
+                      "left": "Player_Attributes.player_api_id",
+                      "right": "Player.player_api_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "Player.player_name",
+                    "op": "eq",
+                    "val": "Ariel Borysiuk"
+                  }
+                ],
+                "select": [
+                  {
+                    "expr": "Player_Attributes.overall_rating",
+                    "as": "rating"
+                  }
+                ]
+              },
+              "recursive": false
+            },
+            {
+              "name": "paulin_rating",
+              "query": {
+                "scan": "Player_Attributes",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "Player",
+                    "on": {
+                      "left": "Player_Attributes.player_api_id",
+                      "right": "Player.player_api_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "Player.player_name",
+                    "op": "eq",
+                    "val": "Paulin Puel"
+                  }
+                ],
+                "select": [
+                  {
+                    "expr": "Player_Attributes.overall_rating",
+                    "as": "rating"
+                  }
+                ]
+              },
+              "recursive": false
+            }
+          ]
+        },
+        "assessment": {
+          "reference_assessment": "参考聚合口径未被问题/Evidence指定：Gold将每人全部历史rating相加后比较，24条与12条历史导致133.726%；这不同于最新/平均/单次评分比较。不能据Gold不匹配单独判候选错。",
+          "forge": {
+            "classification": "certain_candidate_error_with_reference_ambiguity",
+            "candidate_correctness": "incorrect_grain",
+            "reason": "两组历史记录CROSS JOIN产生24×12=288行、33个不同百分比；题目要求两位球员的一个相对评分百分比，未要求全部跨日期配对，缺少历史记录归约或日期绑定。即使参考SUM口径不成立，此笛卡尔积也是独立可证的粒度错误。"
+          },
+          "direct": {
+            "classification": "semantic_ambiguity",
+            "candidate_correctness": "underdetermined",
+            "reason": "无ORDER BY/LIMIT的标量子查询在SQLite取第一条，恰为两人的最新记录68/59，得到15.254%；可对应最新评分解释，但SQL未明确选择最新，也没有题意授权SUM/AVG/latest中的某一种。不能仅凭参考差异认定该数值必错；任意首行选择存在确定结构风险。"
+          },
+          "system_defect": {
+            "possible": true,
+            "stage": "semantic_generation",
+            "reason": "[INFERENCE]多版本实体属性未定义归约/时间绑定：Forge为笛卡尔积，Direct为无排序标量首行。当前Forge IR到SQL一致，未发现编译器差异；只有这一组证据，不能断言普遍缺陷。"
+          },
+          "evidence_summary": "SUM口径133.726%；AVG口径16.863%；MAX口径18.644%；显式各自最新68/59给15.254%；所有原始评分配对范围-6.780%到27.273%，Gold的133.726%来自历史行数不等而非任一配对。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT (SUM(CASE WHEN t1.player_name = 'Ariel Borysiuk' THEN t2.overall_rating ELSE 0 END) * 1.0 - SUM(CASE WHEN t1.player_name = 'Paulin Puel' THEN t2.overall_rating ELSE 0 END)) * 100 / SUM(CASE WHEN t1.player_name = 'Paulin Puel' THEN t2.overall_rating ELSE 0 END) FROM Player AS t1 INNER JOIN Player_Attributes AS t2 ON t1.player_api_id = t2.player_api_id",
+            "result": {
+              "columns": [
+                "(SUM(CASE WHEN t1.player_name = 'Ariel Borysiuk' THEN t2.overall_rating ELSE 0 END) * 1.0 - SUM(CASE WHEN t1.player_name = 'Paulin Puel' THEN t2.overall_rating ELSE 0 END)) * 100 / SUM(CASE WHEN t1.player_name = 'Paulin Puel' THEN t2.overall_rating ELSE 0 END)"
+              ],
+              "rows": [
+                [
+                  133.7260677466863
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            }
+          },
+          "forge": {
+            "sql": "WITH ariel_rating AS (\n  SELECT Player_Attributes.overall_rating AS rating\n  FROM Player_Attributes\n  INNER JOIN Player ON Player_Attributes.player_api_id = Player.player_api_id\n  WHERE Player.player_name = 'Ariel Borysiuk'\n),\npaulin_rating AS (\n  SELECT Player_Attributes.overall_rating AS rating\n  FROM Player_Attributes\n  INNER JOIN Player ON Player_Attributes.player_api_id = Player.player_api_id\n  WHERE Player.player_name = 'Paulin Puel'\n)\nSELECT (ariel_rating.rating - paulin_rating.rating) * 100.0 / paulin_rating.rating AS percentage_higher\nFROM ariel_rating\nCROSS JOIN paulin_rating",
+            "result": {
+              "columns": [
+                "percentage_higher"
+              ],
+              "rows": [
+                [
+                  23.636363636363637
+                ],
+                [
+                  23.636363636363637
+                ],
+                [
+                  23.636363636363637
+                ],
+                [
+                  21.428571428571427
+                ],
+                [
+                  21.428571428571427
+                ]
+              ],
+              "row_count": 288,
+              "truncated": true,
+              "column_count": 1,
+              "distinct_row_count": 33
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 33,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [
+                [
+                  -1.694915254237288
+                ],
+                [
+                  -1.7857142857142858
+                ],
+                [
+                  -3.508771929824561
+                ],
+                [
+                  -5.172413793103448
+                ],
+                [
+                  -6.779661016949152
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  133.7260677466863
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT ((SELECT pa.overall_rating FROM Player_Attributes pa JOIN Player p ON pa.player_api_id = p.player_api_id WHERE p.player_name = 'Ariel Borysiuk') - (SELECT pa.overall_rating FROM Player_Attributes pa JOIN Player p ON pa.player_api_id = p.player_api_id WHERE p.player_name = 'Paulin Puel')) * 100.0 / (SELECT pa.overall_rating FROM Player_Attributes pa JOIN Player p ON pa.player_api_id = p.player_api_id WHERE p.player_name = 'Paulin Puel')",
+            "result": {
+              "columns": [
+                "((SELECT pa.overall_rating FROM Player_Attributes pa JOIN Player p ON pa.player_api_id = p.player_api_id WHERE p.player_name = 'Ariel Borysiuk') - (SELECT pa.overall_rating FROM Player_Attributes pa JOIN Player p ON pa.player_api_id = p.player_api_id WHERE p.player_name = 'Paulin Puel')) * 100.0 / (SELECT pa.overall_rating FROM Player_Attributes pa JOIN Player p ON pa.player_api_id = p.player_api_id WHERE p.player_name = 'Paulin Puel')"
+              ],
+              "rows": [
+                [
+                  15.254237288135593
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [
+                [
+                  15.254237288135593
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  133.7260677466863
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "rating_history_summary",
+            "sql": "SELECT p.player_name,p.player_api_id,COUNT(*) AS history_rows,COUNT(DISTINCT pa.overall_rating) AS distinct_ratings,SUM(pa.overall_rating) AS sum_rating,AVG(pa.overall_rating) AS avg_rating,MIN(pa.overall_rating) AS min_rating,MAX(pa.overall_rating) AS max_rating,MIN(pa.date) AS first_date,MAX(pa.date) AS last_date FROM Player p JOIN Player_Attributes pa ON pa.player_api_id=p.player_api_id WHERE p.player_name IN ('Ariel Borysiuk','Paulin Puel') GROUP BY p.player_api_id",
+            "result": {
+              "columns": [
+                "player_name",
+                "player_api_id",
+                "history_rows",
+                "distinct_ratings",
+                "sum_rating",
+                "avg_rating",
+                "min_rating",
+                "max_rating",
+                "first_date",
+                "last_date"
+              ],
+              "rows": [
+                [
+                  "Ariel Borysiuk",
+                  112656,
+                  24,
+                  7,
+                  1587,
+                  66.125,
+                  55,
+                  70,
+                  "2007-02-22 00:00:00",
+                  "2016-03-24 00:00:00"
+                ],
+                [
+                  "Paulin Puel",
+                  536526,
+                  12,
+                  5,
+                  679,
+                  56.583333333333336,
+                  55,
+                  59,
+                  "2007-02-22 00:00:00",
+                  "2016-05-12 00:00:00"
+                ]
+              ],
+              "row_count": 2,
+              "truncated": false,
+              "column_count": 10
+            }
+          },
+          {
+            "name": "scalar_subquery_selected_rows",
+            "sql": "SELECT p.player_name,(SELECT pa.id FROM Player_Attributes pa WHERE pa.player_api_id=p.player_api_id) AS selected_id,(SELECT pa.date FROM Player_Attributes pa WHERE pa.player_api_id=p.player_api_id) AS selected_date,(SELECT pa.overall_rating FROM Player_Attributes pa WHERE pa.player_api_id=p.player_api_id) AS selected_rating FROM Player p WHERE p.player_name IN ('Ariel Borysiuk','Paulin Puel')",
+            "result": {
+              "columns": [
+                "player_name",
+                "selected_id",
+                "selected_date",
+                "selected_rating"
+              ],
+              "rows": [
+                [
+                  "Ariel Borysiuk",
+                  16249,
+                  "2016-03-24 00:00:00",
+                  68
+                ],
+                [
+                  "Paulin Puel",
+                  140626,
+                  "2016-05-12 00:00:00",
+                  59
+                ]
+              ],
+              "row_count": 2,
+              "truncated": false,
+              "column_count": 4
+            }
+          },
+          {
+            "name": "alternative_rating_aggregations",
+            "sql": "WITH stats AS (SELECT p.player_name,AVG(pa.overall_rating) avg_rating,MAX(pa.overall_rating) max_rating,SUM(pa.overall_rating) sum_rating FROM Player p JOIN Player_Attributes pa ON pa.player_api_id=p.player_api_id WHERE p.player_name IN ('Ariel Borysiuk','Paulin Puel') GROUP BY p.player_name) SELECT 100.0*(a.avg_rating-b.avg_rating)/b.avg_rating AS mean_percent,100.0*(a.max_rating-b.max_rating)/b.max_rating AS max_percent,100.0*(a.sum_rating-b.sum_rating)/b.sum_rating AS sum_percent FROM stats a CROSS JOIN stats b WHERE a.player_name='Ariel Borysiuk' AND b.player_name='Paulin Puel'",
+            "result": {
+              "columns": [
+                "mean_percent",
+                "max_percent",
+                "sum_percent"
+              ],
+              "rows": [
+                [
+                  16.863033873343145,
+                  18.64406779661017,
+                  133.7260677466863
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 3
+            }
+          },
+          {
+            "name": "pairwise_percentage_range",
+            "sql": "SELECT MIN((a.overall_rating-b.overall_rating)*100.0/b.overall_rating) AS min_percent,MAX((a.overall_rating-b.overall_rating)*100.0/b.overall_rating) AS max_percent,COUNT(*) AS pairs FROM Player_Attributes a JOIN Player pa ON pa.player_api_id=a.player_api_id CROSS JOIN Player_Attributes b JOIN Player pb ON pb.player_api_id=b.player_api_id WHERE pa.player_name='Ariel Borysiuk' AND pb.player_name='Paulin Puel'",
+            "result": {
+              "columns": [
+                "min_percent",
+                "max_percent",
+                "pairs"
+              ],
+              "rows": [
+                [
+                  -6.779661016949152,
+                  27.272727272727273,
+                  288
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 3
+            }
+          },
+          {
+            "name": "explicit_latest_rating",
+            "sql": "SELECT p.player_name,pa.date,pa.overall_rating FROM Player p JOIN Player_Attributes pa ON pa.player_api_id=p.player_api_id WHERE p.player_name IN ('Ariel Borysiuk','Paulin Puel') AND pa.date=(SELECT MAX(px.date) FROM Player_Attributes px WHERE px.player_api_id=p.player_api_id)",
+            "result": {
+              "columns": [
+                "player_name",
+                "date",
+                "overall_rating"
+              ],
+              "rows": [
+                [
+                  "Ariel Borysiuk",
+                  "2016-03-24 00:00:00",
+                  68
+                ],
+                [
+                  "Paulin Puel",
+                  "2016-05-12 00:00:00",
+                  59
+                ]
+              ],
+              "row_count": 2,
+              "truncated": false,
+              "column_count": 3
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        }
+      }
+    },
+    {
+      "case_id": "md-234",
+      "primary_case_category": "reference_conflict",
+      "reason": "Gold遗漏题目要求的次数；赛道与地点粒度另有歧义",
+      "question": "How many times the circuits were held in Austria? Please give their location and coordinates.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-234",
+        "db_id": "formula_1",
+        "question": "How many times the circuits were held in Austria? Please give their location and coordinates.",
+        "evidence": "location coordinates refers to (lat,lng); Austria refers to country = 'Austria';",
+        "forge_output": {
+          "scan": "circuits",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "races",
+              "on": {
+                "left": "circuits.circuitId",
+                "right": "races.circuitId"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "circuits.country",
+              "op": "eq",
+              "val": "Austria"
+            }
+          ],
+          "group": [
+            "circuits.circuitId",
+            "circuits.location",
+            "circuits.lat",
+            "circuits.lng"
+          ],
+          "agg": [
+            {
+              "fn": "count_distinct",
+              "col": "races.raceId",
+              "as": "times_held"
+            }
+          ],
+          "select": [
+            "circuits.location",
+            "circuits.lat",
+            "circuits.lng",
+            "times_held"
+          ]
+        },
+        "assessment": {
+          "reference_assessment": "确定参考输出遗漏与分组歧义并存：题目明确How many times并要求地点坐标，Gold仅地点坐标去重，无次数；是否按circuitId还是物理地点合并未明确。",
+          "forge": {
+            "classification": "reference_conflict_with_grain_ambiguity",
+            "candidate_correctness": "plausible",
+            "reason": "按circuitId计赛事，3行，Spielburg的A1-Ring和Red Bull Ring分别25与4，Styria为1。保留赛道身份但投影不显示身份，出现同地点两行；若要求每地点次数则粒度不合，若每赛道则合理。"
+          },
+          "direct": {
+            "classification": "reference_conflict_with_grain_ambiguity",
+            "candidate_correctness": "plausible",
+            "reason": "按地点坐标合并，Spielburg=29，Styria=1，符合按地点次数解释；与Gold仅差所请求的次数列。"
+          },
+          "system_defect": {
+            "possible": false,
+            "reason": "两臂输出均保留了题目要求的次数；Forge编译输入和输出一致。赛道身份与地点粒度分歧属本题业务口径，不足以证明通用编译缺陷。"
+          },
+          "evidence_summary": "全部奥地利3个circuitId均有比赛，两个ID共用Spielburg坐标；去掉次数后两臂的地点坐标集合均等于Gold。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT DISTINCT location, lat, lng FROM circuits WHERE country = 'Austria'",
+            "result": {
+              "columns": [
+                "location",
+                "lat",
+                "lng"
+              ],
+              "rows": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478
+                ]
+              ],
+              "row_count": 2,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 2
+            }
+          },
+          "forge": {
+            "sql": "SELECT circuits.location, circuits.lat, circuits.lng, COUNT(DISTINCT races.raceId) AS times_held\nFROM circuits\nINNER JOIN races ON circuits.circuitId = races.circuitId\nWHERE circuits.country = 'Austria'\nGROUP BY circuits.circuitId, circuits.location, circuits.lat, circuits.lng",
+            "result": {
+              "columns": [
+                "location",
+                "lat",
+                "lng",
+                "times_held"
+              ],
+              "rows": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  25
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1
+                ],
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  4
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 3
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 3,
+              "gold_only_distinct_count": 2,
+              "candidate_only_sample": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  25
+                ],
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  4
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT c.location, c.lat, c.lng, COUNT(r.raceId) AS times_held\nFROM circuits AS c\nJOIN races AS r ON r.circuitId = c.circuitId\nWHERE c.country = 'Austria'\nGROUP BY c.location, c.lat, c.lng",
+            "result": {
+              "columns": [
+                "location",
+                "lat",
+                "lng",
+                "times_held"
+              ],
+              "rows": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  29
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1
+                ]
+              ],
+              "row_count": 2,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 2
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 2,
+              "gold_only_distinct_count": 2,
+              "candidate_only_sample": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  29
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "austria_circuit_identity_and_races",
+            "sql": "SELECT c.circuitId,c.circuitRef,c.name,c.location,c.lat,c.lng,COUNT(r.raceId) AS races,MIN(r.year) AS first_year,MAX(r.year) AS last_year FROM circuits c LEFT JOIN races r ON r.circuitId=c.circuitId WHERE c.country='Austria' GROUP BY c.circuitId ORDER BY c.circuitId",
+            "result": {
+              "columns": [
+                "circuitId",
+                "circuitRef",
+                "name",
+                "location",
+                "lat",
+                "lng",
+                "races",
+                "first_year",
+                "last_year"
+              ],
+              "rows": [
+                [
+                  23,
+                  "osterreichring",
+                  "A1-Ring",
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  25,
+                  1970,
+                  2003
+                ],
+                [
+                  57,
+                  "zeltweg",
+                  "Zeltweg",
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1,
+                  1964,
+                  1964
+                ],
+                [
+                  70,
+                  "red_bull_ring",
+                  "Red Bull Ring",
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  4,
+                  2014,
+                  2017
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 9
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        },
+        "additional_result_checks": {
+          "both_candidates_location_coordinate_sets_equal_gold": true
+        }
+      }
+    },
+    {
+      "case_id": "md-249",
+      "primary_case_category": "output_contract_ambiguity",
+      "reason": "排序与Gold前两列逐行一致，是否另输出RANK列未明确",
+      "question": "Rank heroes published by Marvel Comics by their height in descending order.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-249",
+        "db_id": "superhero",
+        "question": "Rank heroes published by Marvel Comics by their height in descending order.",
+        "evidence": "name refers to superhero_name; the tallest hero refers to MAX(height_cm); published by Marvel Comics refers to publisher_name = 'Marvel Comics'",
+        "forge_output": {
+          "scan": "superhero",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "publisher",
+              "on": {
+                "left": "superhero.publisher_id",
+                "right": "publisher.id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "publisher.publisher_name",
+              "op": "eq",
+              "val": "Marvel Comics"
+            }
+          ],
+          "select": [
+            "superhero.superhero_name",
+            "superhero.height_cm"
+          ],
+          "sort": [
+            {
+              "col": "superhero.height_cm",
+              "dir": "desc"
+            }
+          ]
+        },
+        "assessment": {
+          "reference_assessment": "输出契约歧义：Rank ... in descending order可指降序排列，也可要求显式名次列。Gold提供RANK窗口列，但问题未明确要求名次字段，Evidence甚至仅提示MAX(height_cm)，未指定RANK或并列规则。",
+          "forge": {
+            "classification": "semantic_ambiguity",
+            "candidate_correctness": "plausible_missing_rank_column_if_required",
+            "reason": "正确筛选Marvel并按height_cm降序，387行；与Gold去除HeightRank后的全部有序行完全一致。若rank必须输出数字名次则缺列，但不能凭Gold独有第三列认定排序解释必错。"
+          },
+          "direct": {
+            "classification": "semantic_ambiguity",
+            "candidate_correctness": "plausible_missing_rank_column_if_required",
+            "reason": "同Forge：降序结果与Gold前两列逐行一致，差异仅显式HeightRank列。"
+          },
+          "system_defect": {
+            "possible": false,
+            "reason": "生成IR本身只要求sort和两列，编译忠实；没有证据证明窗口功能丢失。"
+          },
+          "evidence_summary": "Gold387×3，两臂387×2；均386个不同元组（对应自身列数）。最高两人高度30480，Gold并列RANK=1，下一人=3；自然语言未指定并列规则。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT superhero_name, height_cm, RANK() OVER (ORDER BY height_cm DESC) AS HeightRank FROM superhero INNER JOIN publisher ON superhero.publisher_id = publisher.id WHERE publisher.publisher_name = 'Marvel Comics'",
+            "result": {
+              "columns": [
+                "superhero_name",
+                "height_cm",
+                "HeightRank"
+              ],
+              "rows": [
+                [
+                  "Surtur",
+                  30480,
+                  1
+                ],
+                [
+                  "Ymir",
+                  30480,
+                  1
+                ],
+                [
+                  "Bloodwraith",
+                  3050,
+                  3
+                ],
+                [
+                  "Utgard-Loki",
+                  1520,
+                  4
+                ],
+                [
+                  "Fin Fang Foom",
+                  975,
+                  5
+                ]
+              ],
+              "row_count": 387,
+              "truncated": true,
+              "column_count": 3,
+              "distinct_row_count": 386
+            }
+          },
+          "forge": {
+            "sql": "SELECT superhero.superhero_name, superhero.height_cm\nFROM superhero\nINNER JOIN publisher ON superhero.publisher_id = publisher.id\nWHERE publisher.publisher_name = 'Marvel Comics'\nORDER BY superhero.height_cm DESC",
+            "result": {
+              "columns": [
+                "superhero_name",
+                "height_cm"
+              ],
+              "rows": [
+                [
+                  "Surtur",
+                  30480
+                ],
+                [
+                  "Ymir",
+                  30480
+                ],
+                [
+                  "Bloodwraith",
+                  3050
+                ],
+                [
+                  "Utgard-Loki",
+                  1520
+                ],
+                [
+                  "Fin Fang Foom",
+                  975
+                ]
+              ],
+              "row_count": 387,
+              "truncated": true,
+              "column_count": 2,
+              "distinct_row_count": 386
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 386,
+              "gold_only_distinct_count": 386,
+              "candidate_only_sample": [
+                [
+                  "3-D Man",
+                  188
+                ],
+                [
+                  "A-Bomb",
+                  203
+                ],
+                [
+                  "Abomination",
+                  203
+                ],
+                [
+                  "Abraxas",
+                  0
+                ],
+                [
+                  "Absorbing Man",
+                  193
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  "3-D Man",
+                  188,
+                  94
+                ],
+                [
+                  "A-Bomb",
+                  203,
+                  33
+                ],
+                [
+                  "Abomination",
+                  203,
+                  33
+                ],
+                [
+                  "Abraxas",
+                  0,
+                  328
+                ],
+                [
+                  "Absorbing Man",
+                  193,
+                  66
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT s.superhero_name, s.height_cm\nFROM superhero AS s\nJOIN publisher AS p ON s.publisher_id = p.id\nWHERE p.publisher_name = 'Marvel Comics'\nORDER BY s.height_cm DESC",
+            "result": {
+              "columns": [
+                "superhero_name",
+                "height_cm"
+              ],
+              "rows": [
+                [
+                  "Surtur",
+                  30480
+                ],
+                [
+                  "Ymir",
+                  30480
+                ],
+                [
+                  "Bloodwraith",
+                  3050
+                ],
+                [
+                  "Utgard-Loki",
+                  1520
+                ],
+                [
+                  "Fin Fang Foom",
+                  975
+                ]
+              ],
+              "row_count": 387,
+              "truncated": true,
+              "column_count": 2,
+              "distinct_row_count": 386
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 386,
+              "gold_only_distinct_count": 386,
+              "candidate_only_sample": [
+                [
+                  "3-D Man",
+                  188
+                ],
+                [
+                  "A-Bomb",
+                  203
+                ],
+                [
+                  "Abomination",
+                  203
+                ],
+                [
+                  "Abraxas",
+                  0
+                ],
+                [
+                  "Absorbing Man",
+                  193
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  "3-D Man",
+                  188,
+                  94
+                ],
+                [
+                  "A-Bomb",
+                  203,
+                  33
+                ],
+                [
+                  "Abomination",
+                  203,
+                  33
+                ],
+                [
+                  "Abraxas",
+                  0,
+                  328
+                ],
+                [
+                  "Absorbing Man",
+                  193,
+                  66
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "height_ties",
+            "sql": "SELECT s.height_cm,COUNT(*) AS heroes FROM superhero s JOIN publisher p ON p.id=s.publisher_id WHERE p.publisher_name='Marvel Comics' GROUP BY s.height_cm HAVING COUNT(*)>1 ORDER BY s.height_cm DESC LIMIT 5",
+            "result": {
+              "columns": [
+                "height_cm",
+                "heroes"
+              ],
+              "rows": [
+                [
+                  30480,
+                  2
+                ],
+                [
+                  366,
+                  2
+                ],
+                [
+                  305,
+                  2
+                ],
+                [
+                  229,
+                  3
+                ],
+                [
+                  226,
+                  3
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 2
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        },
+        "additional_result_checks": {
+          "both_candidates_equal_full_ordered_gold_projection_without_rank": true
+        }
+      }
+    },
+    {
+      "case_id": "md-259",
+      "primary_case_category": "candidate_error",
+      "reason": "Forge漏百分比；双臂INNER JOIN缩小全体英雄分母",
+      "question": "What is the percentage of superheroes who act in their own self-interest or make decisions based on their own moral code? Indicate how many of the said superheroes were published by Marvel Comics.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-259",
+        "db_id": "superhero",
+        "question": "What is the percentage of superheroes who act in their own self-interest or make decisions based on their own moral code? Indicate how many of the said superheroes were published by Marvel Comics.",
+        "evidence": "published by Marvel Comics refers to publisher_name = 'Marvel Comics'; superheroes who act in their own self-interest or make decisions based on their own moral code refers to alignment = 'Bad'; calculation = MULTIPLY(DIVIDE(SUM(alignment = 'Bad); count(id)), 100)",
+        "forge_output": {
+          "scan": "superhero",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "alignment",
+              "on": {
+                "left": "superhero.alignment_id",
+                "right": "alignment.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "publisher",
+              "on": {
+                "left": "superhero.publisher_id",
+                "right": "publisher.id"
+              }
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "total_count"
+            },
+            {
+              "fn": "count",
+              "col": "superhero.id",
+              "as": "bad_count",
+              "filter": [
+                {
+                  "col": "alignment.alignment",
+                  "op": "eq",
+                  "val": "Bad"
+                }
+              ]
+            },
+            {
+              "fn": "count",
+              "col": "superhero.id",
+              "as": "marvel_bad_count",
+              "filter": [
+                {
+                  "col": "alignment.alignment",
+                  "op": "eq",
+                  "val": "Bad"
+                },
+                {
+                  "col": "publisher.publisher_name",
+                  "op": "eq",
+                  "val": "Marvel Comics"
+                }
+              ]
+            }
+          ],
+          "select": [
+            "total_count",
+            "bad_count",
+            "marvel_bad_count"
+          ],
+          "cte": [
+            {
+              "name": "stats",
+              "query": {
+                "scan": "superhero",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "alignment",
+                    "on": {
+                      "left": "superhero.alignment_id",
+                      "right": "alignment.id"
+                    }
+                  },
+                  {
+                    "type": "inner",
+                    "table": "publisher",
+                    "on": {
+                      "left": "superhero.publisher_id",
+                      "right": "publisher.id"
+                    }
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "count_all",
+                    "as": "total_count"
+                  },
+                  {
+                    "fn": "count",
+                    "col": "superhero.id",
+                    "as": "bad_count",
+                    "filter": [
+                      {
+                        "col": "alignment.alignment",
+                        "op": "eq",
+                        "val": "Bad"
+                      }
+                    ]
+                  },
+                  {
+                    "fn": "count",
+                    "col": "superhero.id",
+                    "as": "marvel_bad_count",
+                    "filter": [
+                      {
+                        "col": "alignment.alignment",
+                        "op": "eq",
+                        "val": "Bad"
+                      },
+                      {
+                        "col": "publisher.publisher_name",
+                        "op": "eq",
+                        "val": "Marvel Comics"
+                      }
+                    ]
+                  }
+                ],
+                "select": [
+                  "total_count",
+                  "bad_count",
+                  "marvel_bad_count"
+                ]
+              },
+              "recursive": false
+            }
+          ]
+        },
+        "assessment": {
+          "reference_assessment": "本题Gold与题目/Evidence的全体superhero分母相符：212/750×100=28.2667%，其中Marvel=118。其publisher INNER JOIN在本数据未删任何Bad英雄。",
+          "forge": {
+            "classification": "certain_candidate_error",
+            "candidate_correctness": "incorrect",
+            "reason": "候选IR及SQL直接输出total_count,bad_count,marvel_bad_count三项原始计数741,212,118，完全没有计算所求百分比；INNER JOIN还把全体分母750缩到741。CTE stats未被外层引用，且与外层聚合重复，但仅冗余不是独立结果错误。"
+          },
+          "direct": {
+            "classification": "certain_candidate_error",
+            "candidate_correctness": "incorrect",
+            "reason": "百分比结构正确但INNER JOIN alignment排除6个alignment_id=NULL英雄，分母744而非全部750，故212/744×100=28.4946%；Marvel计数118正确。"
+          },
+          "system_defect": {
+            "possible": true,
+            "stage": "semantic_generation",
+            "reason": "[INFERENCE]总体百分比分母因可空维表INNER JOIN缩水是可推广的语义问题；Forge漏最终公式也在现有output中可见，不是编译SQL遗漏。未读取raw_output，因此不推断output之前是否发生任何变换。"
+          },
+          "evidence_summary": "总英雄750；alignment连接744；publisher连接747；两者内连接741；Bad在全体/有效publisher中均212；Marvel Bad118。全部LEFT JOIN诊断返回与Gold相同百分比。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT (CAST(COUNT(*) AS REAL) * 100 / (SELECT COUNT(*) FROM superhero)), CAST(SUM(CASE WHEN T2.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS REAL) FROM superhero AS T1 INNER JOIN publisher AS T2 ON T1.publisher_id = T2.id INNER JOIN alignment AS T3 ON T3.id = T1.alignment_id WHERE T3.alignment = 'Bad'",
+            "result": {
+              "columns": [
+                "(CAST(COUNT(*) AS REAL) * 100 / (SELECT COUNT(*) FROM superhero))",
+                "CAST(SUM(CASE WHEN T2.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS REAL)"
+              ],
+              "rows": [
+                [
+                  28.266666666666666,
+                  118.0
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 1
+            }
+          },
+          "forge": {
+            "sql": "WITH stats AS (\n  SELECT COUNT(*) AS total_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad') AS bad_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics') AS marvel_bad_count\n  FROM superhero\n  INNER JOIN alignment ON superhero.alignment_id = alignment.id\n  INNER JOIN publisher ON superhero.publisher_id = publisher.id\n)\nSELECT COUNT(*) AS total_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad') AS bad_count, COUNT(superhero.id) FILTER (WHERE alignment.alignment = 'Bad' AND publisher.publisher_name = 'Marvel Comics') AS marvel_bad_count\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+            "result": {
+              "columns": [
+                "total_count",
+                "bad_count",
+                "marvel_bad_count"
+              ],
+              "rows": [
+                [
+                  741,
+                  212,
+                  118
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [
+                [
+                  741,
+                  212,
+                  118
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  28.266666666666666,
+                  118.0
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage_bad, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+            "result": {
+              "columns": [
+                "percentage_bad",
+                "marvel_bad_count"
+              ],
+              "rows": [
+                [
+                  28.49462365591398,
+                  118
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 1
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 1,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [
+                [
+                  28.49462365591398,
+                  118
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  28.266666666666666,
+                  118.0
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "denominator_join_coverage",
+            "sql": "SELECT COUNT(*) AS all_heroes,COUNT(a.id) AS alignment_joined,COUNT(p.id) AS publisher_joined,SUM(a.id IS NOT NULL AND p.id IS NOT NULL) AS both_joined,SUM(a.alignment='Bad') AS all_bad,SUM(a.alignment='Bad' AND p.id IS NOT NULL) AS publisher_joined_bad,SUM(a.alignment='Bad' AND p.publisher_name='Marvel Comics') AS marvel_bad FROM superhero s LEFT JOIN alignment a ON a.id=s.alignment_id LEFT JOIN publisher p ON p.id=s.publisher_id",
+            "result": {
+              "columns": [
+                "all_heroes",
+                "alignment_joined",
+                "publisher_joined",
+                "both_joined",
+                "all_bad",
+                "publisher_joined_bad",
+                "marvel_bad"
+              ],
+              "rows": [
+                [
+                  750,
+                  744,
+                  747,
+                  741,
+                  212,
+                  212,
+                  118
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 7
+            }
+          },
+          {
+            "name": "excluded_alignment_heroes",
+            "sql": "SELECT s.id,s.superhero_name,s.alignment_id,a.alignment,s.publisher_id,p.publisher_name FROM superhero s LEFT JOIN alignment a ON a.id=s.alignment_id LEFT JOIN publisher p ON p.id=s.publisher_id WHERE a.id IS NULL OR p.id IS NULL ORDER BY s.id",
+            "result": {
+              "columns": [
+                "id",
+                "superhero_name",
+                "alignment_id",
+                "alignment",
+                "publisher_id",
+                "publisher_name"
+              ],
+              "rows": [
+                [
+                  35,
+                  "Anti-Venom",
+                  null,
+                  null,
+                  13,
+                  "Marvel Comics"
+                ],
+                [
+                  116,
+                  "Blackwulf",
+                  null,
+                  null,
+                  13,
+                  "Marvel Comics"
+                ],
+                [
+                  329,
+                  "He-Man",
+                  1,
+                  "Good",
+                  null,
+                  null
+                ],
+                [
+                  363,
+                  "James Bond (Craig)",
+                  1,
+                  "Good",
+                  null,
+                  null
+                ],
+                [
+                  441,
+                  "Man of Miracles",
+                  null,
+                  null,
+                  10,
+                  "Image Comics"
+                ],
+                [
+                  551,
+                  "Q",
+                  null,
+                  null,
+                  20,
+                  "Star Trek"
+                ],
+                [
+                  613,
+                  "She-Ra",
+                  1,
+                  "Good",
+                  null,
+                  null
+                ],
+                [
+                  699,
+                  "Trickster",
+                  null,
+                  null,
+                  4,
+                  "DC Comics"
+                ],
+                [
+                  715,
+                  "Venompool",
+                  null,
+                  null,
+                  13,
+                  "Marvel Comics"
+                ]
+              ],
+              "row_count": 9,
+              "truncated": false,
+              "column_count": 6
+            }
+          },
+          {
+            "name": "full_population_percentage",
+            "sql": "SELECT 100.0*SUM(CASE WHEN a.alignment='Bad' THEN 1 ELSE 0 END)/COUNT(s.id) AS percentage_bad,SUM(CASE WHEN a.alignment='Bad' AND p.publisher_name='Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero s LEFT JOIN alignment a ON a.id=s.alignment_id LEFT JOIN publisher p ON p.id=s.publisher_id",
+            "result": {
+              "columns": [
+                "percentage_bad",
+                "marvel_bad_count"
+              ],
+              "rows": [
+                [
+                  28.266666666666666,
+                  118
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        }
+      }
+    },
+    {
+      "case_id": "md-273",
+      "primary_case_category": "output_contract_ambiguity",
+      "reason": "5名实体及颜色映射正确，但候选给颜色标签、Gold给ID；Evidence映射不足以独立消除所有表示歧义",
+      "question": "List the eyes, hair and skin colour of all female superheroes published by Dark Horse Comics.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-273",
+        "db_id": "superhero",
+        "question": "List the eyes, hair and skin colour of all female superheroes published by Dark Horse Comics.",
+        "evidence": "eyes refers to eye_colour_id; hair refers to hair_colour_id; skin colour refers to skin_colour_id; female superheroes refers to gender = 'Female'; published by Dark Horse Comics refers to publisher_name = 'Dark Horse Comics';",
+        "forge_output": {
+          "scan": "superhero",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "gender",
+              "on": {
+                "left": "superhero.gender_id",
+                "right": "gender.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "publisher",
+              "on": {
+                "left": "superhero.publisher_id",
+                "right": "publisher.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "colour AS eye_colour",
+              "on": {
+                "left": "superhero.eye_colour_id",
+                "right": "eye_colour.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "colour AS hair_colour",
+              "on": {
+                "left": "superhero.hair_colour_id",
+                "right": "hair_colour.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "colour AS skin_colour",
+              "on": {
+                "left": "superhero.skin_colour_id",
+                "right": "skin_colour.id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "gender.gender",
+              "op": "eq",
+              "val": "Female"
+            },
+            {
+              "col": "publisher.publisher_name",
+              "op": "eq",
+              "val": "Dark Horse Comics"
+            }
+          ],
+          "select": [
+            "eye_colour.colour",
+            "hair_colour.colour",
+            "skin_colour.colour"
+          ],
+          "distinct": false
+        },
+        "assessment": {
+          "reference_assessment": "Gold忠于Evidence明确的三个*_colour_id输出映射。自然语言“colour”本身允许颜色标签，但在本题带Evidence契约下应该保留ID；这不是Gold算错或实体选错。",
+          "forge": {
+            "classification": "certain_evidence_contract_mismatch",
+            "candidate_correctness": "incorrect_under_evidence_contract",
+            "reason": "将Evidence指定的ID字段主动解引用为colour字符串；5名女性Dark Horse实体均正确、无丢行，错误仅输出表示层。"
+          },
+          "direct": {
+            "classification": "certain_evidence_contract_mismatch",
+            "candidate_correctness": "incorrect_under_evidence_contract",
+            "reason": "与Forge相同：返回标签而不是Evidence指定的eye_colour_id/hair_colour_id/skin_colour_id。脱离Evidence仅按自然语言时标签答案合理，不能扩大为查询事实错误。"
+          },
+          "system_defect": {
+            "possible": true,
+            "stage": "semantic_generation",
+            "reason": "[INFERENCE]显式Evidence字段契约被自然语言标签解引用覆盖，可作为通用输出字段选择风险；Forge IR已选择colour别名，SQL没有擅自替换。"
+          },
+          "evidence_summary": "Gold与两臂都是5×3；(14,6,1)映射(Green,Blond,No Colour)等，诊断提供全部5行ID↔标签，证明实体范围相同。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT T1.eye_colour_id, T1.hair_colour_id, T1.skin_colour_id FROM superhero AS T1 INNER JOIN publisher AS T2 ON T2.id = T1.publisher_id INNER JOIN gender AS T3 ON T3.id = T1.gender_id WHERE T2.publisher_name = 'Dark Horse Comics' AND T3.gender = 'Female'",
+            "result": {
+              "columns": [
+                "eye_colour_id",
+                "hair_colour_id",
+                "skin_colour_id"
+              ],
+              "rows": [
+                [
+                  14,
+                  6,
+                  1
+                ],
+                [
+                  9,
+                  9,
+                  1
+                ],
+                [
+                  1,
+                  1,
+                  1
+                ],
+                [
+                  1,
+                  1,
+                  28
+                ],
+                [
+                  30,
+                  4,
+                  1
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 5
+            }
+          },
+          "forge": {
+            "sql": "SELECT eye_colour.colour, hair_colour.colour, skin_colour.colour\nFROM superhero\nINNER JOIN gender ON superhero.gender_id = gender.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id\nINNER JOIN colour AS eye_colour ON superhero.eye_colour_id = eye_colour.id\nINNER JOIN colour AS hair_colour ON superhero.hair_colour_id = hair_colour.id\nINNER JOIN colour AS skin_colour ON superhero.skin_colour_id = skin_colour.id\nWHERE gender.gender = 'Female' AND publisher.publisher_name = 'Dark Horse Comics'",
+            "result": {
+              "columns": [
+                "colour",
+                "colour",
+                "colour"
+              ],
+              "rows": [
+                [
+                  "Green",
+                  "Blond",
+                  "No Colour"
+                ],
+                [
+                  "Brown",
+                  "Brown",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "Silver"
+                ],
+                [
+                  "Violet",
+                  "Black",
+                  "No Colour"
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 5
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 5,
+              "gold_only_distinct_count": 5,
+              "candidate_only_sample": [
+                [
+                  "Brown",
+                  "Brown",
+                  "No Colour"
+                ],
+                [
+                  "Green",
+                  "Blond",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "Silver"
+                ],
+                [
+                  "Violet",
+                  "Black",
+                  "No Colour"
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  1,
+                  1,
+                  1
+                ],
+                [
+                  1,
+                  1,
+                  28
+                ],
+                [
+                  14,
+                  6,
+                  1
+                ],
+                [
+                  30,
+                  4,
+                  1
+                ],
+                [
+                  9,
+                  9,
+                  1
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT eye.colour AS eyes, hair.colour AS hair, skin.colour AS skin\nFROM superhero AS s\nJOIN gender AS g ON s.gender_id = g.id\nJOIN publisher AS p ON s.publisher_id = p.id\nJOIN colour AS eye ON s.eye_colour_id = eye.id\nJOIN colour AS hair ON s.hair_colour_id = hair.id\nJOIN colour AS skin ON s.skin_colour_id = skin.id\nWHERE g.gender = 'Female'\n  AND p.publisher_name = 'Dark Horse Comics'",
+            "result": {
+              "columns": [
+                "eyes",
+                "hair",
+                "skin"
+              ],
+              "rows": [
+                [
+                  "Green",
+                  "Blond",
+                  "No Colour"
+                ],
+                [
+                  "Brown",
+                  "Brown",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "Silver"
+                ],
+                [
+                  "Violet",
+                  "Black",
+                  "No Colour"
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 5
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 5,
+              "gold_only_distinct_count": 5,
+              "candidate_only_sample": [
+                [
+                  "Brown",
+                  "Brown",
+                  "No Colour"
+                ],
+                [
+                  "Green",
+                  "Blond",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "No Colour"
+                ],
+                [
+                  "No Colour",
+                  "No Colour",
+                  "Silver"
+                ],
+                [
+                  "Violet",
+                  "Black",
+                  "No Colour"
+                ]
+              ],
+              "gold_only_sample": [
+                [
+                  1,
+                  1,
+                  1
+                ],
+                [
+                  1,
+                  1,
+                  28
+                ],
+                [
+                  14,
+                  6,
+                  1
+                ],
+                [
+                  30,
+                  4,
+                  1
+                ],
+                [
+                  9,
+                  9,
+                  1
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "colour_ids_and_labels",
+            "sql": "SELECT s.superhero_name,s.eye_colour_id,e.colour AS eyes,s.hair_colour_id,h.colour AS hair,s.skin_colour_id,k.colour AS skin FROM superhero s JOIN gender g ON g.id=s.gender_id JOIN publisher p ON p.id=s.publisher_id LEFT JOIN colour e ON e.id=s.eye_colour_id LEFT JOIN colour h ON h.id=s.hair_colour_id LEFT JOIN colour k ON k.id=s.skin_colour_id WHERE g.gender='Female' AND p.publisher_name='Dark Horse Comics'",
+            "result": {
+              "columns": [
+                "superhero_name",
+                "eye_colour_id",
+                "eyes",
+                "hair_colour_id",
+                "hair",
+                "skin_colour_id",
+                "skin"
+              ],
+              "rows": [
+                [
+                  "Buffy",
+                  14,
+                  "Green",
+                  6,
+                  "Blond",
+                  1,
+                  "No Colour"
+                ],
+                [
+                  "Elastigirl",
+                  9,
+                  "Brown",
+                  9,
+                  "Brown",
+                  1,
+                  "No Colour"
+                ],
+                [
+                  "Liz Sherman",
+                  1,
+                  "No Colour",
+                  1,
+                  "No Colour",
+                  1,
+                  "No Colour"
+                ],
+                [
+                  "T-X",
+                  1,
+                  "No Colour",
+                  1,
+                  "No Colour",
+                  28,
+                  "Silver"
+                ],
+                [
+                  "Violet Parr",
+                  30,
+                  "Violet",
+                  4,
+                  "Black",
+                  1,
+                  "No Colour"
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 7
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        }
+      }
+    },
+    {
+      "case_id": "md-300",
+      "primary_case_category": "candidate_error",
+      "reason": "错用posts.OwnerDisplayName=NULL而非users.DisplayName",
+      "question": "Who is the owner of the post \"Eliciting priors from experts\"?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-300",
+        "db_id": "codebase_community",
+        "question": "Who is the owner of the post \"Eliciting priors from experts\"?",
+        "evidence": "\"Eliciting priors from experts\" is the Title of post; owner refers to DisplayName",
+        "forge_output": {
+          "scan": "posts",
+          "filter": [
+            {
+              "col": "posts.Title",
+              "op": "eq",
+              "val": "Eliciting priors from experts"
+            }
+          ],
+          "select": [
+            "posts.OwnerDisplayName"
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT posts.OwnerDisplayName\nFROM posts\nWHERE posts.Title = 'Eliciting priors from experts'",
+            "result": {
+              "columns": [
+                "OwnerDisplayName"
+              ],
+              "rows": [
+                [
+                  null
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 1,
+            "only_gold_distinct_count": 1,
+            "classification": "confirmed_candidate_error",
+            "rationale": "选择posts.OwnerDisplayName而未沿OwnerUserId绑定users.DisplayName，实际返回NULL。不是编译漏JOIN：原始Forge output已只选择帖子字段。"
+          },
+          "direct": {
+            "sql": "SELECT OwnerDisplayName FROM posts WHERE Title = 'Eliciting priors from experts'",
+            "result": {
+              "columns": [
+                "OwnerDisplayName"
+              ],
+              "rows": [
+                [
+                  null
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 1,
+            "only_gold_distinct_count": 1,
+            "classification": "confirmed_candidate_error",
+            "rationale": "同样选择posts.OwnerDisplayName并返回NULL；可用的所属用户名称为csgillespie。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT T2.DisplayName FROM posts AS T1 INNER JOIN users AS T2 ON T1.OwnerUserId = T2.Id WHERE T1.Title = 'Eliciting priors from experts'",
+          "result": {
+            "columns": [
+              "DisplayName"
+            ],
+            "rows": [
+              [
+                "csgillespie"
+              ]
+            ],
+            "row_count": 1,
+            "truncated": false,
+            "column_count": 1,
+            "distinct_row_count": 1
+          },
+          "assessment": "匹配帖子Id=1，OwnerUserId=8，用户8的DisplayName=csgillespie；Gold返回此名。"
+        },
+        "intent": "按唯一标题定位帖子，并返回帖子所属用户的DisplayName。",
+        "diagnostics": [
+          {
+            "name": "owner_entity_binding",
+            "sql": "SELECT p.Id,p.Title,p.OwnerUserId,p.OwnerDisplayName,u.Id AS user_id,u.DisplayName FROM posts p LEFT JOIN users u ON p.OwnerUserId=u.Id WHERE p.Title='Eliciting priors from experts'",
+            "result": {
+              "columns": [
+                "Id",
+                "Title",
+                "OwnerUserId",
+                "OwnerDisplayName",
+                "user_id",
+                "DisplayName"
+              ],
+              "rows": [
+                [
+                  1,
+                  "Eliciting priors from experts",
+                  8,
+                  null,
+                  8,
+                  "csgillespie"
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 6,
+              "distinct_row_count": 1
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "owner_entity_binding"
+        ],
+        "caveats": [
+          "posts.csv也将OwnerDisplayName描述为the display name of the post owner，与users.DisplayName语义近似。因此取错列存在真实元数据消歧难点，而非仅凭Gold不匹配认定错误；NULL与可解析OwnerUserId是独立执行证据。",
+          "本记录没有证明OwnerDisplayName在所有帖子上均无效，也不建议按该题NULL特判或全局强制替换。"
+        ],
+        "possible_general_system_issue": {
+          "possible": true,
+          "area": "同名/近义冗余字段与权威实体关系绑定",
+          "confidence": "当前实体绑定错误已证实；元数据应否补充字段角色是待验证通用假设。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    },
+    {
+      "case_id": "md-340",
+      "primary_case_category": "gold_blocked",
+      "reason": "沿用已冻结Gold超时；本次不重复执行",
+      "question": "Among all the posts posted by the most influential user, identify the percentage with a score above 50.",
+      "official_original": {
+        "forge": {
+          "scored": false,
+          "official_ea": null,
+          "contract_accuracy": null
+        },
+        "direct": {
+          "scored": false,
+          "official_ea": null,
+          "contract_accuracy": null
+        }
+      },
+      "detail": null
+    },
+    {
+      "case_id": "md-418",
+      "primary_case_category": "reference_conflict",
+      "reason": "候选3个bond；Gold共1041行，其中1037行属于其他分子",
+      "question": "How many bonds which involved atom 12 does molecule TR009 have?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-418",
+        "db_id": "toxicology",
+        "question": "How many bonds which involved atom 12 does molecule TR009 have?",
+        "evidence": "TR009 is the molecule id;  involved atom 12 refers to atom_id = 'TR009_12' or atom_id2 = 'TR009_12'",
+        "forge_output": {
+          "scan": "connected",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "bond",
+              "on": {
+                "left": "connected.bond_id",
+                "right": "bond.bond_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "or": [
+                {
+                  "col": "connected.atom_id",
+                  "op": "eq",
+                  "val": "TR009_12"
+                },
+                {
+                  "col": "connected.atom_id2",
+                  "op": "eq",
+                  "val": "TR009_12"
+                }
+              ]
+            },
+            {
+              "col": "bond.molecule_id",
+              "op": "eq",
+              "val": "TR009"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_distinct",
+              "col": "connected.bond_id",
+              "as": "count_bonds"
+            }
+          ],
+          "select": [
+            "count_bonds"
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT COUNT(DISTINCT connected.bond_id) AS count_bonds\nFROM connected\nINNER JOIN bond ON connected.bond_id = bond.bond_id\nWHERE (connected.atom_id = 'TR009_12' OR connected.atom_id2 = 'TR009_12') AND bond.molecule_id = 'TR009'",
+            "result": {
+              "columns": [
+                "count_bonds"
+              ],
+              "rows": [
+                [
+                  3
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 1,
+            "only_gold_distinct_count": 1,
+            "classification": "reference_conflict",
+            "rationale": "返回3，符合Evidence和3个不同bond_id。6条connected记录是每条键的正反向，不应计6。"
+          },
+          "direct": {
+            "sql": "SELECT COUNT(DISTINCT b.bond_id) FROM bond AS b JOIN connected AS c ON c.bond_id = b.bond_id WHERE b.molecule_id = 'TR009' AND (c.atom_id = 'TR009_12' OR c.atom_id2 = 'TR009_12')",
+            "result": {
+              "columns": [
+                "COUNT(DISTINCT b.bond_id)"
+              ],
+              "rows": [
+                [
+                  3
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 1,
+            "only_gold_distinct_count": 1,
+            "classification": "reference_conflict",
+            "rationale": "返回3，与独立枚举的三条键一致；与1041不匹配不构成候选错误。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT COUNT(T2.bond_id) FROM bond AS T1 INNER JOIN connected AS T2 ON T1.bond_id = T2.bond_id WHERE T1.molecule_id = 'TR009' AND T2.atom_id = T1.molecule_id || '_1' OR T2.atom_id2 = T1.molecule_id || '_2'",
+          "result": {
+            "columns": [
+              "COUNT(T2.bond_id)"
+            ],
+            "rows": [
+              [
+                1041
+              ]
+            ],
+            "row_count": 1,
+            "truncated": false,
+            "column_count": 1,
+            "distinct_row_count": 1
+          },
+          "assessment": "确定参考冲突：Gold把atom12写成后缀_1/_2，并因AND/OR未括号使第二支跨全部分子；1041条连接记录中1037条属于其他分子，覆盖343个分子。仅补括号仍得4而非3，说明并非只有优先级问题。"
+        },
+        "intent": "计数TR009分子涉及TR009_12的不同bond实体。",
+        "diagnostics": [
+          {
+            "name": "requested_bonds",
+            "sql": "SELECT b.molecule_id,c.bond_id,c.atom_id,c.atom_id2 FROM bond b JOIN connected c ON b.bond_id=c.bond_id WHERE b.molecule_id='TR009' AND (c.atom_id='TR009_12' OR c.atom_id2='TR009_12') ORDER BY c.bond_id",
+            "result": {
+              "columns": [
+                "molecule_id",
+                "bond_id",
+                "atom_id",
+                "atom_id2"
+              ],
+              "rows": [
+                [
+                  "TR009",
+                  "TR009_10_12",
+                  "TR009_10",
+                  "TR009_12"
+                ],
+                [
+                  "TR009",
+                  "TR009_10_12",
+                  "TR009_12",
+                  "TR009_10"
+                ],
+                [
+                  "TR009",
+                  "TR009_12_17",
+                  "TR009_12",
+                  "TR009_17"
+                ],
+                [
+                  "TR009",
+                  "TR009_12_17",
+                  "TR009_17",
+                  "TR009_12"
+                ],
+                [
+                  "TR009",
+                  "TR009_5_12",
+                  "TR009_12",
+                  "TR009_5"
+                ],
+                [
+                  "TR009",
+                  "TR009_5_12",
+                  "TR009_5",
+                  "TR009_12"
+                ]
+              ],
+              "row_count": 6,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 6
+            }
+          },
+          {
+            "name": "gold_scope_leak",
+            "sql": "SELECT COUNT(*) AS gold_rows,COUNT(DISTINCT b.molecule_id) AS molecule_count,SUM(CASE WHEN b.molecule_id='TR009' THEN 1 ELSE 0 END) AS target_molecule_rows,SUM(CASE WHEN b.molecule_id<>'TR009' THEN 1 ELSE 0 END) AS other_molecule_rows FROM bond b JOIN connected c ON b.bond_id=c.bond_id WHERE b.molecule_id='TR009' AND c.atom_id=b.molecule_id||'_1' OR c.atom_id2=b.molecule_id||'_2'",
+            "result": {
+              "columns": [
+                "gold_rows",
+                "molecule_count",
+                "target_molecule_rows",
+                "other_molecule_rows"
+              ],
+              "rows": [
+                [
+                  1041,
+                  343,
+                  4,
+                  1037
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "gold_parentheses_only",
+            "sql": "SELECT COUNT(*) FROM bond b JOIN connected c ON b.bond_id=c.bond_id WHERE b.molecule_id='TR009' AND (c.atom_id=b.molecule_id||'_1' OR c.atom_id2=b.molecule_id||'_2')",
+            "result": {
+              "columns": [
+                "COUNT(*)"
+              ],
+              "rows": [
+                [
+                  4
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "requested_bond_grain",
+            "sql": "SELECT COUNT(*) AS connected_rows,COUNT(DISTINCT c.bond_id) AS distinct_bonds FROM bond b JOIN connected c ON b.bond_id=c.bond_id WHERE b.molecule_id='TR009' AND (c.atom_id='TR009_12' OR c.atom_id2='TR009_12')",
+            "result": {
+              "columns": [
+                "connected_rows",
+                "distinct_bonds"
+              ],
+              "rows": [
+                [
+                  6,
+                  3
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 1
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "requested_bonds",
+          "gold_scope_leak",
+          "gold_parentheses_only",
+          "requested_bond_grain"
+        ],
+        "caveats": [],
+        "possible_general_system_issue": {
+          "possible": false,
+          "area": "Gold参考错误，不是候选系统错误",
+          "confidence": "已证实；候选正确使用括号及COUNT DISTINCT。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    },
+    {
+      "case_id": "md-429",
+      "primary_case_category": "output_contract_ambiguity",
+      "reason": "候选20行、Gold4行；元素集合相同，存在双向连接与端点重复",
+      "question": "List the elements of all the triple bonds.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": true,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": true,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-429",
+        "db_id": "toxicology",
+        "question": "List the elements of all the triple bonds.",
+        "evidence": "triple bond refers to bond_type = '#';",
+        "forge_output": {
+          "scan": "atom",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "connected",
+              "on": {
+                "left": "atom.atom_id",
+                "right": "connected.atom_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "bond",
+              "on": {
+                "left": "connected.bond_id",
+                "right": "bond.bond_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "bond.bond_type",
+              "op": "eq",
+              "val": "#"
+            }
+          ],
+          "select": [
+            "atom.element"
+          ],
+          "distinct": false,
+          "union": [
+            {
+              "mode": "union_all",
+              "query": {
+                "scan": "atom",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "connected",
+                    "on": {
+                      "left": "atom.atom_id",
+                      "right": "connected.atom_id2"
+                    }
+                  },
+                  {
+                    "type": "inner",
+                    "table": "bond",
+                    "on": {
+                      "left": "connected.bond_id",
+                      "right": "bond.bond_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "bond.bond_type",
+                    "op": "eq",
+                    "val": "#"
+                  }
+                ],
+                "select": [
+                  "atom.element"
+                ],
+                "distinct": false
+              }
+            }
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT atom.element\nFROM atom\nINNER JOIN connected ON atom.atom_id = connected.atom_id\nINNER JOIN bond ON connected.bond_id = bond.bond_id\nWHERE bond.bond_type = '#'\nUNION ALL\nSELECT atom.element\nFROM atom\nINNER JOIN connected ON atom.atom_id = connected.atom_id2\nINNER JOIN bond ON connected.bond_id = bond.bond_id\nWHERE bond.bond_type = '#'",
+            "result": {
+              "columns": [
+                "element"
+              ],
+              "rows": [
+                [
+                  "n"
+                ],
+                [
+                  "c"
+                ],
+                [
+                  "c"
+                ],
+                [
+                  "n"
+                ],
+                [
+                  "c"
+                ],
+                [
+                  "n"
+                ]
+              ],
+              "row_count": 20,
+              "truncated": true,
+              "column_count": 1,
+              "distinct_row_count": 4
+            },
+            "set_equal_gold": true,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 0,
+            "classification": "output_contract_ambiguity",
+            "rationale": "两端UNION ALL返回20行，去重为c,n,p,y，与Gold集合一致。5条不同三键在connected中为10条正反向记录，再展开两端使元素重复；若要求元素类别应去重，若要求真实端点明细也有双计。题面未明示去重，保留输出粒度歧义而非宣称元素值错误。"
+          },
+          "direct": {
+            "sql": "SELECT a.element\nFROM atom AS a\nJOIN connected AS c ON a.atom_id = c.atom_id OR a.atom_id = c.atom_id2\nJOIN bond AS b ON c.bond_id = b.bond_id\nWHERE b.bond_type = '#'",
+            "result": {
+              "columns": [
+                "element"
+              ],
+              "rows": [
+                [
+                  "n"
+                ],
+                [
+                  "c"
+                ],
+                [
+                  "n"
+                ],
+                [
+                  "c"
+                ],
+                [
+                  "c"
+                ],
+                [
+                  "n"
+                ]
+              ],
+              "row_count": 20,
+              "truncated": true,
+              "column_count": 1,
+              "distinct_row_count": 4
+            },
+            "set_equal_gold": true,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 0,
+            "classification": "output_contract_ambiguity",
+            "rationale": "OR连接两个端点也返回20行，与Forge同样的元素重数：c/n各8，p/y各2。不是遗漏任一端点造成的差异。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT DISTINCT T3.element FROM bond AS T1 INNER JOIN connected AS T2 ON T1.bond_id = T2.bond_id INNER JOIN atom AS T3 ON T2.atom_id = T3.atom_id WHERE T1.bond_type = '#'",
+          "result": {
+            "columns": [
+              "element"
+            ],
+            "rows": [
+              [
+                "n"
+              ],
+              [
+                "c"
+              ],
+              [
+                "y"
+              ],
+              [
+                "p"
+              ]
+            ],
+            "row_count": 4,
+            "truncated": false,
+            "column_count": 1,
+            "distinct_row_count": 4
+          },
+          "assessment": "Gold返回4个不同元素n,c,y,p。虽然只JOIN第一端点，当前connected含正反向记录，因此实际覆盖全部端点，不能静态判Gold漏端点。"
+        },
+        "intent": "列出三键相关的元素；未明确是元素种类集合还是逐键端点出现明细。",
+        "diagnostics": [
+          {
+            "name": "endpoint_pairs",
+            "sql": "SELECT a.element AS endpoint1,z.element AS endpoint2,COUNT(*) AS connected_rows,COUNT(DISTINCT b.bond_id) AS bonds FROM bond b JOIN connected c ON b.bond_id=c.bond_id JOIN atom a ON c.atom_id=a.atom_id JOIN atom z ON c.atom_id2=z.atom_id WHERE b.bond_type='#' GROUP BY a.element,z.element ORDER BY a.element,z.element",
+            "result": {
+              "columns": [
+                "endpoint1",
+                "endpoint2",
+                "connected_rows",
+                "bonds"
+              ],
+              "rows": [
+                [
+                  "c",
+                  "n",
+                  4,
+                  4
+                ],
+                [
+                  "n",
+                  "c",
+                  4,
+                  4
+                ],
+                [
+                  "p",
+                  "y",
+                  1,
+                  1
+                ],
+                [
+                  "y",
+                  "p",
+                  1,
+                  1
+                ]
+              ],
+              "row_count": 4,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 4
+            }
+          },
+          {
+            "name": "distinct_both_endpoints",
+            "sql": "SELECT DISTINCT a.element FROM bond b JOIN connected c ON b.bond_id=c.bond_id JOIN atom a ON a.atom_id=c.atom_id OR a.atom_id=c.atom_id2 WHERE b.bond_type='#' ORDER BY a.element",
+            "result": {
+              "columns": [
+                "element"
+              ],
+              "rows": [
+                [
+                  "c"
+                ],
+                [
+                  "n"
+                ],
+                [
+                  "p"
+                ],
+                [
+                  "y"
+                ]
+              ],
+              "row_count": 4,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 4
+            }
+          },
+          {
+            "name": "triple_bond_grain",
+            "sql": "SELECT COUNT(*) AS connected_rows,COUNT(DISTINCT b.bond_id) AS bonds FROM bond b JOIN connected c ON b.bond_id=c.bond_id WHERE b.bond_type='#'",
+            "result": {
+              "columns": [
+                "connected_rows",
+                "bonds"
+              ],
+              "rows": [
+                [
+                  10,
+                  5
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "candidate_element_multiplicity",
+            "sql": "SELECT element,COUNT(*) AS occurrences FROM (SELECT atom.element\nFROM atom\nINNER JOIN connected ON atom.atom_id = connected.atom_id\nINNER JOIN bond ON connected.bond_id = bond.bond_id\nWHERE bond.bond_type = '#'\nUNION ALL\nSELECT atom.element\nFROM atom\nINNER JOIN connected ON atom.atom_id = connected.atom_id2\nINNER JOIN bond ON connected.bond_id = bond.bond_id\nWHERE bond.bond_type = '#') GROUP BY element ORDER BY element",
+            "result": {
+              "columns": [
+                "element",
+                "occurrences"
+              ],
+              "rows": [
+                [
+                  "c",
+                  8
+                ],
+                [
+                  "n",
+                  8
+                ],
+                [
+                  "p",
+                  2
+                ],
+                [
+                  "y",
+                  2
+                ]
+              ],
+              "row_count": 4,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 4
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "endpoint_pairs",
+          "distinct_both_endpoints",
+          "triple_bond_grain",
+          "candidate_element_multiplicity"
+        ],
+        "caveats": [],
+        "possible_general_system_issue": {
+          "possible": true,
+          "area": "无向关系正反向存储与输出粒度",
+          "confidence": "物理关系双向及bag重复已证实；期望集合/明细口径需区分。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    },
+    {
+      "case_id": "md-447",
+      "primary_case_category": "candidate_error",
+      "reason": "QUALIFY外层引用未投影源列；DOCType标签与Gold DOC编码另有歧义",
+      "question": "Consider the average difference between K-12 enrollment and 15-17 enrollment of schools that are locally funded, list the names and DOC type of schools which has a difference above this average.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-447",
+        "db_id": "california_schools",
+        "question": "Consider the average difference between K-12 enrollment and 15-17 enrollment of schools that are locally funded, list the names and DOC type of schools which has a difference above this average.",
+        "evidence": "Difference between K-12 enrollment and 15-17 enrollment can be computed by `Enrollment (K-12)` - `Enrollment (Ages 5-17)`",
+        "forge": {
+          "classification": "candidate_scope_error_with_lowering_boundary",
+          "output": {
+            "scan": "frpm",
+            "joins": [
+              {
+                "type": "inner",
+                "table": "schools",
+                "on": {
+                  "left": "frpm.CDSCode",
+                  "right": "schools.CDSCode"
+                }
+              }
+            ],
+            "filter": [
+              {
+                "col": "schools.FundingType",
+                "op": "eq",
+                "val": "Locally funded"
+              }
+            ],
+            "select": [
+              "schools.School",
+              "schools.DOCType"
+            ],
+            "qualify": [
+              {
+                "col": "(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")",
+                "op": "gt",
+                "val": {
+                  "subquery": {
+                    "scan": "frpm",
+                    "joins": [
+                      {
+                        "type": "inner",
+                        "table": "schools",
+                        "on": {
+                          "left": "frpm.CDSCode",
+                          "right": "schools.CDSCode"
+                        }
+                      }
+                    ],
+                    "filter": [
+                      {
+                        "col": "schools.FundingType",
+                        "op": "eq",
+                        "val": "Locally funded"
+                      }
+                    ],
+                    "agg": [
+                      {
+                        "fn": "avg",
+                        "col": "(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")",
+                        "as": "avg_difference"
+                      }
+                    ],
+                    "select": [
+                      "avg_difference"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "sql": "SELECT * FROM (\n  SELECT schools.School, schools.DOCType\n  FROM frpm\n  INNER JOIN schools ON frpm.CDSCode = schools.CDSCode\n  WHERE schools.FundingType = 'Locally funded'\n) AS _q\nWHERE (frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\") > (\n  SELECT AVG((frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")) AS avg_difference\n  FROM frpm\n  INNER JOIN schools ON frpm.CDSCode = schools.CDSCode\n  WHERE schools.FundingType = 'Locally funded'\n)",
+          "sqlite_error": "no such column: frpm.Enrollment (K-12)",
+          "reason": "QUALIFY外层仅能看到School/DOCType，无法引用frpm的未投影源列。源列确实存在；当前IR和包装SQL一致。生成阶段选择与通用QUALIFY降级支持边界共同暴露，不能把任意QUALIFY无条件迁移至WHERE。"
+        },
+        "direct": {
+          "classification": "output_representation_ambiguity",
+          "sql": "WITH avg_diff AS (\n    SELECT AVG(f.\"Enrollment (K-12)\" - f.\"Enrollment (Ages 5-17)\") AS avg_difference\n    FROM frpm AS f\n    JOIN schools AS s ON f.CDSCode = s.CDSCode\n    WHERE s.FundingType = 'Locally funded'\n)\nSELECT s.School, s.DOCType\nFROM frpm AS f\nJOIN schools AS s ON f.CDSCode = s.CDSCode\nCROSS JOIN avg_diff\nWHERE s.FundingType = 'Locally funded'\n  AND f.\"Enrollment (K-12)\" - f.\"Enrollment (Ages 5-17)\" > avg_diff.avg_difference",
+          "reason": "返回DOCType文字标签，Gold返回DOC编码；题面DOC type没有明确指定编码。"
+        },
+        "gold": {
+          "sql": "SELECT T2.School, T2.DOC FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.FundingType = 'Locally funded' AND (T1.`Enrollment (K-12)` - T1.`Enrollment (Ages 5-17)`) > (SELECT AVG(T3.`Enrollment (K-12)` - T3.`Enrollment (Ages 5-17)`) FROM frpm AS T3 INNER JOIN schools AS T4 ON T3.CDSCode = T4.CDSCode WHERE T4.FundingType = 'Locally funded')",
+          "result": {
+            "columns": [
+              "School",
+              "DOC"
+            ],
+            "rows": [
+              [
+                "Mountain Oaks",
+                "00"
+              ],
+              [
+                "Castle Rock",
+                "00"
+              ],
+              [
+                "Charter Community School Home Study Academy",
+                "00"
+              ]
+            ],
+            "row_count": 57,
+            "truncated": true
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "doc_code_label_mapping",
+            "sql": "SELECT DOC, DOCType, COUNT(*) AS schools FROM schools GROUP BY DOC, DOCType",
+            "result": {
+              "columns": [
+                "DOC",
+                "DOCType",
+                "schools"
+              ],
+              "rows": [
+                [
+                  "00",
+                  "County Office of Education (COE)",
+                  1703
+                ],
+                [
+                  "02",
+                  "State Board of Education",
+                  69
+                ],
+                [
+                  "03",
+                  "Statewide Benefit Charter",
+                  11
+                ],
+                [
+                  "31",
+                  "State Special Schools",
+                  6
+                ],
+                [
+                  "34",
+                  "Non-School Locations",
+                  49
+                ],
+                [
+                  "42",
+                  "Joint Powers Authority (JPA)",
+                  2
+                ],
+                [
+                  "52",
+                  "Elementary School District",
+                  4378
+                ],
+                [
+                  "54",
+                  "Unified School District",
+                  10190
+                ],
+                [
+                  "56",
+                  "High School District",
+                  1079
+                ],
+                [
+                  "58",
+                  "Community College District",
+                  33
+                ],
+                [
+                  "98",
+                  "Regional Occupation Center/Program (ROC/P)",
+                  156
+                ],
+                [
+                  "99",
+                  "Administration Only",
+                  10
+                ]
+              ],
+              "row_count": 12,
+              "truncated": false
+            }
+          },
+          {
+            "name": "move_predicate_only_counterfactual",
+            "output": {
+              "scan": "frpm",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "schools",
+                  "on": {
+                    "left": "frpm.CDSCode",
+                    "right": "schools.CDSCode"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "schools.FundingType",
+                  "op": "eq",
+                  "val": "Locally funded"
+                },
+                {
+                  "col": "(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")",
+                  "op": "gt",
+                  "val": {
+                    "subquery": {
+                      "scan": "frpm",
+                      "joins": [
+                        {
+                          "type": "inner",
+                          "table": "schools",
+                          "on": {
+                            "left": "frpm.CDSCode",
+                            "right": "schools.CDSCode"
+                          }
+                        }
+                      ],
+                      "filter": [
+                        {
+                          "col": "schools.FundingType",
+                          "op": "eq",
+                          "val": "Locally funded"
+                        }
+                      ],
+                      "agg": [
+                        {
+                          "fn": "avg",
+                          "col": "(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")",
+                          "as": "avg_difference"
+                        }
+                      ],
+                      "select": [
+                        "avg_difference"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "select": [
+                "schools.School",
+                "schools.DOCType"
+              ]
+            },
+            "sql": "SELECT schools.School, schools.DOCType\nFROM frpm\nINNER JOIN schools ON frpm.CDSCode = schools.CDSCode\nWHERE schools.FundingType = 'Locally funded' AND (frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\") > (\n  SELECT AVG((frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")) AS avg_difference\n  FROM frpm\n  INNER JOIN schools ON frpm.CDSCode = schools.CDSCode\n  WHERE schools.FundingType = 'Locally funded'\n)",
+            "result": {
+              "columns": [
+                "School",
+                "DOCType"
+              ],
+              "rows": [
+                [
+                  "Mountain Oaks",
+                  "County Office of Education (COE)"
+                ],
+                [
+                  "Castle Rock",
+                  "County Office of Education (COE)"
+                ],
+                [
+                  "Charter Community School Home Study Academy",
+                  "County Office of Education (COE)"
+                ]
+              ],
+              "row_count": 57,
+              "truncated": true
+            },
+            "evaluation": {
+              "execution_status": "passed",
+              "official_ea": false,
+              "contract_accuracy": false
+            },
+            "adopted": false,
+            "note": "只证明作用域原因；改变了原候选，不能记为固定候选收益。"
+          },
+          {
+            "name": "also_change_output_to_gold_code",
+            "output": {
+              "scan": "frpm",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "schools",
+                  "on": {
+                    "left": "frpm.CDSCode",
+                    "right": "schools.CDSCode"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "schools.FundingType",
+                  "op": "eq",
+                  "val": "Locally funded"
+                },
+                {
+                  "col": "(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")",
+                  "op": "gt",
+                  "val": {
+                    "subquery": {
+                      "scan": "frpm",
+                      "joins": [
+                        {
+                          "type": "inner",
+                          "table": "schools",
+                          "on": {
+                            "left": "frpm.CDSCode",
+                            "right": "schools.CDSCode"
+                          }
+                        }
+                      ],
+                      "filter": [
+                        {
+                          "col": "schools.FundingType",
+                          "op": "eq",
+                          "val": "Locally funded"
+                        }
+                      ],
+                      "agg": [
+                        {
+                          "fn": "avg",
+                          "col": "(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\")",
+                          "as": "avg_difference"
+                        }
+                      ],
+                      "select": [
+                        "avg_difference"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "select": [
+                "schools.School",
+                "schools.DOC"
+              ]
+            },
+            "evaluation": {
+              "execution_status": "passed",
+              "official_ea": true,
+              "contract_accuracy": true
+            },
+            "adopted": false,
+            "note": "两处人工改写后匹配Gold不代表系统已修复，也不解决编码/标签业务歧义。"
+          }
+        ],
+        "limitations": [
+          "题面15–17与Evidence指定Ages 5–17不一致。",
+          "不新增QUALIFY拒绝，不把全部后置筛选搬到WHERE，不根据Gold自动替换字段。"
+        ]
+      }
+    },
+    {
+      "case_id": "md-472",
+      "primary_case_category": "reference_conflict",
+      "reason": "Gold未落实最高工资条件；全局双极值交集为空有依据",
+      "question": "List out the account numbers of clients who are youngest and have highest average salary?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-472",
+        "db_id": "financial",
+        "question": "List out the account numbers of clients who are youngest and have highest average salary?",
+        "evidence": "If the person A's birthdate < B's birthdate, it means that person B is younger than person A; A11 refers to average salary",
+        "forge_output": {
+          "scan": "account",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "disp",
+              "on": {
+                "left": "account.account_id",
+                "right": "disp.account_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "client",
+              "on": {
+                "left": "disp.client_id",
+                "right": "client.client_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "district",
+              "on": {
+                "left": "account.district_id",
+                "right": "district.district_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "youngest",
+              "on": {
+                "left": "client.birth_date",
+                "right": "youngest.youngest_birthdate"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "highest_salary",
+              "on": {
+                "left": "district.A11",
+                "right": "highest_salary.highest_A11"
+              }
+            }
+          ],
+          "select": [
+            "account.account_id"
+          ],
+          "cte": [
+            {
+              "name": "youngest",
+              "query": {
+                "scan": "client",
+                "select": [
+                  {
+                    "expr": "MAX(\"client\".\"birth_date\")",
+                    "as": "youngest_birthdate"
+                  }
+                ]
+              },
+              "recursive": false
+            },
+            {
+              "name": "highest_salary",
+              "query": {
+                "scan": "district",
+                "select": [
+                  {
+                    "expr": "MAX(\"district\".\"A11\")",
+                    "as": "highest_A11"
+                  }
+                ]
+              },
+              "recursive": false
+            }
+          ],
+          "distinct": true
+        },
+        "assessment": {
+          "reference_assessment": "参考冲突/极值口径歧义：Gold仅选最年轻一名client，GROUP BY A11并未实现最高薪资筛选或排序。题目有youngest AND highest average salary；全局双极值交集、先年龄后薪资、最高薪资群内最年轻三种解释不同。",
+          "forge": {
+            "classification": "reference_conflict_with_extrema_ambiguity",
+            "candidate_correctness": "plausible",
+            "reason": "全局最年轻与全局最高薪资取交集，按account地区绑定A11，返回空；该最年轻客户的账户与客户地区均为42、薪资8388<12541，空集不是执行失败。地区绑定到account而非client是额外业务歧义，本例不影响结果。"
+          },
+          "direct": {
+            "classification": "reference_conflict_with_extrema_ambiguity",
+            "candidate_correctness": "plausible",
+            "reason": "按client地区薪资取全局双极值交集，同样为空；忠于字面AND解释。Gold返回2836只是最年轻客户账户，并不满足全局最高工资条件。"
+          },
+          "system_defect": {
+            "possible": false,
+            "reason": "不应为了消除空结果把AND极值自动改成排序LIMIT。当前Forge输出与SQL一致，Gold忽略salary条件不证明候选生成错误。"
+          },
+          "evidence_summary": "最年轻唯一client3428，1987-09-27，account2836，地区42/A11=8388；最高A11=12541在地区1；最高薪资群内最年轻客户1660/account1372。两种地区绑定在最年轻客户上相同。"
+        },
+        "executions": {
+          "gold": {
+            "sql": "SELECT T1.account_id  FROM account AS T1 INNER JOIN disp AS T2 ON T1.account_id = T2.account_id INNER JOIN client AS T3 ON T2.client_id = T3.client_id INNER JOIN district AS T4 on T4.district_id = T1.district_id WHERE T2.client_id = ( SELECT client_id FROM client ORDER BY birth_date DESC LIMIT 1) GROUP BY T4.A11, T1.account_id",
+            "result": {
+              "columns": [
+                "account_id"
+              ],
+              "rows": [
+                [
+                  2836
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            }
+          },
+          "forge": {
+            "sql": "WITH youngest AS (\n  SELECT MAX(\"client\".\"birth_date\") AS youngest_birthdate\n  FROM client\n),\nhighest_salary AS (\n  SELECT MAX(\"district\".\"A11\") AS highest_A11\n  FROM district\n)\nSELECT DISTINCT account.account_id\nFROM account\nINNER JOIN disp ON account.account_id = disp.account_id\nINNER JOIN client ON disp.client_id = client.client_id\nINNER JOIN district ON account.district_id = district.district_id\nINNER JOIN youngest ON client.birth_date = youngest.youngest_birthdate\nINNER JOIN highest_salary ON district.A11 = highest_salary.highest_A11",
+            "result": {
+              "columns": [
+                "account_id"
+              ],
+              "rows": [],
+              "row_count": 0,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 0
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 0,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [],
+              "gold_only_sample": [
+                [
+                  2836
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          },
+          "direct": {
+            "sql": "SELECT a.account_id\nFROM account AS a\nJOIN disp AS dp ON dp.account_id = a.account_id\nJOIN client AS c ON c.client_id = dp.client_id\nJOIN district AS d ON d.district_id = c.district_id\nWHERE c.birth_date = (SELECT MAX(birth_date) FROM client)\n  AND d.A11 = (SELECT MAX(A11) FROM district)",
+            "result": {
+              "columns": [
+                "account_id"
+              ],
+              "rows": [],
+              "row_count": 0,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 0
+            },
+            "gold_comparison": {
+              "equal_result_sets": false,
+              "candidate_only_distinct_count": 0,
+              "gold_only_distinct_count": 1,
+              "candidate_only_sample": [],
+              "gold_only_sample": [
+                [
+                  2836
+                ]
+              ],
+              "note": "参考集合差异仅是现象，不用于单独判定语义错误。"
+            }
+          }
+        },
+        "diagnostics": [
+          {
+            "name": "youngest_clients_and_districts",
+            "sql": "SELECT c.client_id,c.birth_date,c.district_id AS client_district,dc.A11 AS client_salary,dp.account_id,a.district_id AS account_district,da.A11 AS account_salary,dp.type FROM client c LEFT JOIN disp dp ON dp.client_id=c.client_id LEFT JOIN account a ON a.account_id=dp.account_id LEFT JOIN district dc ON dc.district_id=c.district_id LEFT JOIN district da ON da.district_id=a.district_id WHERE c.birth_date=(SELECT MAX(birth_date) FROM client)",
+            "result": {
+              "columns": [
+                "client_id",
+                "birth_date",
+                "client_district",
+                "client_salary",
+                "account_id",
+                "account_district",
+                "account_salary",
+                "type"
+              ],
+              "rows": [
+                [
+                  3428,
+                  "1987-09-27",
+                  42,
+                  8388,
+                  2836,
+                  42,
+                  8388,
+                  "DISPONENT"
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 8
+            }
+          },
+          {
+            "name": "maximum_salary_district",
+            "sql": "SELECT district_id,A2,A11 FROM district WHERE A11=(SELECT MAX(A11) FROM district)",
+            "result": {
+              "columns": [
+                "district_id",
+                "A2",
+                "A11"
+              ],
+              "rows": [
+                [
+                  1,
+                  "Hl.m. Praha",
+                  12541
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 3
+            }
+          },
+          {
+            "name": "lexicographic_youngest_then_salary",
+            "sql": "SELECT c.client_id,c.birth_date,dp.account_id,dc.A11 AS client_salary,da.A11 AS account_salary FROM client c JOIN disp dp ON dp.client_id=c.client_id JOIN account a ON a.account_id=dp.account_id JOIN district dc ON dc.district_id=c.district_id JOIN district da ON da.district_id=a.district_id ORDER BY c.birth_date DESC,dc.A11 DESC LIMIT 3",
+            "result": {
+              "columns": [
+                "client_id",
+                "birth_date",
+                "account_id",
+                "client_salary",
+                "account_salary"
+              ],
+              "rows": [
+                [
+                  3428,
+                  "1987-09-27",
+                  2836,
+                  8388,
+                  8388
+                ],
+                [
+                  4354,
+                  "1986-08-13",
+                  3609,
+                  8594,
+                  8594
+                ],
+                [
+                  10201,
+                  "1985-10-19",
+                  8261,
+                  8598,
+                  8598
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 5
+            }
+          },
+          {
+            "name": "youngest_within_highest_salary",
+            "sql": "SELECT c.client_id,c.birth_date,dp.account_id,d.A11 FROM client c JOIN disp dp ON dp.client_id=c.client_id JOIN district d ON d.district_id=c.district_id WHERE d.A11=(SELECT MAX(A11) FROM district) ORDER BY c.birth_date DESC LIMIT 3",
+            "result": {
+              "columns": [
+                "client_id",
+                "birth_date",
+                "account_id",
+                "A11"
+              ],
+              "rows": [
+                [
+                  1660,
+                  "1982-12-11",
+                  1372,
+                  12541
+                ],
+                [
+                  3973,
+                  "1982-08-20",
+                  3282,
+                  12541
+                ],
+                [
+                  3230,
+                  "1982-06-06",
+                  2675,
+                  12541
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 4
+            }
+          }
+        ],
+        "forge_output_sql_consistency": {
+          "observed_mismatch": false,
+          "scope": "run forge.output→stored forge.sql; no raw_output inspection"
+        }
+      }
+    },
+    {
+      "case_id": "md-481",
+      "primary_case_category": "reference_conflict",
+      "reason": "Gold遗漏地区列；Evidence年份、地区/贷款粒度另有冲突",
+      "question": "For loans contracts which are still running where client are in debt, list the district of the and the state the percentage unemployment rate increment from year 1995 to 1996.",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-481",
+        "db_id": "financial",
+        "question": "For loans contracts which are still running where client are in debt, list the district of the and the state the percentage unemployment rate increment from year 1995 to 1996.",
+        "evidence": "Unemployment increment rate in percentage = [(unemployment rate 2016 - unemployment rate 2015) / unemployment rate 2015] * 100; unemployment rate 2015 appears in the A12; unemployment rate 2016 appears in the A13; Loan contracts which are still running where client are in debt can be presented as status = 'D'",
+        "forge_output": {
+          "scan": "loan",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "account",
+              "on": {
+                "left": "loan.account_id",
+                "right": "account.account_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "district",
+              "on": {
+                "left": "account.district_id",
+                "right": "district.district_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "loan.status",
+              "op": "eq",
+              "val": "D"
+            }
+          ],
+          "select": [
+            "district.A2",
+            {
+              "expr": "((district.A13 - district.A12) / district.A12) * 100",
+              "as": "unemployment_rate_increment_percentage"
+            }
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT district.A2, ((district.A13 - district.A12) / district.A12) * 100 AS unemployment_rate_increment_percentage\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nINNER JOIN district ON account.district_id = district.district_id\nWHERE loan.status = 'D'",
+            "result": {
+              "columns": [
+                "A2",
+                "unemployment_rate_increment_percentage"
+              ],
+              "rows": [
+                [
+                  "Strakonice",
+                  40
+                ],
+                [
+                  "Chrudim",
+                  39.259259259259245
+                ],
+                [
+                  "Hl.m. Praha",
+                  114.99999999999999
+                ],
+                [
+                  "Brno - mesto",
+                  22.499999999999993
+                ],
+                [
+                  "Mlada Boleslav",
+                  20
+                ],
+                [
+                  "Jesenik",
+                  null
+                ]
+              ],
+              "row_count": 45,
+              "truncated": true,
+              "column_count": 2,
+              "distinct_row_count": 30
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 30,
+            "only_gold_distinct_count": 30,
+            "classification": "reference_conflict",
+            "rationale": "输出地区+增长率，45行/30个地区，主要与Gold的1列输出冲突。重复地区保留贷款粒度，是否必须30个唯一地区仍有输出歧义。公式数学等价；无整数截断。"
+          },
+          "direct": {
+            "sql": "SELECT DISTINCT d.A2, ((d.A13 - d.A12) / d.A12) * 100 AS unemployment_rate_increment\nFROM district AS d\nJOIN account AS a ON a.district_id = d.district_id\nJOIN loan AS l ON l.account_id = a.account_id\nWHERE l.status = 'D'",
+            "result": {
+              "columns": [
+                "A2",
+                "unemployment_rate_increment"
+              ],
+              "rows": [
+                [
+                  "Strakonice",
+                  40
+                ],
+                [
+                  "Chrudim",
+                  39.259259259259245
+                ],
+                [
+                  "Hl.m. Praha",
+                  114.99999999999999
+                ],
+                [
+                  "Brno - mesto",
+                  22.499999999999993
+                ],
+                [
+                  "Mlada Boleslav",
+                  20
+                ],
+                [
+                  "Jesenik",
+                  null
+                ]
+              ],
+              "row_count": 30,
+              "truncated": true,
+              "column_count": 2,
+              "distinct_row_count": 30
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 30,
+            "only_gold_distinct_count": 30,
+            "classification": "reference_conflict",
+            "rationale": "DISTINCT地区+增长率返回30行，符合地区清单解读；不应因Gold省略地区而认定额外列生成错误。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT CAST((T3.A13 - T3.A12) AS REAL) * 100 / T3.A12 FROM loan AS T1 INNER JOIN account AS T2 ON T1.account_id = T2.account_id INNER JOIN district AS T3 ON T2.district_id = T3.district_id WHERE T1.status = 'D'",
+          "result": {
+            "columns": [
+              "CAST((T3.A13 - T3.A12) AS REAL) * 100 / T3.A12"
+            ],
+            "rows": [
+              [
+                40
+              ],
+              [
+                39.25925925925924
+              ],
+              [
+                115
+              ],
+              [
+                22.49999999999999
+              ],
+              [
+                20
+              ],
+              [
+                null
+              ]
+            ],
+            "row_count": 45,
+            "truncated": true,
+            "column_count": 1,
+            "distinct_row_count": 30
+          },
+          "assessment": "Gold仅输出增长率1列，遗漏题目明确提及的地区。Evidence把年份误写2015/2016，但映射A12/A13；官方district.csv明确这两列为1995/1996，候选使用列正确。"
+        },
+        "intent": "针对仍在运行且欠款(status D)的贷款，列出地区及1995到1996失业率增长百分比。题面有语病，地区/贷款逐行口径未完全明确。",
+        "diagnostics": [
+          {
+            "name": "district_column_schema",
+            "sql": "SELECT name,type FROM pragma_table_info('district') WHERE name IN ('A2','A12','A13')",
+            "result": {
+              "columns": [
+                "name",
+                "type"
+              ],
+              "rows": [
+                [
+                  "A2",
+                  "TEXT"
+                ],
+                [
+                  "A12",
+                  "REAL"
+                ],
+                [
+                  "A13",
+                  "REAL"
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 3
+            }
+          },
+          {
+            "name": "district_grain",
+            "sql": "SELECT COUNT(*) AS loan_rows,COUNT(DISTINCT l.loan_id) AS loans,COUNT(DISTINCT a.district_id) AS districts FROM loan l JOIN account a ON l.account_id=a.account_id WHERE l.status='D'",
+            "result": {
+              "columns": [
+                "loan_rows",
+                "loans",
+                "districts"
+              ],
+              "rows": [
+                [
+                  45,
+                  45,
+                  30
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "arithmetic_and_missingness",
+            "sql": "SELECT d.district_id,d.A2,d.A12,typeof(d.A12) AS a12_type,d.A13,typeof(d.A13) AS a13_type,((d.A13-d.A12)/d.A12)*100 AS candidate_rate,CAST(d.A13-d.A12 AS REAL)*100/d.A12 AS gold_rate,COUNT(*) AS running_indebted_loans FROM loan l JOIN account a ON l.account_id=a.account_id JOIN district d ON a.district_id=d.district_id WHERE l.status='D' GROUP BY d.district_id ORDER BY d.district_id",
+            "result": {
+              "columns": [
+                "district_id",
+                "A2",
+                "A12",
+                "a12_type",
+                "A13",
+                "a13_type",
+                "candidate_rate",
+                "gold_rate",
+                "running_indebted_loans"
+              ],
+              "rows": [
+                [
+                  1,
+                  "Hl.m. Praha",
+                  0.2,
+                  "real",
+                  0.43,
+                  "real",
+                  114.99999999999999,
+                  115,
+                  4
+                ],
+                [
+                  3,
+                  "Beroun",
+                  1.9,
+                  "real",
+                  2.21,
+                  "real",
+                  16.315789473684212,
+                  16.315789473684216,
+                  2
+                ],
+                [
+                  4,
+                  "Kladno",
+                  4.6,
+                  "real",
+                  5.05,
+                  "real",
+                  9.78260869565218,
+                  9.782608695652177,
+                  1
+                ],
+                [
+                  6,
+                  "Kutna Hora",
+                  2.9,
+                  "real",
+                  4.02,
+                  "real",
+                  38.6206896551724,
+                  38.620689655172406,
+                  1
+                ],
+                [
+                  8,
+                  "Mlada Boleslav",
+                  1.2,
+                  "real",
+                  1.44,
+                  "real",
+                  20,
+                  20,
+                  1
+                ],
+                [
+                  14,
+                  "Ceske Budejovice",
+                  1.4,
+                  "real",
+                  1.71,
+                  "real",
+                  22.142857142857146,
+                  22.14285714285715,
+                  1
+                ]
+              ],
+              "row_count": 30,
+              "truncated": true,
+              "column_count": 9,
+              "distinct_row_count": 30
+            }
+          },
+          {
+            "name": "arithmetic_difference_summary",
+            "sql": "SELECT COUNT(*) AS district_count,SUM(candidate_rate IS NULL) AS null_rates,SUM(candidate_rate<>gold_rate) AS exact_float_differences,MAX(ABS(candidate_rate-gold_rate)) AS maximum_absolute_difference FROM (SELECT DISTINCT d.district_id,((d.A13-d.A12)/d.A12)*100 AS candidate_rate,CAST(d.A13-d.A12 AS REAL)*100/d.A12 AS gold_rate FROM loan l JOIN account a ON l.account_id=a.account_id JOIN district d ON a.district_id=d.district_id WHERE l.status='D')",
+            "result": {
+              "columns": [
+                "district_count",
+                "null_rates",
+                "exact_float_differences",
+                "maximum_absolute_difference"
+              ],
+              "rows": [
+                [
+                  30,
+                  1,
+                  14,
+                  1.4210854715202004e-14
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 4,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "null_rate_sources",
+            "sql": "SELECT DISTINCT d.district_id,d.A2,d.A12,typeof(d.A12) AS a12_type,d.A13,typeof(d.A13) AS a13_type FROM loan l JOIN account a ON l.account_id=a.account_id JOIN district d ON a.district_id=d.district_id WHERE l.status='D' AND ((d.A13-d.A12)/d.A12)*100 IS NULL",
+            "result": {
+              "columns": [
+                "district_id",
+                "A2",
+                "A12",
+                "a12_type",
+                "A13",
+                "a13_type"
+              ],
+              "rows": [
+                [
+                  69,
+                  "Jesenik",
+                  null,
+                  "null",
+                  7.01,
+                  "real"
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 6,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "repeated_districts",
+            "sql": "SELECT d.A2,COUNT(*) AS loans FROM loan l JOIN account a ON l.account_id=a.account_id JOIN district d ON a.district_id=d.district_id WHERE l.status='D' GROUP BY d.district_id HAVING COUNT(*)>1 ORDER BY COUNT(*) DESC,d.A2 LIMIT 5",
+            "result": {
+              "columns": [
+                "A2",
+                "loans"
+              ],
+              "rows": [
+                [
+                  "Hl.m. Praha",
+                  4
+                ],
+                [
+                  "Brno - mesto",
+                  3
+                ],
+                [
+                  "Karvina",
+                  3
+                ],
+                [
+                  "Svitavy",
+                  3
+                ],
+                [
+                  "Beroun",
+                  2
+                ]
+              ],
+              "row_count": 5,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 5
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "district_column_schema",
+          "district_grain",
+          "arithmetic_and_missingness",
+          "arithmetic_difference_summary",
+          "null_rate_sources",
+          "repeated_districts"
+        ],
+        "caveats": [
+          "14个地区因浮点运算顺序出现精确值差异，最大绝对误差1.4210854715202004e-14；不是业务公式错误，也不据此改评分。",
+          "唯一NULL为Jesenik的A12本身NULL，两种公式均NULL；不是候选新引入除零或漏转换。",
+          "地区取account.district_id，与Gold一致；题面不清晰，不外推为必须使用客户居住district。"
+        ],
+        "possible_general_system_issue": {
+          "possible": true,
+          "area": "输出列/实体粒度契约及参考缺列；另有浮点精确比较边界",
+          "confidence": "缺列、重复及数值误差有执行证据；不是新编译缺陷。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    },
+    {
+      "case_id": "md-483",
+      "primary_case_category": "candidate_error",
+      "reason": "实际ISO日期被绑定为YYMMDD边界，漏掉符合条件的记录",
+      "question": "Between 1/1/1995 and 12/31/1997, how many loans in the amount of at least 250,000 per account that chose monthly statement issuance were approved?",
+      "official_original": {
+        "forge": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        },
+        "direct": {
+          "scored": true,
+          "official_ea": false,
+          "contract_accuracy": false
+        }
+      },
+      "detail": {
+        "case_id": "md-483",
+        "db_id": "financial",
+        "question": "Between 1/1/1995 and 12/31/1997, how many loans in the amount of at least 250,000 per account that chose monthly statement issuance were approved?",
+        "evidence": "Frequency = 'POPLATEK MESICNE' stands for monthly issurance",
+        "forge_output": {
+          "scan": "loan",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "account",
+              "on": {
+                "left": "loan.account_id",
+                "right": "account.account_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "loan.date",
+              "op": "between",
+              "val": null,
+              "lo": "950101",
+              "hi": "971231"
+            },
+            {
+              "col": "loan.amount",
+              "op": "gte",
+              "val": 250000
+            },
+            {
+              "col": "account.frequency",
+              "op": "eq",
+              "val": "POPLATEK MESICNE"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count",
+              "col": "loan.loan_id",
+              "as": "loan_count"
+            }
+          ],
+          "select": [
+            "loan_count"
+          ]
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT COUNT(loan.loan_id) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date BETWEEN '950101' AND '971231' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+            "result": {
+              "columns": [
+                "loan_count"
+              ],
+              "rows": [
+                [
+                  0
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 1,
+            "only_gold_distinct_count": 1,
+            "classification": "confirmed_candidate_error",
+            "rationale": "把存储为YYYY-MM-DD的日期错误绑定成950101..971231，返回0。只在离线诊断中替换边界为ISO即得65，与Gold一致；原始output已含错误边界，非编译转换。"
+          },
+          "direct": {
+            "sql": "SELECT l.account_id, COUNT(l.loan_id) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id",
+            "result": {
+              "columns": [
+                "account_id",
+                "loan_count"
+              ],
+              "rows": [],
+              "row_count": 0,
+              "truncated": false,
+              "column_count": 2,
+              "distinct_row_count": 0
+            },
+            "set_equal_gold": false,
+            "only_candidate_distinct_count": 0,
+            "only_gold_distinct_count": 1,
+            "classification": "confirmed_candidate_error",
+            "rationale": "同样错误日期边界导致空结果。独立的GROUP BY account_id输出争议需分开：仅修日期得65行(account_id,1)，而Gold为1行总数65；per account存在按账户解释，不把该差异追加算作确定生成错误。"
+          }
+        },
+        "gold": {
+          "sql": "SELECT COUNT(T1.account_id) FROM account AS T1 INNER JOIN loan AS T2 ON T1.account_id = T2.account_id WHERE T2.date BETWEEN '1995-01-01' AND '1997-12-31' AND T1.frequency = 'POPLATEK MESICNE' AND T2.amount >= 250000",
+          "result": {
+            "columns": [
+              "COUNT(T1.account_id)"
+            ],
+            "rows": [
+              [
+                65
+              ]
+            ],
+            "row_count": 1,
+            "truncated": false,
+            "column_count": 1,
+            "distinct_row_count": 1
+          },
+          "assessment": "Gold以ISO日期范围返回总数65。loan.csv说明date为批准日期、amount为批准金额，不需额外批准状态过滤。当前符合条件的65贷款恰好65账户。"
+        },
+        "intent": "统计1995-01-01至1997-12-31、金额至少250000、按月出具账单账户的已批准贷款；per account是否要求按账户输出存在句法歧义。",
+        "diagnostics": [
+          {
+            "name": "date_storage",
+            "sql": "SELECT typeof(date) AS storage_type,length(date) AS length,MIN(date) AS earliest,MAX(date) AS latest,COUNT(*) AS loans FROM loan GROUP BY typeof(date),length(date)",
+            "result": {
+              "columns": [
+                "storage_type",
+                "length",
+                "earliest",
+                "latest",
+                "loans"
+              ],
+              "rows": [
+                [
+                  "text",
+                  10,
+                  "1993-07-05",
+                  "1998-12-08",
+                  682
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 5,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "date_filter_contrast",
+            "sql": "SELECT SUM(date BETWEEN '1995-01-01' AND '1997-12-31') AS iso_range,SUM(date BETWEEN '950101' AND '971231') AS short_range,COUNT(*) AS all_loans FROM loan",
+            "result": {
+              "columns": [
+                "iso_range",
+                "short_range",
+                "all_loans"
+              ],
+              "rows": [
+                [
+                  403,
+                  0,
+                  682
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 3,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "eligible_account_grain",
+            "sql": "SELECT COUNT(*) AS loan_rows,COUNT(DISTINCT l.loan_id) AS loans,COUNT(DISTINCT l.account_id) AS accounts,MIN(l.date) AS first_date,MAX(l.date) AS last_date FROM loan l JOIN account a ON l.account_id=a.account_id WHERE a.frequency='POPLATEK MESICNE' AND l.amount>=250000 AND l.date BETWEEN '1995-01-01' AND '1997-12-31'",
+            "result": {
+              "columns": [
+                "loan_rows",
+                "loans",
+                "accounts",
+                "first_date",
+                "last_date"
+              ],
+              "rows": [
+                [
+                  65,
+                  65,
+                  65,
+                  "1995-01-03",
+                  "1997-12-31"
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 5,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "date_only_corrected_forge",
+            "sql": "SELECT COUNT(loan.loan_id) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date BETWEEN '1995-01-01' AND '1997-12-31' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+            "result": {
+              "columns": [
+                "loan_count"
+              ],
+              "rows": [
+                [
+                  65
+                ]
+              ],
+              "row_count": 1,
+              "truncated": false,
+              "column_count": 1,
+              "distinct_row_count": 1
+            }
+          },
+          {
+            "name": "date_only_corrected_direct",
+            "sql": "SELECT l.account_id, COUNT(l.loan_id) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '1995-01-01' AND '1997-12-31'\nGROUP BY l.account_id",
+            "result": {
+              "columns": [
+                "account_id",
+                "loan_count"
+              ],
+              "rows": [
+                [
+                  103,
+                  1
+                ],
+                [
+                  442,
+                  1
+                ],
+                [
+                  501,
+                  1
+                ],
+                [
+                  817,
+                  1
+                ],
+                [
+                  915,
+                  1
+                ],
+                [
+                  940,
+                  1
+                ]
+              ],
+              "row_count": 65,
+              "truncated": true,
+              "column_count": 2,
+              "distinct_row_count": 65
+            }
+          }
+        ],
+        "supporting_diagnostics": [
+          "date_storage",
+          "date_filter_contrast",
+          "eligible_account_grain",
+          "date_only_corrected_forge",
+          "date_only_corrected_direct"
+        ],
+        "caveats": [],
+        "possible_general_system_issue": {
+          "possible": true,
+          "area": "日期字面值与真实字段格式绑定；次要为计数输出粒度",
+          "confidence": "日期误绑定已证实；不能由此认为现有format元数据必然缺失或直接改Prompt。",
+          "compiler_defect": false
+        },
+        "forge_compilation_consistency": {
+          "assessment": "原始Forge output与记录SQL的关系、过滤、投影、去重/聚合语义一致，未发现编译前后不一致。",
+          "method": "逐项比对原始output与原始SQL；未重新编译，不将此扩展为当前编译器全量正确证明。",
+          "inconsistency_found": false
+        }
+      }
+    }
+  ],
+  "verification": {
+    "independent_diagnostic_sql_rechecks": 91,
+    "fixed_candidates_re_evaluated": 38,
+    "sql_or_score_mismatches": 0,
+    "gold_unknown_arms_preserved_without_rerun": 2,
+    "source_and_data_match_frozen": true,
+    "unit_suite_rerun": false
+  },
+  "decision": {
+    "runtime_prompt_compiler_schema_gold_scoring_changed": false,
+    "automatic_repairs_adopted": false,
+    "reason": "未满足狭窄确定性修复门槛。生成语义错误不能靠按Gold改JSON、自动去重/换JOIN/选作者字段/换编码处理；QUALIFY支持边界不能通过无条件移至WHERE修复。",
+    "reference_findings": "保留原始官方EX/Contract，不计纠正后准确率，不伪造人审标签。"
+  },
+  "review_adjustments": [
+    {
+      "case_id": "md-273",
+      "subagent_classification": "certain_evidence_contract_mismatch",
+      "consolidated_classification": "output_contract_ambiguity",
+      "reason": "Evidence指出ID字段但未直说必须输出ID而不能标签；实体与映射已验证正确，保守保留表示歧义。"
+    }
+  ],
+  "next_hypothesis": {
+    "factor": "observed_date_layout_context",
+    "reason": "md-483存在明确可观察的ISO日期与YYMMDD边界冲突；先验证补充带来源的实际格式事实，不覆盖原始CSV、不泛化自动转换日期。",
+    "implementation_adopted": false,
+    "model_calls_started": false,
+    "acceptance": "固定同题、正确及跨库对照；仅日期上下文变量；预算另行冻结授权，不以手工改候选作为模型收益。"
+  },
+  "artifacts": [
+    {
+      "path": ".forge/benchmarks/luna-seed45-offline-triage-20260905/semantic-triage.json",
+      "sha256": "cfd0f5d6ef71ea5502c682fd4d5a179459ff9a3d2b262015a277f617d6a5dcf5"
+    },
+    {
+      "path": ".forge/benchmarks/luna-seed45-offline-triage-20260905/binding-triage.json",
+      "sha256": "65ea42c13272920fdcce8a5824110d613919050f5f430e2611649e64d921b2d3"
+    },
+    {
+      "path": ".forge/benchmarks/luna-seed45-offline-triage-20260905/scope-triage.json",
+      "sha256": "345625d6c9850373a770371e2bbf4182c77a50ec40dc119af28116b24b48d7c6"
+    },
+    {
+      "path": ".forge/benchmarks/luna-seed45-offline-triage-20260905/verification.json",
+      "sha256": "2e1844345e4cbdf78d293e19c40e09c80d7455de8d69bbbec9787c8c38ac53dd"
+    }
+  ]
+}

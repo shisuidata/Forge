@@ -154,8 +154,12 @@ SELECT COUNT(*) AS cnt, cnt * 2 AS double_cnt  -- 错误：cnt 未定义
 FROM orders
 ```
 
-Forge DSL 的 `_expand_aliases()` 在编译前将 SELECT expr 中引用的 agg/window 别名
-展开为完整表达式，消灭整类 alias 作用域错误。
+Forge DSL 的 `_expand_aliases()` 将本层 SELECT expr 中未限定的 agg/window 列引用展开为完整表达式。实现使用 SQLGlot 27+ 的 AST 定位原文跨度，单次替换，不对整个表达式重新序列化。
+
+- 声明 `SUM(facts.amount) AS n` 后，表达式 `n + 1` 引用该聚合；`facts.n` 仍是源列，不能去掉限定名后覆盖成聚合。
+- 引号包裹的别名按标识符处理；数值/字符串常量、注释、函数名和类型名不参与别名替换。嵌套 SQL 子查询保留自己的作用域，插入的聚合/窗口 SQL 不再次展开。
+- HAVING 两侧可引用本层聚合别名；窗口实参和窗口排序保留已有聚合别名接口。未投影聚合用于普通查询的排序表达式时会展开，但不会增加输出列。
+- CTE 的显式 `select` 决定导出列。声明聚合并不等于显式投影了它；未导出的字段和拼错的别名仍可能被拒绝，不自动补列或改名。
 
 ---
 

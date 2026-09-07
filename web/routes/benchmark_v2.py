@@ -6,11 +6,15 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from jsonschema import ValidationError
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, StrictInt
 
 from agent.contracts import validate_contract
-from agent.prompts import build_system
+from agent.prompts import (
+    STRUCTURED_BENCHMARK_PROMPT_REVISION,
+    build_structured_benchmark_system,
+)
 from forge.assurance import QueryAssuranceError, assure_compiled_sql
+from forge.benchmark_v2 import RESULT_COMPARATOR_REVISION
 from forge.benchmark_v2 import ResultContract, build_context_snapshot, semantic_result_compare, snapshot_dict
 from forge.compiler import compile_query
 from forge.hard_accuracy_benchmark import (
@@ -22,11 +26,9 @@ from forge.hard_accuracy_benchmark import (
     _forge_context,
     _json_safe,
     execute_result,
-    get_hard_benchmark_service,
     load_suite,
     structure_projection,
     structure_prompt,
-    validate_gold_cases,
 )
 from web.auth import require_pi_service_auth
 
@@ -38,13 +40,34 @@ router = APIRouter(
 
 class ContextRequest(BaseModel):
     case_id: str
+    protocol_revision: str
 
 
 class EvaluateRequest(BaseModel):
     case_id: str
+    protocol_revision: str
+    metric_revision: str
     arm: Literal["forge", "direct"]
     output: Any
     context_snapshot: dict[str, Any]
+
+
+class ProtocolRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: str
+    model: str
+    case_ids: list[str]
+    confirm_model_calls: StrictInt
+    protocol_manifest: dict[str, Any] | None = None
+
+
+@router.post("/protocol")
+def protocol_projection(req: ProtocolRequest):
+    from forge.bird_benchmark import preflight
+    try:
+        return preflight(**req.model_dump())
+    except (ValueError, OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _suite():
@@ -74,14 +97,17 @@ def _failed_evaluation(
     sql: str | None = None,
     forge_json: dict[str, Any] | None = None,
     assurance: dict[str, Any] | None = None,
+    scored: bool = True,
 ) -> dict[str, Any]:
     failure = _failure(stage, code, retryable=retryable)
     return {
         "arm": req.arm,
+        "metric_revision": RESULT_COMPARATOR_REVISION,
         "compile_status": compile_status,
         "execution_status": execution_status,
-        "official_ea": False,
-        "contract_accuracy": False,
+        "scored": scored,
+        "official_ea": False if scored else None,
+        "contract_accuracy": False if scored else None,
         "failure": failure,
         "error_code": code,
         "sql": sql,
@@ -126,10 +152,30 @@ def _execution_failure_code(exc: Exception) -> str:
     return "execution_failed"
 
 
+def check_gold_readiness(suite: dict[str, Any], case_ids: list[str]) -> list[dict[str, str]]:
+    """Execute all selected Gold and return only answer-safe failure identities."""
+    cases = {case["case_id"]: case for case in suite["cases"]}
+    if any(case_id not in cases for case_id in case_ids):
+        raise ValueError("Gold readiness selection contains an unknown case")
+    failures = []
+    for case_id in case_ids:
+        case = cases[case_id]
+        try:
+            execute_result(_database_path(case["db_id"]), str(case["SQL"]))
+        except Exception as exc:
+            failures.append({
+                "case_id": case_id,
+                "db_id": case["db_id"],
+                "code": _execution_failure_code(exc),
+            })
+    return failures
+
+
 @router.get("/suite")
 def suite_projection():
     suite = _suite()
     return {
+        "metric_revision": RESULT_COMPARATOR_REVISION,
         "suite": suite["manifest"],
         "cases": [
             {
@@ -147,8 +193,24 @@ def suite_projection():
 
 @router.post("/context")
 def context_projection(req: ContextRequest):
-    suite = _suite()
-    case = _case(suite, req.case_id)
+    from forge.bird_benchmark import _contexts, context_hashes, verify_case
+    try:
+        manifest = verify_case(req.protocol_revision, req.case_id)
+        suite = _suite()
+        context = _contexts(suite, [req.case_id], manifest["date_context"], manifest["grain_context"],
+                            manifest["value_context"], manifest["forge_prompt_revision"])[req.case_id]
+        if context_hashes({req.case_id: context})[req.case_id] != manifest["context_hashes"][req.case_id]:
+            raise ValueError("Frozen context drift")
+        verify_case(req.protocol_revision, req.case_id)
+        return {**context, "protocol_revision": req.protocol_revision}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def build_context_response(
+    suite: dict[str, Any], case: dict[str, Any], *,
+    forge_prompt_revision: str = STRUCTURED_BENCHMARK_PROMPT_REVISION,
+):
     structure = structure_projection(suite["tables"][case["db_id"]])
     snapshot = build_context_snapshot(case["question"], case["evidence"], structure)
     selected = set(snapshot.tables)
@@ -163,6 +225,7 @@ def context_projection(req: ContextRequest):
     }
     schema_context = structure_prompt(filtered)
     return {
+        "metric_revision": RESULT_COMPARATOR_REVISION,
         "case": {
             "case_id": case["case_id"],
             "question_id": case["question_id"],
@@ -173,10 +236,9 @@ def context_projection(req: ContextRequest):
         },
         "context_snapshot": snapshot_dict(snapshot),
         "schema_context": schema_context,
-        "forge_instructions": build_system(
-            _forge_context(schema_context, case["evidence"]),
-            question=case["question"],
-            mode="benchmark",
+        "forge_prompt_revision": forge_prompt_revision,
+        "forge_instructions": build_structured_benchmark_system(
+            _forge_context(schema_context, case["evidence"]), prompt_revision=forge_prompt_revision,
         ),
         "direct_instructions": _direct_system(schema_context, case["evidence"]),
     }
@@ -184,11 +246,24 @@ def context_projection(req: ContextRequest):
 
 @router.post("/evaluate")
 def evaluate_arm(req: EvaluateRequest):
-    suite = _suite()
+    if req.metric_revision != RESULT_COMPARATOR_REVISION:
+        raise HTTPException(status_code=409, detail="Result comparator revision mismatch")
+    from forge.bird_benchmark import verify_case
+    try:
+        verify_case(req.protocol_revision, req.case_id)
+        result = evaluate_candidate(req, _suite())
+        verify_case(req.protocol_revision, req.case_id)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {**result, "protocol_revision": req.protocol_revision}
+
+
+def evaluate_candidate(req: EvaluateRequest, suite: dict[str, Any]):
+    """Shared offline/HTTP compiler → assurance → execution → EX/Contract path."""
     case = _case(suite, req.case_id)
     structure = structure_projection(suite["tables"][case["db_id"]])
     expected_context = build_context_snapshot(case["question"], case["evidence"], structure)
-    if req.context_snapshot.get("content_hash") != expected_context.content_hash:
+    if json.dumps(req.context_snapshot, sort_keys=True) != json.dumps(snapshot_dict(expected_context), sort_keys=True):
         raise HTTPException(status_code=409, detail="ContextSnapshot hash mismatch")
     contract = ResultContract(**req.context_snapshot["result_contract"])
     forge_json: dict[str, Any] | None = None
@@ -301,8 +376,25 @@ def evaluate_arm(req: EvaluateRequest):
             assurance=assurance_report.to_dict(),
         )
 
-    answers = validate_gold_cases(suite)
-    gold_rows = answers[case["case_id"]]["rows"]
+    result_preview = {
+        "columns": preview["columns"],
+        "rows": [[_json_safe(value) for value in row] for row in predicted_rows[:20]],
+        "row_count": len(predicted_rows),
+        "truncated": len(predicted_rows) > 20,
+    }
+    # Gold is scoring-only; execute read-only instead of trusting historical caches.
+    try:
+        gold_rows, _ = execute_result(_database_path(case["db_id"]), str(case["SQL"]))
+    except Exception:
+        return {
+            **_failed_evaluation(
+                req, compile_status=compile_status, execution_status="passed",
+                stage="gold", code="gold_execution_failed", retryable=False,
+                sql=sql, forge_json=forge_json, assurance=assurance_report.to_dict(),
+                scored=False,
+            ),
+            "result": result_preview,
+        }
     official_ea = _compare_results(predicted_rows, gold_rows)
     semantic = semantic_result_compare(gold_rows, predicted_rows, contract)
     if not semantic["correct"]:
@@ -313,8 +405,10 @@ def evaluate_arm(req: EvaluateRequest):
         failure = None
     return {
         "arm": req.arm,
+        "metric_revision": RESULT_COMPARATOR_REVISION,
         "compile_status": compile_status,
         "execution_status": "passed",
+        "scored": True,
         "official_ea": official_ea,
         "contract_accuracy": semantic["correct"],
         "semantic_verdict": semantic["verdict"],
@@ -324,10 +418,5 @@ def evaluate_arm(req: EvaluateRequest):
         "sql": sql,
         "forge_json": forge_json,
         "assurance": assurance_report.to_dict(),
-        "result": {
-            "columns": preview["columns"],
-            "rows": [[_json_safe(value) for value in row] for row in predicted_rows[:20]],
-            "row_count": len(predicted_rows),
-            "truncated": len(predicted_rows) > 20,
-        },
+        "result": result_preview,
     }

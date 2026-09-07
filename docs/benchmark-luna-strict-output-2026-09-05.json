@@ -1,0 +1,191 @@
+{
+  "requirement": "REQ-2026-09-05-038",
+  "date": "2026-09-05",
+  "status": "verified",
+  "purpose": "Native strict function-tool protocol canary, not an accuracy estimate",
+  "model": "openai-codex/gpt-5.6-luna",
+  "run_id": "pbr_b2cd8643a738419892e4b9052bf75db5",
+  "case_id": "md-034",
+  "authorized_generation_requests": 2,
+  "actual_generation_requests": 2,
+  "automatic_retries": 0,
+  "requests": [
+    {
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-04T23:04:29.561Z",
+      "status": 200,
+      "strict": null,
+      "tool_choice": "auto",
+      "parallel_tool_calls": true,
+      "schema_revision": null,
+      "payload_sha256": "sha256:16f7adf7fc06a7b39fec64d5829768324d2319102b292d5c7550a33d048e420f"
+    },
+    {
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-04T23:04:29.563Z",
+      "status": 200,
+      "strict": true,
+      "tool_choice": {
+        "type": "function",
+        "name": "emit_forge_query"
+      },
+      "parallel_tool_calls": false,
+      "schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "payload_sha256": "sha256:82ae834666d2f615da5ca7621513d639682ab0237d9fd8e08ee2f7941a065787"
+    }
+  ],
+  "generation_contract": {
+    "forge_output_mode": "pi_tool_schema",
+    "forge_prompt_revision": "forge-structured-benchmark-v1",
+    "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "provider_json_schema_request": "required",
+    "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+    "direct_output_mode": "text_sql"
+  },
+  "source_sha256": {
+    "services/pi-orchestrator/src/benchmark-runtime.ts": "sha256:7f09fbfc813ff0d8578eb59176f66e428c9b6975a15485c166e14b487c24cb41",
+    "services/pi-orchestrator/src/strict-forge-output.ts": "sha256:33f42cb95d71eb723428ac5de5f210af70c4464dc45b8c05da6ebf2deeb4bac3",
+    "services/pi-orchestrator/src/benchmark-contracts.ts": "sha256:708b93746b9045e12389ced01ae933f7a07d0bcf3c77a9bf60d1891f9145b73b",
+    "forge/schema.json": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723"
+  },
+  "raw_forge_arguments": {
+    "scan": "income",
+    "joins": [
+      {
+        "type": "inner",
+        "table": "member",
+        "on": {
+          "left": "income.link_to_member",
+          "right": "member.member_id"
+        },
+        "filter": null
+      }
+    ],
+    "filter": [
+      {
+        "col": "member.position",
+        "op": "eq",
+        "val": "Vice President",
+        "lo": null,
+        "hi": null,
+        "col2": null
+      }
+    ],
+    "group": null,
+    "agg": [
+      {
+        "fn": "sum",
+        "col": "income.amount",
+        "as": "amount",
+        "filter": null
+      }
+    ],
+    "having": null,
+    "select": [
+      "amount"
+    ],
+    "window": null,
+    "qualify": null,
+    "sort": null,
+    "limit": null,
+    "offset": null,
+    "explain": null,
+    "cte": null,
+    "distinct": null,
+    "union": null,
+    "intersect": null,
+    "except": null
+  },
+  "raw_uncoerced_arguments_validated": true,
+  "forge": {
+    "generation_ms": 7657,
+    "prompt_tokens": 3902,
+    "completion_tokens": 283,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "total_tokens": 4185,
+    "compile_status": "passed",
+    "execution_status": "passed",
+    "official_ea": true,
+    "contract_accuracy": true,
+    "failure": null,
+    "error_code": null,
+    "sql": "SELECT SUM(income.amount) AS amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE member.position = 'Vice President'",
+    "output": {
+      "scan": "income",
+      "joins": [
+        {
+          "type": "inner",
+          "table": "member",
+          "on": {
+            "left": "income.link_to_member",
+            "right": "member.member_id"
+          }
+        }
+      ],
+      "filter": [
+        {
+          "col": "member.position",
+          "op": "eq",
+          "val": "Vice President"
+        }
+      ],
+      "agg": [
+        {
+          "fn": "sum",
+          "col": "income.amount",
+          "as": "amount"
+        }
+      ],
+      "select": [
+        "amount"
+      ]
+    }
+  },
+  "direct": {
+    "generation_ms": 4656.8,
+    "prompt_tokens": 2039,
+    "completion_tokens": 143,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "total_tokens": 2182,
+    "compile_status": "not_applicable",
+    "execution_status": "passed",
+    "official_ea": true,
+    "contract_accuracy": true,
+    "failure": null,
+    "error_code": null,
+    "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+    "output": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President';"
+  },
+  "verification": {
+    "typecheck": "passed",
+    "pi_tests": {
+      "passed": 129,
+      "failed": 0
+    },
+    "real_runtime": "PiBenchmarkRuntime + existing Pi OAuth + isolated resource loader",
+    "pipeline": "Strict raw arguments -> normalized Forge -> Compiler -> Assurance -> read-only SQLite -> existing evaluator",
+    "recursive_and_null_contracts": "Permanent regression covers CTE, recursive_term, subquery, set operation, SQL NULL/default, and false/zero preservation"
+  },
+  "setup_failures": {
+    "generation_requests": 0,
+    "note": "Local probe initially tried to parse the SDK zstd-compressed HTTP body as plain JSON. These attempts were rejected by the local probe before fetch; one intervening probe syntax error also made no request. Failed run evidence retained, not scored or counted as provider retries.",
+    "artifacts": [
+      ".forge/benchmarks/luna-strict-20260905/",
+      ".forge/benchmarks/luna-strict-20260905-live/"
+    ]
+  },
+  "boundaries": [
+    "strict:true is attached to the native function tool, not response_format text JSON.",
+    "Only this Luna/Codex provider was live-verified; Responses and Completions payload shapes have offline protocol coverage.",
+    "Unsupported API families and explicit supportsStrictMode:false fail closed; no prefer fallback.",
+    "Historical prefer or wire/schema/prompt revision mismatch cannot resume.",
+    "A structural schema cannot establish correct aliases, bindings, grouping, or business meaning.",
+    "One selected dev question does not estimate accuracy or rewrite historical benchmark scores.",
+    "The request cap is not a token cap; legacy run temperature=0/max_output_tokens=8192 are not effective settings."
+  ],
+  "artifacts": ".forge/benchmarks/luna-strict-20260905-http/"
+}

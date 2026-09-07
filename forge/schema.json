@@ -174,7 +174,7 @@
   "definitions": {
 
     "ScalarVal": {
-      "description": "A typed scalar, array, date value, or subquery (for IN operator).",
+      "description": "A typed scalar, array, date value, or one-column subquery for IN and scalar comparisons.",
       "oneOf": [
         { "type": "string" },
         { "type": "number" },
@@ -209,7 +209,7 @@
         },
         {
           "type": "object",
-          "description": "Subquery for IN operator. The inner Forge query must return exactly one column.",
+          "description": "One-column subquery for IN or a scalar comparison; scalar comparisons require at most one result row.",
           "required": ["subquery"],
           "additionalProperties": false,
           "properties": {
@@ -281,7 +281,7 @@
             },
             {
               "type": "array",
-              "description": "Multi-condition join (inner/left/right/full only). items are SimpleConditions AND-combined.",
+              "description": "AND-combined SimpleConditions; semi/anti joins compile them inside EXISTS/NOT EXISTS.",
               "items": { "$ref": "#/definitions/SimpleCondition" },
               "minItems": 2
             }
@@ -412,7 +412,7 @@
       "required": ["col", "dir"],
       "additionalProperties": false,
       "properties": {
-        "col": { "type": "string" },
+        "col": { "type": "string", "description": "ColumnRef, output alias, or explicit SQL expression used only for ordering." },
         "dir": { "type": "string", "enum": ["asc", "desc"] }
       }
     },

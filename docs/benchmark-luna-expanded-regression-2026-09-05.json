@@ -1,0 +1,3466 @@
+{
+  "requirement": "REQ-2026-09-05-041",
+  "date": "2026-09-05",
+  "status": "completed_and_all_original_candidates_replayed",
+  "post_generation_semantic_checks": {
+  "read_only_public_result_checks": [
+    {
+      "case_id": "md-241",
+      "question": "What is full name of the racer who ranked 1st in the 3rd qualifying race held in the Marina Bay Street Circuit in 2008?",
+      "evidence": "Ranked 1st in the 3rd qualifying race refer to MIN(q3); 2008 is the year of race; full name of racer = forename, surname",
+      "gold_sql": "SELECT T2.forename, T2.surname FROM qualifying AS T1 INNER JOIN drivers AS T2 on T1.driverId = T2.driverId INNER JOIN races AS T3 ON T1.raceid = T3.raceid WHERE q3 IS NOT NULL AND T3.year = 2008 AND T3.circuitId IN ( SELECT circuitId FROM circuits WHERE name = 'Marina Bay Street Circuit' ) ORDER BY CAST(SUBSTR(q3, 1, INSTR(q3, ':') - 1) AS INTEGER) * 60 + CAST(SUBSTR(q3, INSTR(q3, ':') + 1, INSTR(q3, '.') - INSTR(q3, ':') - 1) AS REAL) + CAST(SUBSTR(q3, INSTR(q3, '.') + 1) AS REAL) / 1000 ASC LIMIT 1",
+      "gold_result": {
+        "row_count": 1,
+        "rows_preview": [
+          [
+            "Felipe",
+            "Massa"
+          ]
+        ]
+      },
+      "arms": {
+        "forge": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              "Felipe Massa"
+            ]
+          ]
+        },
+        "direct": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              "Felipe Massa"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "md-259",
+      "question": "What is the percentage of superheroes who act in their own self-interest or make decisions based on their own moral code? Indicate how many of the said superheroes were published by Marvel Comics.",
+      "evidence": "published by Marvel Comics refers to publisher_name = 'Marvel Comics'; superheroes who act in their own self-interest or make decisions based on their own moral code refers to alignment = 'Bad'; calculation = MULTIPLY(DIVIDE(SUM(alignment = 'Bad); count(id)), 100)",
+      "gold_sql": "SELECT (CAST(COUNT(*) AS REAL) * 100 / (SELECT COUNT(*) FROM superhero)), CAST(SUM(CASE WHEN T2.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS REAL) FROM superhero AS T1 INNER JOIN publisher AS T2 ON T1.publisher_id = T2.id INNER JOIN alignment AS T3 ON T3.id = T1.alignment_id WHERE T3.alignment = 'Bad'",
+      "gold_result": {
+        "row_count": 1,
+        "rows_preview": [
+          [
+            28.266666666666666,
+            118
+          ]
+        ]
+      },
+      "arms": {
+        "forge": {
+          "row_count": 741,
+          "rows_preview": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ]
+          ]
+        },
+        "direct": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              28.49462365591398,
+              118
+            ]
+          ]
+        }
+      },
+      "denominator_check": {
+        "all_superheroes": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              750
+            ]
+          ]
+        },
+        "after_inner_alignment": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              744
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "md-436",
+      "question": "What is the ratio of Hydrogen elements in molecule ID TR006? List the ratio with its label.",
+      "evidence": "hydrogen refers to element = 'h'; ratio = DIVIDE(SUM(element = 'h'), count(element)) where molecule_id = 'TR006' ; label = '+' mean molecules are carcinogenic; label = '-' means molecules are non-carcinogenic",
+      "gold_sql": "WITH SubQuery AS (SELECT DISTINCT T1.atom_id, T1.element, T1.molecule_id, T2.label FROM atom AS T1 INNER JOIN molecule AS T2 ON T1.molecule_id = T2.molecule_id WHERE T2.molecule_id = 'TR006') SELECT CAST(COUNT(CASE WHEN element = 'h' THEN atom_id ELSE NULL END) AS REAL) / (CASE WHEN COUNT(atom_id) = 0 THEN NULL ELSE COUNT(atom_id) END) AS ratio, label FROM SubQuery GROUP BY label",
+      "gold_result": {
+        "row_count": 1,
+        "rows_preview": [
+          [
+            0.3617021276595745,
+            "+"
+          ]
+        ]
+      },
+      "arms": {
+        "forge": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              "TR006",
+              "+"
+            ]
+          ]
+        },
+        "direct": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              0.3617021276595745,
+              "+"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "md-454",
+      "question": "List the names of virtual schools that are among the top 5 in their respective counties based on average reading scores.",
+      "evidence": "Exclusively virtual refers to Virtual = 'F'; respective counties means PARTITION BY County",
+      "gold_sql": "SELECT School FROM (SELECT T2.School,T1.AvgScrRead, RANK() OVER (PARTITION BY T2.County ORDER BY T1.AvgScrRead DESC) AS rnk FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Virtual = 'F' ) ranked_schools WHERE rnk <= 5",
+      "gold_result": {
+        "row_count": 34,
+        "rows_preview": [
+          [
+            "Dunlap Leadership Academy"
+          ],
+          [
+            "Academy of Arts and Sciences: Fresno"
+          ],
+          [
+            "Insight School of California"
+          ],
+          [
+            "California Virtual Academy @ Kings"
+          ],
+          [
+            "National University Academy, Armona"
+          ]
+        ]
+      },
+      "arms": {
+        "forge": {
+          "row_count": 34,
+          "rows_preview": [
+            [
+              "Academy of Arts and Sciences: Fresno"
+            ],
+            [
+              "Dunlap Leadership Academy"
+            ],
+            [
+              "Insight School of California"
+            ],
+            [
+              "California Virtual Academy @ Kings"
+            ],
+            [
+              "National University Academy, Armona"
+            ]
+          ]
+        },
+        "direct": {
+          "row_count": 34,
+          "rows_preview": [
+            [
+              "Dunlap Leadership Academy"
+            ],
+            [
+              "Academy of Arts and Sciences: Fresno"
+            ],
+            [
+              "Insight School of California"
+            ],
+            [
+              "California Virtual Academy @ Kings"
+            ],
+            [
+              "National University Academy, Armona"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "md-483",
+      "question": "Between 1/1/1995 and 12/31/1997, how many loans in the amount of at least 250,000 per account that chose monthly statement issuance were approved?",
+      "evidence": "Frequency = 'POPLATEK MESICNE' stands for monthly issurance",
+      "gold_sql": "SELECT COUNT(T1.account_id) FROM account AS T1 INNER JOIN loan AS T2 ON T1.account_id = T2.account_id WHERE T2.date BETWEEN '1995-01-01' AND '1997-12-31' AND T1.frequency = 'POPLATEK MESICNE' AND T2.amount >= 250000",
+      "gold_result": {
+        "row_count": 1,
+        "rows_preview": [
+          [
+            65
+          ]
+        ]
+      },
+      "arms": {
+        "forge": {
+          "row_count": 1,
+          "rows_preview": [
+            [
+              0
+            ]
+          ]
+        },
+        "direct": {
+          "row_count": 0,
+          "rows_preview": []
+        }
+      },
+      "stored_date_examples": {
+        "row_count": 5,
+        "rows_preview": [
+          [
+            "1993-07-05"
+          ],
+          [
+            "1993-07-11"
+          ],
+          [
+            "1993-07-28"
+          ],
+          [
+            "1993-08-03"
+          ],
+          [
+            "1993-09-06"
+          ]
+        ]
+      }
+    }
+  ],
+  "synthetic_top5_counterexample": {
+    "case_id": "md-454",
+    "source": "isolated synthetic six-school single-county data, unique descending scores; no public DB mutation",
+    "forge_row_count": 6,
+    "reference_top5_row_count": 5,
+    "extra_rows": [
+      [
+        "school-5"
+      ]
+    ],
+    "finding": "Missing top-five predicate is a semantic defect despite Official EA passing on current public data. Contract failure on public data is order-related, not proof it detected this missing predicate."
+  },
+  "new_generation_requests": 0,
+  "gold_modified": false
+},
+  "case_observations": [
+  {
+    "case_id": "md-436",
+    "finding": "Forge declares aggregate counts but final projection returns molecule ID plus label, not requested ratio plus label; Direct returns reference ratio.",
+    "classification": "missing_required_result_expression"
+  },
+  {
+    "case_id": "md-259",
+    "finding": "Forge returns 741 IDs rather than percentage/count. Direct percentage denominator is 744 after INNER JOIN alignment, versus all 750 superheroes in reference; Marvel count 118 matches.",
+    "classification": "projection_and_population_scope"
+  },
+  {
+    "case_id": "md-483",
+    "finding": "Both arms use YYMMDD literals against ISO date values in loan.date: Forge returns 0 versus reference 65, Direct returns zero rows and also groups by account. Frozen loan.date has no format annotation; YYMMDD annotations exist on other date fields, but their causal influence is unproven.",
+    "classification": "field_specific_date_binding_and_grain"
+  },
+  {
+    "case_id": "md-241",
+    "finding": "Both return Felipe Massa in one column; Evidence defines full name as forename, surname and Gold returns two columns. Retain original column-count failures; racer identity itself matches.",
+    "classification": "output_column_contract"
+  },
+  {
+    "case_id": "md-454",
+    "finding": "Forge omits the Top-5 predicate yet Official EA passes on the current 34-row result set. Synthetic six-school single-county counterexample returns six rather than five. Existing Contract failure is due to result order, not proof of detecting the missing predicate.",
+    "classification": "semantic_false_positive_under_current_data"
+  }
+],
+  "experiment_card": {
+    "requirement": "REQ-2026-09-05-041",
+    "user_request": "嗯，那就测试下当前优化的结果吧",
+    "user_authorization": "10题，20次请求",
+    "status": "frozen_before_generation",
+    "model": "openai-codex/gpt-5.6-luna",
+    "max_generation_requests": 20,
+    "retries": 0,
+    "replacement_requests": 0,
+    "conditions": [
+      "treatment"
+    ],
+    "seed": "REQ-2026-09-05-041:cross-db-regression-v1",
+    "selection_algorithm": "Sort distinct db_id by SHA256(seed + :db: + db_id), choose first ten; within each choose minimum SHA256(seed + :case: + case_id), excluding five recent development cases. No outcome/Gold-based selection.",
+    "excluded_case_ids": [
+      "md-065",
+      "md-034",
+      "md-046",
+      "md-052",
+      "md-077"
+    ],
+    "cases": [
+      {
+        "case_id": "md-085",
+        "db_id": "thrombosis_prediction",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-241",
+        "db_id": "formula_1",
+        "difficulty": "challenging"
+      },
+      {
+        "case_id": "md-454",
+        "db_id": "california_schools",
+        "difficulty": "simple"
+      },
+      {
+        "case_id": "md-436",
+        "db_id": "toxicology",
+        "difficulty": "challenging"
+      },
+      {
+        "case_id": "md-312",
+        "db_id": "codebase_community",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-259",
+        "db_id": "superhero",
+        "difficulty": "challenging"
+      },
+      {
+        "case_id": "md-483",
+        "db_id": "financial",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-040",
+        "db_id": "student_club",
+        "difficulty": "simple"
+      },
+      {
+        "case_id": "md-168",
+        "db_id": "european_football_2",
+        "difficulty": "simple"
+      },
+      {
+        "case_id": "md-386",
+        "db_id": "card_games",
+        "difficulty": "challenging"
+      }
+    ],
+    "source_cases_sha256": "4ba5fa8de55856222f484d380d2ba872b380bf79d825de70478e2120cb0fc43b",
+    "limitations": [
+      "Exposed R500 regression slice; not independent holdout or population accuracy estimate.",
+      "No pre-optimization same-model control; cannot estimate causal optimization gain.",
+      "Preserve original Gold, comparator and every selected case; no result-dependent replacement."
+    ]
+  },
+  "model": "openai-codex/gpt-5.6-luna",
+  "model_revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+  "generation_contract": {
+    "forge_output_mode": "pi_tool_schema",
+    "forge_prompt_revision": "forge-structured-benchmark-v1",
+    "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "provider_json_schema_request": "required",
+    "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+    "direct_output_mode": "text_sql"
+  },
+  "metric_revision": "semantic-result-compare-v2",
+  "actual_generation_requests": 20,
+  "provider_http_200_requests": 20,
+  "automatic_provider_retries": 0,
+  "replacement_requests": 0,
+  "metrics": {
+    "forge": {
+      "cases": 10,
+      "official_ea": 6,
+      "contract_accuracy": 5,
+      "contract_unknown": 0,
+      "execution_passed": 10,
+      "compile_passed": 10,
+      "total_tokens": 51077,
+      "input_tokens": 45821,
+      "output_tokens": 5256,
+      "cache_read_tokens": 0,
+      "average_generation_ms": 11802.499999999998,
+      "p95_generation_ms": 21024.7
+    },
+    "direct": {
+      "cases": 10,
+      "official_ea": 7,
+      "contract_accuracy": 7,
+      "contract_unknown": 0,
+      "execution_passed": 10,
+      "compile_passed": null,
+      "total_tokens": 29953,
+      "input_tokens": 27191,
+      "output_tokens": 2762,
+      "cache_read_tokens": 0,
+      "average_generation_ms": 7114.589999999999,
+      "p95_generation_ms": 13856.9
+    }
+  },
+  "paired": [
+    {
+      "case_id": "md-085",
+      "forge": true,
+      "direct": true
+    },
+    {
+      "case_id": "md-241",
+      "forge": false,
+      "direct": false
+    },
+    {
+      "case_id": "md-454",
+      "forge": true,
+      "direct": true
+    },
+    {
+      "case_id": "md-436",
+      "forge": false,
+      "direct": true
+    },
+    {
+      "case_id": "md-312",
+      "forge": true,
+      "direct": true
+    },
+    {
+      "case_id": "md-259",
+      "forge": false,
+      "direct": false
+    },
+    {
+      "case_id": "md-483",
+      "forge": false,
+      "direct": false
+    },
+    {
+      "case_id": "md-040",
+      "forge": true,
+      "direct": true
+    },
+    {
+      "case_id": "md-168",
+      "forge": true,
+      "direct": true
+    },
+    {
+      "case_id": "md-386",
+      "forge": true,
+      "direct": true
+    }
+  ],
+  "token_cost": {
+    "total": 81030,
+    "forge_direct_ratio": 1.7052382065235536,
+    "currency": null
+  },
+  "requests": [
+    {
+      "condition": "treatment",
+      "case_id": "md-085",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:24:50.235Z",
+      "payload_sha256": "87e8add8177329eacf52088f41f8e9d568f731386b9637a2e17adcabcbf4b651",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-085",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:24:50.236Z",
+      "payload_sha256": "33dd112e643345ad53ac558171ece30386cf7bf25d4ab47a13b6b2d59c12da2a",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-241",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:24:58.964Z",
+      "payload_sha256": "6d9f78b93b08ee86ec5a88564f7febf653cb1b360e33042cea496ea23396656c",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-241",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:24:58.966Z",
+      "payload_sha256": "911cefc32279424c03f18f4f75c65c19732b0554e518efd5cf995d0d574c781b",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-454",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:25:14.053Z",
+      "payload_sha256": "710ebff4752b96437e42b98e2661af7081b0accc9b3470b9c578a21000afd587",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-454",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:25:14.056Z",
+      "payload_sha256": "4eb228b0ace9adcec7a5698a2b8d922406298b69ad90b4a1e32ff118bc9c7997",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-436",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:25:35.268Z",
+      "payload_sha256": "ef13d6456b7890f48ea0a570578a0cc5d0321fac7d82e86d3de22b303b2f7b72",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-436",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:25:35.269Z",
+      "payload_sha256": "655ae8de01e70efbcc7635f56df18251ca3e1aa45b81a743b3579e4384fdb44f",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-312",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:25:56.882Z",
+      "payload_sha256": "b74fe0a60679c6a522c23ea31d73135f809028b30c3ab729f869c2dfb1782416",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-312",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:25:56.883Z",
+      "payload_sha256": "3378a73afe9d0d04b220a2ac85a09b782238575f78acff34a9058dd677d1ad4c",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-259",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:03.145Z",
+      "payload_sha256": "dc04eb3349a23cfa65622edac00419823c36b420eb886853647a944b5a0077af",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-259",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:03.146Z",
+      "payload_sha256": "db405f5fb523dfd85c31c512a75c3380517d1902ddb2564226fb54f64a5957e9",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-483",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:22.668Z",
+      "payload_sha256": "be28fd93242bdf11be122b3769d5f16c5e923d55089325b37b867e78d75befd0",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-483",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:22.669Z",
+      "payload_sha256": "c998b73f8dcf5e615672969390b5d308cd7228ed2da42acc50f0c10697099758",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-040",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:33.827Z",
+      "payload_sha256": "46362e24a67a764e4200869c2d2aeaf184aea4b342bb33e0c4e3a4e071d44d43",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-040",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:33.829Z",
+      "payload_sha256": "ea0d58f833ffbfa81e2536c2d10d02fa70ea7fbb24a2f2f508bc072bba00e93b",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-168",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:39.482Z",
+      "payload_sha256": "49eceeafccb3dac981229c386959e613021972cc6a105a97d0a3db4704700ff9",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-168",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:39.484Z",
+      "payload_sha256": "5e3a62ed2017b5786903fd77ed4209013c1c0f02282f51c00b59475d64a3f928",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-386",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:47.619Z",
+      "payload_sha256": "288cac61ec1535cce70f9818e0c1bd1185d92743d659fbaf9db64f7cd4079360",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-386",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:26:47.620Z",
+      "payload_sha256": "31d9c59c6982434f8855052260e8c22cd1472d4e5dd148bd4ae0b128d5ae23ef",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    }
+  ],
+  "outcomes": [
+    {
+      "case_id": "md-085",
+      "db_id": "thrombosis_prediction",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_9d210978fa4247d3a49ed0d161952799",
+      "candidate": {
+        "scan": "Patient",
+        "filter": [
+          {
+            "col": "\"SEX\"",
+            "op": "eq",
+            "val": "F"
+          },
+          {
+            "col": "strftime('%Y', \"Description\")",
+            "op": "eq",
+            "val": "1997"
+          },
+          {
+            "col": "\"Admission\"",
+            "op": "eq",
+            "val": "-"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "count"
+          }
+        ],
+        "select": [
+          {
+            "expr": "COUNT(*)",
+            "as": "count"
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) AS count\nFROM Patient\nWHERE \"SEX\" = 'F' AND strftime('%Y', \"Description\") = '1997' AND \"Admission\" = '-'",
+        "forge_json": {
+          "scan": "Patient",
+          "filter": [
+            {
+              "col": "\"SEX\"",
+              "op": "eq",
+              "val": "F"
+            },
+            {
+              "col": "strftime('%Y', \"Description\")",
+              "op": "eq",
+              "val": "1997"
+            },
+            {
+              "col": "\"Admission\"",
+              "op": "eq",
+              "val": "-"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "count"
+            }
+          ],
+          "select": [
+            {
+              "expr": "COUNT(*)",
+              "as": "count"
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) AS count\nFROM Patient\nWHERE \"SEX\" = 'F' AND strftime('%Y', \"Description\") = '1997' AND \"Admission\" = '-'",
+          "sql_hash": "sha256:a51fc5f2734f7014cf00f6e452a5f08bc00d5d4326a4961b416b4af9484f9b9b",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "count"
+          ],
+          "rows": [
+            [
+              161
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3921,
+        "output": 331,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4252
+      },
+      "generation_ms": 8359.1
+    },
+    {
+      "case_id": "md-085",
+      "db_id": "thrombosis_prediction",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_9d210978fa4247d3a49ed0d161952799",
+      "candidate": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c0490fd8b1e9ef3fc41cd039af0d9ac45e303e39feb94cb7e8ebfe8f6d4d237",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+          "sql_hash": "sha256:22db484fc857ae79dcde5fed9f6986779bdb9c0c1063296744fc7d397bd9925f",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "COUNT(*)"
+          ],
+          "rows": [
+            [
+              161
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2058,
+        "output": 115,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2173
+      },
+      "generation_ms": 3652.6
+    },
+    {
+      "case_id": "md-241",
+      "db_id": "formula_1",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_fe7fd409cf49445a948d2012456e50ee",
+      "candidate": {
+        "scan": "qualifying AS q",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "races AS r",
+            "on": {
+              "left": "q.raceId",
+              "right": "r.raceId"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "circuits AS c",
+            "on": {
+              "left": "r.circuitId",
+              "right": "c.circuitId"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "drivers AS d",
+            "on": {
+              "left": "q.driverId",
+              "right": "d.driverId"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "r.year",
+            "op": "eq",
+            "val": 2008
+          },
+          {
+            "col": "c.name",
+            "op": "eq",
+            "val": "Marina Bay Street Circuit"
+          },
+          {
+            "col": "q.q3",
+            "op": "is_not_null",
+            "val": null
+          }
+        ],
+        "select": [
+          {
+            "expr": "d.forename || ' ' || d.surname",
+            "as": "full_name"
+          }
+        ],
+        "sort": [
+          {
+            "col": "q.q3",
+            "dir": "asc"
+          }
+        ],
+        "limit": 1
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "column_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_column_count_mismatch",
+        "sql": "SELECT d.forename || ' ' || d.surname AS full_name\nFROM qualifying AS q\nINNER JOIN races AS r ON q.raceId = r.raceId\nINNER JOIN circuits AS c ON r.circuitId = c.circuitId\nINNER JOIN drivers AS d ON q.driverId = d.driverId\nWHERE r.year = 2008 AND c.name = 'Marina Bay Street Circuit' AND q.q3 IS NOT NULL\nORDER BY q.q3 ASC\nLIMIT 1",
+        "forge_json": {
+          "scan": "qualifying AS q",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "races AS r",
+              "on": {
+                "left": "q.raceId",
+                "right": "r.raceId"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "circuits AS c",
+              "on": {
+                "left": "r.circuitId",
+                "right": "c.circuitId"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "drivers AS d",
+              "on": {
+                "left": "q.driverId",
+                "right": "d.driverId"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "r.year",
+              "op": "eq",
+              "val": 2008
+            },
+            {
+              "col": "c.name",
+              "op": "eq",
+              "val": "Marina Bay Street Circuit"
+            },
+            {
+              "col": "q.q3",
+              "op": "is_not_null",
+              "val": null
+            }
+          ],
+          "select": [
+            {
+              "expr": "d.forename || ' ' || d.surname",
+              "as": "full_name"
+            }
+          ],
+          "sort": [
+            {
+              "col": "q.q3",
+              "dir": "asc"
+            }
+          ],
+          "limit": 1
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5e9df9642d9d574e79e0cc0ff06b8cd8e44e61bdcd1729e4a7b9353e1b8027d4",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5e9df9642d9d574e79e0cc0ff06b8cd8e44e61bdcd1729e4a7b9353e1b8027d4",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT d.forename || ' ' || d.surname AS full_name\nFROM qualifying AS q\nINNER JOIN races AS r ON q.raceId = r.raceId\nINNER JOIN circuits AS c ON r.circuitId = c.circuitId\nINNER JOIN drivers AS d ON q.driverId = d.driverId\nWHERE r.year = 2008 AND c.name = 'Marina Bay Street Circuit' AND q.q3 IS NOT NULL\nORDER BY q.q3 ASC\nLIMIT 1",
+          "sql_hash": "sha256:36ba3ddaf21f19242c2445cab0e3b74d77f47aee8e1c8ce4150fb7b8470ce070",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "full_name"
+          ],
+          "rows": [
+            [
+              "Felipe Massa"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4994,
+        "output": 687,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 5681
+      },
+      "generation_ms": 14724.9
+    },
+    {
+      "case_id": "md-241",
+      "db_id": "formula_1",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_fe7fd409cf49445a948d2012456e50ee",
+      "candidate": "SELECT d.forename || ' ' || d.surname\nFROM qualifying AS q\nJOIN races AS r ON q.raceId = r.raceId\nJOIN circuits AS c ON r.circuitId = c.circuitId\nJOIN drivers AS d ON q.driverId = d.driverId\nWHERE r.year = 2008\n  AND c.name = 'Marina Bay Street Circuit'\n  AND q.q3 = (\n    SELECT MIN(q2.q3)\n    FROM qualifying AS q2\n    WHERE q2.raceId = q.raceId\n  );",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "column_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_column_count_mismatch",
+        "sql": "SELECT d.forename || ' ' || d.surname\nFROM qualifying AS q\nJOIN races AS r ON q.raceId = r.raceId\nJOIN circuits AS c ON r.circuitId = c.circuitId\nJOIN drivers AS d ON q.driverId = d.driverId\nWHERE r.year = 2008\n  AND c.name = 'Marina Bay Street Circuit'\n  AND q.q3 = (\n    SELECT MIN(q2.q3)\n    FROM qualifying AS q2\n    WHERE q2.raceId = q.raceId\n  )",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5e9df9642d9d574e79e0cc0ff06b8cd8e44e61bdcd1729e4a7b9353e1b8027d4",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5e9df9642d9d574e79e0cc0ff06b8cd8e44e61bdcd1729e4a7b9353e1b8027d4",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT d.forename || ' ' || d.surname\nFROM qualifying AS q\nJOIN races AS r ON q.raceId = r.raceId\nJOIN circuits AS c ON r.circuitId = c.circuitId\nJOIN drivers AS d ON q.driverId = d.driverId\nWHERE r.year = 2008\n  AND c.name = 'Marina Bay Street Circuit'\n  AND q.q3 = (\n    SELECT MIN(q2.q3)\n    FROM qualifying AS q2\n    WHERE q2.raceId = q.raceId\n  )",
+          "sql_hash": "sha256:56b070bccd2da89ada55eda5544d9b85acc83495b51d3e1e9cdabc7c276a17ff",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "d.forename || ' ' || d.surname"
+          ],
+          "rows": [
+            [
+              "Felipe Massa"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3131,
+        "output": 459,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3590
+      },
+      "generation_ms": 10887.8
+    },
+    {
+      "case_id": "md-454",
+      "db_id": "california_schools",
+      "difficulty": "simple",
+      "arm": "forge",
+      "run_id": "pbr_2b1873f52b814b23958cc110a5d4524e",
+      "candidate": {
+        "scan": "ranked_virtual_schools",
+        "select": [
+          "School"
+        ],
+        "sort": [
+          {
+            "col": "County",
+            "dir": "asc"
+          },
+          {
+            "col": "AvgScrRead",
+            "dir": "desc"
+          },
+          {
+            "col": "School",
+            "dir": "asc"
+          }
+        ],
+        "cte": [
+          {
+            "name": "ranked_virtual_schools",
+            "query": {
+              "scan": "schools",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "satscores",
+                  "on": {
+                    "left": "schools.CDSCode",
+                    "right": "satscores.cds"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "schools.Virtual",
+                  "op": "eq",
+                  "val": "F"
+                }
+              ],
+              "select": [
+                "schools.School",
+                "schools.County",
+                "satscores.AvgScrRead"
+              ],
+              "window": [
+                {
+                  "fn": "rank",
+                  "partition": [
+                    "schools.County"
+                  ],
+                  "order": [
+                    {
+                      "col": "satscores.AvgScrRead",
+                      "dir": "desc"
+                    }
+                  ],
+                  "as": "reading_rank"
+                }
+              ]
+            },
+            "recursive": false
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_order_or_value_mismatch",
+        "column_mapping": [
+          0
+        ],
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_order_or_value_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_order_or_value_mismatch",
+        "sql": "WITH ranked_virtual_schools AS (\n  SELECT schools.School, schools.County, satscores.AvgScrRead\n  FROM schools\n  INNER JOIN satscores ON schools.CDSCode = satscores.cds\n  WHERE schools.Virtual = 'F'\n)\nSELECT School\nFROM ranked_virtual_schools\nORDER BY County ASC, AvgScrRead DESC, School ASC",
+        "forge_json": {
+          "scan": "ranked_virtual_schools",
+          "select": [
+            "School"
+          ],
+          "sort": [
+            {
+              "col": "County",
+              "dir": "asc"
+            },
+            {
+              "col": "AvgScrRead",
+              "dir": "desc"
+            },
+            {
+              "col": "School",
+              "dir": "asc"
+            }
+          ],
+          "cte": [
+            {
+              "name": "ranked_virtual_schools",
+              "query": {
+                "scan": "schools",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "satscores",
+                    "on": {
+                      "left": "schools.CDSCode",
+                      "right": "satscores.cds"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "schools.Virtual",
+                    "op": "eq",
+                    "val": "F"
+                  }
+                ],
+                "select": [
+                  "schools.School",
+                  "schools.County",
+                  "satscores.AvgScrRead"
+                ],
+                "window": [
+                  {
+                    "fn": "rank",
+                    "partition": [
+                      "schools.County"
+                    ],
+                    "order": [
+                      {
+                        "col": "satscores.AvgScrRead",
+                        "dir": "desc"
+                      }
+                    ],
+                    "as": "reading_rank"
+                  }
+                ]
+              },
+              "recursive": false
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:1d7212e0a6bd57421e96327b2a1c6927d7448149aae4d80020aca195cef85897",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:1d7212e0a6bd57421e96327b2a1c6927d7448149aae4d80020aca195cef85897",
+              "diagnostics": []
+            }
+          ],
+          "sql": "WITH ranked_virtual_schools AS (\n  SELECT schools.School, schools.County, satscores.AvgScrRead\n  FROM schools\n  INNER JOIN satscores ON schools.CDSCode = satscores.cds\n  WHERE schools.Virtual = 'F'\n)\nSELECT School\nFROM ranked_virtual_schools\nORDER BY County ASC, AvgScrRead DESC, School ASC",
+          "sql_hash": "sha256:12eecff3694224e01b1a20b1628aa39b0656029e0eb82f8df63641831259e401",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "School"
+          ],
+          "rows": [
+            [
+              "Academy of Arts and Sciences: Fresno"
+            ],
+            [
+              "Dunlap Leadership Academy"
+            ],
+            [
+              "Insight School of California"
+            ],
+            [
+              "California Virtual Academy @ Kings"
+            ],
+            [
+              "National University Academy, Armona"
+            ],
+            [
+              "California Virtual Academy @ Los Angeles"
+            ],
+            [
+              "Insight @ Los Angeles"
+            ],
+            [
+              "Academy of Arts and Sciences: Los Angeles (9-12)"
+            ],
+            [
+              "Desert Sands Charter"
+            ],
+            [
+              "Los Angeles County Online High"
+            ],
+            [
+              "SIATech Academy South"
+            ],
+            [
+              "iQ Academy California-Los Angeles"
+            ],
+            [
+              "Capistrano Connections Academy"
+            ],
+            [
+              "California Preparatory Academy"
+            ],
+            [
+              "Rivercrest Preparatory"
+            ],
+            [
+              "Riverside Virtual"
+            ],
+            [
+              "Southern California Online Academy"
+            ],
+            [
+              "Academy of Arts and Sciences"
+            ],
+            [
+              "Oasis High (Alternative)"
+            ],
+            [
+              "RAI Online Charter"
+            ]
+          ],
+          "row_count": 34,
+          "truncated": true
+        }
+      },
+      "tokens": {
+        "input": 5621,
+        "output": 1076,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 6697
+      },
+      "generation_ms": 21024.7
+    },
+    {
+      "case_id": "md-454",
+      "db_id": "california_schools",
+      "difficulty": "simple",
+      "arm": "direct",
+      "run_id": "pbr_2b1873f52b814b23958cc110a5d4524e",
+      "candidate": "SELECT School\nFROM (\n    SELECT s.School,\n           RANK() OVER (\n               PARTITION BY s.County\n               ORDER BY ss.AvgScrRead DESC\n           ) AS county_rank\n    FROM schools AS s\n    JOIN satscores AS ss ON s.CDSCode = ss.cds\n    WHERE s.Virtual = 'F'\n)\nWHERE county_rank <= 5;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "ordered_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT School\nFROM (\n    SELECT s.School,\n           RANK() OVER (\n               PARTITION BY s.County\n               ORDER BY ss.AvgScrRead DESC\n           ) AS county_rank\n    FROM schools AS s\n    JOIN satscores AS ss ON s.CDSCode = ss.cds\n    WHERE s.Virtual = 'F'\n)\nWHERE county_rank <= 5",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:1d7212e0a6bd57421e96327b2a1c6927d7448149aae4d80020aca195cef85897",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:1d7212e0a6bd57421e96327b2a1c6927d7448149aae4d80020aca195cef85897",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT School\nFROM (\n    SELECT s.School,\n           RANK() OVER (\n               PARTITION BY s.County\n               ORDER BY ss.AvgScrRead DESC\n           ) AS county_rank\n    FROM schools AS s\n    JOIN satscores AS ss ON s.CDSCode = ss.cds\n    WHERE s.Virtual = 'F'\n)\nWHERE county_rank <= 5",
+          "sql_hash": "sha256:473f10f485e30032acebeffab19ff11c40610ca0e4ae5a2bc1369cf747fb3031",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "School"
+          ],
+          "rows": [
+            [
+              "Dunlap Leadership Academy"
+            ],
+            [
+              "Academy of Arts and Sciences: Fresno"
+            ],
+            [
+              "Insight School of California"
+            ],
+            [
+              "California Virtual Academy @ Kings"
+            ],
+            [
+              "National University Academy, Armona"
+            ],
+            [
+              "California Virtual Academy @ Los Angeles"
+            ],
+            [
+              "Insight @ Los Angeles"
+            ],
+            [
+              "Los Angeles County Online High"
+            ],
+            [
+              "Desert Sands Charter"
+            ],
+            [
+              "iQ Academy California-Los Angeles"
+            ],
+            [
+              "Academy of Arts and Sciences: Los Angeles (9-12)"
+            ],
+            [
+              "SIATech Academy South"
+            ],
+            [
+              "Capistrano Connections Academy"
+            ],
+            [
+              "California Preparatory Academy"
+            ],
+            [
+              "Rivercrest Preparatory"
+            ],
+            [
+              "Riverside Virtual"
+            ],
+            [
+              "Southern California Online Academy"
+            ],
+            [
+              "Oasis High (Alternative)"
+            ],
+            [
+              "San Diego Virtual"
+            ],
+            [
+              "Academy of Arts and Sciences"
+            ]
+          ],
+          "row_count": 34,
+          "truncated": true
+        }
+      },
+      "tokens": {
+        "input": 3758,
+        "output": 601,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4359
+      },
+      "generation_ms": 13856.9
+    },
+    {
+      "case_id": "md-436",
+      "db_id": "toxicology",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_6b6abc8a51864a109dd416b0f1694f65",
+      "candidate": {
+        "scan": "atom",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "molecule",
+            "on": {
+              "left": "atom.molecule_id",
+              "right": "molecule.molecule_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "atom.molecule_id",
+            "op": "eq",
+            "val": "TR006"
+          }
+        ],
+        "group": [
+          "atom.molecule_id",
+          "molecule.label"
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END",
+            "as": "hydrogen_count"
+          },
+          {
+            "fn": "count",
+            "col": "atom.element",
+            "as": "element_count"
+          }
+        ],
+        "select": [
+          "atom.molecule_id",
+          "molecule.label"
+        ],
+        "cte": [
+          {
+            "name": "molecule_ratio",
+            "query": {
+              "scan": "atom",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "molecule",
+                  "on": {
+                    "left": "atom.molecule_id",
+                    "right": "molecule.molecule_id"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "atom.molecule_id",
+                  "op": "eq",
+                  "val": "TR006"
+                }
+              ],
+              "group": [
+                "atom.molecule_id",
+                "molecule.label"
+              ],
+              "agg": [
+                {
+                  "fn": "sum",
+                  "col": "CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END",
+                  "as": "hydrogen_count"
+                },
+                {
+                  "fn": "count",
+                  "col": "atom.element",
+                  "as": "element_count"
+                }
+              ],
+              "select": [
+                "atom.molecule_id",
+                "molecule.label"
+              ]
+            }
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "value_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_value_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_value_mismatch",
+        "sql": "WITH molecule_ratio AS (\n  SELECT atom.molecule_id, molecule.label\n  FROM atom\n  INNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\n  WHERE atom.molecule_id = 'TR006'\n  GROUP BY atom.molecule_id, molecule.label\n)\nSELECT atom.molecule_id, molecule.label\nFROM atom\nINNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\nWHERE atom.molecule_id = 'TR006'\nGROUP BY atom.molecule_id, molecule.label",
+        "forge_json": {
+          "scan": "atom",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "molecule",
+              "on": {
+                "left": "atom.molecule_id",
+                "right": "molecule.molecule_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "atom.molecule_id",
+              "op": "eq",
+              "val": "TR006"
+            }
+          ],
+          "group": [
+            "atom.molecule_id",
+            "molecule.label"
+          ],
+          "agg": [
+            {
+              "fn": "sum",
+              "col": "CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END",
+              "as": "hydrogen_count"
+            },
+            {
+              "fn": "count",
+              "col": "atom.element",
+              "as": "element_count"
+            }
+          ],
+          "select": [
+            "atom.molecule_id",
+            "molecule.label"
+          ],
+          "cte": [
+            {
+              "name": "molecule_ratio",
+              "query": {
+                "scan": "atom",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "molecule",
+                    "on": {
+                      "left": "atom.molecule_id",
+                      "right": "molecule.molecule_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "atom.molecule_id",
+                    "op": "eq",
+                    "val": "TR006"
+                  }
+                ],
+                "group": [
+                  "atom.molecule_id",
+                  "molecule.label"
+                ],
+                "agg": [
+                  {
+                    "fn": "sum",
+                    "col": "CASE WHEN atom.element = 'h' THEN 1 ELSE 0 END",
+                    "as": "hydrogen_count"
+                  },
+                  {
+                    "fn": "count",
+                    "col": "atom.element",
+                    "as": "element_count"
+                  }
+                ],
+                "select": [
+                  "atom.molecule_id",
+                  "molecule.label"
+                ]
+              }
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+              "diagnostics": []
+            }
+          ],
+          "sql": "WITH molecule_ratio AS (\n  SELECT atom.molecule_id, molecule.label\n  FROM atom\n  INNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\n  WHERE atom.molecule_id = 'TR006'\n  GROUP BY atom.molecule_id, molecule.label\n)\nSELECT atom.molecule_id, molecule.label\nFROM atom\nINNER JOIN molecule ON atom.molecule_id = molecule.molecule_id\nWHERE atom.molecule_id = 'TR006'\nGROUP BY atom.molecule_id, molecule.label",
+          "sql_hash": "sha256:ccc576a94c27c20a137fdd70fe2ce507c6c11a011653f1ef9a659d53e7755b07",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "molecule_id",
+            "label"
+          ],
+          "rows": [
+            [
+              "TR006",
+              "+"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3016,
+        "output": 815,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3831
+      },
+      "generation_ms": 17577.3
+    },
+    {
+      "case_id": "md-436",
+      "db_id": "toxicology",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_6b6abc8a51864a109dd416b0f1694f65",
+      "candidate": "SELECT CAST(SUM(a.element = 'h') AS REAL) / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0,
+          1
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT CAST(SUM(a.element = 'h') AS REAL) / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:c1b3e32b024352d79b0be34abb8d5b17acced211d5bacf96ca65172e07295e2e",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT CAST(SUM(a.element = 'h') AS REAL) / COUNT(a.element) AS ratio, m.label\nFROM atom AS a\nJOIN molecule AS m ON a.molecule_id = m.molecule_id\nWHERE a.molecule_id = 'TR006'\nGROUP BY m.label",
+          "sql_hash": "sha256:c07fa927de02a064d19f3cd4e19ff5fcf80868cd7ae418ed82b3c4520897d5ef",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ratio",
+            "label"
+          ],
+          "rows": [
+            [
+              0.3617021276595745,
+              "+"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 1153,
+        "output": 314,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1467
+      },
+      "generation_ms": 7496
+    },
+    {
+      "case_id": "md-312",
+      "db_id": "codebase_community",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_7749a8fc39d841339b548f1e6dd15273",
+      "candidate": {
+        "scan": "posts",
+        "filter": [
+          {
+            "col": "posts.Title",
+            "op": "eq",
+            "val": "Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer"
+          }
+        ],
+        "select": [
+          "posts.ViewCount"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT posts.ViewCount\nFROM posts\nWHERE posts.Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+        "forge_json": {
+          "scan": "posts",
+          "filter": [
+            {
+              "col": "posts.Title",
+              "op": "eq",
+              "val": "Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer"
+            }
+          ],
+          "select": [
+            "posts.ViewCount"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT posts.ViewCount\nFROM posts\nWHERE posts.Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+          "sql_hash": "sha256:a2e80be2dbb2981196b44cce495a3b94c45636fe4b3777916e7274d48f4d420e",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ViewCount"
+          ],
+          "rows": [
+            [
+              60
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4095,
+        "output": 134,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4229
+      },
+      "generation_ms": 5105.3
+    },
+    {
+      "case_id": "md-312",
+      "db_id": "codebase_community",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_7749a8fc39d841339b548f1e6dd15273",
+      "candidate": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:78a6bd1a16eb138d0c12dc05bd0f0706146884289f90a16b03e2656f23b10932",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT ViewCount FROM posts WHERE Title = 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer'",
+          "sql_hash": "sha256:fc48952c2fe78f65653f22ad9c534b6c18cc29461ae822d60383b8d8913247fc",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "ViewCount"
+          ],
+          "rows": [
+            [
+              60
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2232,
+        "output": 29,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2261
+      },
+      "generation_ms": 2238
+    },
+    {
+      "case_id": "md-259",
+      "db_id": "superhero",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_dca3eaa690d44fa1a000b84f4277cb68",
+      "candidate": {
+        "scan": "superhero",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "alignment",
+            "on": {
+              "left": "superhero.alignment_id",
+              "right": "alignment.id"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "publisher",
+            "on": {
+              "left": "superhero.publisher_id",
+              "right": "publisher.id"
+            }
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_distinct",
+            "col": "superhero.id",
+            "as": "total_superheroes"
+          },
+          {
+            "fn": "count_distinct",
+            "col": "superhero.id",
+            "as": "bad_superheroes",
+            "filter": [
+              {
+                "col": "alignment.alignment",
+                "op": "eq",
+                "val": "Bad"
+              }
+            ]
+          },
+          {
+            "fn": "count_distinct",
+            "col": "superhero.id",
+            "as": "bad_marvel_superheroes",
+            "filter": [
+              {
+                "col": "alignment.alignment",
+                "op": "eq",
+                "val": "Bad"
+              },
+              {
+                "col": "publisher.publisher_name",
+                "op": "eq",
+                "val": "Marvel Comics"
+              }
+            ]
+          }
+        ],
+        "select": [
+          "superhero.id"
+        ],
+        "cte": [
+          {
+            "name": "counts",
+            "query": {
+              "scan": "superhero",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "alignment",
+                  "on": {
+                    "left": "superhero.alignment_id",
+                    "right": "alignment.id"
+                  }
+                },
+                {
+                  "type": "inner",
+                  "table": "publisher",
+                  "on": {
+                    "left": "superhero.publisher_id",
+                    "right": "publisher.id"
+                  }
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "count_distinct",
+                  "col": "superhero.id",
+                  "as": "total_superheroes"
+                },
+                {
+                  "fn": "count_distinct",
+                  "col": "superhero.id",
+                  "as": "bad_superheroes",
+                  "filter": [
+                    {
+                      "col": "alignment.alignment",
+                      "op": "eq",
+                      "val": "Bad"
+                    }
+                  ]
+                },
+                {
+                  "fn": "count_distinct",
+                  "col": "superhero.id",
+                  "as": "bad_marvel_superheroes",
+                  "filter": [
+                    {
+                      "col": "alignment.alignment",
+                      "op": "eq",
+                      "val": "Bad"
+                    },
+                    {
+                      "col": "publisher.publisher_name",
+                      "op": "eq",
+                      "val": "Marvel Comics"
+                    }
+                  ]
+                }
+              ],
+              "select": [
+                "superhero.id"
+              ]
+            }
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "WITH counts AS (\n  SELECT superhero.id\n  FROM superhero\n  INNER JOIN alignment ON superhero.alignment_id = alignment.id\n  INNER JOIN publisher ON superhero.publisher_id = publisher.id\n)\nSELECT superhero.id\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+        "forge_json": {
+          "scan": "superhero",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "alignment",
+              "on": {
+                "left": "superhero.alignment_id",
+                "right": "alignment.id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "publisher",
+              "on": {
+                "left": "superhero.publisher_id",
+                "right": "publisher.id"
+              }
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_distinct",
+              "col": "superhero.id",
+              "as": "total_superheroes"
+            },
+            {
+              "fn": "count_distinct",
+              "col": "superhero.id",
+              "as": "bad_superheroes",
+              "filter": [
+                {
+                  "col": "alignment.alignment",
+                  "op": "eq",
+                  "val": "Bad"
+                }
+              ]
+            },
+            {
+              "fn": "count_distinct",
+              "col": "superhero.id",
+              "as": "bad_marvel_superheroes",
+              "filter": [
+                {
+                  "col": "alignment.alignment",
+                  "op": "eq",
+                  "val": "Bad"
+                },
+                {
+                  "col": "publisher.publisher_name",
+                  "op": "eq",
+                  "val": "Marvel Comics"
+                }
+              ]
+            }
+          ],
+          "select": [
+            "superhero.id"
+          ],
+          "cte": [
+            {
+              "name": "counts",
+              "query": {
+                "scan": "superhero",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "alignment",
+                    "on": {
+                      "left": "superhero.alignment_id",
+                      "right": "alignment.id"
+                    }
+                  },
+                  {
+                    "type": "inner",
+                    "table": "publisher",
+                    "on": {
+                      "left": "superhero.publisher_id",
+                      "right": "publisher.id"
+                    }
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "count_distinct",
+                    "col": "superhero.id",
+                    "as": "total_superheroes"
+                  },
+                  {
+                    "fn": "count_distinct",
+                    "col": "superhero.id",
+                    "as": "bad_superheroes",
+                    "filter": [
+                      {
+                        "col": "alignment.alignment",
+                        "op": "eq",
+                        "val": "Bad"
+                      }
+                    ]
+                  },
+                  {
+                    "fn": "count_distinct",
+                    "col": "superhero.id",
+                    "as": "bad_marvel_superheroes",
+                    "filter": [
+                      {
+                        "col": "alignment.alignment",
+                        "op": "eq",
+                        "val": "Bad"
+                      },
+                      {
+                        "col": "publisher.publisher_name",
+                        "op": "eq",
+                        "val": "Marvel Comics"
+                      }
+                    ]
+                  }
+                ],
+                "select": [
+                  "superhero.id"
+                ]
+              }
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+              "diagnostics": []
+            }
+          ],
+          "sql": "WITH counts AS (\n  SELECT superhero.id\n  FROM superhero\n  INNER JOIN alignment ON superhero.alignment_id = alignment.id\n  INNER JOIN publisher ON superhero.publisher_id = publisher.id\n)\nSELECT superhero.id\nFROM superhero\nINNER JOIN alignment ON superhero.alignment_id = alignment.id\nINNER JOIN publisher ON superhero.publisher_id = publisher.id",
+          "sql_hash": "sha256:b7362292d2071a174e301490b1b718d1b70ca6b093a7726f0cf4b8e125dbc863",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "id"
+          ],
+          "rows": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ],
+            [
+              5
+            ],
+            [
+              6
+            ],
+            [
+              7
+            ],
+            [
+              8
+            ],
+            [
+              9
+            ],
+            [
+              10
+            ],
+            [
+              11
+            ],
+            [
+              12
+            ],
+            [
+              13
+            ],
+            [
+              14
+            ],
+            [
+              15
+            ],
+            [
+              16
+            ],
+            [
+              17
+            ],
+            [
+              18
+            ],
+            [
+              19
+            ],
+            [
+              20
+            ]
+          ],
+          "row_count": 741,
+          "truncated": true
+        }
+      },
+      "tokens": {
+        "input": 4042,
+        "output": 944,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4986
+      },
+      "generation_ms": 19379.1
+    },
+    {
+      "case_id": "md-259",
+      "db_id": "superhero",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_dca3eaa690d44fa1a000b84f4277cb68",
+      "candidate": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "value_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_value_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_value_mismatch",
+        "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5f4c9f36e01a21c2c17ee6a2b7d49b618b9f0693b9616e2de01f6e32b133e3b8",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT 100.0 * SUM(CASE WHEN a.alignment = 'Bad' THEN 1 ELSE 0 END) / COUNT(s.id) AS percentage, SUM(CASE WHEN a.alignment = 'Bad' AND p.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) AS marvel_bad_count FROM superhero AS s JOIN alignment AS a ON s.alignment_id = a.id LEFT JOIN publisher AS p ON s.publisher_id = p.id",
+          "sql_hash": "sha256:e4bf4d51dce5700d025bc91e350bfa9a79c0d6f8b0eece311872e60096113218",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "percentage",
+            "marvel_bad_count"
+          ],
+          "rows": [
+            [
+              28.49462365591398,
+              118
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2179,
+        "output": 585,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2764
+      },
+      "generation_ms": 11557.5
+    },
+    {
+      "case_id": "md-483",
+      "db_id": "financial",
+      "difficulty": "moderate",
+      "arm": "forge",
+      "run_id": "pbr_cd5f47bb19884f6793d2c9dd9782f4e2",
+      "candidate": {
+        "scan": "loan",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "account",
+            "on": {
+              "left": "loan.account_id",
+              "right": "account.account_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "loan.date",
+            "op": "gte",
+            "val": "950101"
+          },
+          {
+            "col": "loan.date",
+            "op": "lte",
+            "val": "971231"
+          },
+          {
+            "col": "loan.amount",
+            "op": "gte",
+            "val": 250000
+          },
+          {
+            "col": "account.frequency",
+            "op": "eq",
+            "val": "POPLATEK MESICNE"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "loan_count"
+          }
+        ],
+        "select": [
+          "loan_count"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "value_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_value_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_value_mismatch",
+        "sql": "SELECT COUNT(*) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date >= '950101' AND loan.date <= '971231' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+        "forge_json": {
+          "scan": "loan",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "account",
+              "on": {
+                "left": "loan.account_id",
+                "right": "account.account_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "loan.date",
+              "op": "gte",
+              "val": "950101"
+            },
+            {
+              "col": "loan.date",
+              "op": "lte",
+              "val": "971231"
+            },
+            {
+              "col": "loan.amount",
+              "op": "gte",
+              "val": 250000
+            },
+            {
+              "col": "account.frequency",
+              "op": "eq",
+              "val": "POPLATEK MESICNE"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "loan_count"
+            }
+          ],
+          "select": [
+            "loan_count"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:225d0e25a062bdb305a9aca48ca894139eba0475a0edde210af336394fa1d2af",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:225d0e25a062bdb305a9aca48ca894139eba0475a0edde210af336394fa1d2af",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date >= '950101' AND loan.date <= '971231' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+          "sql_hash": "sha256:8f1cc1c35602ad2d62593e473fa8644c66b578fa67c50189f64e7d812b959705",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "loan_count"
+          ],
+          "rows": [
+            [
+              0
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3798,
+        "output": 479,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4277
+      },
+      "generation_ms": 10845
+    },
+    {
+      "case_id": "md-483",
+      "db_id": "financial",
+      "difficulty": "moderate",
+      "arm": "direct",
+      "run_id": "pbr_cd5f47bb19884f6793d2c9dd9782f4e2",
+      "candidate": "SELECT l.account_id, COUNT(l.loan_id) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT l.account_id, COUNT(l.loan_id) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:225d0e25a062bdb305a9aca48ca894139eba0475a0edde210af336394fa1d2af",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:225d0e25a062bdb305a9aca48ca894139eba0475a0edde210af336394fa1d2af",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT l.account_id, COUNT(l.loan_id) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id",
+          "sql_hash": "sha256:959aa1bf5228e5eeadd1901be749a27f421d8ed194adf16bc05547fb3f409f44",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "account_id",
+            "loan_count"
+          ],
+          "rows": [],
+          "row_count": 0,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 1935,
+        "output": 429,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2364
+      },
+      "generation_ms": 9773.4
+    },
+    {
+      "case_id": "md-040",
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "arm": "forge",
+      "run_id": "pbr_65108ccfea9c476eae7662f17bd8f300",
+      "candidate": {
+        "scan": "member",
+        "filter": [
+          {
+            "col": "member.first_name",
+            "op": "eq",
+            "val": "Carlo"
+          },
+          {
+            "col": "member.last_name",
+            "op": "eq",
+            "val": "Jacobs"
+          }
+        ],
+        "select": [
+          "member.phone"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT member.phone\nFROM member\nWHERE member.first_name = 'Carlo' AND member.last_name = 'Jacobs'",
+        "forge_json": {
+          "scan": "member",
+          "filter": [
+            {
+              "col": "member.first_name",
+              "op": "eq",
+              "val": "Carlo"
+            },
+            {
+              "col": "member.last_name",
+              "op": "eq",
+              "val": "Jacobs"
+            }
+          ],
+          "select": [
+            "member.phone"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT member.phone\nFROM member\nWHERE member.first_name = 'Carlo' AND member.last_name = 'Jacobs'",
+          "sql_hash": "sha256:54469df237a01ccf529e645f78b69c67699289e686087d9e2e83ef9f12928f49",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "phone"
+          ],
+          "rows": [
+            [
+              "928-555-2577"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3904,
+        "output": 193,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4097
+      },
+      "generation_ms": 5353
+    },
+    {
+      "case_id": "md-040",
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "arm": "direct",
+      "run_id": "pbr_65108ccfea9c476eae7662f17bd8f300",
+      "candidate": "SELECT phone FROM member WHERE first_name = 'Carlo' AND last_name = 'Jacobs';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT phone FROM member WHERE first_name = 'Carlo' AND last_name = 'Jacobs'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT phone FROM member WHERE first_name = 'Carlo' AND last_name = 'Jacobs'",
+          "sql_hash": "sha256:1625486330555e7d239e3d1dd55ef4ee75b7b5a40ada09d80966c930100b3b31",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "phone"
+          ],
+          "rows": [
+            [
+              "928-555-2577"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 2041,
+        "output": 24,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2065
+      },
+      "generation_ms": 2201.6
+    },
+    {
+      "case_id": "md-168",
+      "db_id": "european_football_2",
+      "difficulty": "simple",
+      "arm": "forge",
+      "run_id": "pbr_c912e475d1454b7087c488a6ba4f70c1",
+      "candidate": {
+        "scan": "Player",
+        "filter": [
+          {
+            "col": "Player.player_name",
+            "op": "like",
+            "val": "Aaron%"
+          },
+          {
+            "col": "Player.birthday",
+            "op": "gt",
+            "val": "1990"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "player_count"
+          }
+        ],
+        "select": [
+          "player_count"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) AS player_count\nFROM Player\nWHERE Player.player_name LIKE 'Aaron%' AND Player.birthday > '1990'",
+        "forge_json": {
+          "scan": "Player",
+          "filter": [
+            {
+              "col": "Player.player_name",
+              "op": "like",
+              "val": "Aaron%"
+            },
+            {
+              "col": "Player.birthday",
+              "op": "gt",
+              "val": "1990"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "player_count"
+            }
+          ],
+          "select": [
+            "player_count"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:bfc60b0ade6c734386d4f2e9bc277fcd1c94a7eedb25cb8e3e8614abb91fd162",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:bfc60b0ade6c734386d4f2e9bc277fcd1c94a7eedb25cb8e3e8614abb91fd162",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) AS player_count\nFROM Player\nWHERE Player.player_name LIKE 'Aaron%' AND Player.birthday > '1990'",
+          "sql_hash": "sha256:3aff27717298eacc67fa3710c6e22ab4542b021b88b689fdcef53fd950080266",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "player_count"
+          ],
+          "rows": [
+            [
+              9
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 6700,
+        "output": 277,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 6977
+      },
+      "generation_ms": 7820.6
+    },
+    {
+      "case_id": "md-168",
+      "db_id": "european_football_2",
+      "difficulty": "simple",
+      "arm": "direct",
+      "run_id": "pbr_c912e475d1454b7087c488a6ba4f70c1",
+      "candidate": "SELECT COUNT(*) FROM Player WHERE player_name LIKE 'Aaron%' AND birthday > '1990';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT COUNT(*) FROM Player WHERE player_name LIKE 'Aaron%' AND birthday > '1990'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:bfc60b0ade6c734386d4f2e9bc277fcd1c94a7eedb25cb8e3e8614abb91fd162",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:bfc60b0ade6c734386d4f2e9bc277fcd1c94a7eedb25cb8e3e8614abb91fd162",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT COUNT(*) FROM Player WHERE player_name LIKE 'Aaron%' AND birthday > '1990'",
+          "sql_hash": "sha256:e1c80f5fbef44de48c8747a4562260e75bcc3db217eb6c74675d408cab6839df",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "COUNT(*)"
+          ],
+          "rows": [
+            [
+              9
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 4837,
+        "output": 23,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4860
+      },
+      "generation_ms": 2740.9
+    },
+    {
+      "case_id": "md-386",
+      "db_id": "card_games",
+      "difficulty": "challenging",
+      "arm": "forge",
+      "run_id": "pbr_dae085466f91430b9985ce9342ccd495",
+      "candidate": {
+        "scan": "cards",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "sets",
+            "on": {
+              "left": "cards.setCode",
+              "right": "sets.code"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "sets.name",
+            "op": "eq",
+            "val": "Coldsnap"
+          },
+          {
+            "col": "cards.artist",
+            "op": "in",
+            "val": [
+              "Jeremy Jarvis",
+              "Aaron Miller",
+              "Chippy"
+            ]
+          }
+        ],
+        "select": [
+          "cards.artist"
+        ],
+        "distinct": true
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT DISTINCT cards.artist\nFROM cards\nINNER JOIN sets ON cards.setCode = sets.code\nWHERE sets.name = 'Coldsnap' AND cards.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+        "forge_json": {
+          "scan": "cards",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "sets",
+              "on": {
+                "left": "cards.setCode",
+                "right": "sets.code"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "sets.name",
+              "op": "eq",
+              "val": "Coldsnap"
+            },
+            {
+              "col": "cards.artist",
+              "op": "in",
+              "val": [
+                "Jeremy Jarvis",
+                "Aaron Miller",
+                "Chippy"
+              ]
+            }
+          ],
+          "select": [
+            "cards.artist"
+          ],
+          "distinct": true
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT DISTINCT cards.artist\nFROM cards\nINNER JOIN sets ON cards.setCode = sets.code\nWHERE sets.name = 'Coldsnap' AND cards.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+          "sql_hash": "sha256:4328a5326fc1345545d21b5ca0975ab40fcd47e8ee52de66b497fbd1270caa6c",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "artist"
+          ],
+          "rows": [
+            [
+              "Jeremy Jarvis"
+            ],
+            [
+              "Chippy"
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 5730,
+        "output": 320,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 6050
+      },
+      "generation_ms": 7836
+    },
+    {
+      "case_id": "md-386",
+      "db_id": "card_games",
+      "difficulty": "challenging",
+      "arm": "direct",
+      "run_id": "pbr_dae085466f91430b9985ce9342ccd495",
+      "candidate": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy');",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:7229fec558cc61ac0bc020cfd404458f9e3aa04849b275d14c653d056d472894",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT DISTINCT c.artist\nFROM cards AS c\nJOIN sets AS s ON c.setCode = s.code\nWHERE s.name = 'Coldsnap'\n  AND c.artist IN ('Jeremy Jarvis', 'Aaron Miller', 'Chippy')",
+          "sql_hash": "sha256:5f043c0cfe8bcb54138b0c178d34365dd35f19879d37f137361f7f41f071cf7c",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "artist"
+          ],
+          "rows": [
+            [
+              "Jeremy Jarvis"
+            ],
+            [
+              "Chippy"
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "tokens": {
+        "input": 3867,
+        "output": 183,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4050
+      },
+      "generation_ms": 6741.2
+    }
+  ],
+  "source_preflight": {
+    "model": "openai-codex/gpt-5.6-luna",
+    "ready": true,
+    "frozen_contexts_verified": 10,
+    "frozen_user_prompts_verified": 20,
+    "local_auth_denial_verified": true,
+    "max_generation_requests": 20,
+    "prior_rejected_requests": 0,
+    "automatic_retries": 0,
+    "agent_turns_per_arm": 1,
+    "temperature_requested": null,
+    "sampling": "provider_default",
+    "output_token_hard_cap": null,
+    "global_extensions_or_context_files_loaded": false,
+    "real_auth_handled_only_by_sdk": true,
+    "source_sha256": {
+      "services/pi-orchestrator/src/benchmark-runtime.ts": "9e24552df12bc4e22566f8357edf989ada76e09eeaca3dde5005106a52a08ba8",
+      "services/pi-orchestrator/src/strict-forge-output.ts": "33f42cb95d71eb723428ac5de5f210af70c4464dc45b8c05da6ebf2deeb4bac3",
+      "forge/compiler.py": "5e4845e7151158b21e11b3032411e253670efe67fd942545ccd07f788a194a59",
+      "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "forge/hard_accuracy_benchmark.py": "008d8a3fba2f83998592d2b77cd1f6c5865ae57092176fd35dd611f892e27ba1",
+      "forge/benchmark_v2.py": "966683a76b20e3e8f92f945c76b48b56124254fbcf27ece081811a843cb72777",
+      "agent/prompts.py": "8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2",
+      "web/routes/benchmark_v2.py": "c761cbc3c44bdf7744eee82880dc59604c341670f09309378bc4304e080fb1f1"
+    },
+    "generation_calls": 0
+  },
+  "database_snapshots": {
+    "thrombosis_prediction": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/thrombosis_prediction/thrombosis_prediction.sqlite",
+      "sha256": "87583183c3dc472fba04de702965560a9d7c0a548836613f242317e0eeb83f00"
+    },
+    "formula_1": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/formula_1.sqlite",
+      "sha256": "79770caf966707e35516fa566e24b40ae515c74ec1ec4631235245645b87b24d"
+    },
+    "california_schools": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/california_schools/california_schools.sqlite",
+      "sha256": "c0903eec662e63068fd1d14403d3d6c1d473287fc10c4356333ea58f878db983"
+    },
+    "toxicology": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/toxicology.sqlite",
+      "sha256": "35ef27ae6bdfda530e125ed369666ac0abb8bc8c0bcc0ad09407f547ecb61a93"
+    },
+    "codebase_community": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/codebase_community.sqlite",
+      "sha256": "92101be6d2a9f6adceea59d38f6d1c556087f9eea1432432a21268cb1348036d"
+    },
+    "superhero": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/superhero.sqlite",
+      "sha256": "75e94a2c3236ee3bb2c01fb97a1c4b4c1c269bcefd4eab1d04be323d2d0825b1"
+    },
+    "financial": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/financial.sqlite",
+      "sha256": "d15d89cdb068a202b6f2b99342af44dffc1d52545b39ceaf62efdc0ba570101e"
+    },
+    "student_club": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/student_club.sqlite",
+      "sha256": "eb89bcfe97eefa386a27904ec5aa15159811a7eac894ec659a36e48fa9f76b77"
+    },
+    "european_football_2": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/european_football_2.sqlite",
+      "sha256": "f72f5c9b990371417288a67b27a02e601ef904d45525c2c9f7931fb01001c536"
+    },
+    "card_games": {
+      "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/card_games.sqlite",
+      "sha256": "c98bdb57fe7474da798b407785544b9af0daaad5d61fd21e2a73309493bc1227"
+    }
+  },
+  "verification": {
+    "original_candidates_replayed": 20,
+    "raw_strict_forge_arguments_and_native_pi_validation_passed": 10,
+    "one_provider_request_and_one_agent_turn_per_arm": true,
+    "stored_scores_and_tokens_match_independent_replay": true,
+    "source_hashes_unchanged": true,
+    "public_database_hashes_unchanged": true
+  },
+  "limitations": [
+    "Exposed R500 regression slice; not independent holdout or population accuracy estimate.",
+    "No pre-optimization same-model control; cannot estimate causal optimization gain.",
+    "Preserve original Gold, comparator and every selected case; no result-dependent replacement.",
+    "Oracle Evidence retained in both arms; not a production evidence test.",
+    "Latency is the existing arm generation_ms field and may include local handoff/evaluation overhead; descriptive only.",
+    "No code, Gold or scoring changes during this experiment."
+  ]
+}

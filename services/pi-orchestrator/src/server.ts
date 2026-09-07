@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { pathToFileURL } from "node:url";
 
 import { OrchestratorApplication } from "./application.js";
-import { PiBenchmarkRuntime } from "./benchmark-runtime.js";
+import { BenchmarkInputError, PiBenchmarkRuntime } from "./benchmark-runtime.js";
 import { parseChannelEvent, type ChannelIdentity } from "./channels/contracts.js";
 import { ChannelIdentityError, ChannelIdentityResolver } from "./channels/identity.js";
 import { loadConfig, type OrchestratorConfig } from "./config.js";
@@ -296,15 +296,17 @@ export function createOrchestratorServer(
         const body = await readJson(request);
         const provider = requireString(body, "provider");
         const model = requireString(body, "model");
-        const limit = body.limit === undefined ? undefined : Number(body.limit);
-        const caseIds = Array.isArray(body.case_ids)
-          ? body.case_ids.filter((item): item is string => typeof item === "string")
-          : undefined;
+        if (body.limit !== undefined && (typeof body.limit !== "number" || !Number.isSafeInteger(body.limit) || body.limit <= 0)) throw new RequestError("limit must be a positive integer");
+        if (!Number.isSafeInteger(body.confirm_model_calls) || Number(body.confirm_model_calls) < 0) throw new RequestError("Explicit nonnegative confirm_model_calls is required");
+        if (body.case_ids !== undefined && (!Array.isArray(body.case_ids) || !body.case_ids.length || body.case_ids.some((id) => typeof id !== "string" || !id.trim()) || new Set(body.case_ids).size !== body.case_ids.length)) throw new RequestError("case_ids must contain unique nonempty IDs");
+        if (body.protocol_manifest !== undefined && (!body.protocol_manifest || typeof body.protocol_manifest !== "object" || Array.isArray(body.protocol_manifest))) throw new RequestError("protocol_manifest must be an object");
         const run = await benchmarkRuntime.start({
           provider,
           model,
-          ...(Number.isInteger(limit) && Number(limit) > 0 ? { limit: Number(limit) } : {}),
-          ...(caseIds?.length ? { caseIds } : {}),
+          ...(body.limit !== undefined ? { limit: body.limit as number } : {}),
+          ...(body.case_ids !== undefined ? { caseIds: body.case_ids as string[] } : {}),
+          confirmModelCalls: body.confirm_model_calls as number,
+          ...(body.protocol_manifest !== undefined ? { protocolManifest: body.protocol_manifest as Record<string, unknown> } : {}),
         });
         sendJson(response, 202, run);
         return;
@@ -862,7 +864,7 @@ export function createOrchestratorServer(
 
       sendJson(response, 404, { status: "not_found" });
     } catch (error) {
-      if (error instanceof RequestError) {
+      if (error instanceof RequestError || error instanceof BenchmarkInputError) {
         sendJson(response, 400, { status: "invalid_request", error: error.message });
       } else if (
         error instanceof ChannelAuthenticationError ||

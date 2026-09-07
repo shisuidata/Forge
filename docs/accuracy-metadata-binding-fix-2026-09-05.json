@@ -1,0 +1,2170 @@
+{
+  "schema_version": 1,
+  "requirement": "REQ-2026-09-05-037",
+  "date": "2026-09-05",
+  "status": "input_restoration_verified_no_new_candidates",
+  "treatment": "Restore authoritative CSV metadata using SQLite ASCII identifier equivalence; do not add format/PK presentation, change Gold, or change retrieval algorithm.",
+  "source_code": {
+    "control_sha256": "bf1d807064df05233269cee3f8843ff7d80dc0d9431ecb4db8bf65abaad646bb",
+    "treatment_sha256": "008d8a3fba2f83998592d2b77cd1f6c5865ae57092176fd35dd611f892e27ba1",
+    "control_snapshot_path": ".forge/benchmarks/accuracy-metadata-audit-20260905/pre-fix-source-snapshot.json",
+    "route_sha256": "c761cbc3c44bdf7744eee82880dc59604c341670f09309378bc4304e080fb1f1"
+  },
+  "input_artifact": {
+    "path": ".forge/benchmarks/accuracy-metadata-binding-20260905/D50-binding-inputs.json",
+    "sha256": "23e21741aec80b5bb27a00f47a61e1205d6ac3b8b4376b5f5355c63267751901"
+  },
+  "frozen_cohort_file_sha256": "eedead5551d5ed7958d10fe660a6cd5fbeea6dae9ba709744a642140618b5e42",
+  "source_csv_sha256": {
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/debit_card_specializing/database_description/customers.csv": "fd1ff06796da13f6331801dba2a24536fd0aed887cde2a8d08cd03530de88f2d",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/debit_card_specializing/database_description/gasstations.csv": "4e44804b860c9fe412dd8872a4f53fc0e1094035ecc027fac4d9477d05766199",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/debit_card_specializing/database_description/products.csv": "b61419d9b6481b170230a302c313fd787b5f0291f9a1a15fb3a55eb6d4f5f538",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/debit_card_specializing/database_description/transactions_1k.csv": "08bed279bc784952f1e17c97b290cf869ede6f9ea0914641052546408626b0af",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/debit_card_specializing/database_description/yearmonth.csv": "7faf48ff08295935610dc07b33596028483f8270dd1ace0c6a512ae65f8a2e16",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/account.csv": "98f9b72619c30593fadc013efc668d081193f34f2bda1353214c48c8013f03b3",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/card.csv": "1dd79bf48c7696a5e6c3fc4835c9994b129f58307ad75c2f874f9cd1078fe300",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/client.csv": "d1ef6f74b4730737517307c2f3b219496af264d83fe3e34f435c078b368dd800",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/disp.csv": "3b7ade14650a78e7122fdf4f423c4dae241e923d73039c65e5e85b7ac7919ffe",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/district.csv": "6da804294fe9e7f9f8285759b842e39e0c5c8cb10390a93d5e292c2cb28fdc48",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/loan.csv": "e6f4c7393d3973c9647913206ec4da2b9480bca4a8fb1ed45f4d42c433112756",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/order.csv": "d01db89f3121b96a8c5876108d835ad0ab8d8bd5e132d9d823d384ae12706476",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/financial/database_description/trans.csv": "59efafabbb4347853f29ebfc14fdd18633f724a669e7e26cb7b2ecd628d6c4a2",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/circuits.csv": "fd69591f97ae0cb3b36b2d35524f03e5ec250c52358a71b2e41d435f3b2b658d",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/constructorResults.csv": "b446078a76a422e9fbbb3246acf18a36bc75a441fac5f907555ac7031834f7d5",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/constructorStandings.csv": "d7df8f78744b244375278bb092f8b6d05c9cf4964bdc9cd41eb60261678db861",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/constructors.csv": "79eb5ffde214702c1465ffa8584d59d3fc2e6a43fd8c41db91c02402af239dd4",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/driverStandings.csv": "3cc467154abbf10dfc7f8ea5fdec512b5674f0683d36b893085a04de5d9aca5e",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/drivers.csv": "0444a1610c97dcc1cb1af25a8aed4dc3ca585a0b27f8326d1bb9ffaa6f4e8635",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/lapTimes.csv": "6fc86f0867ca9fc350b8583c18a74784d7a2e78afb1bc6462f83e3b7cddf5573",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/pitStops.csv": "6c1c7eb14a445b617710ac286e1f5a303e8b808062fa760c2054c276b2b79fab",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/qualifying.csv": "35b7e1ce9def76a653407a54f2b18901768392d92d1ef2484d24c20077c77e0e",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/races.csv": "a8e61de0c7e966c5198c701475d80276065f3a1cf96c3b79051c3541d8fd60d3",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/results.csv": "7f7cde75b468b8ea135c6ed0872ef30ff715fda691786ca58e70d783b0a23b5d",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/seasons.csv": "6a87681dcc94db3f6c81879c8569ec29a966eccc7277aa1d9ad59b16e314e5c9",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/formula_1/database_description/status.csv": "78725236cee342600f862cea296e87a4ea2e047d64d365f594526363f8acde57",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/california_schools/database_description/frpm.csv": "f2c3fa53a02c5d711866a192f580c6a545389192a096441767f40d72ffa41334",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/california_schools/database_description/satscores.csv": "a44145158100894387d05a96987c487e3c83742892b13127b486de309bb8f138",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/california_schools/database_description/schools.csv": "f18d96abf47892e4bd8094dd47d6978ea6bbc11821eccdf91f3f54dd1685979f",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/database_description/cards.csv": "41bc566e91e165f43f7484a1d3d3f17e66094e2c0cc3092829366f6e2f019d23",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/database_description/foreign_data.csv": "ac254726eeb2d0fd574ec64bac31617ac233842623f692469b7569febe9f3310",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/database_description/legalities.csv": "223def1785f0f6f277db07a7881e8938e4314382697da47c080d14b52f1253e9",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/database_description/rulings.csv": "c50c64dd4d882a17d1a8478cd48b889103a39464c78f3da5dd904fde966bd3d4",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/database_description/set_translations.csv": "d6f172ff2add8a399176cdb9ef32a5d60c8cf11186363e6142bb48a09debb2ff",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/card_games/database_description/sets.csv": "3679c8051713f1574d40ff6793eaebf590705915d20f086ffe3ee930a4ddbb0e",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/Country.csv": "e74aa65527321782a69ec5fdc68c3993aa6e1e5684426724776b81d12bcbe437",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/League.csv": "d44bbef373f44c16dee4729012375c1bf901664f1097e3af4bb3dfc973067437",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/Match.csv": "2facc86ec5e869e7bb61b67fa660591c0a4f6291da79125dc2777a2bdafdd4dd",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/Player.csv": "a7a3cdc5c995227bbfcddf88d789f9244ffcfe0f6aed8aa69fcbef084149b92c",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/Player_Attributes.csv": "d01a00206b4ec6e94435f3af7e5153abca01931c4e93a519bb86ca5bbd42b46c",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/Team.csv": "104e03607f09cb41deddcb24a96add08aa2e9d8fc169454c3091a792df9f81ef",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/european_football_2/database_description/Team_Attributes.csv": "3fbad7950903c65a467c291282ab90d773a9e517802e0fffad5c5abfa7390840",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/thrombosis_prediction/database_description/Examination.csv": "b563c9030159bf169236e4582b653386bd34706e309227bf5eceb63b91eb0a89",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/thrombosis_prediction/database_description/Laboratory.csv": "cf9704e56cf3aca75e38de09277c307a7f0f726301b472254ce66ff4a352ff9f",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/thrombosis_prediction/database_description/Patient.csv": "519838a9f2592760bb26d1fb4f074bc304eee4e7aeaf46d03f652c370230e175",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/database_description/atom.csv": "9de75492701c77c1229242e8c3b688ced9eb9095ac59d37361dfb0ec34300245",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/database_description/bond.csv": "7d200d38b0dcc07e8fe22718bd6bdb1bdf4b6522b7a84a5d0c95340b6d8cb4bc",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/database_description/connected.csv": "589b24206b9f884863ca57f3e339abcb2409a15feeaff0b08afcd955cd211036",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/toxicology/database_description/molecule.csv": "a6ff2966916d03b07fd3ce275823d9ec65abb0b55158e871b07c40972b292d70",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Attendance.csv": "33a5d912e8fea231ecd73d1ee3847433ced7d1768b91866bd1403fb7fd88ea22",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Budget.csv": "b9000d8f18b4a1613ea3c1877a41823375c2405647756a694591722ba86e60cd",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Event.csv": "1bf99aa2ce4ae79886eb0d4204e3edd1f0c8c0e44ed427c166f3a1a1af0aec04",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Expense.csv": "b323e60df3ebfa3ec64686a1d76bece0bb94d81cfe5b642a54b6763b67be302d",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Income.csv": "573755cd0f41a5dce3a053eb877a52f101bf21af745aaf83170093aa5a4d0579",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Major.csv": "baca5c68fa1b1c9a427445bd60a1c8702cbdab9d27d5eb0a4304fb7f2ef32e0d",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Member.csv": "1b9dda90d5fdccc4f70f057bf594a6935975e55a9f81d333714d74d1f4d9674a",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/database_description/Zip_Code.csv": "1c903324ec3ff9decd6abb10ac96e3746e1c1b776a26d3a8d4bf5244c8620ecb",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/alignment.csv": "ebff59e5832b2870c298d2bbc85607e0f6b93c4921ff4d3265803d02a8796dce",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/attribute.csv": "3c6bac9176d61e05ba059e8be6a3d5c5aa6eb743f526f07a1570f172cdbf6c72",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/colour.csv": "ba732eddb938dc077cbc3f038057f566f9f12ccb53cc131168a5da538514b9cf",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/gender.csv": "7311f964c77b6319184bbfc9ce8cc0ef87a103106bb1d6967461a5c681a3fe08",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/hero_attribute.csv": "65af1dfdb96e4ddaba6262f3dffe9f61ea240c31d0ea2122e974d769827f039b",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/hero_power.csv": "54eb40baa6b5b726bff28c872478caa8da8500f195239f8c6c3c552797c3794f",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/publisher.csv": "232e8656107f426beb3c7a25f1833afb295dbfa2ae3981b2a200f08ed4f1f000",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/race.csv": "8eb79fe0d1fc7d5641eff43d34e0e10b89fa726360d913bbee31dd55191064c7",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/superhero.csv": "503f0a71acd1766923c571865277f81accbf79b2c9d8df4a18439dfe01ec6f44",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/superhero/database_description/superpower.csv": "4edef8900f158238382843e348ff9842991c83f1d384c53bef5dd8cb1e613ee2",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/badges.csv": "a1a7fc9783f11107c6b80adc54d0404a31d7bc162a1f5ae5e246e4852dc41a09",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/comments.csv": "bd8de09b3eab2b4a1f69d9298460b0f39d919504d5dfb34d00de302b77e520eb",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/postHistory.csv": "053779c106b3bc61da71744e918b321a2436180e5c57ad2a706e9c29fef11e94",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/postLinks.csv": "789fefbd5b9b8db2653f8079c78325d6e3fd23a2ceff69ed7ee8959674ff014c",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/posts.csv": "33e6883bbadc4fe77b5f4f593f7f23d74c2bc2bc45c8f2086c328beeefeb28e2",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/tags.csv": "27bc5022eeb20e18dc588a1f3cb63ac2c23720670f003fdd776ae9a5aad0a0d7",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/users.csv": "69d3297922932d9b39eb56e673606ba56fb3474a650fe417ea32d4d627160014",
+    ".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/codebase_community/database_description/votes.csv": "9c3856469bc9fd563d86f7062bfb9d632c6e98ae42fd7c52117e0be15e9e7ccf"
+  },
+  "restored_columns": [
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "event_id",
+      "restored_metadata": {
+        "format": "text",
+        "label": "event id",
+        "description": "A unique identifier for the event",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "event_name",
+      "restored_metadata": {
+        "format": "text",
+        "label": "event name",
+        "description": "event name",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "event_date",
+      "restored_metadata": {
+        "format": "text",
+        "label": "event date",
+        "description": "The date the event took place or is scheduled to take place",
+        "values": "e.g. 2020-03-10T12:00:00"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "type",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The kind of event, such as game, social, election",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "notes",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "A free text field for any notes about the event",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "location",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "Address where the event was held or is to be held or the name of such a location",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "event",
+      "column": "status",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "One of three values indicating if the event is in planning, is opened, or is closed",
+        "values": "Open/ Closed/ Planning"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "major",
+      "column": "major_id",
+      "restored_metadata": {
+        "format": "text",
+        "label": "major id",
+        "description": "A unique identifier for each major",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "major",
+      "column": "major_name",
+      "restored_metadata": {
+        "format": "text",
+        "label": "major name",
+        "description": "major name",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "major",
+      "column": "department",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The name of the department that offers the major",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "major",
+      "column": "college",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The name college that houses the department that offers the major",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "zip_code",
+      "column": "zip_code",
+      "restored_metadata": {
+        "format": "integer",
+        "label": "zip code",
+        "description": "The ZIP code itself. A five-digit number identifying a US post office.",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "zip_code",
+      "column": "type",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The kind of ZIP code",
+        "values": "commonsense evidence: � Standard: the normal codes with which most people are familiar � PO Box: zip codes have post office boxes � Unique: zip codes that are assigned to individual organizations."
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "zip_code",
+      "column": "city",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The city to which the ZIP pertains",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "zip_code",
+      "column": "county",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The county to which the ZIP pertains",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "zip_code",
+      "column": "state",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The name of the state to which the ZIP pertains",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "zip_code",
+      "column": "short_state",
+      "restored_metadata": {
+        "format": "text",
+        "label": "short state",
+        "description": "The abbreviation of the state to which the ZIP pertains",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "attendance",
+      "column": "link_to_event",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to event",
+        "description": "The unique identifier of the event which was attended",
+        "values": "References the Event table"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "attendance",
+      "column": "link_to_member",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to member",
+        "description": "The unique identifier of the member who attended the event",
+        "values": "References the Member table"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "budget_id",
+      "restored_metadata": {
+        "format": "text",
+        "label": "budget id",
+        "description": "A unique identifier for the budget entry",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "category",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The area for which the amount is budgeted, such as, advertisement, food, parking",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "spent",
+      "restored_metadata": {
+        "format": "real",
+        "label": "",
+        "description": "The total amount spent in the budgeted category for an event.",
+        "values": "the unit is dollar. This is summarized from the Expense table"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "remaining",
+      "restored_metadata": {
+        "format": "real",
+        "label": "",
+        "description": "A value calculated as the amount budgeted minus the amount spent",
+        "values": "the unit is dollar commonsense evidence: If the remaining < 0, it means that the cost has exceeded the budget."
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "amount",
+      "restored_metadata": {
+        "format": "integer",
+        "label": "",
+        "description": "The amount budgeted for the specified category and event",
+        "values": "the unit is dollar commonsense evidence:some computation like: amount = spent + remaining"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "event_status",
+      "restored_metadata": {
+        "format": "text",
+        "label": "event status",
+        "description": "the status of the event",
+        "values": "Closed / Open/ Planning commonsense evidence: • Closed: It means that the event is closed. The spent and the remaining won't change anymore.• Open: It means that the event is already opened. The spent and the remaining will change with new expenses.• Planning: The event is not started yet but is planning. The spent and the remaining won't change at this stage."
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "budget",
+      "column": "link_to_event",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to event",
+        "description": "The unique identifier of the event to which the budget line applies.",
+        "values": "References the Event table"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "expense_id",
+      "restored_metadata": {
+        "format": "text",
+        "label": "expense id",
+        "description": "unique id of income",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "expense_description",
+      "restored_metadata": {
+        "format": "text",
+        "label": "expense description",
+        "description": "A textual description of what the money was spend for",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "expense_date",
+      "restored_metadata": {
+        "format": "text",
+        "label": "expense date",
+        "description": "The date the expense was incurred",
+        "values": "e.g. YYYY-MM-DD"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "cost",
+      "restored_metadata": {
+        "format": "real",
+        "label": "",
+        "description": "The dollar amount of the expense",
+        "values": "the unit is dollar"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "approved",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "A true or false value indicating if the expense was approved",
+        "values": "true/ false"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "link_to_member",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to member",
+        "description": "The member who incurred the expense",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "expense",
+      "column": "link_to_budget",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to budget",
+        "description": "The unique identifier of the record in the Budget table that indicates the expected total expenditure for a given category and event.",
+        "values": "References the Budget table"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "income",
+      "column": "income_id",
+      "restored_metadata": {
+        "format": "text",
+        "label": "income id",
+        "description": "A unique identifier for each record of income",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "income",
+      "column": "date_received",
+      "restored_metadata": {
+        "format": "text",
+        "label": "date received",
+        "description": "the date that the fund received",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "income",
+      "column": "amount",
+      "restored_metadata": {
+        "format": "integer",
+        "label": "",
+        "description": "amount of funds",
+        "values": "the unit is dollar"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "income",
+      "column": "source",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "A value indicating where the funds come from such as dues, or the annual university allocation",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "income",
+      "column": "notes",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "A free-text value giving any needed details about the receipt of funds",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "income",
+      "column": "link_to_member",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to member",
+        "description": "link to member",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "member_id",
+      "restored_metadata": {
+        "format": "text",
+        "label": "member id",
+        "description": "unique id of member",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "first_name",
+      "restored_metadata": {
+        "format": "text",
+        "label": "first name",
+        "description": "member's first name",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "last_name",
+      "restored_metadata": {
+        "format": "text",
+        "label": "last name",
+        "description": "member's last name",
+        "values": "commonsense evidence: full name is first_name + last_name. e.g. A member's first name is Angela and last name is Sanders. Thus, his/her full name is Angela Sanders."
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "email",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "member's email",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "position",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The position the member holds in the club",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "t_shirt_size",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The size of tee shirt that member wants when shirts are ordered",
+        "values": "commonsense evidence: usually the student ordered t-shirt with lager size has bigger body shape"
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "phone",
+      "restored_metadata": {
+        "format": "text",
+        "label": "",
+        "description": "The best telephone at which to contact the member",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "zip",
+      "restored_metadata": {
+        "format": "integer",
+        "label": "",
+        "description": "the zip code of the member's hometown",
+        "values": ""
+      }
+    },
+    {
+      "db_id": "student_club",
+      "table": "member",
+      "column": "link_to_major",
+      "restored_metadata": {
+        "format": "text",
+        "label": "link to major",
+        "description": "The unique identifier of the major of the member. References the Major table",
+        "values": ""
+      }
+    }
+  ],
+  "summary": {
+    "databases": 11,
+    "tables": 75,
+    "columns": 798,
+    "restored_metadata_columns": 48,
+    "D_cases": 50,
+    "changed_D_cases": [
+      "md-034",
+      "md-046",
+      "md-052",
+      "md-065",
+      "md-077"
+    ],
+    "changed_snapshot_cases": [
+      "md-034",
+      "md-046",
+      "md-052",
+      "md-065",
+      "md-077"
+    ],
+    "changed_table_scope_cases": [],
+    "changed_relationship_scope_cases": [],
+    "new_retrieval_insufficient_cases": [],
+    "new_candidate_calls": 0
+  },
+  "verification": {
+    "real_context_function_body_cases": 50,
+    "both_arm_control_prompts_match_pre_fix_artifact": 100,
+    "schema_identifiers_types_keys_relationships_unchanged": true,
+    "existing_metadata_preserved": true,
+    "raw_csv_unchanged": true,
+    "config_imported": false,
+    "network_connections": 0,
+    "md065_value_evidence_restored_to_both_arm_instructions": true
+  },
+  "limitations": [
+    "This proves input restoration, not improved generated-answer accuracy.",
+    "Restored metadata may change retrieval results even though retrieval code/parameters are unchanged; record scope and input hashes, not only template revision.",
+    "Historical in-memory provider request payloads were not recovered; control is the reproducibly reconstructed pre-fix code path, not a claim of byte-identical historical provider requests.",
+    "Full prompt text mirrors the current Pi serializer; actual provider payload parameter enforcement remains a separate run preflight.",
+    "Do not use this input-only smoke as a heldout or business accuracy result."
+  ],
+  "cases": [
+    {
+      "case_id": "md-000",
+      "db_id": "debit_card_specializing",
+      "role": "control",
+      "control_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "treatment_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "e95acc15b2cfc2f955dacc8095e6c43eef6eeba8e6f118f138efa7bdc425d7d3",
+          "treatment_input_sha256": "e95acc15b2cfc2f955dacc8095e6c43eef6eeba8e6f118f138efa7bdc425d7d3",
+          "control_utf8_bytes": 4053,
+          "treatment_utf8_bytes": 4053,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "1e20c322bfc0aef50af04da3ceaf4821d77211254ed77ab86ac72530ff291aca",
+          "treatment_input_sha256": "1e20c322bfc0aef50af04da3ceaf4821d77211254ed77ab86ac72530ff291aca",
+          "control_utf8_bytes": 2874,
+          "treatment_utf8_bytes": 2874,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-003",
+      "db_id": "debit_card_specializing",
+      "role": "control",
+      "control_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "treatment_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "f4d3c55ac5aa8e869d2712ba01a6e58a93bd7aa45942ae3eeebbc9e4421a4477",
+          "treatment_input_sha256": "f4d3c55ac5aa8e869d2712ba01a6e58a93bd7aa45942ae3eeebbc9e4421a4477",
+          "control_utf8_bytes": 4709,
+          "treatment_utf8_bytes": 4709,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "43673826fae85fcd9d1be1cf8a5154c7de3a536e7c05373ebeac5512d02c0285",
+          "treatment_input_sha256": "43673826fae85fcd9d1be1cf8a5154c7de3a536e7c05373ebeac5512d02c0285",
+          "control_utf8_bytes": 3530,
+          "treatment_utf8_bytes": 3530,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-009",
+      "db_id": "debit_card_specializing",
+      "role": "diagnostic",
+      "control_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "treatment_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "5746ceca8b5bed9ca7d95591d21fbbd2945f892e419ba989036ed746a184a7dd",
+          "treatment_input_sha256": "5746ceca8b5bed9ca7d95591d21fbbd2945f892e419ba989036ed746a184a7dd",
+          "control_utf8_bytes": 4746,
+          "treatment_utf8_bytes": 4746,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "c40d76d060459702065e3be242fe78007c6ed7fc37d37e52c269c0998750ff92",
+          "treatment_input_sha256": "c40d76d060459702065e3be242fe78007c6ed7fc37d37e52c269c0998750ff92",
+          "control_utf8_bytes": 3567,
+          "treatment_utf8_bytes": 3567,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-022",
+      "db_id": "debit_card_specializing",
+      "role": "control",
+      "control_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "treatment_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "fb1b4fb4d19d5f1e2b2918b3f86d4e24c5030392bf87e2f531d3a95cc7768f32",
+          "treatment_input_sha256": "fb1b4fb4d19d5f1e2b2918b3f86d4e24c5030392bf87e2f531d3a95cc7768f32",
+          "control_utf8_bytes": 4505,
+          "treatment_utf8_bytes": 4505,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "4fc9c7e341ecd206038d42fb54a53eccd2100f24933fcc41ebc881d7df140c5c",
+          "treatment_input_sha256": "4fc9c7e341ecd206038d42fb54a53eccd2100f24933fcc41ebc881d7df140c5c",
+          "control_utf8_bytes": 3326,
+          "treatment_utf8_bytes": 3326,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-026",
+      "db_id": "debit_card_specializing",
+      "role": "diagnostic",
+      "control_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "treatment_schema_sha256": "e484055ffab5a9a3b9f51da8c7ccb860279718ca4296224584bf866b063346dd",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "4776016af078a4b7095fb670456af494fe698c9f88906767f98e2b230bdaa596",
+          "treatment_input_sha256": "4776016af078a4b7095fb670456af494fe698c9f88906767f98e2b230bdaa596",
+          "control_utf8_bytes": 3977,
+          "treatment_utf8_bytes": 3977,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "51e99aee6ef3a17b2273cdad318006cadcbd5566f267c2e299a0d632cd8cae31",
+          "treatment_input_sha256": "51e99aee6ef3a17b2273cdad318006cadcbd5566f267c2e299a0d632cd8cae31",
+          "control_utf8_bytes": 2798,
+          "treatment_utf8_bytes": 2798,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-034",
+      "db_id": "student_club",
+      "role": "control",
+      "control_schema_sha256": "0a4e49c488fb2e1c7ae06e29e897bd5481341af8d8938ae50c96285165f3b15c",
+      "treatment_schema_sha256": "c38ff815cc5070eaf01ae6043af2f9ce4d8f04c2fb4162d8c54e84b5a1072073",
+      "schema_changed": true,
+      "context_snapshot_changed": true,
+      "tables_changed": false,
+      "fields_changed": true,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "412a9684d5ef3677fb944349e49298ceb89c2930f9e7a241b0351937499e92e0",
+          "treatment_input_sha256": "4a59b0cef9d0930062b09698a623e7d243a9b6309be69184dc6efe7cd4d293cc",
+          "control_utf8_bytes": 5004,
+          "treatment_utf8_bytes": 10047,
+          "delta_utf8_bytes": 5043
+        },
+        "direct": {
+          "control_input_sha256": "1e43f48d2e948c5256ae57a133425c11e11cab1bf7df45a6f30595931a8f356c",
+          "treatment_input_sha256": "bfe68c2259d0aa7ccb0251a2e27c1a15989137fb228d3d439c7c0175cea9f6af",
+          "control_utf8_bytes": 3825,
+          "treatment_utf8_bytes": 8868,
+          "delta_utf8_bytes": 5043
+        }
+      }
+    },
+    {
+      "case_id": "md-046",
+      "db_id": "student_club",
+      "role": "control",
+      "control_schema_sha256": "0a4e49c488fb2e1c7ae06e29e897bd5481341af8d8938ae50c96285165f3b15c",
+      "treatment_schema_sha256": "c38ff815cc5070eaf01ae6043af2f9ce4d8f04c2fb4162d8c54e84b5a1072073",
+      "schema_changed": true,
+      "context_snapshot_changed": true,
+      "tables_changed": false,
+      "fields_changed": true,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "7b6e175d20675a8f1c39047c8a54d7c0e6f11c1a98e672403227e4d1b6bb245a",
+          "treatment_input_sha256": "7a4c654a73f1db524fef1c742560d6933e5c32d007f0b38a24fca6c7b72c208a",
+          "control_utf8_bytes": 5532,
+          "treatment_utf8_bytes": 10411,
+          "delta_utf8_bytes": 4879
+        },
+        "direct": {
+          "control_input_sha256": "f51e6758e71dfc7687b2c89d8b366c80877679fa49f74fbfe49d64ab43a411de",
+          "treatment_input_sha256": "824f969e0c196794779522e9db5402099b27894d18bf2cbf1aba7d50fa28001d",
+          "control_utf8_bytes": 4353,
+          "treatment_utf8_bytes": 9232,
+          "delta_utf8_bytes": 4879
+        }
+      }
+    },
+    {
+      "case_id": "md-052",
+      "db_id": "student_club",
+      "role": "control",
+      "control_schema_sha256": "0a4e49c488fb2e1c7ae06e29e897bd5481341af8d8938ae50c96285165f3b15c",
+      "treatment_schema_sha256": "c38ff815cc5070eaf01ae6043af2f9ce4d8f04c2fb4162d8c54e84b5a1072073",
+      "schema_changed": true,
+      "context_snapshot_changed": true,
+      "tables_changed": false,
+      "fields_changed": true,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "57aa8cf4ac4e1bb2da2c5e66c8716170caa144dc79410f85ddfe9ecb2be98069",
+          "treatment_input_sha256": "a467dc63e970e106bf6065f9dde241038f67f9c7bfaeebb5d33c16baf4187d6e",
+          "control_utf8_bytes": 5585,
+          "treatment_utf8_bytes": 10246,
+          "delta_utf8_bytes": 4661
+        },
+        "direct": {
+          "control_input_sha256": "de44de8ae47ca832cb1d2e6c907ec4ec4cf1a19a00964edd5e253047f7f805a3",
+          "treatment_input_sha256": "c21a72907921b953bb43e6103dfdbd3c1c80211c1699bfcc273489666825bcf0",
+          "control_utf8_bytes": 4406,
+          "treatment_utf8_bytes": 9067,
+          "delta_utf8_bytes": 4661
+        }
+      }
+    },
+    {
+      "case_id": "md-065",
+      "db_id": "student_club",
+      "role": "diagnostic",
+      "control_schema_sha256": "0a4e49c488fb2e1c7ae06e29e897bd5481341af8d8938ae50c96285165f3b15c",
+      "treatment_schema_sha256": "c38ff815cc5070eaf01ae6043af2f9ce4d8f04c2fb4162d8c54e84b5a1072073",
+      "schema_changed": true,
+      "context_snapshot_changed": true,
+      "tables_changed": false,
+      "fields_changed": true,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "14c425273eaf3a6a61aeb4338c7d34e5e296ff6e545e136674ad9985d6047374",
+          "treatment_input_sha256": "d997940e858f6de1e08cefdcb783eb480101154fe14ad22a7d54c9599aee1d39",
+          "control_utf8_bytes": 5317,
+          "treatment_utf8_bytes": 10141,
+          "delta_utf8_bytes": 4824
+        },
+        "direct": {
+          "control_input_sha256": "18cc4e906577779476dadce95b376cd5eaa4d657e5f003b7abba1e41ccb5a40b",
+          "treatment_input_sha256": "f7d9432535cdef8715c6d851243a313da64216f33a91dfd8cd6e00e2c183088c",
+          "control_utf8_bytes": 4138,
+          "treatment_utf8_bytes": 8962,
+          "delta_utf8_bytes": 4824
+        }
+      }
+    },
+    {
+      "case_id": "md-077",
+      "db_id": "student_club",
+      "role": "diagnostic",
+      "control_schema_sha256": "0a4e49c488fb2e1c7ae06e29e897bd5481341af8d8938ae50c96285165f3b15c",
+      "treatment_schema_sha256": "c38ff815cc5070eaf01ae6043af2f9ce4d8f04c2fb4162d8c54e84b5a1072073",
+      "schema_changed": true,
+      "context_snapshot_changed": true,
+      "tables_changed": false,
+      "fields_changed": true,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "02b9034f23af06526c0f8268199fc7a558bd2c8d82c36726f0c383c1cc0bb329",
+          "treatment_input_sha256": "a1d34ded4900af22c333dfb94573dc01d2d00101bb490def4cb057d0d077692e",
+          "control_utf8_bytes": 5277,
+          "treatment_utf8_bytes": 10301,
+          "delta_utf8_bytes": 5024
+        },
+        "direct": {
+          "control_input_sha256": "bc5f946a4fc816e96930b4f7e7ce362bb1fa47044d644f1feafe2ce0559cf0a6",
+          "treatment_input_sha256": "d7a59aae05b33f484d5889d9de77351b351ed94e0cfb27cec71488556c955a3c",
+          "control_utf8_bytes": 4098,
+          "treatment_utf8_bytes": 9122,
+          "delta_utf8_bytes": 5024
+        }
+      }
+    },
+    {
+      "case_id": "md-081",
+      "db_id": "thrombosis_prediction",
+      "role": "control",
+      "control_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "treatment_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "a84e8ec7fdffb1b796d7800124d738b72750cdb28e5c1d08f88b4746c223ec1e",
+          "treatment_input_sha256": "a84e8ec7fdffb1b796d7800124d738b72750cdb28e5c1d08f88b4746c223ec1e",
+          "control_utf8_bytes": 8530,
+          "treatment_utf8_bytes": 8530,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "0cebdc45b2a6b2e630c3d8f18743f9e2b2b4fc4b31da70a79810991b1e9f447e",
+          "treatment_input_sha256": "0cebdc45b2a6b2e630c3d8f18743f9e2b2b4fc4b31da70a79810991b1e9f447e",
+          "control_utf8_bytes": 7351,
+          "treatment_utf8_bytes": 7351,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-095",
+      "db_id": "thrombosis_prediction",
+      "role": "control",
+      "control_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "treatment_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "edf43e2c6ff98ff005180fcb19612417db237ab86cca3614553682cb8c2c1526",
+          "treatment_input_sha256": "edf43e2c6ff98ff005180fcb19612417db237ab86cca3614553682cb8c2c1526",
+          "control_utf8_bytes": 8923,
+          "treatment_utf8_bytes": 8923,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "39ef355c39443287848df5b592d3a4cb047dfee370fc579c4c7fd9b43397bf8e",
+          "treatment_input_sha256": "39ef355c39443287848df5b592d3a4cb047dfee370fc579c4c7fd9b43397bf8e",
+          "control_utf8_bytes": 7744,
+          "treatment_utf8_bytes": 7744,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-101",
+      "db_id": "thrombosis_prediction",
+      "role": "control",
+      "control_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "treatment_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "1d6b79cd7fa001f0715fcd0b57762ee27899eb19933fe55bb66770f574c6cbaa",
+          "treatment_input_sha256": "1d6b79cd7fa001f0715fcd0b57762ee27899eb19933fe55bb66770f574c6cbaa",
+          "control_utf8_bytes": 8643,
+          "treatment_utf8_bytes": 8643,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "e91a097f95d6a3ce7cc13e59651b2cb45556d35b0210490d12d74e592de6040c",
+          "treatment_input_sha256": "e91a097f95d6a3ce7cc13e59651b2cb45556d35b0210490d12d74e592de6040c",
+          "control_utf8_bytes": 7464,
+          "treatment_utf8_bytes": 7464,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-123",
+      "db_id": "thrombosis_prediction",
+      "role": "diagnostic",
+      "control_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "treatment_schema_sha256": "088dddd5e99d754ff625c538637e3e49c2c30fde326892b1b9b85b79ac9aa05e",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "2b45a60b0c9797be007732712d293f0e22ea9017cc11b68e11d396ac82577c06",
+          "treatment_input_sha256": "2b45a60b0c9797be007732712d293f0e22ea9017cc11b68e11d396ac82577c06",
+          "control_utf8_bytes": 8604,
+          "treatment_utf8_bytes": 8604,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "b57ae7f845deed0447236606369e867aebf486f96d10f7855e73c8117131e6dc",
+          "treatment_input_sha256": "b57ae7f845deed0447236606369e867aebf486f96d10f7855e73c8117131e6dc",
+          "control_utf8_bytes": 7425,
+          "treatment_utf8_bytes": 7425,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-146",
+      "db_id": "european_football_2",
+      "role": "control",
+      "control_schema_sha256": "eecf0059b0912f0d89474efbc8a2e66c926679c16344ea9df6d0d1a88db3d813",
+      "treatment_schema_sha256": "eecf0059b0912f0d89474efbc8a2e66c926679c16344ea9df6d0d1a88db3d813",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "08137fecd54e2eb8d98ab221a29e125fafff16e4bcef2af603b52111f2d9b89d",
+          "treatment_input_sha256": "08137fecd54e2eb8d98ab221a29e125fafff16e4bcef2af603b52111f2d9b89d",
+          "control_utf8_bytes": 20669,
+          "treatment_utf8_bytes": 20669,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "5ac28881b8ceb7d6e4c64fa01d56aa2deafddfe196094a591a2da5fb4a3b85da",
+          "treatment_input_sha256": "5ac28881b8ceb7d6e4c64fa01d56aa2deafddfe196094a591a2da5fb4a3b85da",
+          "control_utf8_bytes": 19490,
+          "treatment_utf8_bytes": 19490,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-155",
+      "db_id": "european_football_2",
+      "role": "control",
+      "control_schema_sha256": "eecf0059b0912f0d89474efbc8a2e66c926679c16344ea9df6d0d1a88db3d813",
+      "treatment_schema_sha256": "eecf0059b0912f0d89474efbc8a2e66c926679c16344ea9df6d0d1a88db3d813",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "f70d7cc27d937764f56a6068916ce50e07df9e326ae4f90f95fc93687f3b9bbb",
+          "treatment_input_sha256": "f70d7cc27d937764f56a6068916ce50e07df9e326ae4f90f95fc93687f3b9bbb",
+          "control_utf8_bytes": 20919,
+          "treatment_utf8_bytes": 20919,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "e32f2fdb19c8b0e37d67dedffe9de39fa1dd3e4a1997b0b5285abb6a254cd52f",
+          "treatment_input_sha256": "e32f2fdb19c8b0e37d67dedffe9de39fa1dd3e4a1997b0b5285abb6a254cd52f",
+          "control_utf8_bytes": 19740,
+          "treatment_utf8_bytes": 19740,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-162",
+      "db_id": "european_football_2",
+      "role": "control",
+      "control_schema_sha256": "eecf0059b0912f0d89474efbc8a2e66c926679c16344ea9df6d0d1a88db3d813",
+      "treatment_schema_sha256": "eecf0059b0912f0d89474efbc8a2e66c926679c16344ea9df6d0d1a88db3d813",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "69db4fdd15544eadc94df9faaa0419d4b3bbbc9002f5e569ad5883a7a0ef31d5",
+          "treatment_input_sha256": "69db4fdd15544eadc94df9faaa0419d4b3bbbc9002f5e569ad5883a7a0ef31d5",
+          "control_utf8_bytes": 20494,
+          "treatment_utf8_bytes": 20494,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "0e5ab040f7a2865202beab4d89408939129425674094f97cb8259c799c83ef27",
+          "treatment_input_sha256": "0e5ab040f7a2865202beab4d89408939129425674094f97cb8259c799c83ef27",
+          "control_utf8_bytes": 19315,
+          "treatment_utf8_bytes": 19315,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-192",
+      "db_id": "formula_1",
+      "role": "control",
+      "control_schema_sha256": "1c6a7509488632f3d814c90e8ce34ed908481d9ce9f6eb57d31b2aed97a0f659",
+      "treatment_schema_sha256": "1c6a7509488632f3d814c90e8ce34ed908481d9ce9f6eb57d31b2aed97a0f659",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "6c24c667fc7435a526da46c3d1538382be06b6f78e7d9ddcb1ea4aca5090a18e",
+          "treatment_input_sha256": "6c24c667fc7435a526da46c3d1538382be06b6f78e7d9ddcb1ea4aca5090a18e",
+          "control_utf8_bytes": 14589,
+          "treatment_utf8_bytes": 14589,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "0d5c01a934fdab9aaa193a57fbf72e5fa919c77fd6d92fc588d5ba9a96ecf9e0",
+          "treatment_input_sha256": "0d5c01a934fdab9aaa193a57fbf72e5fa919c77fd6d92fc588d5ba9a96ecf9e0",
+          "control_utf8_bytes": 13410,
+          "treatment_utf8_bytes": 13410,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-193",
+      "db_id": "formula_1",
+      "role": "control",
+      "control_schema_sha256": "1c6a7509488632f3d814c90e8ce34ed908481d9ce9f6eb57d31b2aed97a0f659",
+      "treatment_schema_sha256": "1c6a7509488632f3d814c90e8ce34ed908481d9ce9f6eb57d31b2aed97a0f659",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "91da28f53ac763da3387ea156caf84fefa8e321a58cf8b3ff390abd32df465bd",
+          "treatment_input_sha256": "91da28f53ac763da3387ea156caf84fefa8e321a58cf8b3ff390abd32df465bd",
+          "control_utf8_bytes": 14749,
+          "treatment_utf8_bytes": 14749,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "da7e656ec4ce967e0cbbf3fdcf4cafce30b8f6e3755150654057f98b9a5a36f8",
+          "treatment_input_sha256": "da7e656ec4ce967e0cbbf3fdcf4cafce30b8f6e3755150654057f98b9a5a36f8",
+          "control_utf8_bytes": 13570,
+          "treatment_utf8_bytes": 13570,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-195",
+      "db_id": "formula_1",
+      "role": "control",
+      "control_schema_sha256": "1c6a7509488632f3d814c90e8ce34ed908481d9ce9f6eb57d31b2aed97a0f659",
+      "treatment_schema_sha256": "1c6a7509488632f3d814c90e8ce34ed908481d9ce9f6eb57d31b2aed97a0f659",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "49f1492e02a061ee750be4a6ff2fb8bb0e9d5dd17cfee622c573b662ab720c40",
+          "treatment_input_sha256": "49f1492e02a061ee750be4a6ff2fb8bb0e9d5dd17cfee622c573b662ab720c40",
+          "control_utf8_bytes": 15236,
+          "treatment_utf8_bytes": 15236,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "f55a1137120105d655035458a51ac6fa35f6808acd7444ed052ae715a10c0631",
+          "treatment_input_sha256": "f55a1137120105d655035458a51ac6fa35f6808acd7444ed052ae715a10c0631",
+          "control_utf8_bytes": 14057,
+          "treatment_utf8_bytes": 14057,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-239",
+      "db_id": "superhero",
+      "role": "control",
+      "control_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "treatment_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "cc26e72a2e0dc9070925481f2e530a5e2257e0e8a3aae8e314fafef80f77b8df",
+          "treatment_input_sha256": "cc26e72a2e0dc9070925481f2e530a5e2257e0e8a3aae8e314fafef80f77b8df",
+          "control_utf8_bytes": 9972,
+          "treatment_utf8_bytes": 9972,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "6705f474f502e4c0ddc3687f0bb655fb8607a67b541df4f4028aca73a45d0d31",
+          "treatment_input_sha256": "6705f474f502e4c0ddc3687f0bb655fb8607a67b541df4f4028aca73a45d0d31",
+          "control_utf8_bytes": 8793,
+          "treatment_utf8_bytes": 8793,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-253",
+      "db_id": "superhero",
+      "role": "control",
+      "control_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "treatment_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "be523cbbb6141007c9139c2c24157fc9c11cc85fe7cb4ab7420fe1ea24895c44",
+          "treatment_input_sha256": "be523cbbb6141007c9139c2c24157fc9c11cc85fe7cb4ab7420fe1ea24895c44",
+          "control_utf8_bytes": 9918,
+          "treatment_utf8_bytes": 9918,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "c4955c42aaf7b1d99c8969c8015fd107f62db59b5019dfde393cb7ddacfa7e04",
+          "treatment_input_sha256": "c4955c42aaf7b1d99c8969c8015fd107f62db59b5019dfde393cb7ddacfa7e04",
+          "control_utf8_bytes": 8739,
+          "treatment_utf8_bytes": 8739,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-264",
+      "db_id": "superhero",
+      "role": "control",
+      "control_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "treatment_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "af626ecb6f072269fae6f627f4f246d41fb36278598f5946dddba015e6a4610b",
+          "treatment_input_sha256": "af626ecb6f072269fae6f627f4f246d41fb36278598f5946dddba015e6a4610b",
+          "control_utf8_bytes": 9990,
+          "treatment_utf8_bytes": 9990,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "68fcd8d967bfc45eaa06fcf43107d627ce4d56bb791b42b5e30a16185d7aa4c9",
+          "treatment_input_sha256": "68fcd8d967bfc45eaa06fcf43107d627ce4d56bb791b42b5e30a16185d7aa4c9",
+          "control_utf8_bytes": 8811,
+          "treatment_utf8_bytes": 8811,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-281",
+      "db_id": "superhero",
+      "role": "control",
+      "control_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "treatment_schema_sha256": "854ae1ccbf1f71cbb7a25bd4203b826a3fa43ee5d710cc349a8eb6760cf27443",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "d4b4ea8107f7bde21040c6bfcdb6dd7d277bc4505e24e18c4ed3d7ddc58617a7",
+          "treatment_input_sha256": "d4b4ea8107f7bde21040c6bfcdb6dd7d277bc4505e24e18c4ed3d7ddc58617a7",
+          "control_utf8_bytes": 10242,
+          "treatment_utf8_bytes": 10242,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "b458970b4c315a961599b235f806057a702a42a434eec0fc5b684100d9f91a34",
+          "treatment_input_sha256": "b458970b4c315a961599b235f806057a702a42a434eec0fc5b684100d9f91a34",
+          "control_utf8_bytes": 9063,
+          "treatment_utf8_bytes": 9063,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-302",
+      "db_id": "codebase_community",
+      "role": "control",
+      "control_schema_sha256": "c235dc2e67d59eb8b4697927261cb9a4947d48a70c1e0fb851f58c859d610578",
+      "treatment_schema_sha256": "c235dc2e67d59eb8b4697927261cb9a4947d48a70c1e0fb851f58c859d610578",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "cef30140418218839f1d0c2cad48eb35c01094143da37b27ebd29c10f810344a",
+          "treatment_input_sha256": "cef30140418218839f1d0c2cad48eb35c01094143da37b27ebd29c10f810344a",
+          "control_utf8_bytes": 10191,
+          "treatment_utf8_bytes": 10191,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "552db79f3ea75c2a5b97c71079f7f9040fd97e2abb4e0d4a14f23efaf073de45",
+          "treatment_input_sha256": "552db79f3ea75c2a5b97c71079f7f9040fd97e2abb4e0d4a14f23efaf073de45",
+          "control_utf8_bytes": 9012,
+          "treatment_utf8_bytes": 9012,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-326",
+      "db_id": "codebase_community",
+      "role": "control",
+      "control_schema_sha256": "c235dc2e67d59eb8b4697927261cb9a4947d48a70c1e0fb851f58c859d610578",
+      "treatment_schema_sha256": "c235dc2e67d59eb8b4697927261cb9a4947d48a70c1e0fb851f58c859d610578",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "ac3ddb52173950a57f3e12fb9da987cf189e4733fcf53cdd78e6bbafae16e1fb",
+          "treatment_input_sha256": "ac3ddb52173950a57f3e12fb9da987cf189e4733fcf53cdd78e6bbafae16e1fb",
+          "control_utf8_bytes": 10182,
+          "treatment_utf8_bytes": 10182,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "8d0007453d1da1479acd53285c294e68b0b93ca209b6e35b0b7620840d31450e",
+          "treatment_input_sha256": "8d0007453d1da1479acd53285c294e68b0b93ca209b6e35b0b7620840d31450e",
+          "control_utf8_bytes": 9003,
+          "treatment_utf8_bytes": 9003,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-331",
+      "db_id": "codebase_community",
+      "role": "control",
+      "control_schema_sha256": "c235dc2e67d59eb8b4697927261cb9a4947d48a70c1e0fb851f58c859d610578",
+      "treatment_schema_sha256": "c235dc2e67d59eb8b4697927261cb9a4947d48a70c1e0fb851f58c859d610578",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "37633419f48309e8783327183400f94348058c93654a775588bdf7367c12f605",
+          "treatment_input_sha256": "37633419f48309e8783327183400f94348058c93654a775588bdf7367c12f605",
+          "control_utf8_bytes": 9848,
+          "treatment_utf8_bytes": 9848,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "facaf156809bbd162da532b154d2fc4100bafb458bbab6d82c876fad50c3eaf1",
+          "treatment_input_sha256": "facaf156809bbd162da532b154d2fc4100bafb458bbab6d82c876fad50c3eaf1",
+          "control_utf8_bytes": 8669,
+          "treatment_utf8_bytes": 8669,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-356",
+      "db_id": "card_games",
+      "role": "control",
+      "control_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "treatment_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "8789764f0e6b100aef43f3fc12ff0b29775c876308d57c5817f72c8bded46fe9",
+          "treatment_input_sha256": "8789764f0e6b100aef43f3fc12ff0b29775c876308d57c5817f72c8bded46fe9",
+          "control_utf8_bytes": 16117,
+          "treatment_utf8_bytes": 16117,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "ac09f45ffbcd562cef93b5602c176bc52b48ca3f6711acb1b5b29339d41efd97",
+          "treatment_input_sha256": "ac09f45ffbcd562cef93b5602c176bc52b48ca3f6711acb1b5b29339d41efd97",
+          "control_utf8_bytes": 14938,
+          "treatment_utf8_bytes": 14938,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-368",
+      "db_id": "card_games",
+      "role": "control",
+      "control_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "treatment_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "48479017f8aa8b6a3c3de680313c9cf98d73c91c3a2a504f701b4325ebd107d5",
+          "treatment_input_sha256": "48479017f8aa8b6a3c3de680313c9cf98d73c91c3a2a504f701b4325ebd107d5",
+          "control_utf8_bytes": 16465,
+          "treatment_utf8_bytes": 16465,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "f48b068542965390e6041890c52c66dd8501d3d632fdb21390ebbf9cc76a1aab",
+          "treatment_input_sha256": "f48b068542965390e6041890c52c66dd8501d3d632fdb21390ebbf9cc76a1aab",
+          "control_utf8_bytes": 15286,
+          "treatment_utf8_bytes": 15286,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-369",
+      "db_id": "card_games",
+      "role": "diagnostic",
+      "control_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "treatment_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "5462906f5b98fee9b7a339ce2020b1a6f795a9807fa741d7a43be46fe83abd27",
+          "treatment_input_sha256": "5462906f5b98fee9b7a339ce2020b1a6f795a9807fa741d7a43be46fe83abd27",
+          "control_utf8_bytes": 16430,
+          "treatment_utf8_bytes": 16430,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "fa467bbd5ef8f04cb679160c7e2bfcce58158c8f7cae30d4edbe8e02bf3ce61c",
+          "treatment_input_sha256": "fa467bbd5ef8f04cb679160c7e2bfcce58158c8f7cae30d4edbe8e02bf3ce61c",
+          "control_utf8_bytes": 15251,
+          "treatment_utf8_bytes": 15251,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-386",
+      "db_id": "card_games",
+      "role": "control",
+      "control_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "treatment_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "a3ac8abdffdb17fc8ea626ff3b66926a010e0544af6dcbf347b2ed241e79788c",
+          "treatment_input_sha256": "a3ac8abdffdb17fc8ea626ff3b66926a010e0544af6dcbf347b2ed241e79788c",
+          "control_utf8_bytes": 16365,
+          "treatment_utf8_bytes": 16365,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "8219a5a8387d0ceb668ab6fc1a1180289f0b8f7b770be64ec5ac44e42ff2e005",
+          "treatment_input_sha256": "8219a5a8387d0ceb668ab6fc1a1180289f0b8f7b770be64ec5ac44e42ff2e005",
+          "control_utf8_bytes": 15186,
+          "treatment_utf8_bytes": 15186,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-388",
+      "db_id": "card_games",
+      "role": "diagnostic",
+      "control_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "treatment_schema_sha256": "40c399b5427427c2857c4644baf67f4f709792779b38cb29190f2d682694621f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "717c66ea4b5bbccbad03722f92630505319df124248e8e16ff96e25802f35ddf",
+          "treatment_input_sha256": "717c66ea4b5bbccbad03722f92630505319df124248e8e16ff96e25802f35ddf",
+          "control_utf8_bytes": 16256,
+          "treatment_utf8_bytes": 16256,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "eed04f110c1d4b1a6d6cb3a888acf575b94635b64fa78c8d0b9b350897079b96",
+          "treatment_input_sha256": "eed04f110c1d4b1a6d6cb3a888acf575b94635b64fa78c8d0b9b350897079b96",
+          "control_utf8_bytes": 15077,
+          "treatment_utf8_bytes": 15077,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-420",
+      "db_id": "toxicology",
+      "role": "control",
+      "control_schema_sha256": "cff75d63919d334764c728bb9fa2c4eabe349d3ac6d1b82c23190b443397f3f6",
+      "treatment_schema_sha256": "cff75d63919d334764c728bb9fa2c4eabe349d3ac6d1b82c23190b443397f3f6",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "1ed3bdd7e7de3ddc59a2c1957575ff662fc3d9e202082e1b09297e0f721410c0",
+          "treatment_input_sha256": "1ed3bdd7e7de3ddc59a2c1957575ff662fc3d9e202082e1b09297e0f721410c0",
+          "control_utf8_bytes": 4902,
+          "treatment_utf8_bytes": 4902,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "fd8dead0bb1e01c4f2cd489ec57882a2b2669efbb349cdffae91818a3d1b9d30",
+          "treatment_input_sha256": "fd8dead0bb1e01c4f2cd489ec57882a2b2669efbb349cdffae91818a3d1b9d30",
+          "control_utf8_bytes": 3723,
+          "treatment_utf8_bytes": 3723,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-422",
+      "db_id": "toxicology",
+      "role": "control",
+      "control_schema_sha256": "cff75d63919d334764c728bb9fa2c4eabe349d3ac6d1b82c23190b443397f3f6",
+      "treatment_schema_sha256": "cff75d63919d334764c728bb9fa2c4eabe349d3ac6d1b82c23190b443397f3f6",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "b0062addfae7b481277a3a86935bdf12d36462c11216f06f0ca5a81501129ce6",
+          "treatment_input_sha256": "b0062addfae7b481277a3a86935bdf12d36462c11216f06f0ca5a81501129ce6",
+          "control_utf8_bytes": 5143,
+          "treatment_utf8_bytes": 5143,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "416920f82f4bdb4ef826f52d3753ff2ce8966eaa853f5ebd36856683287d4aaf",
+          "treatment_input_sha256": "416920f82f4bdb4ef826f52d3753ff2ce8966eaa853f5ebd36856683287d4aaf",
+          "control_utf8_bytes": 3964,
+          "treatment_utf8_bytes": 3964,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-436",
+      "db_id": "toxicology",
+      "role": "control",
+      "control_schema_sha256": "cff75d63919d334764c728bb9fa2c4eabe349d3ac6d1b82c23190b443397f3f6",
+      "treatment_schema_sha256": "cff75d63919d334764c728bb9fa2c4eabe349d3ac6d1b82c23190b443397f3f6",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "bf014b755b04bbdeb6409e68d7c935240e2bc3329a223a7951782b4cc6455d44",
+          "treatment_input_sha256": "bf014b755b04bbdeb6409e68d7c935240e2bc3329a223a7951782b4cc6455d44",
+          "control_utf8_bytes": 5429,
+          "treatment_utf8_bytes": 5429,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "ea3d8b6a1660dda16fa2ba7132931b76b7834d8e3c893e53e081aeb132766e1f",
+          "treatment_input_sha256": "ea3d8b6a1660dda16fa2ba7132931b76b7834d8e3c893e53e081aeb132766e1f",
+          "control_utf8_bytes": 4250,
+          "treatment_utf8_bytes": 4250,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-438",
+      "db_id": "california_schools",
+      "role": "control",
+      "control_schema_sha256": "d1dca34c87a4a7bd86e825533a29b82fef183e5bbea16e1f7ab50e3166d5f25f",
+      "treatment_schema_sha256": "d1dca34c87a4a7bd86e825533a29b82fef183e5bbea16e1f7ab50e3166d5f25f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "0feb5913b813d0b12d5bf72f4177acad29ef67af6cdef559eb918bec2b061880",
+          "treatment_input_sha256": "0feb5913b813d0b12d5bf72f4177acad29ef67af6cdef559eb918bec2b061880",
+          "control_utf8_bytes": 17767,
+          "treatment_utf8_bytes": 17767,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "e057c969d0bb2aba013e38bb859ce0a327d1f63067323fb421aa0e4862a41a79",
+          "treatment_input_sha256": "e057c969d0bb2aba013e38bb859ce0a327d1f63067323fb421aa0e4862a41a79",
+          "control_utf8_bytes": 16588,
+          "treatment_utf8_bytes": 16588,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-440",
+      "db_id": "california_schools",
+      "role": "control",
+      "control_schema_sha256": "d1dca34c87a4a7bd86e825533a29b82fef183e5bbea16e1f7ab50e3166d5f25f",
+      "treatment_schema_sha256": "d1dca34c87a4a7bd86e825533a29b82fef183e5bbea16e1f7ab50e3166d5f25f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "9800aa458ee12d03e1cecd3b2de035c0b4fdb16d472227cffa3a15bb689b12b8",
+          "treatment_input_sha256": "9800aa458ee12d03e1cecd3b2de035c0b4fdb16d472227cffa3a15bb689b12b8",
+          "control_utf8_bytes": 18167,
+          "treatment_utf8_bytes": 18167,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "52c94ace77723a7a5e65c99ddc3544aa7de96297c5a239a6fcdcad84eae6289b",
+          "treatment_input_sha256": "52c94ace77723a7a5e65c99ddc3544aa7de96297c5a239a6fcdcad84eae6289b",
+          "control_utf8_bytes": 16988,
+          "treatment_utf8_bytes": 16988,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-465",
+      "db_id": "california_schools",
+      "role": "control",
+      "control_schema_sha256": "d1dca34c87a4a7bd86e825533a29b82fef183e5bbea16e1f7ab50e3166d5f25f",
+      "treatment_schema_sha256": "d1dca34c87a4a7bd86e825533a29b82fef183e5bbea16e1f7ab50e3166d5f25f",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "d2bae55e379556a20320b28caa1844d3e1bdc537eb646792e5578a6bcc0c1dc4",
+          "treatment_input_sha256": "d2bae55e379556a20320b28caa1844d3e1bdc537eb646792e5578a6bcc0c1dc4",
+          "control_utf8_bytes": 18275,
+          "treatment_utf8_bytes": 18275,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "ec86b51faf0e2761e770ec9f669a3d444a43df4715bc81cbe06d85ac8a9e2659",
+          "treatment_input_sha256": "ec86b51faf0e2761e770ec9f669a3d444a43df4715bc81cbe06d85ac8a9e2659",
+          "control_utf8_bytes": 17096,
+          "treatment_utf8_bytes": 17096,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-468",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "82fe123e6d66389ef8c60f5b4a603e323842c00ce87975caeb11c1bbfe842252",
+          "treatment_input_sha256": "82fe123e6d66389ef8c60f5b4a603e323842c00ce87975caeb11c1bbfe842252",
+          "control_utf8_bytes": 8842,
+          "treatment_utf8_bytes": 8842,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "e6265e81aba6b5705a43b88f5774e21fbf22eb3e7096d507c80e2fcc4d2c39ec",
+          "treatment_input_sha256": "e6265e81aba6b5705a43b88f5774e21fbf22eb3e7096d507c80e2fcc4d2c39ec",
+          "control_utf8_bytes": 7663,
+          "treatment_utf8_bytes": 7663,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-469",
+      "db_id": "financial",
+      "role": "control",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "f3bd6a558ec41be7ac386882d7da8d8013cf3eaff75924d3ad0411b6a6743eab",
+          "treatment_input_sha256": "f3bd6a558ec41be7ac386882d7da8d8013cf3eaff75924d3ad0411b6a6743eab",
+          "control_utf8_bytes": 8747,
+          "treatment_utf8_bytes": 8747,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "a3640755db4eaa677740b13325e77b9b8160a05e78c591e89d4d0d977d080d29",
+          "treatment_input_sha256": "a3640755db4eaa677740b13325e77b9b8160a05e78c591e89d4d0d977d080d29",
+          "control_utf8_bytes": 7568,
+          "treatment_utf8_bytes": 7568,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-470",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "008c82bcfdeda9076f8d666566d5e51b8781c93d2067dce793e09fab8c26a4b5",
+          "treatment_input_sha256": "008c82bcfdeda9076f8d666566d5e51b8781c93d2067dce793e09fab8c26a4b5",
+          "control_utf8_bytes": 8127,
+          "treatment_utf8_bytes": 8127,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "dde72139903985872a5c6ad9d1a2f20f2cf48572a1c8193b295016cbbbbf04ef",
+          "treatment_input_sha256": "dde72139903985872a5c6ad9d1a2f20f2cf48572a1c8193b295016cbbbbf04ef",
+          "control_utf8_bytes": 6948,
+          "treatment_utf8_bytes": 6948,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-473",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "7d7c14cb48286fe7edd96e3e125093e2c78f3bf23b1b474e4fd78bbe3b3a558b",
+          "treatment_input_sha256": "7d7c14cb48286fe7edd96e3e125093e2c78f3bf23b1b474e4fd78bbe3b3a558b",
+          "control_utf8_bytes": 8562,
+          "treatment_utf8_bytes": 8562,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "366304e6c30f866dc67317c431a14cb9a91d854124c19ccc7b0c331cf6a71356",
+          "treatment_input_sha256": "366304e6c30f866dc67317c431a14cb9a91d854124c19ccc7b0c331cf6a71356",
+          "control_utf8_bytes": 7383,
+          "treatment_utf8_bytes": 7383,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-474",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "2ed3fec38a123123dc5cddd08bbf2dd7de26828c852aa642c48a847ebda4e04f",
+          "treatment_input_sha256": "2ed3fec38a123123dc5cddd08bbf2dd7de26828c852aa642c48a847ebda4e04f",
+          "control_utf8_bytes": 8719,
+          "treatment_utf8_bytes": 8719,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "e9e74f14ec9c404693d2518ad7e95086b62c2267c4034b9e3118a206062c7ed0",
+          "treatment_input_sha256": "e9e74f14ec9c404693d2518ad7e95086b62c2267c4034b9e3118a206062c7ed0",
+          "control_utf8_bytes": 7540,
+          "treatment_utf8_bytes": 7540,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-476",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "dc3f0ba823e622ba57fee6f75f91638a5cf384fce381709147d17f10330b6ecb",
+          "treatment_input_sha256": "dc3f0ba823e622ba57fee6f75f91638a5cf384fce381709147d17f10330b6ecb",
+          "control_utf8_bytes": 8722,
+          "treatment_utf8_bytes": 8722,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "f22ea342ad74fd8dc387f39cd634d5f68611670d03352f8b0ddd4b2fcab70ba3",
+          "treatment_input_sha256": "f22ea342ad74fd8dc387f39cd634d5f68611670d03352f8b0ddd4b2fcab70ba3",
+          "control_utf8_bytes": 7543,
+          "treatment_utf8_bytes": 7543,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-478",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "86e1fcec03b02fe36748fad159cef412b8e4f52cdd0b32348772768b09363f8a",
+          "treatment_input_sha256": "86e1fcec03b02fe36748fad159cef412b8e4f52cdd0b32348772768b09363f8a",
+          "control_utf8_bytes": 8872,
+          "treatment_utf8_bytes": 8872,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "ffe477cbae680802b64caa86fbed51e508bee9544fd60e19b745152043a0458c",
+          "treatment_input_sha256": "ffe477cbae680802b64caa86fbed51e508bee9544fd60e19b745152043a0458c",
+          "control_utf8_bytes": 7693,
+          "treatment_utf8_bytes": 7693,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-483",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "d126a20a72bfb7379e354df390cd8fe1ba8e7717d13e628a1176df1b918fee55",
+          "treatment_input_sha256": "d126a20a72bfb7379e354df390cd8fe1ba8e7717d13e628a1176df1b918fee55",
+          "control_utf8_bytes": 8910,
+          "treatment_utf8_bytes": 8910,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "8873b0423fcf2f201f9faa5008fde3ec09547b05e9751d3bd3732904c003fcae",
+          "treatment_input_sha256": "8873b0423fcf2f201f9faa5008fde3ec09547b05e9751d3bd3732904c003fcae",
+          "control_utf8_bytes": 7731,
+          "treatment_utf8_bytes": 7731,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-487",
+      "db_id": "financial",
+      "role": "control",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "4310ca8f752a9b293f33b4b5a42cc8411cf43b49257b94e941abc62a8d299e0f",
+          "treatment_input_sha256": "4310ca8f752a9b293f33b4b5a42cc8411cf43b49257b94e941abc62a8d299e0f",
+          "control_utf8_bytes": 8211,
+          "treatment_utf8_bytes": 8211,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "2dfcf755571f0a499933d33a12e69a95bea00953877290bea5b3f8b905533675",
+          "treatment_input_sha256": "2dfcf755571f0a499933d33a12e69a95bea00953877290bea5b3f8b905533675",
+          "control_utf8_bytes": 7032,
+          "treatment_utf8_bytes": 7032,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-489",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "972327cdc014c237dcc2757ad7a749a5f5ddc64c147834974447f743c652220e",
+          "treatment_input_sha256": "972327cdc014c237dcc2757ad7a749a5f5ddc64c147834974447f743c652220e",
+          "control_utf8_bytes": 8741,
+          "treatment_utf8_bytes": 8741,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "0da4458589c204ab8d3443d6a67564bc0be78530f3e0e9d81f1a6b4e0d39c4ae",
+          "treatment_input_sha256": "0da4458589c204ab8d3443d6a67564bc0be78530f3e0e9d81f1a6b4e0d39c4ae",
+          "control_utf8_bytes": 7562,
+          "treatment_utf8_bytes": 7562,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-491",
+      "db_id": "financial",
+      "role": "diagnostic",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "534adcb95ce3cadd5699dfdb4413232392788033a0fc66fc6149a2e244841119",
+          "treatment_input_sha256": "534adcb95ce3cadd5699dfdb4413232392788033a0fc66fc6149a2e244841119",
+          "control_utf8_bytes": 8977,
+          "treatment_utf8_bytes": 8977,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "15dac5b6958c5b5a1c563fc097626ad9306c8d1c5795d81a9021dfedcd12918e",
+          "treatment_input_sha256": "15dac5b6958c5b5a1c563fc097626ad9306c8d1c5795d81a9021dfedcd12918e",
+          "control_utf8_bytes": 7798,
+          "treatment_utf8_bytes": 7798,
+          "delta_utf8_bytes": 0
+        }
+      }
+    },
+    {
+      "case_id": "md-495",
+      "db_id": "financial",
+      "role": "control",
+      "control_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "treatment_schema_sha256": "eb64a76d36ce44dffc9a31d9fb4767e4aade9af68eebca8225991111e69d0c71",
+      "schema_changed": false,
+      "context_snapshot_changed": false,
+      "tables_changed": false,
+      "fields_changed": false,
+      "relationships_changed": false,
+      "sufficiency_before": "sufficient",
+      "sufficiency_after": "sufficient",
+      "arms": {
+        "forge": {
+          "control_input_sha256": "56522297207d635dbc0b456ce31afcccf2f89f7902b804aca7aee044ef49df33",
+          "treatment_input_sha256": "56522297207d635dbc0b456ce31afcccf2f89f7902b804aca7aee044ef49df33",
+          "control_utf8_bytes": 8813,
+          "treatment_utf8_bytes": 8813,
+          "delta_utf8_bytes": 0
+        },
+        "direct": {
+          "control_input_sha256": "ea5c8da5aaa3efb438db3f4e172ff8939de436b74c5699a300c0eda5636c8974",
+          "treatment_input_sha256": "ea5c8da5aaa3efb438db3f4e172ff8939de436b74c5699a300c0eda5636c8974",
+          "control_utf8_bytes": 7634,
+          "treatment_utf8_bytes": 7634,
+          "delta_utf8_bytes": 0
+        }
+      }
+    }
+  ],
+  "report_sha256": "467952482918ec3637f4a4aa4034c70e0b2f6bdd1042f2bb49e6f0e196a500cc"
+}

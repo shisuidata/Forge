@@ -1,0 +1,1584 @@
+{
+  "schema_version": 1,
+  "requirement": "REQ-2026-09-05-037",
+  "model": "openai-codex/gpt-5.6-luna",
+  "scope": "Five preselected affected development cases in student_club; not a Luna overall-accuracy estimate or independent holdout.",
+  "actual_requests": {
+    "total": 22,
+    "parameter_rejected": 2,
+    "successful": 20,
+    "automatic_retries": 0,
+    "successful_candidate_count": 20
+  },
+  "sampling": "provider_default; no temperature or output-token cap in actual request bodies",
+  "legacy_pi_record_warning": "temperature=0/max_output_tokens=8192 in raw Pi projections are not effective provider settings; use captured payloads and sessions.",
+  "metrics": {
+    "control": {
+      "forge": {
+        "candidate_count": 5,
+        "official_ea_pass": 3,
+        "contract_pass": 3,
+        "execution_pass": 5,
+        "compile_failure_count": 0,
+        "tokens": {
+          "prompt_tokens": 20126,
+          "completion_tokens": 1733,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "total_tokens": 21859
+        },
+        "mean_generation_ms": 8244.68,
+        "p95_generation_ms_nearest_rank": 14172.3
+      },
+      "direct": {
+        "candidate_count": 5,
+        "official_ea_pass": 3,
+        "contract_pass": 3,
+        "execution_pass": 5,
+        "compile_failure_count": 0,
+        "tokens": {
+          "prompt_tokens": 5401,
+          "completion_tokens": 1351,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "total_tokens": 6752
+        },
+        "mean_generation_ms": 6792.7,
+        "p95_generation_ms_nearest_rank": 9573.9
+      },
+      "combined": {
+        "candidate_count": 10,
+        "official_ea_pass": 6,
+        "contract_pass": 6,
+        "execution_pass": 10,
+        "compile_failure_count": 0,
+        "tokens": {
+          "prompt_tokens": 25527,
+          "completion_tokens": 3084,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "total_tokens": 28611
+        },
+        "mean_generation_ms": 7518.69,
+        "p95_generation_ms_nearest_rank": 14172.3
+      }
+    },
+    "treatment": {
+      "forge": {
+        "candidate_count": 5,
+        "official_ea_pass": 2,
+        "contract_pass": 2,
+        "execution_pass": 4,
+        "compile_failure_count": 1,
+        "tokens": {
+          "prompt_tokens": 25108,
+          "completion_tokens": 1719,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "total_tokens": 26827
+        },
+        "mean_generation_ms": 8071.280000000001,
+        "p95_generation_ms_nearest_rank": 11191.6
+      },
+      "direct": {
+        "candidate_count": 5,
+        "official_ea_pass": 3,
+        "contract_pass": 3,
+        "execution_pass": 5,
+        "compile_failure_count": 0,
+        "tokens": {
+          "prompt_tokens": 10383,
+          "completion_tokens": 1499,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "total_tokens": 11882
+        },
+        "mean_generation_ms": 7400.9800000000005,
+        "p95_generation_ms_nearest_rank": 11778.4
+      },
+      "combined": {
+        "candidate_count": 10,
+        "official_ea_pass": 5,
+        "contract_pass": 5,
+        "execution_pass": 9,
+        "compile_failure_count": 1,
+        "tokens": {
+          "prompt_tokens": 35491,
+          "completion_tokens": 3218,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "total_tokens": 38709
+        },
+        "mean_generation_ms": 7736.13,
+        "p95_generation_ms_nearest_rank": 11778.4
+      }
+    }
+  },
+  "cost_guard": {
+    "treatment_control_total_token_ratio": 1.3529411764705883,
+    "maximum_for_promotion": 1.2,
+    "passed": false,
+    "currency_cost": null,
+    "note": "Token usage is observed; no provider settlement-price or currency-cost claim."
+  },
+  "latency_guard": {
+    "treatment_control_p95_ratio": 0.8310859916880111,
+    "maximum_for_promotion": 1.25,
+    "passed": true,
+    "note": "Small-sample descriptive timing, not a statistical latency conclusion."
+  },
+  "case_differences": [
+    {
+      "case_id": "md-065",
+      "question": "Identify the type of expenses and their total value approved for 'October Meeting' event.",
+      "arms": {
+        "forge": {
+          "control_ea": false,
+          "treatment_ea": false,
+          "control_contract": false,
+          "treatment_contract": false
+        },
+        "direct": {
+          "control_ea": false,
+          "treatment_ea": false,
+          "control_contract": false,
+          "treatment_contract": false
+        }
+      }
+    },
+    {
+      "case_id": "md-034",
+      "question": "What is the amount of the funds that the Vice President received?",
+      "arms": {
+        "forge": {
+          "control_ea": true,
+          "treatment_ea": true,
+          "control_contract": true,
+          "treatment_contract": true
+        },
+        "direct": {
+          "control_ea": true,
+          "treatment_ea": true,
+          "control_contract": true,
+          "treatment_contract": true
+        }
+      }
+    },
+    {
+      "case_id": "md-046",
+      "question": "How many times was the budget in Advertisement for \"Yearly Kickoff\" meeting more than \"October Meeting\"?",
+      "arms": {
+        "forge": {
+          "control_ea": true,
+          "treatment_ea": true,
+          "control_contract": true,
+          "treatment_contract": true
+        },
+        "direct": {
+          "control_ea": true,
+          "treatment_ea": true,
+          "control_contract": true,
+          "treatment_contract": true
+        }
+      }
+    },
+    {
+      "case_id": "md-052",
+      "question": "Among all the closed events, which event has the highest spend-to-budget ratio?",
+      "arms": {
+        "forge": {
+          "control_ea": true,
+          "treatment_ea": false,
+          "control_contract": true,
+          "treatment_contract": false
+        },
+        "direct": {
+          "control_ea": true,
+          "treatment_ea": true,
+          "control_contract": true,
+          "treatment_contract": true
+        }
+      }
+    },
+    {
+      "case_id": "md-077",
+      "question": "Write the full names of students who received funds on the date of 9/9/2019 and include the amount received.",
+      "arms": {
+        "forge": {
+          "control_ea": false,
+          "treatment_ea": false,
+          "control_contract": false,
+          "treatment_contract": false
+        },
+        "direct": {
+          "control_ea": false,
+          "treatment_ea": false,
+          "control_contract": false,
+          "treatment_contract": false
+        }
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "condition": "control",
+      "case_id": "md-065",
+      "arm": "forge",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT budget.category AS type\nFROM event\nINNER JOIN budget ON event.event_id = budget.link_to_event\nINNER JOIN expense ON budget.budget_id = expense.link_to_budget\nWHERE event.event_name = 'October Meeting' AND expense.approved = 'Yes'\nGROUP BY budget.category",
+      "output": {
+        "scan": "event",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget",
+            "on": {
+              "left": "event.event_id",
+              "right": "budget.link_to_event"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "expense",
+            "on": {
+              "left": "budget.budget_id",
+              "right": "expense.link_to_budget"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "event.event_name",
+            "op": "eq",
+            "val": "October Meeting"
+          },
+          {
+            "col": "expense.approved",
+            "op": "eq",
+            "val": "Yes"
+          }
+        ],
+        "group": [
+          "budget.category"
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "expense.cost",
+            "as": "total_value"
+          }
+        ],
+        "select": [
+          {
+            "expr": "budget.category",
+            "as": "type"
+          }
+        ]
+      },
+      "total_tokens": 4347,
+      "generation_ms": 8331.6,
+      "result_row_count": 0,
+      "result_columns": [
+        "type"
+      ],
+      "result_preview": [],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-065",
+      "arm": "direct",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'Yes'\nGROUP BY e.expense_description",
+      "output": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'Yes'\nGROUP BY e.expense_description;",
+      "total_tokens": 1497,
+      "generation_ms": 9573.9,
+      "result_row_count": 0,
+      "result_columns": [
+        "expense_description",
+        "total_value"
+      ],
+      "result_preview": [],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-065",
+      "arm": "forge",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT expense.expense_description, SUM(expense.cost) AS total_value\nFROM expense\nINNER JOIN budget ON expense.link_to_budget = budget.budget_id\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE event.event_name = 'October Meeting' AND expense.approved = 'true'\nGROUP BY expense.expense_description",
+      "output": {
+        "scan": "expense",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget",
+            "on": {
+              "left": "expense.link_to_budget",
+              "right": "budget.budget_id"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "event",
+            "on": {
+              "left": "budget.link_to_event",
+              "right": "event.event_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "event.event_name",
+            "op": "eq",
+            "val": "October Meeting"
+          },
+          {
+            "col": "expense.approved",
+            "op": "eq",
+            "val": "true"
+          }
+        ],
+        "group": [
+          "expense.expense_description"
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "expense.cost",
+            "as": "total_value"
+          }
+        ],
+        "select": [
+          "expense.expense_description",
+          "total_value"
+        ]
+      },
+      "total_tokens": 5216,
+      "generation_ms": 5360.1,
+      "result_row_count": 3,
+      "result_columns": [
+        "expense_description",
+        "total_value"
+      ],
+      "result_preview": [
+        [
+          "Pizza",
+          51.81
+        ],
+        [
+          "Posters",
+          54.25
+        ],
+        [
+          "Water, chips, cookies",
+          69.33
+        ]
+      ],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-065",
+      "arm": "direct",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT b.category, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS v ON b.link_to_event = v.event_id\nWHERE v.event_name = 'October Meeting'\n  AND e.approved = 'true'\nGROUP BY b.category",
+      "output": "SELECT b.category, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS v ON b.link_to_event = v.event_id\nWHERE v.event_name = 'October Meeting'\n  AND e.approved = 'true'\nGROUP BY b.category;",
+      "total_tokens": 2646,
+      "generation_ms": 11778.4,
+      "result_row_count": 2,
+      "result_columns": [
+        "category",
+        "total_value"
+      ],
+      "result_preview": [
+        [
+          "Advertisement",
+          54.25
+        ],
+        [
+          "Food",
+          121.14
+        ]
+      ],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-034",
+      "arm": "forge",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE member.position = 'Vice President'",
+      "output": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "member.position",
+            "op": "eq",
+            "val": "Vice President"
+          }
+        ],
+        "select": [
+          "income.amount"
+        ]
+      },
+      "total_tokens": 5213,
+      "generation_ms": 6526.7,
+      "result_row_count": 1,
+      "result_columns": [
+        "amount"
+      ],
+      "result_preview": [
+        [
+          50
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-034",
+      "arm": "direct",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+      "output": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President';",
+      "total_tokens": 2166,
+      "generation_ms": 3899.1,
+      "result_row_count": 1,
+      "result_columns": [
+        "amount"
+      ],
+      "result_preview": [
+        [
+          50
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-034",
+      "arm": "forge",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT SUM(income.amount) AS amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE member.position = 'Vice President'",
+      "output": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "member.position",
+            "op": "eq",
+            "val": "Vice President"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "income.amount",
+            "as": "amount"
+          }
+        ],
+        "select": [
+          "amount"
+        ]
+      },
+      "total_tokens": 4153,
+      "generation_ms": 5212.1,
+      "result_row_count": 1,
+      "result_columns": [
+        "amount"
+      ],
+      "result_preview": [
+        [
+          50
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-034",
+      "arm": "direct",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+      "output": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President';",
+      "total_tokens": 1157,
+      "generation_ms": 3985.6,
+      "result_row_count": 1,
+      "result_columns": [
+        "amount"
+      ],
+      "result_preview": [
+        [
+          50
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-046",
+      "arm": "forge",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT 1.0 * SUM(CASE WHEN event.event_name = 'Yearly Kickoff' THEN budget.amount ELSE 0 END) / SUM(CASE WHEN event.event_name = 'October Meeting' THEN budget.amount ELSE 0 END) AS times\nFROM budget\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE budget.category = 'Advertisement' AND event.event_name IN ('Yearly Kickoff', 'October Meeting')",
+      "output": {
+        "scan": "budget",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "event",
+            "on": {
+              "left": "budget.link_to_event",
+              "right": "event.event_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "budget.category",
+            "op": "eq",
+            "val": "Advertisement"
+          },
+          {
+            "col": "event.event_name",
+            "op": "in",
+            "val": [
+              "Yearly Kickoff",
+              "October Meeting"
+            ]
+          }
+        ],
+        "select": [
+          {
+            "expr": "1.0 * SUM(CASE WHEN event.event_name = 'Yearly Kickoff' THEN budget.amount ELSE 0 END) / SUM(CASE WHEN event.event_name = 'October Meeting' THEN budget.amount ELSE 0 END)",
+            "as": "times"
+          }
+        ]
+      },
+      "total_tokens": 4373,
+      "generation_ms": 7693.9,
+      "result_row_count": 1,
+      "result_columns": [
+        "times"
+      ],
+      "result_preview": [
+        [
+          2.727272727272727
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-046",
+      "arm": "direct",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT 1.0 * SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) AS times_more\nFROM budget AS b\nJOIN event AS e ON b.link_to_event = e.event_id\nWHERE b.category = 'Advertisement'",
+      "output": "SELECT 1.0 * SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) AS times_more\nFROM budget AS b\nJOIN event AS e ON b.link_to_event = e.event_id\nWHERE b.category = 'Advertisement';",
+      "total_tokens": 1363,
+      "generation_ms": 6689.7,
+      "result_row_count": 1,
+      "result_columns": [
+        "times_more"
+      ],
+      "result_preview": [
+        [
+          2.727272727272727
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-046",
+      "arm": "forge",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "WITH budget_totals AS (\n  SELECT SUM(CASE WHEN event.event_name = 'Yearly Kickoff' THEN budget.amount ELSE 0 END) AS yearly_amount, SUM(CASE WHEN event.event_name = 'October Meeting' THEN budget.amount ELSE 0 END) AS october_amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement'\n)\nSELECT SUM(CASE WHEN event.event_name = 'Yearly Kickoff' THEN budget.amount ELSE 0 END) * 1.0 / SUM(CASE WHEN event.event_name = 'October Meeting' THEN budget.amount ELSE 0 END) AS times_more\nFROM budget\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE budget.category = 'Advertisement'",
+      "output": {
+        "scan": "budget",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "event",
+            "on": {
+              "left": "budget.link_to_event",
+              "right": "event.event_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "budget.category",
+            "op": "eq",
+            "val": "Advertisement"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "CASE WHEN event.event_name = 'Yearly Kickoff' THEN budget.amount ELSE 0 END",
+            "as": "yearly_amount"
+          },
+          {
+            "fn": "sum",
+            "col": "CASE WHEN event.event_name = 'October Meeting' THEN budget.amount ELSE 0 END",
+            "as": "october_amount"
+          }
+        ],
+        "select": [
+          {
+            "expr": "yearly_amount * 1.0 / october_amount",
+            "as": "times_more"
+          }
+        ],
+        "cte": [
+          {
+            "name": "budget_totals",
+            "query": {
+              "scan": "budget",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "event",
+                  "on": {
+                    "left": "budget.link_to_event",
+                    "right": "event.event_id"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "budget.category",
+                  "op": "eq",
+                  "val": "Advertisement"
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "sum",
+                  "col": "CASE WHEN event.event_name = 'Yearly Kickoff' THEN budget.amount ELSE 0 END",
+                  "as": "yearly_amount"
+                },
+                {
+                  "fn": "sum",
+                  "col": "CASE WHEN event.event_name = 'October Meeting' THEN budget.amount ELSE 0 END",
+                  "as": "october_amount"
+                }
+              ],
+              "select": [
+                "yearly_amount",
+                "october_amount"
+              ]
+            }
+          }
+        ]
+      },
+      "total_tokens": 5573,
+      "generation_ms": 11191.6,
+      "result_row_count": 1,
+      "result_columns": [
+        "times_more"
+      ],
+      "result_preview": [
+        [
+          2.727272727272727
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-046",
+      "arm": "direct",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement'",
+      "output": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement';",
+      "total_tokens": 2375,
+      "generation_ms": 7983.9,
+      "result_row_count": 1,
+      "result_columns": [
+        "CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END)"
+      ],
+      "result_preview": [
+        [
+          2.727272727272727
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-052",
+      "arm": "forge",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "compile",
+        "code": "compile_failed",
+        "retryable": true
+      },
+      "sql": null,
+      "output": {
+        "scan": "event e",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget b",
+            "on": {
+              "left": "e.event_id",
+              "right": "b.link_to_event"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "e.status",
+            "op": "eq",
+            "val": "Closed"
+          }
+        ],
+        "select": [
+          "e.event_name"
+        ],
+        "sort": [
+          {
+            "col": "b.spent * 1.0 / b.amount",
+            "dir": "desc"
+          }
+        ],
+        "limit": 1
+      },
+      "total_tokens": 5480,
+      "generation_ms": 9940.8,
+      "reproduced_compile_error": "JOIN 条件引用了未声明的表：b, e。"
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-052",
+      "arm": "direct",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent * 1.0 / b.amount DESC\nLIMIT 1",
+      "output": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent * 1.0 / b.amount DESC\nLIMIT 1;",
+      "total_tokens": 2401,
+      "generation_ms": 7981.1,
+      "result_row_count": 1,
+      "result_columns": [
+        "event_name"
+      ],
+      "result_preview": [
+        [
+          "September Speaker"
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-052",
+      "arm": "forge",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "WITH ratios AS (\n  SELECT event.event_name, budget.spent / budget.amount AS ratio\n  FROM event\n  INNER JOIN budget ON event.event_id = budget.link_to_event\n  WHERE event.status = 'Closed'\n)\nSELECT event_name\nFROM ratios\nORDER BY ratio DESC\nLIMIT 1",
+      "output": {
+        "scan": "ratios",
+        "cte": [
+          {
+            "name": "ratios",
+            "query": {
+              "scan": "event",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "budget",
+                  "on": {
+                    "left": "event.event_id",
+                    "right": "budget.link_to_event"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "event.status",
+                  "op": "eq",
+                  "val": "Closed"
+                }
+              ],
+              "select": [
+                "event.event_name",
+                {
+                  "expr": "budget.spent / budget.amount",
+                  "as": "ratio"
+                }
+              ]
+            }
+          }
+        ],
+        "select": [
+          "event_name"
+        ],
+        "sort": [
+          {
+            "col": "ratio",
+            "dir": "desc"
+          }
+        ],
+        "limit": 1
+      },
+      "total_tokens": 4776,
+      "generation_ms": 14172.3,
+      "result_row_count": 1,
+      "result_columns": [
+        "event_name"
+      ],
+      "result_preview": [
+        [
+          "September Speaker"
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-052",
+      "arm": "direct",
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "sql": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / b.amount DESC\nLIMIT 1",
+      "output": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / b.amount DESC\nLIMIT 1;",
+      "total_tokens": 1458,
+      "generation_ms": 7745.9,
+      "result_row_count": 1,
+      "result_columns": [
+        "event_name"
+      ],
+      "result_preview": [
+        [
+          "September Speaker"
+        ]
+      ],
+      "semantic_replay": {
+        "correct": true,
+        "verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure_code": null
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-077",
+      "arm": "forge",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '9/9/2019'",
+      "output": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "income.date_received",
+            "op": "eq",
+            "val": "9/9/2019"
+          }
+        ],
+        "select": [
+          {
+            "expr": "member.first_name || ' ' || member.last_name",
+            "as": "full_name"
+          },
+          "income.amount"
+        ]
+      },
+      "total_tokens": 4210,
+      "generation_ms": 5813.5,
+      "result_row_count": 0,
+      "result_columns": [
+        "full_name",
+        "amount"
+      ],
+      "result_preview": [],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-077",
+      "arm": "direct",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT m.first_name, m.last_name, i.amount\nFROM member AS m\nJOIN income AS i ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019'",
+      "output": "SELECT m.first_name, m.last_name, i.amount\nFROM member AS m\nJOIN income AS i ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019';",
+      "total_tokens": 1277,
+      "generation_ms": 5968.4,
+      "result_row_count": 0,
+      "result_columns": [
+        "first_name",
+        "last_name",
+        "amount"
+      ],
+      "result_preview": [],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-077",
+      "arm": "forge",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_column_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '2019-09-09'",
+      "output": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "income.date_received",
+            "op": "eq",
+            "val": "2019-09-09"
+          }
+        ],
+        "select": [
+          {
+            "expr": "member.first_name || ' ' || member.last_name",
+            "as": "full_name"
+          },
+          "income.amount"
+        ]
+      },
+      "total_tokens": 5345,
+      "generation_ms": 7337.2,
+      "result_row_count": 2,
+      "result_columns": [
+        "full_name",
+        "amount"
+      ],
+      "result_preview": [
+        [
+          "Sacha Harrison",
+          50
+        ],
+        [
+          "Carlo Jacobs",
+          50
+        ]
+      ],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "column_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_column_count_mismatch"
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-077",
+      "arm": "direct",
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019'",
+      "output": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019';",
+      "total_tokens": 2294,
+      "generation_ms": 5362.4,
+      "result_row_count": 0,
+      "result_columns": [
+        "full_name",
+        "amount"
+      ],
+      "result_preview": [],
+      "semantic_replay": {
+        "correct": false,
+        "verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure_code": "result_row_count_mismatch"
+      }
+    }
+  ],
+  "official_gold": {
+    "md-065": {
+      "sql": "SELECT T1.type, SUM(T3.cost) FROM event AS T1 INNER JOIN budget AS T2 ON T1.event_id = T2.link_to_event INNER JOIN expense AS T3 ON T2.budget_id = T3.link_to_budget WHERE T1.event_name = 'October Meeting'",
+      "row_count": 1,
+      "columns": [
+        "type",
+        "SUM(T3.cost)"
+      ],
+      "preview": [
+        [
+          "Meeting",
+          175.39
+        ]
+      ]
+    },
+    "md-034": {
+      "sql": "SELECT T2.amount FROM member AS T1 INNER JOIN income AS T2 ON T1.member_id = T2.link_to_member WHERE T1.position = 'Vice President'",
+      "row_count": 1,
+      "columns": [
+        "amount"
+      ],
+      "preview": [
+        [
+          50
+        ]
+      ]
+    },
+    "md-046": {
+      "sql": "SELECT CAST(SUM(CASE WHEN T2.event_name = 'Yearly Kickoff' THEN T1.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN T2.event_name = 'October Meeting' THEN T1.amount ELSE 0 END) FROM budget AS T1 INNER JOIN event AS T2 ON T1.link_to_event = T2.event_id WHERE T1.category = 'Advertisement' AND T2.type = 'Meeting'",
+      "row_count": 1,
+      "columns": [
+        "CAST(SUM(CASE WHEN T2.event_name = 'Yearly Kickoff' THEN T1.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN T2.event_name = 'October Meeting' THEN T1.amount ELSE 0 END)"
+      ],
+      "preview": [
+        [
+          2.727272727272727
+        ]
+      ]
+    },
+    "md-052": {
+      "sql": "SELECT T2.event_name FROM budget AS T1 INNER JOIN event AS T2 ON T1.link_to_event = T2.event_id WHERE T2.status = 'Closed' ORDER BY T1.spent / T1.amount DESC LIMIT 1",
+      "row_count": 1,
+      "columns": [
+        "event_name"
+      ],
+      "preview": [
+        [
+          "September Speaker"
+        ]
+      ]
+    },
+    "md-077": {
+      "sql": "SELECT DISTINCT T3.first_name, T3.last_name, T4.amount FROM event AS T1 INNER JOIN attendance AS T2 ON T1.event_id = T2.link_to_event INNER JOIN member AS T3 ON T3.member_id = T2.link_to_member INNER JOIN income AS T4 ON T4.link_to_member = T3.member_id WHERE T4.date_received = '2019-09-09'",
+      "row_count": 2,
+      "columns": [
+        "first_name",
+        "last_name",
+        "amount"
+      ],
+      "preview": [
+        [
+          "Sacha",
+          "Harrison",
+          50
+        ],
+        [
+          "Carlo",
+          "Jacobs",
+          50
+        ]
+      ]
+    }
+  },
+  "verification": {
+    "frozen_http_contexts": 10,
+    "frozen_runtime_user_prompts": 20,
+    "provider_payloads_and_single_requests": 20,
+    "candidate_outcomes_reproduced": 20,
+    "gold_cache_vs_readonly_execution": 5,
+    "model_network_calls_during_review": 0,
+    "md077_name_amount_representation_check": "same two people and amounts; not used to override metric",
+    "stored_approved_values_readonly_probe": [
+      [
+        null,
+        1
+      ],
+      [
+        "true",
+        31
+      ]
+    ],
+    "oauth_refresh_request_count": null,
+    "oauth_note": "Pi handled existing OAuth opaquely; auth-refresh HTTP calls were not separately counted. The22cap and ledger cover generation HTTP requests."
+  },
+  "public_database_snapshot_at_replay": {
+    "path": "./.forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/student_club.sqlite",
+    "sha256": "eb89bcfe97eefa386a27904ec5aa15159811a7eac894ec659a36e48fa9f76b77"
+  },
+  "artifacts": [
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-065-forge-payload.json",
+      "sha256": "e59c7ec545dfb2939ac1166fcd59a221a25302d4eecc44ca277ca6d803b8b926"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-065-forge-session.json",
+      "sha256": "fc3dec3c80678b7ef7bade2d5c8c05ab3a55651328a884b67b7f42fc03b49794"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-065-direct-payload.json",
+      "sha256": "bdf02425f728b82b37587f29dd7dc48dbf898bf219bc3b0b384a21148663ac7b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-065-direct-session.json",
+      "sha256": "b47ac4f92330a651af02fd31789eb8f25bf996d28b04d5d09a6a914aff9925c7"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-065-run.json",
+      "sha256": "79fcdf0b8772f051e28737e2d0400f4155ee3f7a908c65f19a35d3e542a19703"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-065-forge-payload.json",
+      "sha256": "ebb5a9e8bca8d911409bb202c9325f6239709c5ff00205736081d60fe56e3ef4"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-065-forge-session.json",
+      "sha256": "2b33486efb4aaf7688a86af627c5986d3727e77b414b2b1334ac3c7c1b0586f5"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-065-direct-payload.json",
+      "sha256": "8ff3f08728abe3f58ec9c3b2712c7c653d4cc0b4b5623e43df96ebfeac13d5a8"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-065-direct-session.json",
+      "sha256": "880b976618799e1171b1e45700d7bda16217e7e33d1fbce13863c6aa9f9f3861"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-065-run.json",
+      "sha256": "cf5ca9b01574d6c99c48ec2d3a4555fcecb4d7765ac5f5be69dd4275604c1d14"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-034-forge-payload.json",
+      "sha256": "b64db32983bc5acadcaad2e62bbd00f7bdf0221b29eb51e26ef822074ff65a22"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-034-forge-session.json",
+      "sha256": "908926b7c0b04ba9ce6590d3c6a173ce5e637f64c12a6b9b7676456daee2c501"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-034-direct-payload.json",
+      "sha256": "3224eb894299bb565ca8a2b77133e5d4a3aca81f1b6d8c33550d0aaddebbbd18"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-034-direct-session.json",
+      "sha256": "e98db4b5354c77a0b5c54862d450d4b26a70d5785a0b1e54ceb74a9b67392fb2"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-034-run.json",
+      "sha256": "1f551ed1723d6a552bd5005ad6800443987d7d6e41b9530516a9e3db38a31241"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-034-forge-payload.json",
+      "sha256": "79590df98bfa23d82d6a80656eab7d1bc870b4bd66e2414c7e914e35fee7cf20"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-034-forge-session.json",
+      "sha256": "b855c4bb1182a9f40de8dce99a323dabf7ccb4064e61bd97e2c67e2db347453c"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-034-direct-payload.json",
+      "sha256": "785a07391fb6c8388937e37232f1f6ddce92d37d5f690eed2be49cab16f2de46"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-034-direct-session.json",
+      "sha256": "5e04bf0211519bc685e35bc2218b8d703a089ec256bd81ba93a40876152f801d"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-034-run.json",
+      "sha256": "602d61dbf281785fd35d2c67db8a702eece763199413e1c48c7dacaaa1b2f552"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-046-forge-payload.json",
+      "sha256": "8ccf4adb31b048e76fb54f903214e56d0d5d1e4918cc4de49ff7328ff2d537ff"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-046-forge-session.json",
+      "sha256": "cf4569b541e494a0b8d0829d5fcd5a17f7309ee61d6d941ef863748b3e8d16be"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-046-direct-payload.json",
+      "sha256": "cd5357e5cf17d6b275ba165271409288d3f75466fe06910e10ffa35bf3fdce3b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-046-direct-session.json",
+      "sha256": "be1bc127dd46859663528727bbac38030abb50a1281c0628f657c422fbd7ff69"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-046-run.json",
+      "sha256": "d58749ffb4b13aca8344bb47dbbe62a5a7b7f584589c65ab0fbe934863ee19f1"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-046-forge-payload.json",
+      "sha256": "8b7f065587cca9b485e67c09c0622414d0c7d825aaabb19e58130a1c5da7f5b8"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-046-forge-session.json",
+      "sha256": "7d1a9627372bdfb38c426cd630b477b03fdc7eacbbc839826a80fff36a0076c9"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-046-direct-payload.json",
+      "sha256": "b95b29875db39463e7c90b22fe50e750252d268bc8cb5a932ecf298fb79a9980"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-046-direct-session.json",
+      "sha256": "d433447dbc6ff1581178551d570d724f7dbd74ea0c0ed2deebed8931f834a07b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-046-run.json",
+      "sha256": "38ba31bed59024c80a3e9db8f2fd0490baf4db893755068fd03a3483ca9bc12b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-052-forge-payload.json",
+      "sha256": "a17e2e3a802d94663f848d003b8f7a3c8d0c0b39ee38c68c1fb52938ac94597d"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-052-forge-session.json",
+      "sha256": "13bcce3cac370fb4dcfb9f0fccf43c9b5c97168fbf8b0eafd6f0760a96bb7636"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-052-direct-payload.json",
+      "sha256": "42fd0a7fc247cccf60ddf0a96444319559c419c117b168a1e2f83fbb0610a816"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-052-direct-session.json",
+      "sha256": "27dd3c117378acf1f2eaff4b6c806ab27aef1777592eb45b08a0ae9cabd8bb4e"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-052-run.json",
+      "sha256": "b97aabac24135edc089d54cec2713cdb915bd5c6c42126dfb567fb100b5b8675"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-052-forge-payload.json",
+      "sha256": "9e86ce78939deda6299f2fef26ffb907533d3d6fc1ef9db827721c28dc1e7cbb"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-052-forge-session.json",
+      "sha256": "897df7c02e781ef286ce512efc5943618ab33d9f838d44333e5b164e2de85cf3"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-052-direct-payload.json",
+      "sha256": "f005e679be687e87c4b6e4e5bbc306ef0571cdf60344d1341dcfd8d9f7ed8644"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-052-direct-session.json",
+      "sha256": "c5b06c9627f45d47f613b107a4d68e253680210d44644a24338ca92258b7baaf"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-052-run.json",
+      "sha256": "eb62ec36895573a3325329d5c6b027f48175803dac9d989a36108fcb7c3ba7a8"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-077-forge-payload.json",
+      "sha256": "7ce618bfe115eee6bfe08b17dbead6b935e5ed2c5c552f2e78469598725db2d9"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-077-forge-session.json",
+      "sha256": "2dac01a551db01318fc81ef29018689cea6eea52a62006a0b2150684bd04f794"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-077-direct-payload.json",
+      "sha256": "a68ce19f75ad44c622815130f6d4f379dd6b173cc352c40e38d914556fd05aba"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-077-direct-session.json",
+      "sha256": "c3031d2979dbac49f63208af7af7b4ddc3ead857149bf12175fcb33f815f718b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/control-md-077-run.json",
+      "sha256": "608ae1f25efd2b884ae4c75fd72f316456ccfacc0114f5ce6a27a40675c26e4a"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-077-forge-payload.json",
+      "sha256": "4ffac204ca1e892fa8cb6d7ab9e882a1e2c6b4a42c9f1a13f05c2e922ef6747b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-077-forge-session.json",
+      "sha256": "458a0708914ab98868a25ef6bcb0e5d84e2fac680a5ca304737f08f3397e4d8a"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-077-direct-payload.json",
+      "sha256": "176acf568bbcf04d0234161f551f5f4c855c24aa1f8af21da7944239edcdb8bc"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-077-direct-session.json",
+      "sha256": "adc619ae3de721bb5ed66ba8baa252d85dc23c3bf5be383fb899088914bad96c"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/treatment-md-077-run.json",
+      "sha256": "4840217d40444e97af03a103f82ad42f09e9abc35749843b9bbf6efe21066b30"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/requests.json",
+      "sha256": "b72d0197a60291268b1dbbbbb17710258de84cd8c2d67a1c66b423aa656ea8a9"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/authorized-experiment-card.json",
+      "sha256": "ec4253fcab9fc32cea07e6d2de8073399db0dd31e5b8f597a327ef8bd8743dab"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/completion.json",
+      "sha256": "c97cca8af097e9b4acad22c4394122da16db8b0a55b786598ac51f9de8a03dec"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/reproduction-recipe.json",
+      "sha256": "91af68048ff202e4d6c97f0bf671f4bda49c23ffe40eadec52f11781df5fc743"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/review-recipe.json",
+      "sha256": "ba80244bff6393a0c588e7ce4529254363d4c33045a72f1f021097af48ae8e5b"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/preflight.json",
+      "sha256": "cac5544e9d10cc10c35f3cc40d6fc6d8968aebbd7d587c379189f202a00c421f"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905-default-sampling/runs.json",
+      "sha256": "fb9b3a54a61513a5e66ceea5308b63fac5fa604364324b4b942dc8e3a31ce2e3"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/requests.json",
+      "sha256": "b5d0a03219bbc294fd2ac5186ff23e914119b6e7e28dde4c8da8f9a25955e86e"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/failure.json",
+      "sha256": "94056d0fc401699e67d9fedb0c1b59c5900dd1d0b878356b476da6a1880ef616"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/control-md-065-run.json",
+      "sha256": "d1058b361b0fb1b6510ca470b3d6acbe98ed164f2ba00066f8980a5941605d41"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/control-md-065-forge-payload.json",
+      "sha256": "b893e1290fe0d3875d6478dfaf08eea5f6a20be59472282e439ee3ce4a6a868e"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/control-md-065-direct-payload.json",
+      "sha256": "e8094d4169b51f240c3a3a47c8fa2cb26f388fb0d7da55b987410055def467f4"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/authorized-experiment-card.json",
+      "sha256": "b6a6efb790fcddb1141bcae9101b58735859aa0b3cbc4f0140cd243e52496287"
+    },
+    {
+      "path": ".forge/benchmarks/luna-binding-20260905/reproduction-recipe.json",
+      "sha256": "52a1fd15df4064e437eee4d12bf188d69697b294c3a8a3167f8b370568c00eeb"
+    }
+  ],
+  "review": {
+    "review_type": "Evidence-based developer review; not independent blinded business labels; no official or contract score overrides.",
+    "observations": [
+      {
+        "case_id": "md-065",
+        "finding": "Both arms changed approved = Yes to approved = true. Read-only database probe found true in31rows and NULL in1row; no Yes value. Outputs changed from empty to nonempty.",
+        "remaining_issue": "Forge groups by expense_description, Direct groups by budget.category, while Gold selects event.type and a single ungrouped total without an approved filter. Expense-type interpretation/reference conflict remains; do not silently relabel either new answer correct."
+      },
+      {
+        "case_id": "md-077",
+        "finding": "Forge changed date literal9/9/2019 to2019-09-09 and returned the same two people and amounts as Gold, with full names concatenated into one column. Direct kept9/9/2019 and returned no rows.",
+        "remaining_issue": "Forge remains a contract/official failure because two output columns differ from Gold three columns. Representation-equivalence check is diagnostic only, not a new score."
+      },
+      {
+        "case_id": "md-052",
+        "finding": "Treatment Forge put SQL-style aliases into scan=event e and join.table=budget b, then referenced e/b. Real compiler reproduces JOIN condition references undeclared tables: b,e. Control Forge and both Direct candidates pass.",
+        "remaining_issue": "A structured-representation failure observed in one generation pair; do not claim metadata deterministically causes it."
+      }
+    ],
+    "decision": {
+      "promote_as_accuracy_improvement": false,
+      "reason": "No official/contract gains; one Forge regression; combined token usage exceeds the predeclared1.20promotion ratio.",
+      "retain_metadata_integrity_fix": true,
+      "expand_to_larger_model_run": false,
+      "next_target": "Fix or prevent the observed Forge alias-representation failure before expanding evaluation; keep ambiguous output/reference cases distinct from confirmed wrong answers.",
+      "generalization": "No overall Luna accuracy claim from these five selected student_club cases."
+    }
+  },
+  "model_catalog_revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+  "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+  "metric_revision": "semantic-result-compare-v2",
+  "report_content_sha256": "4fa07b81a9a02b17e62b6aed37f438d8760f55a129c305a57f8fe50eff211e3c"
+}

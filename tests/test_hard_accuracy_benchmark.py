@@ -18,6 +18,83 @@ def test_bird_execution_accuracy_uses_exact_result_sets():
     assert not bird_execution_accuracy([(1, 2)], [(2, 1)])
 
 
+@pytest.fixture
+def description_schema():
+    return {
+        "db_id": "synthetic", "table_names_original": ["expense"],
+        "column_names_original": [[-1, "*"], [0, "approved"]],
+        "column_types": ["text", "text"], "primary_keys": [], "foreign_keys": [],
+    }
+
+
+def test_description_case_mismatch_keeps_value_evidence_in_model_context(tmp_path, monkeypatch, description_schema):
+    (tmp_path / "Expense.csv").write_text(
+        "original_column_name,column_name,column_description,data_format,value_description\n"
+        "APPROVED,Approved,Approval flag,text,true / false\n"
+    )
+    monkeypatch.setattr(hard, "_description_dir", lambda _: tmp_path)
+    context = hard.structure_prompt(hard.structure_projection(description_schema))
+    assert "true / false" in context
+    assert "Approval flag" in context
+
+
+def test_description_matching_does_not_fold_non_ascii_sqlite_identifiers(tmp_path, monkeypatch, description_schema):
+    (tmp_path / "Ä.csv").write_text(
+        "original_column_name,value_description\napproved,wrong-table-evidence\n"
+    )
+    description_schema["table_names_original"] = ["ä"]
+    monkeypatch.setattr(hard, "_description_dir", lambda _: tmp_path)
+    context = hard.structure_prompt(hard.structure_projection(description_schema))
+    assert "wrong-table-evidence" not in context
+
+
+def test_colliding_description_columns_fail_closed(tmp_path, monkeypatch, description_schema):
+    (tmp_path / "expense.csv").write_text(
+        "original_column_name,value_description\n"
+        "approved,true / false\nAPPROVED,yes / no\n"
+    )
+    monkeypatch.setattr(hard, "_description_dir", lambda _: tmp_path)
+    with pytest.raises(hard.HardBenchmarkError):
+        hard.structure_projection(description_schema)
+
+
+
+def _write_bird_runtime(root: Path, db_ids: list[str], installed: list[str]) -> None:
+    root.mkdir(parents=True)
+    (root / "mini_dev_sqlite.json").write_text(
+        json.dumps([{"db_id": db_id} for db_id in db_ids])
+    )
+    (root / "dev_tables.json").write_text("[]")
+    for db_id in installed:
+        database_dir = root / "dev_databases" / db_id
+        database_dir.mkdir(parents=True)
+        (database_dir / f"{db_id}.sqlite").touch()
+
+
+def test_bird_runtime_root_accepts_official_nested_zip_layout(tmp_path: Path):
+    base = tmp_path / "MINIDEV"
+    nested = base / "MINIDEV"
+    _write_bird_runtime(nested, ["sample"], ["sample"])
+
+    assert hard._resolve_bird_runtime_root(base) == nested
+
+
+def test_bird_runtime_root_prefers_complete_flat_layout(tmp_path: Path):
+    base = tmp_path / "MINIDEV"
+    _write_bird_runtime(base, ["sample"], ["sample"])
+
+    assert hard._resolve_bird_runtime_root(base) == base
+
+
+def test_bird_runtime_root_ignores_partial_flat_layout(tmp_path: Path):
+    base = tmp_path / "MINIDEV"
+    nested = base / "MINIDEV"
+    _write_bird_runtime(base, ["one", "two"], ["one"])
+    _write_bird_runtime(nested, ["one", "two"], ["one", "two"])
+
+    assert hard._resolve_bird_runtime_root(base) == nested
+
+
 def test_full_mini_dev_suite_has_official_coverage_without_model_calls():
     if not all((hard._DB_ROOT / db_id / f"{db_id}.sqlite").exists() for db_id in ("california_schools", "financial", "formula_1")):
         pytest.skip("full Mini-Dev runtime assets are not installed")
@@ -92,6 +169,27 @@ def test_execute_result_interrupts_overlong_sql(tmp_path: Path):
             "WITH RECURSIVE seq(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM seq) SELECT * FROM seq",
             timeout_seconds=0.01,
         )
+
+
+@pytest.mark.parametrize("sql", ["UPDATE seed SET value=2", "CREATE TEMP TABLE scratch(value INTEGER)"])
+def test_execute_result_connection_rejects_writes_even_if_sql_validation_is_bypassed(tmp_path, monkeypatch, sql):
+    database = tmp_path / "readonly.sqlite"
+    with hard.sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE seed(value INTEGER)")
+        db.execute("INSERT INTO seed VALUES(1)")
+    before = database.read_bytes()
+    monkeypatch.setattr(hard, "validate_readonly_sql", lambda _: None)
+    with pytest.raises(hard.sqlite3.OperationalError, match="readonly"):
+        hard.execute_result(database, sql)
+    assert database.read_bytes() == before
+    assert hard.execute_result(database, "SELECT value FROM seed")[0] == [(1,)]
+
+
+def test_execute_result_does_not_create_missing_database(tmp_path):
+    database = tmp_path / "missing.sqlite"
+    with pytest.raises(hard.sqlite3.OperationalError):
+        hard.execute_result(database, "SELECT 1")
+    assert not database.exists()
 
 
 def snapshot() -> ModelConfigSnapshot:

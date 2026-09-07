@@ -58,7 +58,7 @@ Bundle 口径：
 | Vega-Lite | 85,855 bytes | 368,970 bytes | 4 |
 | G2 | 74,279 bytes | 419,780 bytes | 4 |
 
-三份 PDF 都保留报告标题、80% 阈值、四月异常和渠道贡献；内容扫描未发现 `file://`、`/Users/` 或 `localhost` 泄漏。
+三份 PDF 都保留报告标题、80% 阈值、四月异常和渠道贡献；内容扫描未发现 `file://`、`<local-home> 或 `localhost` 泄漏。
 
 Browser smoke：三个 engine 均为 `0 console error / 0 page error`，table fallback 10/6 行可打开，图例可点击，排名第一 datum 均返回 `qr_category_story#row:1`。
 
@@ -171,8 +171,8 @@ ChartArtifact v2
 ## 9. Evidence Paths
 
 - 实现：`tools/chart-engine-bakeoff/`
-- 本地截图：`/tmp/forge-chart-engine-bakeoff/`
-- 本地 SVG/PDF：`/tmp/forge-chart-engine-bakeoff/exports/`
+- 本地截图：`<local-temp>/`
+- 本地 SVG/PDF：`<local-temp>/`
 - 运行：
 
 ```bash

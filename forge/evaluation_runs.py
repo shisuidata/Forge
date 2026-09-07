@@ -13,9 +13,9 @@ import uuid
 
 from agent.contracts import validate_contract
 from forge.assurance import ASSURANCE_REVISION, POLICY_REVISION, QUERY_CANDIDATE_REVISION
+from forge import benchmark_v2
 from forge.evaluate import (
     EVALUATOR_REVISION,
-    RESULT_COMPARATOR_REVISION,
     canonical_hash,
     evaluate_query_candidate,
 )
@@ -226,7 +226,7 @@ def _configuration(
         "retry_policy_revision": suite["retry_policy_revision"],
         "timeout_policy_revision": suite["timeout_policy_revision"],
         "evaluator_revision": EVALUATOR_REVISION,
-        "metric_revision": RESULT_COMPARATOR_REVISION,
+        "metric_revision": benchmark_v2.RESULT_COMPARATOR_REVISION,
         "candidate_contract_revision": QUERY_CANDIDATE_REVISION,
         "assurance_revision": ASSURANCE_REVISION,
         "policy_revision": POLICY_REVISION,

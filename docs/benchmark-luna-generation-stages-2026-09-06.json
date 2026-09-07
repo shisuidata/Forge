@@ -1,0 +1,652 @@
+{
+  "requirement": "REQ-2026-09-06-051",
+  "date": "2026-09-06",
+  "purpose": "Targeted SDK-visible generation-stage diagnosis; not rolling seed49 or an accuracy treatment",
+  "status": "diagnosis_completed",
+  "timeout_reproduced": false,
+  "timeout_root_cause_identified": false,
+  "production_changes": [],
+  "decision": "Keep timeout=120s, Prompt, Schema, Compiler, Gold and scoring unchanged. No additional generation, retry, resume or candidate replacement.",
+  "protocol": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "date_context": "off",
+    "grain_context": "off",
+    "schedule": "Two independent single-case dual-arm runs, sequential by case",
+    "max_calls": 4,
+    "provider_retries": 0,
+    "timeout_seconds": 120,
+    "rolling_parent_run": "pbr_f24226875eaf4a56b5fb560d61b94dc2",
+    "preparation_card_is_pre_authorization_snapshot": true,
+    "authorization_artifact": ".forge/benchmarks/luna-generation-stages-20260906/authorization.json",
+    "revisions": {
+      "md-234": "sha256:ddb8eedb3adc90a0fd983659f3aad472403262770a3dd877fd7ca00ea6d50b3a",
+      "md-447": "sha256:f0c2894bb356f6e9d3cf84318d843f90c18c9f742cd4d9c247be98c191c2095a"
+    }
+  },
+  "totals": {
+    "authorized_calls": 4,
+    "dispatched_calls": 4,
+    "completed_calls": 4,
+    "observed_tokens": 19831,
+    "unknown_usage_arms": 0,
+    "scored_arms": 4,
+    "official_ea_correct": 0,
+    "contract_correct": 0
+  },
+  "runs": [
+    {
+      "case_id": "md-234",
+      "run_id": "pbr_6de6e90926754293bd6e71f1a41e7e14",
+      "status": "completed",
+      "started_at": "2026-09-06T11:51:37.384Z",
+      "completed_at": "2026-09-06T11:51:50.422Z",
+      "dispatched_calls": 2,
+      "completed_calls": 2,
+      "protocol_revision": "sha256:ddb8eedb3adc90a0fd983659f3aad472403262770a3dd877fd7ca00ea6d50b3a"
+    },
+    {
+      "case_id": "md-447",
+      "run_id": "pbr_6e942be1bdd6400a8f37649b27b7b4ed",
+      "status": "completed",
+      "started_at": "2026-09-06T11:52:44.416Z",
+      "completed_at": "2026-09-06T11:53:08.120Z",
+      "dispatched_calls": 2,
+      "completed_calls": 2,
+      "protocol_revision": "sha256:f0c2894bb356f6e9d3cf84318d843f90c18c9f742cd4d9c247be98c191c2095a"
+    }
+  ],
+  "stages": [
+    {
+      "case_id": "md-234",
+      "arm": "forge",
+      "run_id": "pbr_6de6e90926754293bd6e71f1a41e7e14",
+      "prompt_sha256": "sha256:57bd9bec0218f3998b86696326307c2e457eaf71ce513139b1f0fdc7b1f234a0",
+      "response_output_hash": "sha256:98518cd928bd8c1783e043193a90e0bfab8f7d292ac4309ea7b30ee06d45b765",
+      "generation_ms": 11177.3,
+      "observer_elapsed_ms": 11171.462624999986,
+      "thinking": {
+        "first_ms": 3244.9224580000155,
+        "last_ms": 7890.282624999993,
+        "events": 6,
+        "delta_code_units": 97
+      },
+      "toolcall": {
+        "first_ms": 7890.306749999989,
+        "last_ms": 11161.394291999983,
+        "events": 195,
+        "delta_code_units": 642
+      },
+      "text": null,
+      "terminal": {
+        "stop_reason": "toolUse",
+        "content_types": [
+          "thinking",
+          "toolCall"
+        ]
+      },
+      "usage": {
+        "prompt": 3225,
+        "completion": 431,
+        "cache_read": 1664,
+        "cache_write": 0,
+        "total": 5320,
+        "observed": true
+      },
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_column_count_mismatch",
+        "retryable": true
+      }
+    },
+    {
+      "case_id": "md-234",
+      "arm": "direct",
+      "run_id": "pbr_6de6e90926754293bd6e71f1a41e7e14",
+      "prompt_sha256": "sha256:bf22e9f744c44ae9218c0a6e9e1696de48cb3b5fc1af061f203c4aedfcda59bb",
+      "response_output_hash": "sha256:2cd471148e2cdbc29a7f6137e1ec6b8dd7f4c6a09d6d578b60cc54bc1fa14a19",
+      "generation_ms": 12982,
+      "observer_elapsed_ms": 12975.405583000043,
+      "thinking": {
+        "first_ms": 3384.8466670000344,
+        "last_ms": 12371.837916999997,
+        "events": 6,
+        "delta_code_units": 105
+      },
+      "toolcall": null,
+      "text": {
+        "first_ms": 12371.851125000045,
+        "last_ms": 12972.224250000028,
+        "events": 67,
+        "delta_code_units": 202
+      },
+      "terminal": {
+        "stop_reason": "stop",
+        "content_types": [
+          "thinking",
+          "text"
+        ]
+      },
+      "usage": {
+        "prompt": 3026,
+        "completion": 529,
+        "cache_read": 0,
+        "cache_write": 0,
+        "total": 3555,
+        "observed": true
+      },
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      }
+    },
+    {
+      "case_id": "md-447",
+      "arm": "forge",
+      "run_id": "pbr_6e942be1bdd6400a8f37649b27b7b4ed",
+      "prompt_sha256": "sha256:7f5d92cdeb9703ca8a0e669b872a8c9902d07cedd19214e8f00e43c0c54a094b",
+      "response_output_hash": "sha256:704416e92ff1f9488d0e294ce0aa3a38270852b25f88108bfcccbb48a31655bc",
+      "generation_ms": 23603.6,
+      "observer_elapsed_ms": 23599.692374999984,
+      "thinking": {
+        "first_ms": 2033.0872090000194,
+        "last_ms": 16079.990624999977,
+        "events": 14,
+        "delta_code_units": 252
+      },
+      "toolcall": {
+        "first_ms": 16081.771624999936,
+        "last_ms": 23545.788166999933,
+        "events": 443,
+        "delta_code_units": 1392
+      },
+      "text": null,
+      "terminal": {
+        "stop_reason": "toolUse",
+        "content_types": [
+          "thinking",
+          "thinking",
+          "toolCall"
+        ]
+      },
+      "usage": {
+        "prompt": 5623,
+        "completion": 1194,
+        "cache_read": 0,
+        "cache_write": 0,
+        "total": 6817,
+        "observed": true
+      },
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_value_mismatch",
+        "retryable": true
+      }
+    },
+    {
+      "case_id": "md-447",
+      "arm": "direct",
+      "run_id": "pbr_6e942be1bdd6400a8f37649b27b7b4ed",
+      "prompt_sha256": "sha256:b915de7e10fa34c787c604b0d2587ea89b678748eb847e4fc50f24d8c94f244c",
+      "response_output_hash": "sha256:d432df1b306a7d6e41d95ca32fb07e042e380bc0f87d0074ad1f5b92a1bead47",
+      "generation_ms": 9587.2,
+      "observer_elapsed_ms": 9584.515332999988,
+      "thinking": {
+        "first_ms": 2722.8282079999335,
+        "last_ms": 7999.483750000014,
+        "events": 6,
+        "delta_code_units": 118
+      },
+      "toolcall": null,
+      "text": {
+        "first_ms": 7999.939458000008,
+        "last_ms": 9563.47191600001,
+        "events": 135,
+        "delta_code_units": 372
+      },
+      "terminal": {
+        "stop_reason": "stop",
+        "content_types": [
+          "thinking",
+          "text"
+        ]
+      },
+      "usage": {
+        "prompt": 3760,
+        "completion": 379,
+        "cache_read": 0,
+        "cache_write": 0,
+        "total": 4139,
+        "observed": true
+      },
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_value_mismatch",
+        "retryable": true
+      }
+    }
+  ],
+  "checks": [
+    {
+      "case_id": "md-234",
+      "arm": "forge",
+      "prompt_hash_matches_seed48": true,
+      "response_hash_matches": true,
+      "replay_core_matches": true,
+      "replay_original_output_unchanged": true,
+      "single_dispatch": true,
+      "usage_observed": true,
+      "observer_terminal_matches": true
+    },
+    {
+      "case_id": "md-234",
+      "arm": "direct",
+      "prompt_hash_matches_seed48": true,
+      "response_hash_matches": true,
+      "replay_core_matches": true,
+      "replay_original_output_unchanged": true,
+      "single_dispatch": true,
+      "usage_observed": true,
+      "observer_terminal_matches": true
+    },
+    {
+      "case_id": "md-447",
+      "arm": "forge",
+      "prompt_hash_matches_seed48": true,
+      "response_hash_matches": true,
+      "replay_core_matches": true,
+      "replay_original_output_unchanged": true,
+      "single_dispatch": true,
+      "usage_observed": true,
+      "observer_terminal_matches": true
+    },
+    {
+      "case_id": "md-447",
+      "arm": "direct",
+      "prompt_hash_matches_seed48": true,
+      "response_hash_matches": true,
+      "replay_core_matches": true,
+      "replay_original_output_unchanged": true,
+      "single_dispatch": true,
+      "usage_observed": true,
+      "observer_terminal_matches": true
+    }
+  ],
+  "result_differences": {
+    "model_calls": 0,
+    "read_only": true,
+    "original_artifacts_changed": false,
+    "counterfactuals_not_scored_as_actual_candidates": true,
+    "cases": [
+      {
+        "case_id": "md-234",
+        "question": "How many times the circuits were held in Austria? Please give their location and coordinates.",
+        "evidence": "location coordinates refers to (lat,lng); Austria refers to country = 'Austria';",
+        "gold_sql": "SELECT DISTINCT location, lat, lng FROM circuits WHERE country = 'Austria'",
+        "gold_preview": {
+          "columns": [
+            "location",
+            "lat",
+            "lng"
+          ],
+          "rows": [
+            [
+              "Spielburg",
+              47.2197,
+              14.7647
+            ],
+            [
+              "Styria",
+              47.2039,
+              14.7478
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        },
+        "arms": {
+          "forge": {
+            "sql": "SELECT circuits.location, circuits.lat, circuits.lng, COUNT(DISTINCT races.raceId) AS times_held_by_circuit\nFROM circuits\nINNER JOIN races ON circuits.circuitId = races.circuitId\nWHERE circuits.country = 'Austria'\nGROUP BY circuits.location, circuits.lat, circuits.lng",
+            "original_preview": {
+              "columns": [
+                "location",
+                "lat",
+                "lng",
+                "times_held_by_circuit"
+              ],
+              "rows": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  29
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1
+                ]
+              ],
+              "row_count": 2,
+              "truncated": false
+            },
+            "official_ea": false,
+            "counterfactual": {
+              "change": "Counterfactual only: remove COUNT projection, leave joins/grouping/predicates unchanged",
+              "sql": "SELECT circuits.location, circuits.lat, circuits.lng FROM circuits INNER JOIN races ON circuits.circuitId = races.circuitId WHERE circuits.country = 'Austria' GROUP BY circuits.location, circuits.lat, circuits.lng",
+              "preview": {
+                "columns": [
+                  "location",
+                  "lat",
+                  "lng"
+                ],
+                "rows": [
+                  [
+                    "Spielburg",
+                    47.2197,
+                    14.7647
+                  ],
+                  [
+                    "Styria",
+                    47.2039,
+                    14.7478
+                  ]
+                ],
+                "row_count": 2,
+                "truncated": false
+              },
+              "official_ea": true,
+              "exact_row_multiset_matches_gold": true,
+              "adopted": false
+            }
+          },
+          "direct": {
+            "sql": "SELECT c.location, c.lat, c.lng, COUNT(r.raceId) AS times_held\nFROM circuits AS c\nJOIN races AS r ON r.circuitId = c.circuitId\nWHERE c.country = 'Austria'\nGROUP BY c.circuitId, c.location, c.lat, c.lng",
+            "original_preview": {
+              "columns": [
+                "location",
+                "lat",
+                "lng",
+                "times_held"
+              ],
+              "rows": [
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  25
+                ],
+                [
+                  "Styria",
+                  47.2039,
+                  14.7478,
+                  1
+                ],
+                [
+                  "Spielburg",
+                  47.2197,
+                  14.7647,
+                  4
+                ]
+              ],
+              "row_count": 3,
+              "truncated": false
+            },
+            "official_ea": false,
+            "counterfactual": {
+              "change": "Counterfactual only: remove COUNT projection, leave joins/grouping/predicates unchanged",
+              "sql": "SELECT c.location, c.lat, c.lng FROM circuits AS c JOIN races AS r ON r.circuitId = c.circuitId WHERE c.country = 'Austria' GROUP BY c.circuitId, c.location, c.lat, c.lng",
+              "preview": {
+                "columns": [
+                  "location",
+                  "lat",
+                  "lng"
+                ],
+                "rows": [
+                  [
+                    "Spielburg",
+                    47.2197,
+                    14.7647
+                  ],
+                  [
+                    "Styria",
+                    47.2039,
+                    14.7478
+                  ],
+                  [
+                    "Spielburg",
+                    47.2197,
+                    14.7647
+                  ]
+                ],
+                "row_count": 3,
+                "truncated": false
+              },
+              "official_ea": true,
+              "exact_row_multiset_matches_gold": false,
+              "adopted": false
+            }
+          }
+        }
+      },
+      {
+        "case_id": "md-447",
+        "question": "Consider the average difference between K-12 enrollment and 15-17 enrollment of schools that are locally funded, list the names and DOC type of schools which has a difference above this average.",
+        "evidence": "Difference between K-12 enrollment and 15-17 enrollment can be computed by `Enrollment (K-12)` - `Enrollment (Ages 5-17)`",
+        "gold_sql": "SELECT T2.School, T2.DOC FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.FundingType = 'Locally funded' AND (T1.`Enrollment (K-12)` - T1.`Enrollment (Ages 5-17)`) > (SELECT AVG(T3.`Enrollment (K-12)` - T3.`Enrollment (Ages 5-17)`) FROM frpm AS T3 INNER JOIN schools AS T4 ON T3.CDSCode = T4.CDSCode WHERE T4.FundingType = 'Locally funded')",
+        "gold_preview": {
+          "columns": [
+            "School",
+            "DOC"
+          ],
+          "rows": [
+            [
+              "Mountain Oaks",
+              "00"
+            ],
+            [
+              "Castle Rock",
+              "00"
+            ],
+            [
+              "Charter Community School Home Study Academy",
+              "00"
+            ]
+          ],
+          "row_count": 57,
+          "truncated": true
+        },
+        "arms": {
+          "forge": {
+            "sql": "WITH avg_diff AS (\n  SELECT AVG(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\") AS avg_diff\n  FROM frpm\n  INNER JOIN schools ON frpm.CDSCode = schools.CDSCode\n  WHERE schools.FundingType = 'Locally funded'\n)\nSELECT schools.School, schools.DOCType\nFROM frpm\nINNER JOIN schools ON frpm.CDSCode = schools.CDSCode\nCROSS JOIN avg_diff\nWHERE schools.FundingType = 'Locally funded' AND frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\" > avg_diff",
+            "original_preview": {
+              "columns": [
+                "School",
+                "DOCType"
+              ],
+              "rows": [
+                [
+                  "Mountain Oaks",
+                  "County Office of Education (COE)"
+                ],
+                [
+                  "Castle Rock",
+                  "County Office of Education (COE)"
+                ],
+                [
+                  "Charter Community School Home Study Academy",
+                  "County Office of Education (COE)"
+                ]
+              ],
+              "row_count": 57,
+              "truncated": true
+            },
+            "official_ea": false,
+            "counterfactual": {
+              "change": "Counterfactual only: replace second projection DOCType with DOC; no other AST change",
+              "sql": "WITH avg_diff AS (SELECT AVG(frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\") AS avg_diff FROM frpm INNER JOIN schools ON frpm.CDSCode = schools.CDSCode WHERE schools.FundingType = 'Locally funded') SELECT schools.School, schools.DOC FROM frpm INNER JOIN schools ON frpm.CDSCode = schools.CDSCode CROSS JOIN avg_diff WHERE schools.FundingType = 'Locally funded' AND frpm.\"Enrollment (K-12)\" - frpm.\"Enrollment (Ages 5-17)\" > avg_diff",
+              "preview": {
+                "columns": [
+                  "School",
+                  "DOC"
+                ],
+                "rows": [
+                  [
+                    "Mountain Oaks",
+                    "00"
+                  ],
+                  [
+                    "Castle Rock",
+                    "00"
+                  ],
+                  [
+                    "Charter Community School Home Study Academy",
+                    "00"
+                  ]
+                ],
+                "row_count": 57,
+                "truncated": true
+              },
+              "official_ea": true,
+              "exact_row_multiset_matches_gold": true,
+              "adopted": false
+            }
+          },
+          "direct": {
+            "sql": "SELECT s.School, s.DOCType\nFROM schools AS s\nJOIN frpm AS f ON s.CDSCode = f.CDSCode\nWHERE s.FundingType = 'Locally funded'\n  AND f.\"Enrollment (K-12)\" - f.\"Enrollment (Ages 5-17)\" > (\n    SELECT AVG(f2.\"Enrollment (K-12)\" - f2.\"Enrollment (Ages 5-17)\")\n    FROM schools AS s2\n    JOIN frpm AS f2 ON s2.CDSCode = f2.CDSCode\n    WHERE s2.FundingType = 'Locally funded'\n  )",
+            "original_preview": {
+              "columns": [
+                "School",
+                "DOCType"
+              ],
+              "rows": [
+                [
+                  "Mountain Oaks",
+                  "County Office of Education (COE)"
+                ],
+                [
+                  "Castle Rock",
+                  "County Office of Education (COE)"
+                ],
+                [
+                  "Charter Community School Home Study Academy",
+                  "County Office of Education (COE)"
+                ]
+              ],
+              "row_count": 57,
+              "truncated": true
+            },
+            "official_ea": false,
+            "counterfactual": {
+              "change": "Counterfactual only: replace second projection DOCType with DOC; no other AST change",
+              "sql": "SELECT s.School, s.DOC FROM schools AS s JOIN frpm AS f ON s.CDSCode = f.CDSCode WHERE s.FundingType = 'Locally funded' AND f.\"Enrollment (K-12)\" - f.\"Enrollment (Ages 5-17)\" > (SELECT AVG(f2.\"Enrollment (K-12)\" - f2.\"Enrollment (Ages 5-17)\") FROM schools AS s2 JOIN frpm AS f2 ON s2.CDSCode = f2.CDSCode WHERE s2.FundingType = 'Locally funded')",
+              "preview": {
+                "columns": [
+                  "School",
+                  "DOC"
+                ],
+                "rows": [
+                  [
+                    "Mountain Oaks",
+                    "00"
+                  ],
+                  [
+                    "Castle Rock",
+                    "00"
+                  ],
+                  [
+                    "Charter Community School Home Study Academy",
+                    "00"
+                  ]
+                ],
+                "row_count": 57,
+                "truncated": true
+              },
+              "official_ea": true,
+              "exact_row_multiset_matches_gold": true,
+              "adopted": false
+            }
+          }
+        }
+      }
+    ]
+  },
+  "findings": [
+    "All four outputs executed successfully; original Official EX and Contract are false in every arm.",
+    "md-234 Gold returns two distinct coordinate rows without answering the requested count. Forge returns two coordinate groups plus counts; Direct returns three circuit groups plus counts. No generated count is automatically deleted to match Gold.",
+    "md-447 both candidates select DOCType; Gold selects DOC. Metadata explicitly defines the former as a text description and the latter as a numeric category code stored as text. Replacing only that projection offline yields the exact Gold row multiset in both arms. No output normalization or scoring change was adopted.",
+    "The four current prompts match the corresponding seed48 prompts byte-for-byte by SHA-256. This does not make a new stochastic response a causal reliability comparison."
+  ],
+  "limitations": [
+    "Visible thinking events are summaries, not measurements of internal reasoning duration. Intervals are first-to-last event envelopes and may contain gaps.",
+    "Pre-visible latency cannot distinguish network, provider queueing or hidden reasoning.",
+    "The actual timeout/cancellation path was not exercised by these four successful generations; prior synthetic SDK cancellation checks remain separate zero-network evidence.",
+    "Counterfactual SQL was only used for offline diagnosis; Contract was not evaluated for counterfactuals, and their results do not replace the four actual failing candidates.",
+    "Seed48 original missing responses and unknown usage remain missing. These runs neither complete nor replace seed48, promote a baseline, nor establish a latency/accuracy gain."
+  ],
+  "verification": {
+    "observed_records": 4,
+    "complete_logs": 57,
+    "original_replay_arms": 4,
+    "independent_official_ex_checks": 4,
+    "replay_model_calls": 0,
+    "observer_zero_network_smokes": [
+      "normal stop",
+      "cancelled terminal response"
+    ],
+    "database_snapshot_integrity": "ok",
+    "database_snapshot_counts": {
+      "task_runs": 2,
+      "benchmark_v2_runs": 2,
+      "benchmark_v2_cases": 2,
+      "benchmark_v2_logs": 57
+    },
+    "services_stopped": true,
+    "ports_without_listeners": [
+      18769,
+      18770
+    ],
+    "no_production_test_suite_rerun": "Experiment only; production source unchanged. Actual runtime, replay and readonly SQL were exercised."
+  },
+  "artifact_sha256": {
+    ".forge/benchmarks/luna-generation-stages-20260906/experiment-card.json": "sha256:31e43b2871ad5d522e190ca31c9c0c12f7313ae92066e032086f56f9e4eff0bf",
+    ".forge/benchmarks/luna-generation-stages-20260906/authorization.json": "sha256:90ab32f847b1210e66dd876e226fa15a87b9546ddabfd56cd98d322ffebe00ec",
+    ".forge/benchmarks/luna-generation-stages-20260906/preflight.json": "sha256:38cf82635ee026dc38855c82c2c675f1774ee779f55eda6ebd9b222c7924a012",
+    ".forge/benchmarks/luna-generation-stages-20260906/observer.mjs": "sha256:2515d93ab4717a23aab8d223b97e88e5032baadee924cb20127ab1d973a42afa",
+    ".forge/benchmarks/luna-generation-stages-20260906/observer-verification.json": "sha256:9689b8ffc999f822cb84c4728f1fac68455661911dd3e969688f0c68809b5b72",
+    ".forge/benchmarks/luna-generation-stages-20260906/observer.smoke.jsonl": "sha256:f8ae5528234fdbbc1cddfa7bf56bd806fb8aa78df994d69286982acecebeece9",
+    ".forge/benchmarks/luna-generation-stages-20260906/observer.success-smoke.jsonl": "sha256:ab8a3465a0dc339217cb07fb5d3b38630fb792a888272b4c6ea35a2a6647b279",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.frozen.json": "sha256:4222f6b76b772747d23188cbd0ad2e11c132dac545a66866ed9dc9c72421f391",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.frozen.json": "sha256:9882897bb8ce5f54a34b5c103a5231b729d97c465704f184fabe0d7ed57df074",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.start-request.json": "sha256:f37be852672069dbe8c8d04c5beb135df1e97334c6de38da665fc8a6c2c3eeaf",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.start-response.json": "sha256:b77ef239534fe1111905c958cc0854e4101b6144eca53db916d8dbe3196a762e",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.start-request.json": "sha256:c58bfc0083d9f983742d8da2e014416360e09a2209cf582a525f30a8479f2d45",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.start-response.json": "sha256:affaf79b3d47688447793253ca6b0d212fbf8749d2a1bc9eaba918c665f0959e",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.run.json": "sha256:7dd11d217c44ab484c15800b5649ef6529ad8e98f7076450c1164134c8a5ed2e",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.run.json": "sha256:db042323fd8d76cea7e5460b36935a0c522dac92b5478873e031a86a0b19c155",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.logs.json": "sha256:82183e7d2e218deea595e9339f2cdad9a9eb87d4ec845f64130f68ac0fb52d2d",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.logs.json": "sha256:9b12e8d1b95f54861d6d1f1dba9ea0bf6971ed75ebfb9060120017a8ac6ab529",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.replay.json": "sha256:7b68b0f1d67962503bff5b11cadd6e1c311a1c6e119f359409acd8f30be3622a",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.replay.json": "sha256:75c4c93a4a55a77cb4edcb251e954cbe46264a670c1cbc3733f9a81c45c03340",
+    ".forge/benchmarks/luna-generation-stages-20260906/stages.jsonl": "sha256:ceee556b6557fd311012df547cbe752d623c268995026673b8fb32e8bdb8380f",
+    ".forge/benchmarks/luna-generation-stages-20260906/result-differences.json": "sha256:92346d42c64ee34b8625c7873b8c10d724150d57443c65958d5cda8a5eb6c622",
+    ".forge/benchmarks/luna-generation-stages-20260906/result-differences-command.json": "sha256:dc1715b8740310918c045ec9762311583efb1667b53a06723397b0b7c7f149ce",
+    ".forge/benchmarks/luna-generation-stages-20260906/evidence-validation.json": "sha256:8e8fa4e0bbc0f43cf35f3cebe7ee82570c9587bb35e26d6c9023c5bc7cf65b17",
+    ".forge/benchmarks/luna-generation-stages-20260906/history.final.json": "sha256:140002b5ffbb50db6ca774536992a302d6d4ffec7bda4a5d50f2a2f2875f0785",
+    ".forge/benchmarks/luna-generation-stages-20260906/state.snapshot.sqlite3": "sha256:2a67424c537430667753e974d53e21ea04cd1758959e6fff83cc2737bdb63bd3"
+  }
+}

@@ -1,0 +1,498 @@
+{
+  "requirement": "REQ-2026-09-06-050",
+  "date": "2026-09-06",
+  "status": "verified",
+  "user_request": "然后，那就继续去优化它吧",
+  "model_calls": 0,
+  "summary": "Abort finalization now precedes failed-arm evidence capture; generation limits, failure scoring, no-retry policy and original candidate scores are unchanged.",
+  "origin_run_id": "pbr_f24226875eaf4a56b5fb560d61b94dc2",
+  "problem": {
+    "evidence": "seed48 md-234 Forge had at least 6250 stream events but persisted assistant=[]",
+    "root_cause": "catch serialized raw_output/hash/usage before finally awaited AgentSession.abort; abort can commit the final assistant and usage asynchronously.",
+    "historical_provider_root_cause": "Unknown. Missing historical content cannot be recovered from this code fix."
+  },
+  "implementation": {
+    "files": [
+      "services/pi-orchestrator/src/benchmark-runtime.ts",
+      "services/pi-orchestrator/tests/benchmark-runtime.test.ts"
+    ],
+    "changes": [
+      "Reuse the same abort promise across deadline, error handling and cleanup.",
+      "Await session finalization before failed-arm raw output, hash and usage are captured.",
+      "Keep the event subscription alive until cancellation finishes, then dispose and remove the controller."
+    ],
+    "unchanged": [
+      "120-second generation deadline",
+      "Single dispatch per arm, no retries",
+      "Fail-fast and no automatic resume",
+      "Incomplete/late output never becomes an accepted candidate",
+      "Unknown usage stays unknown",
+      "Prompt, strict schema, Compiler, Gold, SQL evaluation and old raw records"
+    ]
+  },
+  "verification": {
+    "regression_before": {
+      "text": "(node:52394) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n✖ deadline retains terminal evidence without accepting late output or spending pending budget (15.288833ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 973.84125\n\n✖ failing tests:\n\ntest at tests/benchmark-runtime.test.ts:1:10363\n✖ deadline retains terminal evidence without accepting late output or spending pending budget (15.288833ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n  + []\n  - [\n  -   [\n  -     {\n  -       text: 'SELECT orders.id FROM orders',\n  -       type: 'text'\n  -     }\n  -   ]\n  - ]\n  \n      at TestContext.<anonymous> (./services/pi-orchestrator/tests/benchmark-runtime.test.ts:258:12)\n      at async Test.run (node:internal/test_runner/test:1069:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [],\n    expected: [ [ [Object] ] ],\n    operator: 'deepStrictEqual'\n  }\n\n\nWall time: 1.04 seconds\n\nCommand exited with code 1",
+      "details": {
+        "timeoutSeconds": 30,
+        "wallTimeMs": 1035.9353749975562,
+        "exitCode": 1
+      },
+      "hasError": true
+    },
+    "checks": [
+      {
+        "name": "Pi full",
+        "command": "npm --prefix services/pi-orchestrator test",
+        "result": {
+          "text": "\n> @shisuidata/forge-pi-orchestrator@0.1.0 test\n> node --import tsx --test tests/*.test.ts\n\n(node:54335) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:54337) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:54338) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:54342) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:54360) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:54362) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n(node:54376) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\nℹ tests 151\nℹ suites 0\nℹ pass 151\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 3725.130042\n[raw output: artifact://1799]\n\n\nWall time: 3.89 seconds",
+          "details": {
+            "timeoutSeconds": 120,
+            "wallTimeMs": 3892.9127079993486
+          }
+        }
+      },
+      {
+        "name": "TypeScript",
+        "command": "npm --prefix services/pi-orchestrator run typecheck",
+        "result": {
+          "text": "\n> @shisuidata/forge-pi-orchestrator@0.1.0 typecheck\n> tsc --noEmit\n\n\n\nWall time: 4.85 seconds",
+          "details": {
+            "timeoutSeconds": 120,
+            "wallTimeMs": 4846.78820899874
+          }
+        }
+      },
+      {
+        "name": "Python full",
+        "command": ".venv/bin/python -m pytest tests -q",
+        "result": {
+          "text": "........................................................................ [  8%]\n........................................................................ [ 17%]\n........................................................................ [ 25%]\n........................................................................ [ 34%]\n........................................................................ [ 42%]\n............................................................ssssssssssss [ 51%]\nssssssssssssss.......................................................... [ 59%]\n........................................................................ [ 68%]\n........................................................................ [ 76%]\n........................................................................ [ 85%]\n........................................................................ [ 93%]\n.....................................................                    [100%]\n=============================== warnings summary ===============================\ntests/test_accuracy_benchmark.py::test_benchmark_page_and_start_api_require_explicit_model_call_confirmation\n  ./.venv/lib/python3.14/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).\n    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\npytest: 819 passed, 26 skipped, 1 warning in 11.57s\n[raw output: artifact://1800]\n\n\nWall time: 13.26 seconds",
+          "details": {
+            "timeoutSeconds": 120,
+            "wallTimeMs": 13263.478166997433
+          }
+        }
+      }
+    ],
+    "sdk_smoke": {
+      "sdk": "@earendil-works/pi-coding-agent 0.84.2",
+      "real_agent_session": true,
+      "synthetic_in_process_stream": true,
+      "network_attempts": 0,
+      "model_calls": 0,
+      "before": {
+        "assistant_messages": 0,
+        "tokens": 0
+      },
+      "immediate": {
+        "assistant_messages": 0,
+        "tokens": 0
+      },
+      "after": {
+        "assistant_messages": 1,
+        "tokens": 93,
+        "stop_reason": "aborted",
+        "error_message": "Synthetic delayed cancellation",
+        "content": [
+          {
+            "type": "text",
+            "text": "SELECT 1"
+          }
+        ]
+      },
+      "events": [
+        "agent_start",
+        "turn_start",
+        "message_start",
+        "message_end",
+        "message_start",
+        "message_update",
+        "message_end",
+        "turn_end",
+        "agent_end",
+        "agent_settled"
+      ]
+    },
+    "sdk_smoke_limit": "Real AgentSession/Agent core with a synthetic in-process provider stream, temporary synthetic credentials, no network or paid model calls. The 93 tokens are fixture usage, not recovered Luna usage.",
+    "replay": {
+      "arms": 40,
+      "model_calls": 0,
+      "diagnostic": true,
+      "complete": false,
+      "audit": [
+        {
+          "case_id": "md-020",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-020",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-032",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-032",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-082",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-082",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-127",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-127",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-153",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-153",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-199",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-199",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-222",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-222",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-234",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-234",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-249",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-249",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-259",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-259",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-273",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-273",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-300",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-300",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-313",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-313",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-340",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-340",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-418",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-418",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-429",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-429",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-447",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-447",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-472",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-472",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-481",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-481",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-483",
+          "arm": "forge",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        },
+        {
+          "case_id": "md-483",
+          "arm": "direct",
+          "output_preserved": true,
+          "raw_preserved": true,
+          "changed_fields": []
+        }
+      ]
+    },
+    "historical_artifacts": [
+      {
+        "path": ".forge/benchmarks/luna-mixed-d20-seed48-20260906/run.json",
+        "unchanged": true
+      },
+      {
+        "path": ".forge/benchmarks/luna-mixed-d20-seed48-20260906/frozen-fixed.json",
+        "unchanged": true
+      },
+      {
+        "path": ".forge/benchmarks/luna-mixed-d20-seed48-20260906/replay.json",
+        "unchanged": true
+      }
+    ],
+    "gates": [
+      {
+        "name": "original-python-protocol",
+        "command": ".venv/bin/forge benchmark bird validate .forge/benchmarks/luna-mixed-d20-seed48-20260906/frozen-fixed.json",
+        "result": {
+          "text": "{\n  \"valid\": true,\n  \"protocol_revision\": \"sha256:7f0cd56f430e4ac0c5cf86e27e0446211e9f7d9e41463111b5d9988014113feb\",\n  \"case_ids\": [\n    \"md-020\",\n    \"md-032\",\n    \"md-082\",\n    \"md-127\",\n    \"md-153\",\n    \"md-199\",\n    \"md-222\",\n    \"md-234\",\n    \"md-249\",\n    \"md-259\",\n    \"md-273\",\n    \"md-300\",\n    \"md-340\",\n    \"md-418\",\n    \"md-429\",\n    \"md-447\",\n    \"md-472\",\n    \"md-481\",\n    \"md-483\",\n    \"md-313\"\n  ],\n  \"model_calls\": 0\n}\n\n\nWall time: 1.56 seconds",
+          "details": {
+            "timeoutSeconds": 30,
+            "wallTimeMs": 1563.945000000298
+          }
+        }
+      },
+      {
+        "name": "diagnostic-comparison",
+        "command": ".venv/bin/forge benchmark bird compare .forge/benchmarks/luna-cancellation-evidence-20260906/replay.json .forge/benchmarks/luna-cancellation-evidence-20260906/replay.json",
+        "result": {
+          "text": "{\n  \"comparable\": false,\n  \"reasons\": [\n    \"Unscored, diagnostic or old unversioned record\",\n    \"Unscored candidate evaluation\",\n    \"Unscored, diagnostic or old unversioned record\",\n    \"Unscored candidate evaluation\"\n  ]\n}\n\n\nWall time: 1.60 seconds\n\nCommand exited with code 1",
+          "details": {
+            "timeoutSeconds": 30,
+            "wallTimeMs": 1597.6587499976158,
+            "exitCode": 1
+          },
+          "hasError": true
+        }
+      }
+    ]
+  },
+  "scores_unchanged": {
+    "forge": {
+      "EX": {
+        "correct": 4,
+        "failed": 12,
+        "unscored": 4
+      },
+      "Contract": {
+        "correct": 1,
+        "failed": 15,
+        "unscored": 4
+      }
+    },
+    "direct": {
+      "EX": {
+        "correct": 4,
+        "failed": 12,
+        "unscored": 4
+      },
+      "Contract": {
+        "correct": 1,
+        "failed": 15,
+        "unscored": 4
+      }
+    }
+  },
+  "limitations": [
+    "This improves diagnostic reliability, not query accuracy; seed48 remains incomplete.",
+    "The old md-234 timeout and md-447 aborted usage remain unknown.",
+    "The SDK may not receive terminal usage from a real provider; no values are invented.",
+    "The original finally already waited for abort; this does not extend the generation window or add a retry.",
+    "The Pi runtime fingerprint changed; old Pi generation contracts cannot resume across runtime versions. The unchanged Python protocol still validates for offline replay."
+  ],
+  "rejected_alternatives": [
+    "Do not synthesize missing CTE projections or rename md-032/md-199 references to match Gold.",
+    "Do not reinstate the previously unproven projection prompt, extend the deadline, continue failed runs or add paid calls.",
+    "Do not copy and persist every cumulative stream snapshot."
+  ],
+  "artifacts": {
+    ".forge/benchmarks/luna-cancellation-evidence-20260906/regression-before.json": "sha256:3263e13e6df9b8c394641b95d426387480facfe9315337199e18256a4b6f9afc",
+    ".forge/benchmarks/luna-cancellation-evidence-20260906/verification.json": "sha256:cda2f955216c67c1289fc83ccecc47a48b2e35522fd49230b6ec59e3e630295e",
+    ".forge/benchmarks/luna-cancellation-evidence-20260906/sdk-smoke.json": "sha256:f40ff50ecf8fb08826cf202273e38482d1a756524c4c1a8826b36374321886a7",
+    ".forge/benchmarks/luna-cancellation-evidence-20260906/replay.json": "sha256:beb97d1285ccacaba1d3d62d25b1abc290298adc7c15e20b6238ee4f5555e141",
+    ".forge/benchmarks/luna-cancellation-evidence-20260906/replay-audit.json": "sha256:419fb7d65dbc9e84b2d5a369b0bed6cf2271577da0b4f828ad812768e70c20d2",
+    ".forge/benchmarks/luna-cancellation-evidence-20260906/gates.json": "sha256:7825f93dfe213afd1ca4ca0fdf93931219cc95081923bd1a957a91371f55175f",
+    ".forge/benchmarks/luna-mixed-d20-seed48-20260906/run.json": "sha256:45976ad899c528fac2adfbe9adc9c7512316391fd8578276d84680b9274c288f",
+    ".forge/benchmarks/luna-mixed-d20-seed48-20260906/frozen-fixed.json": "sha256:957d78e17370e6057e1bc5ce0459af279751d0ecec67439692855d8438246b00",
+    ".forge/benchmarks/luna-mixed-d20-seed48-20260906/replay.json": "sha256:556276b9ec62cedcb2310a2c859e77083d0cb43876a4f0a339a44e804b12b9ec",
+    "services/pi-orchestrator/src/benchmark-runtime.ts": "sha256:ee8c74b20edbae5661430de45e471175500d4d179b9fef1ca30f8e78703b612a",
+    "services/pi-orchestrator/tests/benchmark-runtime.test.ts": "sha256:1db0d2d50648216202fecda0c27d8053c0e7ffe19b73f616f0085cead18084f6"
+  }
+}

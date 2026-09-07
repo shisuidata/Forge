@@ -1,13 +1,17 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { dirname, join } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   createAgentSession,
+  DefaultResourceLoader,
+  defineTool,
   ModelRuntime,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import type { TSchema } from "typebox";
 
 import type { OrchestratorApplication } from "./application.js";
 import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
@@ -16,10 +20,52 @@ import type {
   BenchmarkArm,
   BenchmarkCaseProjectionV2,
   BenchmarkLogV2,
+  BenchmarkGenerationContractV2,
+  BenchmarkGoldReadinessV2,
   BenchmarkRunProjectionV2,
   BenchmarkRunStatus,
   ContextSnapshotV2,
 } from "./benchmark-contracts.js";
+import { createStrictForgeOutput, requireStrictForgeApi, requireStrictForgePayload, StrictForgeOutputError } from "./strict-forge-output.js";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const forgeSchemaJson = readFileSync(resolve(moduleDir, "../../../forge/schema.json"), "utf8");
+const canonicalForgeSchema = JSON.parse(forgeSchemaJson);
+const strictForgeOutput = createStrictForgeOutput(canonicalForgeSchema);
+const forgeToolSchema = canonicalForgeSchema as TSchema;
+const forgeToolSchemaChars = JSON.stringify(strictForgeOutput.schema).length;
+
+const FORGE_SCHEMA_REVISION = `sha256:${createHash("sha256").update(forgeSchemaJson).digest("hex")}`;
+const PI_RUNTIME_REVISION = "sha256:" + createHash("sha256")
+  .update("benchmark-runtime\0").update(readFileSync(fileURLToPath(import.meta.url)))
+  .update("strict-forge-output\0").update(readFileSync(new URL("./strict-forge-output" + extname(fileURLToPath(import.meta.url)), import.meta.url)))
+  .digest("hex");
+const PI_SDK_LOCK_REVISION = "sha256:" + createHash("sha256")
+  .update(readFileSync(resolve(moduleDir, "../package-lock.json"))).digest("hex");
+const structuredGenerationContract: Omit<BenchmarkGenerationContractV2, "forge_prompt_revision"> = {
+  forge_output_mode: "pi_tool_schema",
+  forge_schema_revision: FORGE_SCHEMA_REVISION,
+  provider_json_schema_request: "required",
+  forge_wire_schema_revision: strictForgeOutput.revision,
+  sampling: "provider_default",
+  transport: "sse",
+  max_output_tokens: null,
+  timeout_seconds: 120,
+  provider_retries: 0,
+  max_agent_turns_per_arm: 1,
+  isolation_revision: "pi-benchmark-isolation-v1",
+  pi_runtime_revision: PI_RUNTIME_REVISION,
+  pi_sdk_lock_revision: PI_SDK_LOCK_REVISION,
+  direct_output_mode: "text_sql",
+};
+const legacyGenerationContract: BenchmarkGenerationContractV2 = {
+  forge_output_mode: "text_json",
+  forge_prompt_revision: "forge-benchmark-text-legacy",
+  forge_schema_revision: null,
+  provider_json_schema_request: "disabled",
+  forge_wire_schema_revision: null,
+  direct_output_mode: "text_sql",
+};
 
 interface SuiteCase {
   case_id: string;
@@ -29,22 +75,41 @@ interface SuiteCase {
   question: string;
   evidence: string;
 }
-interface ContextResponse { case: SuiteCase; context_snapshot: ContextSnapshotV2; schema_context: string; forge_instructions: string; direct_instructions: string; }
+interface ContextResponse {
+  protocol_revision: string;
+  metric_revision: string;
+  case: SuiteCase;
+  context_snapshot: ContextSnapshotV2;
+  schema_context: string;
+  forge_prompt_revision: string;
+  forge_instructions: string;
+  direct_instructions: string;
+}
 interface ArmEvaluation extends Record<string, unknown> {
+  protocol_revision: string;
+  metric_revision: string;
   compile_status: ArmMetricsV2["compile_status"];
   execution_status: ArmMetricsV2["execution_status"];
-  official_ea: boolean;
-  contract_accuracy: boolean;
+  scored: boolean;
+  official_ea: boolean | null;
+  contract_accuracy: boolean | null;
   failure: NonNullable<ArmMetricsV2["failure"]> | null;
   error_code: ArmMetricsV2["error_code"];
   sql: string | null;
 }
 interface PersistedRun {
+  protocol_manifest?: Record<string, unknown>;
+  gold_readiness?: BenchmarkGoldReadinessV2;
+  protocol_revision?: string;
+  contexts?: Record<string, ContextResponse>;
+  dispatched_calls?: number;
   run_id: string;
   task_run_id: string;
   status: BenchmarkRunStatus;
   suite_id: string;
+  metric_revision?: string;
   model: BenchmarkRunProjectionV2["model"];
+  generation_contract?: BenchmarkGenerationContractV2;
   total_cases: number;
   total_calls: number;
   sequence: number;
@@ -62,8 +127,10 @@ const emptyArm = (): ArmMetricsV2 => ({
   cache_read_tokens: 0,
   cache_write_tokens: 0,
   total_tokens: 0,
+  usage_observed: true,
   compile_status: "pending",
   execution_status: "pending",
+  scored: false,
   official_ea: null,
   contract_accuracy: null,
   failure: null,
@@ -71,6 +138,18 @@ const emptyArm = (): ArmMetricsV2 => ({
   sql: null,
   output: null,
 });
+
+export function benchmarkResourceLoader(cwd: string, agentDir: string, settingsManager: SettingsManager): DefaultResourceLoader {
+  // Never reload: this explicit loader has no filesystem resources.
+  const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager,
+    noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
+  loader.getSystemPrompt = () => "Follow only the controlled benchmark instructions. Produce exactly one final candidate.";
+  return loader;
+}
+
+function outputHash(value: unknown): string {
+  return "sha256:" + createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
 
 function now(): string { return new Date().toISOString(); }
 function parse<T>(raw: unknown): T { return JSON.parse(String(raw)) as T; }
@@ -88,6 +167,56 @@ function assistantText(messages: readonly any[]): string {
     }
   }
   return "";
+}
+
+export class BenchmarkInputError extends Error {}
+class MetricRevisionMismatch extends Error {}
+class EmptyGenerationError extends Error {}
+
+function requireGoldReadiness(value: unknown, cases: SuiteCase[]): BenchmarkGoldReadinessV2 {
+  const readiness = value as BenchmarkGoldReadinessV2 | undefined;
+  if (!readiness || !["require_all", "skip_unscorable"].includes(readiness.policy)
+    || !Array.isArray(readiness.blocked_cases)) throw new BenchmarkInputError("Frozen Gold readiness policy/report is required");
+  const selected = new Map(cases.map((item) => [item.case_id, item.db_id]));
+  const seen = new Set<string>();
+  for (const blocked of readiness.blocked_cases) {
+    if (!blocked || !selected.has(blocked.case_id) || selected.get(blocked.case_id) !== blocked.db_id
+      || seen.has(blocked.case_id) || typeof blocked.code !== "string" || !blocked.code.trim()) {
+      throw new BenchmarkInputError("Gold blocked cases must be unique selected cases with matching databases and failure codes");
+    }
+    seen.add(blocked.case_id);
+  }
+  if (readiness.policy === "require_all" && seen.size) throw new BenchmarkInputError("require_all forbids unscorable Gold cases");
+  return readiness;
+}
+
+function sameGoldReadiness(left: BenchmarkGoldReadinessV2, right: BenchmarkGoldReadinessV2): boolean {
+  return left.policy === right.policy && left.blocked_cases.length === right.blocked_cases.length
+    && left.blocked_cases.every((item) => right.blocked_cases.some((other) =>
+      item.case_id === other.case_id && item.db_id === other.db_id && item.code === other.code));
+}
+
+function requireMetricRevision(expected: string | undefined, received: unknown): asserts received is string {
+  if (typeof expected !== "string" || !expected || received !== expected) {
+    throw new MetricRevisionMismatch(`Result comparator revision mismatch: expected ${expected ?? "unknown"}, received ${received ?? "unknown"}`);
+  }
+}
+function hasCurrentGenerationContract(run: PersistedRun): boolean {
+  const contract = run.generation_contract;
+  return contract?.provider_json_schema_request === "required"
+    && contract.forge_wire_schema_revision === strictForgeOutput.revision
+    && contract.forge_schema_revision === FORGE_SCHEMA_REVISION
+    && typeof run.protocol_manifest?.forge_prompt_revision === "string"
+    && Boolean(run.protocol_manifest.forge_prompt_revision)
+    && contract.forge_prompt_revision === run.protocol_manifest.forge_prompt_revision
+    && contract.sampling === "provider_default" && contract.transport === "sse" && contract.max_output_tokens === null
+    && contract.timeout_seconds === 120 && contract.provider_retries === 0
+    && contract.max_agent_turns_per_arm === 1 && contract.isolation_revision === "pi-benchmark-isolation-v1"
+    && contract.pi_runtime_revision === PI_RUNTIME_REVISION && contract.pi_sdk_lock_revision === PI_SDK_LOCK_REVISION;
+}
+
+function requireGenerationContract(run: PersistedRun): void {
+  if (!hasCurrentGenerationContract(run)) throw new StrictForgeOutputError("Strict Forge generation contract mismatch; start a new run");
 }
 
 
@@ -124,6 +253,7 @@ export class PiBenchmarkRuntime {
     ).all() as Array<{ data_json: string }>;
     for (const row of active) {
       const run = parse<PersistedRun>(row.data_json);
+      if (!run.protocol_revision) continue;
       run.status = "interrupted";
       run.completed_at = now();
       run.sequence += 1;
@@ -150,26 +280,83 @@ export class PiBenchmarkRuntime {
     model: string;
     limit?: number;
     caseIds?: string[];
+    confirmModelCalls?: number;
+    protocolManifest?: Record<string, unknown>;
   }): Promise<BenchmarkRunProjectionV2> {
+    if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit <= 0)) throw new BenchmarkInputError("limit must be a positive integer");
+    if (options.caseIds !== undefined && (!Array.isArray(options.caseIds) || !options.caseIds.length
+      || options.caseIds.some((id) => typeof id !== "string" || !id.trim())
+      || new Set(options.caseIds).size !== options.caseIds.length)) throw new BenchmarkInputError("case_ids must contain unique nonempty IDs");
+    if (!Number.isSafeInteger(options.confirmModelCalls) || Number(options.confirmModelCalls) < 0) throw new BenchmarkInputError("Explicit nonnegative confirm_model_calls is required");
     const active = this.#db.prepare(
-      "SELECT run_id FROM benchmark_v2_runs WHERE status IN ('queued','running','pausing','paused','stopping') LIMIT 1",
+      "SELECT run_id FROM benchmark_v2_runs WHERE status IN ('queued','running','pausing','paused','stopping') AND json_extract(data_json, '$.protocol_revision') IS NOT NULL LIMIT 1",
     ).get();
     if (active) throw new Error("A Pi Benchmark run is already active");
     const runtime = await this.#runtime();
     const selected = runtime.getModel(options.provider, options.model);
     if (!selected) throw new Error(`Model is not registered: ${options.provider}/${options.model}`);
+    requireStrictForgeApi(selected);
     const ready = (await runtime.getAvailable(options.provider)).some((model) => model.id === options.model);
     if (!ready) throw new Error(`Model is unavailable: ${options.provider}/${options.model}`);
 
-    const suite = await this.#forgeGet<{ suite: Record<string, any>; cases: SuiteCase[] }>(
+    const suite = await this.#forgeGet<{ suite: { suite: string }; cases: SuiteCase[]; metric_revision: string }>(
       "/api/internal/benchmark-v2/suite",
     );
+    requireMetricRevision(suite.metric_revision, suite.metric_revision);
     let cases = suite.cases;
-    if (options.caseIds?.length) {
-      const ids = new Set(options.caseIds);
-      cases = cases.filter((item) => ids.has(item.case_id));
+    if (options.caseIds) {
+      const byId = new Map(cases.map((item) => [item.case_id, item]));
+      cases = options.caseIds.map((id) => {
+        const item = byId.get(id);
+        if (!item) throw new BenchmarkInputError("Unknown case ID: " + id);
+        return item;
+      });
     }
-    if (options.limit) cases = cases.slice(0, options.limit);
+    if (options.limit !== undefined) {
+      if (options.limit > cases.length) throw new BenchmarkInputError("limit exceeds selected suite size");
+      cases = cases.slice(0, options.limit);
+    }
+    const requestedReadiness = options.protocolManifest
+      ? requireGoldReadiness(options.protocolManifest.gold_readiness, cases)
+      : { policy: "require_all" as const, blocked_cases: [] };
+    const modelCalls = 2 * (cases.length - requestedReadiness.blocked_cases.length);
+    if (!cases.length || options.confirmModelCalls !== modelCalls) throw new BenchmarkInputError("confirm_model_calls must equal exactly 2(N - frozen Gold blocked cases)");
+    const protocol = await this.#forgePost<{
+      manifest: Record<string, unknown>; protocol_revision: string; case_ids: string[];
+      metric_revision: string; forge_prompt_revision: string; forge_schema_revision: string;
+      contexts: Record<string, ContextResponse>;
+      gold_readiness: BenchmarkGoldReadinessV2;
+      generation: { max_model_calls: number; provider_retries: number; max_agent_turns_per_arm: number; timeout_seconds: number; sampling: string; max_output_tokens: number | null };
+    }>("/api/internal/benchmark-v2/protocol", {
+      provider: options.provider, model: options.model, case_ids: cases.map((item) => item.case_id),
+      confirm_model_calls: options.confirmModelCalls,
+      ...(options.protocolManifest ? { protocol_manifest: options.protocolManifest } : {}),
+    });
+    requireMetricRevision(suite.metric_revision, protocol.metric_revision);
+    const goldReadiness = requireGoldReadiness(protocol.gold_readiness, cases);
+    const manifestReadiness = requireGoldReadiness(protocol.manifest?.gold_readiness, cases);
+    if (!sameGoldReadiness(goldReadiness, manifestReadiness) || !sameGoldReadiness(goldReadiness, requestedReadiness)) {
+      throw new BenchmarkInputError("Frozen Gold readiness differs from the authorized manifest/report");
+    }
+    const blockedIds = new Set(goldReadiness.blocked_cases.map((item) => item.case_id));
+    if (!protocol.protocol_revision || !protocol.manifest ||
+      JSON.stringify(protocol.case_ids) !== JSON.stringify(cases.map((item) => item.case_id)) ||
+      typeof protocol.forge_prompt_revision !== "string" || !protocol.forge_prompt_revision ||
+      protocol.forge_prompt_revision !== protocol.manifest.forge_prompt_revision || protocol.forge_schema_revision !== FORGE_SCHEMA_REVISION ||
+      protocol.generation.max_model_calls !== options.confirmModelCalls || protocol.generation.provider_retries !== 0 ||
+      protocol.generation.max_agent_turns_per_arm !== 1 || protocol.generation.timeout_seconds !== 120 ||
+      protocol.generation.sampling !== "provider_default" || protocol.generation.max_output_tokens !== null) {
+      throw new Error("Frozen benchmark protocol does not match the generation contract");
+    }
+    for (const item of cases) {
+      if (blockedIds.has(item.case_id)) continue;
+      const context = protocol.contexts[item.case_id];
+      if (!context || context.case.case_id !== item.case_id || context.metric_revision !== protocol.metric_revision ||
+        context.forge_prompt_revision !== protocol.forge_prompt_revision) throw new Error("Frozen benchmark context mismatch");
+    }
+    const generationContract: BenchmarkGenerationContractV2 = {
+      ...structuredGenerationContract, forge_prompt_revision: protocol.forge_prompt_revision,
+    };
     const created = this.application.createTask({
       org_id: "org_benchmark",
       team_id: "team_benchmark",
@@ -182,6 +369,9 @@ export class PiBenchmarkRuntime {
         suite_id: String(suite.suite.suite),
         provider: options.provider,
         model: options.model,
+        forge_output_mode: generationContract.forge_output_mode,
+        forge_prompt_revision: generationContract.forge_prompt_revision,
+        forge_schema_revision: generationContract.forge_schema_revision,
       },
     });
     const revision = computePiModelRevision({
@@ -194,15 +384,22 @@ export class PiBenchmarkRuntime {
       task_run_id: created.task.task_run_id,
       status: "queued",
       suite_id: String(suite.suite.suite),
+      metric_revision: suite.metric_revision,
       model: {
         provider: options.provider,
         model: options.model,
         revision,
-        temperature: 0,
-        max_output_tokens: 8192,
+        temperature: null,
+        max_output_tokens: null,
       },
+      generation_contract: generationContract,
+      protocol_manifest: protocol.manifest,
+      gold_readiness: goldReadiness,
+      protocol_revision: protocol.protocol_revision,
+      contexts: protocol.contexts,
+      dispatched_calls: 0,
       total_cases: cases.length,
-      total_calls: cases.length * 2,
+      total_calls: modelCalls,
       sequence: 1,
       current_case: null,
       created_at: now(),
@@ -230,6 +427,17 @@ export class PiBenchmarkRuntime {
         started_at: null,
         completed_at: null,
       };
+      if (blockedIds.has(item.case_id)) {
+        projection.status = "failed";
+        projection.current_stage = "gold_preflight";
+        projection.completed_at = run.created_at;
+        projection.failure = { stage: "gold", code: "gold_execution_failed", retryable: false };
+        for (const arm of ["forge", "direct"] as const) {
+          projection[arm] = { ...emptyArm(), compile_status: "not_applicable", execution_status: "skipped",
+            failure: projection.failure, error_code: "gold_execution_failed",
+            evidence: { dispatches: 0, payload_hash: null, response_output_hash: null } };
+        }
+      }
       insert.run(run.run_id, item.case_id, projection.status, JSON.stringify(projection));
     }
     this.#log(
@@ -238,8 +446,8 @@ export class PiBenchmarkRuntime {
       "shared",
       "run",
       "info",
-      `已创建 Pi Benchmark：${cases.length} cases / ${cases.length * 2} Sub-Agent calls，模型 ${options.provider}/${options.model}。`,
-      {},
+      `已创建 Pi Benchmark：${cases.length} cases / ${modelCalls} Sub-Agent calls，模型 ${options.provider}/${options.model}。`,
+      { generation_contract: generationContract },
     );
     void this.#execute(run.run_id).catch((error: unknown) => this.#failRun(run.run_id, error));
     return this.get(run.run_id)!;
@@ -254,6 +462,18 @@ export class PiBenchmarkRuntime {
     const cases = (
       this.#db.prepare("SELECT data_json FROM benchmark_v2_cases WHERE run_id=? ORDER BY case_id").all(runId) as Array<{ data_json: string }>
     ).map((item) => parse<BenchmarkCaseProjectionV2>(item.data_json));
+    for (const item of cases) {
+      for (const name of ["forge", "direct"] as const) {
+        const arm = item[name];
+        // Legacy false scores also represented Gold failures. Only positive evidence is safe.
+        arm.scored ??= arm.official_ea === true || arm.contract_accuracy === true;
+        if (!arm.scored) {
+          arm.official_ea = null;
+          arm.contract_accuracy = null;
+        }
+      }
+      if (item.forge.contract_accuracy === null || item.direct.contract_accuracy === null) item.winner = null;
+    }
     const completed = cases.filter((item) => item.status === "passed" || item.status === "failed").length;
     const calls = cases.reduce(
       (sum, item) => sum + (item.forge.generation_ms == null ? 0 : 1) + (item.direct.generation_ms == null ? 0 : 1),
@@ -263,15 +483,17 @@ export class PiBenchmarkRuntime {
       schema_version: 2,
       projection_type: "pi_benchmark_run_v2",
       ...run,
+      metric_revision: run.metric_revision ?? null,
+      generation_contract: { ...legacyGenerationContract, ...run.generation_contract },
       completed_cases: completed,
-      completed_calls: calls,
+      completed_calls: run.dispatched_calls ?? calls,
       controls: {
-        can_pause: run.status === "running",
-        can_resume: run.status === "paused",
-        can_stop: ["queued", "running", "pausing", "paused"].includes(run.status),
+        can_pause: Boolean(run.protocol_revision) && run.status === "running",
+        can_resume: run.status === "paused" && Boolean(run.protocol_revision) && hasCurrentGenerationContract(run),
+        can_stop: Boolean(run.protocol_revision) && ["queued", "running", "pausing", "paused"].includes(run.status),
       },
       dag: this.#dag(run, cases),
-      metrics: this.#metrics(cases),
+      metrics: this.#metrics(cases, run.total_cases),
       cases,
     };
   }
@@ -333,6 +555,8 @@ export class PiBenchmarkRuntime {
 
   async #execute(runId: string): Promise<void> {
     const run = this.#run(runId);
+    requireMetricRevision(run.metric_revision, run.metric_revision);
+    requireGenerationContract(run);
     run.status = "running";
     run.started_at = run.started_at ?? now();
     run.sequence += 1;
@@ -343,7 +567,7 @@ export class PiBenchmarkRuntime {
     const workers = Array.from({ length: this.config.benchmarkConcurrency }, async () => {
       while (true) {
         let current = this.#run(runId);
-        if (current.status === "stopping") return;
+        if (["stopping", "failed"].includes(current.status)) return;
         if (current.status === "pausing") {
           current.status = "paused";
           current.sequence += 1;
@@ -365,12 +589,17 @@ export class PiBenchmarkRuntime {
     await Promise.all(workers);
     const final = this.#run(runId);
     if (final.status === "stopping") final.status = "stopped";
-    else if (final.status !== "paused") final.status = "completed";
-    if (["completed", "stopped"].includes(final.status)) final.completed_at = now();
+    else if (final.status === "running") {
+      if (final.gold_readiness?.blocked_cases.length) {
+        final.status = "failed";
+        final.error = "Diagnostic run incomplete: frozen unscorable Gold cases were skipped without replacement";
+      } else final.status = "completed";
+    }
+    if (["completed", "stopped", "failed"].includes(final.status)) final.completed_at = now();
     final.current_case = null;
     final.sequence += 1;
     this.#saveRun(final);
-    this.#log(runId, null, "shared", "run", "success", `Benchmark ${final.status}。`, {});
+    this.#log(runId, null, "shared", "run", final.status === "failed" ? "error" : "success", `Benchmark ${final.status}。`, {});
   }
 
   async #processCase(runId: string, caseId: string): Promise<void> {
@@ -385,10 +614,31 @@ export class PiBenchmarkRuntime {
     this.#saveRun(run);
     this.#log(runId, caseId, "shared", "rag", "info", "开始 RAG 分析与有界召回。", {});
     try {
-      const context = await this.#forgePost<ContextResponse>(
+      const checkedContext = await this.#forgePost<ContextResponse>(
         "/api/internal/benchmark-v2/context",
-        { case_id: caseId },
+        { case_id: caseId, protocol_revision: run.protocol_revision },
       );
+      const context = run.contexts?.[caseId];
+      if (!context || checkedContext.protocol_revision !== run.protocol_revision ||
+        checkedContext.forge_prompt_revision !== context.forge_prompt_revision ||
+        JSON.stringify(checkedContext.context_snapshot) !== JSON.stringify(context.context_snapshot) ||
+        checkedContext.forge_instructions !== context.forge_instructions || checkedContext.direct_instructions !== context.direct_instructions) {
+        throw new MetricRevisionMismatch("Frozen protocol context drift");
+      }
+      requireMetricRevision(run.metric_revision, checkedContext.metric_revision);
+      requireMetricRevision(run.metric_revision, context.metric_revision);
+      if (this.#run(runId).status === "failed") {
+        item.status = "cancelled";
+        item.completed_at = now();
+        this.#saveCase(runId, item);
+        return;
+      }
+      const expectedPromptRevision = (run.generation_contract ?? legacyGenerationContract).forge_prompt_revision;
+      if (context.forge_prompt_revision !== expectedPromptRevision) {
+        throw new Error(
+          `Forge prompt revision mismatch: expected ${expectedPromptRevision}, received ${context.forge_prompt_revision}`,
+        );
+      }
       item.context_snapshot = context.context_snapshot;
       item.current_stage = "parallel_generation";
       this.#saveCase(runId, item);
@@ -432,18 +682,35 @@ export class PiBenchmarkRuntime {
       ]);
       item.forge = forge;
       item.direct = direct;
+      const generationFailure = [forge, direct].find((arm) => arm.failure?.stage === "generation");
+      if (generationFailure) {
+        item.failure = generationFailure.failure ?? null;
+        const error = new Error("Benchmark generation did not produce both candidates");
+        this.#failRun(runId, error);
+        throw error;
+      }
+      const unscored = !forge.scored ? forge : !direct.scored ? direct : null;
+      if (unscored) {
+        item.failure = unscored.failure ?? null;
+        const error = new Error("Benchmark evaluation is unscored");
+        this.#failRun(runId, error);
+        throw error;
+      }
       item.current_stage = "evaluated";
       item.failure = null;
-      item.winner = forge.contract_accuracy === direct.contract_accuracy
-        ? "tie"
-        : forge.contract_accuracy ? "forge" : "direct";
+      item.winner = forge.contract_accuracy === null || direct.contract_accuracy === null
+        ? null
+        : forge.contract_accuracy === direct.contract_accuracy
+          ? "tie"
+          : forge.contract_accuracy ? "forge" : "direct";
       item.status = "passed";
       item.completed_at = now();
     } catch (error) {
       const message = error instanceof Error ? error.message : "case failed";
+      if (error instanceof MetricRevisionMismatch || error instanceof StrictForgeOutputError) this.#failRun(runId, error);
       item.status = "failed";
       item.current_stage = "failed";
-      item.failure = message === "retrieval_insufficient"
+      item.failure ??= message === "retrieval_insufficient"
         ? { stage: "context", code: "retrieval_insufficient", retryable: true }
         : { stage: "context", code: "context_failed", retryable: true };
       item.completed_at = now();
@@ -474,6 +741,27 @@ export class PiBenchmarkRuntime {
     controllers.add(controller);
     this.#controllers.set(runId, controllers);
     const started = performance.now();
+    let activeSession: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
+    let sessionAbort: Promise<void> | undefined;
+    const abortSession = () => sessionAbort ??= activeSession?.abort();
+    let unsubscribe: (() => void) | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let output: unknown = null;
+    let rawArguments: unknown = null;
+    let generationMs: number | null = null;
+    let observedUsage: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number } | undefined;
+    const knownTokens = () => {
+      const recorded = activeSession?.getSessionStats().tokens;
+      // One dispatched response per arm: partial usage is a snapshot, never an additive event counter.
+      return recorded?.total ? recorded : observedUsage ?? recorded;
+    };
+    const evidence = { dispatches: 0, payload_hash: null as string | null, response_output_hash: null as string | null };
+    const usageObserved = () => evidence.dispatches === 0 || Number(knownTokens()?.total) > 0;
+    const rawOutput = () => ({
+      assistant: activeSession?.state.messages.filter((message) => message.role === "assistant")
+        .map(({ content, stopReason, errorMessage }) => ({ content, stopReason, errorMessage: errorMessage ?? null })) ?? [],
+      tool_arguments: rawArguments,
+    });
     const run = this.#run(runId);
     this.#log(
       runId,
@@ -494,27 +782,97 @@ export class PiBenchmarkRuntime {
           + "，revision " + run.model.revision.slice(0, 20) + "。",
         { provider: run.model.provider, model: run.model.model, revision: run.model.revision },
       );
+      let forgeOutput: Record<string, unknown> | null = null;
+      let strictRequests = 0;
+      const forgeTool = arm === "forge" ? defineTool({
+        name: "emit_forge_query",
+        label: "Emit Forge Query",
+        description: "Submit the final Forge query. All schema properties are required: use null for unused optional fields. Preserve SQL NULL values in val/default. Call exactly once as the final action.",
+        parameters: forgeToolSchema,
+        // Validate raw wire arguments before Pi attempts recursive JSON coercion.
+        prepareArguments: (args) => {
+          rawArguments = structuredClone(args);
+          this.#log(runId, item.case_id, arm, "generation.raw_arguments", "info", "Raw native tool arguments captured before validation.", { raw_tool_arguments: rawArguments });
+          return strictForgeOutput.decode(args as Record<string, unknown>);
+        },
+        async execute(_toolCallId, params) {
+          if (strictRequests !== 1) throw new StrictForgeOutputError("Forge output without a strict provider request");
+          if (forgeOutput !== null) throw new StrictForgeOutputError("Multiple Forge candidates are forbidden");
+          forgeOutput = params as Record<string, unknown>;
+          return {
+            content: [{ type: "text", text: "Forge query captured." }],
+            details: {},
+            terminate: true,
+          };
+        },
+      }) : null;
+      const settingsManager = SettingsManager.inMemory({
+        enableSkillCommands: false,
+        compaction: { enabled: false },
+        retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0, timeoutMs: 120000 } },
+      });
       const { session } = await createAgentSession({
         cwd: this.config.skillsRoot,
+        resourceLoader: benchmarkResourceLoader(this.config.skillsRoot, this.config.agentDir, settingsManager),
         agentDir: this.config.agentDir,
         modelRuntime: runtime,
         model,
-        settingsManager: SettingsManager.inMemory({
-          enableSkillCommands: false,
-          compaction: { enabled: false },
-        }),
+        settingsManager,
         sessionManager: SessionManager.inMemory(this.config.skillsRoot),
-        noTools: "all",
-        tools: [],
+        ...(forgeTool === null
+          ? { noTools: "all" as const, tools: [] }
+          : { noTools: "builtin" as const, tools: ["emit_forge_query"], customTools: [forgeTool] }),
       });
+      activeSession = session;
+      const stream = session.agent.streamFunction;
+      session.agent.streamFunction = (selected, providerContext, options) => {
+        const current = this.#run(runId);
+        if (controller.signal.aborted || ["failed", "stopping", "stopped"].includes(current.status)) throw new Error("Benchmark dispatch cancelled");
+        if (evidence.dispatches !== 0 || (current.dispatched_calls ?? 0) >= current.total_calls) {
+          throw new StrictForgeOutputError("A second agent turn or excess budget dispatch is forbidden");
+        }
+        evidence.dispatches += 1;
+        item[arm] = { ...item[arm], usage_observed: false, evidence };
+        this.#saveCase(runId, item);
+        current.dispatched_calls = (current.dispatched_calls ?? 0) + 1;
+        current.sequence += 1;
+        this.#saveRun(current);
+        this.#log(runId, item.case_id, arm, "generation.dispatch", "info", "Pi provider dispatch admitted; HTTP count/status is unobserved.", { dispatches: evidence.dispatches });
+        return stream(selected, providerContext, { ...options, maxRetries: 0, timeoutMs: 120000, transport: "sse" });
+      };
+      session.agent.onPayload = (payload, selected) => {
+        if (++strictRequests !== 1) throw new StrictForgeOutputError("A second provider payload is forbidden");
+        if (controller.signal.aborted) throw new Error("Benchmark dispatch cancelled");
+        const effective = arm === "forge"
+          ? requireStrictForgePayload(payload, selected.api, strictForgeOutput.schema) : payload;
+        evidence.payload_hash = outputHash(effective);
+        this.#log(runId, item.case_id, arm, "generation.payload", "info", "Effective provider payload observed; not HTTP delivery evidence.", {
+          payload_hash: evidence.payload_hash, wire_schema_revision: arm === "forge" ? strictForgeOutput.revision : null,
+        });
+        return effective;
+      };
       this.#log(
         runId, item.case_id, arm, "generation.session", "info",
-        "Pi AgentSession 已创建；内置工具关闭，等待模型响应。",
-        { context_snapshot_id: context.context_snapshot.content_hash },
+        arm === "forge"
+          ? "Pi AgentSession 已创建；内置工具关闭，仅启用 schema-bound terminating tool。"
+          : "Pi AgentSession 已创建；全部工具关闭，等待文本 SQL。",
+        {
+          context_snapshot_id: context.context_snapshot.content_hash,
+          output_mode: arm === "forge" ? "pi_tool_schema" : "text_sql",
+          tool_schema_chars: arm === "forge" ? forgeToolSchemaChars : 0,
+        },
       );
       let streamEvents = 0;
       let firstActivityLogged = false;
-      const unsubscribe = session.subscribe((event: any) => {
+      let turns = 0;
+      unsubscribe = session.subscribe((event: any) => {
+        if (event.type === "turn_start" && ++turns > 1) throw new StrictForgeOutputError("A second agent turn is forbidden");
+        const usage = event.message?.role === "assistant" ? event.message.usage : undefined;
+        if (usage && [usage.input, usage.output, usage.cacheRead, usage.cacheWrite].some((value) => Number.isFinite(value) && value > 0)) {
+          observedUsage = { input: usage.input ?? 0, output: usage.output ?? 0,
+            cacheRead: usage.cacheRead ?? 0, cacheWrite: usage.cacheWrite ?? 0,
+            total: (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0) };
+        }
         if (event.type === "message_update") {
           streamEvents += 1;
           if (!firstActivityLogged) {
@@ -528,17 +886,14 @@ export class PiBenchmarkRuntime {
             );
           }
         } else if (event.type === "auto_retry_start") {
-          this.#log(
-            runId, item.case_id, arm, "generation.retry", "warning",
-            "Provider 自动重试第 " + event.attempt + " 次：" + event.errorMessage,
-            { attempt: event.attempt, max_attempts: event.maxAttempts },
-          );
+          controller.abort();
+          throw new StrictForgeOutputError("Provider/session retry is forbidden");
         }
       });
-      controller.signal.addEventListener("abort", () => { void session.abort(); }, { once: true });
+      controller.signal.addEventListener("abort", () => { void abortSession(); }, { once: true });
       const branchInstructions = arm === "forge" ? context.forge_instructions : context.direct_instructions;
       const outputInstruction = arm === "forge"
-        ? "Return exactly one valid Forge JSON object following the supplied Forge JSON rules. No SQL wrapper, Markdown, or explanation."
+        ? "Call emit_forge_query exactly once with the final Forge query. Do not emit text, SQL, Markdown, or explanation."
         : "Return exactly one read-only SQLite SELECT query. No Markdown or explanation.";
       const prompt = [
         "You are the " + arm + " branch of a controlled SQL benchmark.",
@@ -556,37 +911,90 @@ export class PiBenchmarkRuntime {
         "Prompt 已提交：" + prompt.length + " 字符，"
           + context.context_snapshot.tables.length + " 张表，"
           + context.context_snapshot.fields.length + " 个字段。",
-        { prompt_chars: prompt.length, tables: context.context_snapshot.tables.length, fields: context.context_snapshot.fields.length },
+        {
+          prompt_chars: prompt.length,
+          tool_schema_chars: arm === "forge" ? forgeToolSchemaChars : 0,
+          tables: context.context_snapshot.tables.length,
+          fields: context.context_snapshot.fields.length,
+        },
       );
-      await session.prompt(prompt, { expandPromptTemplates: false, source: "rpc" });
-      unsubscribe();
-      const raw = assistantText(session.state.messages as any[]);
-      const stats = session.getSessionStats();
+      if (controller.signal.aborted) throw new Error("Benchmark cancelled before prompt");
+      await Promise.race([
+        session.prompt(prompt, { expandPromptTemplates: false, source: "rpc" }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => { controller.abort(); reject(new Error("Benchmark generation timeout")); }, 120000);
+        }),
+      ]);
+      clearTimeout(timeout);
+      generationMs = Math.round((performance.now() - started) * 10) / 10;
+      evidence.response_output_hash = outputHash(rawOutput());
+
+      const messages = session.state.messages;
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if (message?.role !== "assistant") continue;
+        if ("stopReason" in message && ["error", "aborted", "length", "pending"].includes(String(message.stopReason))) {
+          throw new Error("Incomplete model response (" + message.stopReason + ")" + (message.errorMessage ? ": " + message.errorMessage : ""));
+        }
+        break;
+      }
+      const raw = assistantText(messages as any[]);
+      const tokens = knownTokens() ?? session.getSessionStats().tokens;
+      if (arm === "direct" && !raw.trim()) throw new EmptyGenerationError("Direct model returned no SQL candidate");
+      if (arm === "forge" && forgeOutput === null) {
+        throw new EmptyGenerationError("Forge strict output tool was not called with valid arguments");
+      }
+      output = arm === "forge" ? forgeOutput : raw;
+      const outputChars = typeof output === "string" ? output.length : JSON.stringify(output).length;
       this.#log(
         runId, item.case_id, arm, "generation.completed", "success",
-        "模型响应结束：" + raw.length + " 字符，输入 " + stats.tokens.input
-          + "，输出 " + stats.tokens.output + "，缓存读取 " + stats.tokens.cacheRead + "。",
-        { output_chars: raw.length, stream_events: streamEvents, tokens: stats.tokens },
+        "模型响应结束：" + outputChars + " 字符，输入 " + (usageObserved() ? tokens.input : "未知")
+          + "，输出 " + (usageObserved() ? tokens.output : "未知") + "，缓存读取 " + (usageObserved() ? tokens.cacheRead : "未知") + "。",
+        {
+          output_chars: outputChars,
+          output,
+          raw_output: rawOutput(),
+          response_output_hash: evidence.response_output_hash,
+          output_mode: arm === "forge" ? "pi_tool_schema" : "text_sql",
+          stream_events: streamEvents,
+          tokens,
+          usage_observed: usageObserved(),
+        },
       );
-      session.dispose();
-      this.#log(runId, item.case_id, arm, "output.handoff", "info", "提交原始候选，由 Forge 统一解析与保障。", {});
-      const output = raw;
+
+      this.#log(
+        runId,
+        item.case_id,
+        arm,
+        "output.handoff",
+        "info",
+        arm === "forge" ? "提交已校验的结构化 Forge 候选。" : "提交原始 SQL 候选。",
+        {},
+      );
       this.#log(runId, item.case_id, arm, "evaluation.request", "info", "提交 Forge 执行层进行编译、只读执行和双评价。", {});
       const evaluation = await this.#forgePost<ArmEvaluation>(
         "/api/internal/benchmark-v2/evaluate",
-        { case_id: item.case_id, arm, output, context_snapshot: context.context_snapshot },
+        { case_id: item.case_id, arm, output, context_snapshot: context.context_snapshot, metric_revision: run.metric_revision, protocol_revision: run.protocol_revision },
       );
+      requireMetricRevision(run.metric_revision, evaluation.metric_revision);
+      if (evaluation.protocol_revision !== run.protocol_revision) throw new MetricRevisionMismatch("Evaluation protocol revision mismatch");
+      if (typeof evaluation.scored !== "boolean") throw new MetricRevisionMismatch("Evaluation scored status is missing");
       const metrics: ArmMetricsV2 = {
-        generation_ms: Math.round((performance.now() - started) * 10) / 10,
-        prompt_tokens: stats.tokens.input,
-        completion_tokens: stats.tokens.output,
-        cache_read_tokens: stats.tokens.cacheRead,
-        cache_write_tokens: stats.tokens.cacheWrite,
-        total_tokens: stats.tokens.total,
+        generation_ms: generationMs,
+        elapsed_ms: Math.round((performance.now() - started) * 10) / 10,
+        raw_output: rawOutput(),
+        evidence,
+        prompt_tokens: tokens.input,
+        completion_tokens: tokens.output,
+        cache_read_tokens: tokens.cacheRead,
+        cache_write_tokens: tokens.cacheWrite,
+        total_tokens: tokens.total,
+        usage_observed: usageObserved(),
         compile_status: evaluation.compile_status,
         execution_status: evaluation.execution_status,
-        official_ea: evaluation.official_ea,
-        contract_accuracy: evaluation.contract_accuracy,
+        scored: evaluation.scored,
+        official_ea: evaluation.scored ? evaluation.official_ea : null,
+        contract_accuracy: evaluation.scored ? evaluation.contract_accuracy : null,
         failure: evaluation.failure,
         error_code: evaluation.error_code,
         sql: evaluation.sql,
@@ -603,10 +1011,18 @@ export class PiBenchmarkRuntime {
           generation_ms: metrics.generation_ms,
           compile_status: metrics.compile_status,
           execution_status: metrics.execution_status,
+          scored: metrics.scored,
         },
       );
       return metrics;
     } catch (error) {
+      if (error instanceof MetricRevisionMismatch) this.#failRun(runId, error);
+      // Cancellation may finalize the assistant message and usage before the session becomes idle.
+      await abortSession();
+      const generationFailed = output === null && !(error instanceof MetricRevisionMismatch);
+      const failureCode = generationFailed ? error instanceof EmptyGenerationError ? "generation_empty" : "agent_failed" : "context_failed";
+      evidence.response_output_hash = outputHash(rawOutput());
+      const tokens = knownTokens();
       this.#log(
         runId,
         item.case_id,
@@ -614,29 +1030,51 @@ export class PiBenchmarkRuntime {
         "generation",
         "error",
         error instanceof Error ? error.message : "arm failed",
-        {},
+        { output, raw_output: rawOutput(), evidence, tokens, usage_observed: usageObserved() },
       );
       return {
         ...emptyArm(),
-        generation_ms: Math.round((performance.now() - started) * 10) / 10,
-        compile_status: arm === "forge" ? "failed" : "not_applicable",
-        execution_status: "failed",
-        failure: { stage: "generation", code: "agent_failed", retryable: true },
-        error_code: "agent_failed",
+        output,
+        raw_output: rawOutput(),
+        evidence,
+        generation_ms: generationMs ?? (evidence.dispatches ? Math.round((performance.now() - started) * 10) / 10 : null),
+        elapsed_ms: Math.round((performance.now() - started) * 10) / 10,
+        prompt_tokens: tokens?.input ?? 0,
+        completion_tokens: tokens?.output ?? 0,
+        cache_read_tokens: tokens?.cacheRead ?? 0,
+        cache_write_tokens: tokens?.cacheWrite ?? 0,
+        total_tokens: tokens?.total ?? 0,
+        usage_observed: usageObserved(),
+        compile_status: arm === "forge" ? "pending" : "not_applicable",
+        execution_status: output === null ? "skipped" : "pending",
+        scored: generationFailed,
+        official_ea: generationFailed ? false : null,
+        contract_accuracy: generationFailed ? false : null,
+        failure: { stage: generationFailed ? "generation" : "context", code: failureCode, retryable: false },
+        error_code: failureCode,
       };
     } finally {
-      controllers.delete(controller);
+      clearTimeout(timeout);
+      try {
+        await abortSession();
+      } finally {
+        unsubscribe?.();
+        activeSession?.dispose();
+        controllers.delete(controller);
+      }
     }
   }
 
   async #runtime(): Promise<ModelRuntime> {
     if (!this.#modelRuntime) {
-      this.#modelRuntime = await ModelRuntime.create({
+      const runtime = await ModelRuntime.create({
         authPath: join(this.config.agentDir, "auth.json"),
         modelsPath: join(this.config.agentDir, "models.json"),
         refreshOnCreate: false,
         allowModelNetwork: false,
       });
+      // Benchmark provider registration is configuration-only; never execute project extensions.
+      this.#modelRuntime = runtime;
     }
     return this.#modelRuntime;
   }
@@ -652,6 +1090,9 @@ export class PiBenchmarkRuntime {
       headers: this.#forgeHeaders,
       body: JSON.stringify(body),
     });
+    if (response.status === 409) {
+      throw new MetricRevisionMismatch("Benchmark evaluation revision or context mismatch (409)");
+    }
     if (!response.ok) throw new Error(`Forge ${path} returned ${response.status}`);
     return await response.json() as T;
   }
@@ -696,6 +1137,7 @@ export class PiBenchmarkRuntime {
   }
   #control(runId: string, status: BenchmarkRunStatus): BenchmarkRunProjectionV2 {
     const run = this.#run(runId);
+    if (!run.protocol_revision || !run.protocol_manifest) throw new Error("Historical runs without a frozen protocol are read-only");
     const allowed: Record<string, string[]> = {
       pausing: ["running"],
       running: ["paused"],
@@ -703,6 +1145,10 @@ export class PiBenchmarkRuntime {
     };
     if (!(allowed[status] ?? []).includes(run.status)) {
       throw new Error(`Cannot transition ${run.status} to ${status}`);
+    }
+    if (status === "running") {
+      requireMetricRevision(run.metric_revision, run.metric_revision);
+      requireGenerationContract(run);
     }
     run.status = status;
     run.sequence += 1;
@@ -715,29 +1161,60 @@ export class PiBenchmarkRuntime {
     if (["completed", "stopped"].includes(run.status)) return;
     run.status = "failed";
     run.error = error instanceof Error ? error.message : "runtime failed";
+    run.current_case = null;
+    for (const controller of this.#controllers.get(runId) ?? []) controller.abort();
     run.completed_at = now();
     run.sequence += 1;
     this.#saveRun(run);
     this.#log(runId, null, "shared", "run", "error", run.error, {});
   }
-  #metrics(cases: BenchmarkCaseProjectionV2[]): Record<string, unknown> {
-    const completed = cases.filter((item) => item.status === "passed");
+  #metrics(cases: BenchmarkCaseProjectionV2[], totalCases: number): Record<string, unknown> {
     const arm = (name: BenchmarkArm) => {
-      const values = completed.map((item) => item[name]);
+      let scored = 0, eaObserved = 0, eaCorrect = 0, contractObserved = 0, contractCorrect = 0;
+      let executionObserved = 0, executionPassed = 0, generationObserved = 0, generationMs = 0;
+      let observedTotal = 0, unobservedArms = totalCases - cases.length;
+      for (const item of cases) {
+        const value = item[name];
+        if (value.scored) {
+          scored += 1;
+          if (typeof value.official_ea === "boolean") eaObserved += 1;
+          if (value.official_ea === true) eaCorrect += 1;
+          if (typeof value.contract_accuracy === "boolean") contractObserved += 1;
+          if (value.contract_accuracy === true) contractCorrect += 1;
+        }
+        if (["passed", "failed", "skipped"].includes(value.execution_status)) executionObserved += 1;
+        if (value.execution_status === "passed") executionPassed += 1;
+        if (typeof value.generation_ms === "number") {
+          generationObserved += 1;
+          generationMs += value.generation_ms;
+        }
+        observedTotal += value.total_tokens;
+        if (value.usage_observed === false || (value.usage_observed === undefined
+          && value.generation_ms !== null && value.total_tokens === 0)) unobservedArms += 1;
+      }
       return {
-        official_ea: values.length
-          ? values.filter((item) => item.official_ea === true).length / values.length
-          : null,
-        contract_accuracy: values.length
-          ? values.filter((item) => item.contract_accuracy === true).length / values.length
-          : null,
-        execution_success: values.length
-          ? values.filter((item) => item.execution_status === "passed").length / values.length
-          : null,
-        total_tokens: values.reduce((sum, item) => sum + item.total_tokens, 0),
-        average_generation_ms: values.length
-          ? values.reduce((sum, item) => sum + (item.generation_ms ?? 0), 0) / values.length
-          : null,
+        total_cases: totalCases,
+        scored_cases: scored,
+        unscored_cases: totalCases - scored,
+        official_ea: totalCases > 0 && eaObserved === totalCases ? eaCorrect / totalCases : null,
+        official_ea_correct_cases: eaCorrect,
+        official_ea_observed_cases: eaObserved,
+        official_ea_missing_cases: totalCases - eaObserved,
+        contract_accuracy: totalCases > 0 && contractObserved === totalCases ? contractCorrect / totalCases : null,
+        contract_accuracy_correct_cases: contractCorrect,
+        contract_accuracy_observed_cases: contractObserved,
+        contract_accuracy_missing_cases: totalCases - contractObserved,
+        execution_success: totalCases > 0 && executionObserved === totalCases ? executionPassed / totalCases : null,
+        execution_success_cases: executionPassed,
+        execution_observed_cases: executionObserved,
+        execution_missing_cases: totalCases - executionObserved,
+        total_tokens: unobservedArms ? null : observedTotal,
+        observed_total_tokens: observedTotal,
+        usage_observed: unobservedArms === 0,
+        unobserved_usage_arms: unobservedArms,
+        average_generation_ms: generationObserved ? generationMs / generationObserved : null,
+        generation_observed_cases: generationObserved,
+        generation_missing_cases: totalCases - generationObserved,
       };
     };
     const forge = arm("forge");

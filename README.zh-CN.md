@@ -30,7 +30,9 @@ Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束�
 - SQLite、PostgreSQL、MySQL 的自动化兼容性检查；
 - 可回放的准确率 Benchmark、Exact Result 比较和失败诊断。
 
-> **项目状态：early-stage，actively iterating。** 当前适合评估、贡献和带人工审核/只读账号的受控部署，不代表功能完备、开放世界准确或大规模高可用。最新完整 500-case BIRD 运行中，Forge EA 为 **45.4%**，Direct SQL 为 **56.4%**；历史 Spider2-Lite SQLite 子集 EA 仍为 **9.2%**。这些结果受数据集、模型、Provider、Prompt、Registry 与运行配置约束，不能外推为普遍能力。详见 [当前项目状态](docs/current-project-state.md) 与 [Benchmark 边界](docs/benchmarks.md)。
+> **项目状态：early-stage，持续维护。** 当前适合评估、贡献和带人工审核/只读账号的受控部署，不代表功能完备或高可用。最新完整 Structured GPT-5.6 BIRD 运行封存成绩为 **Forge EA 57.4% / Direct SQL 62.8%**；随后对**同一批候选**修复编译器并离线重评为 **62.6% / 62.8%**，不是新生成成绩，也不证明 Forge JSON 的准确率优势。详见 [当前状态](docs/current-project-state.md)、[基准规范](docs/benchmarks.md) 与 [每轮报告索引](docs/README.md)。
+
+**升级注意（2026-09-07）：** 共享Assurance已升为`query-assurance-v10`，按SQL作用域校验真实物理来源，不能借嵌套同名CTE绕过表权限。当前扁平Registry未建模的schema/catalog限定来源失败关闭。旧v9 QueryRun审批返回`assurance_revision_drift`，需重新prepare和人工审核，不原地升级旧证据。见[版本验证报告](docs/release-verification-2026-09-07.json)。
 
 ---
 
@@ -267,15 +269,26 @@ flowchart LR
 
 ## 当前状态
 
-| 信号 | 当前边界 |
-|---|---|
-| BIRD 500-case 完整运行 | Forge EA **45.4%**；Direct SQL EA **56.4%** |
-| 历史自有 40 题回归集 | 用于域内回归，不作为陌生 Schema 泛化证明 |
-| Python CI | 完整 `pytest`，并覆盖 SQLite / PostgreSQL / MySQL compatibility smoke |
-| Pi Orchestrator | TypeScript typecheck 与 Node test 可在本地独立运行 |
-| Spider2-Lite SQLite | 编译成功率 **97.6%**；EA **9.2%** |
+| 证据 | Forge Official EX / EA | Direct SQL Official EX / EA | 口径 |
+|---|---:|---:|---|
+| DeepSeek V4 Flash，完整生成 | 227/500（45.4%） | 282/500（56.4%） | 历史运行，不是最新成绩 |
+| GPT-5.6，文本生成 | 266/500（53.2%） | 311/500（62.2%） | 完整配对生成 |
+| GPT-5.6，Structured Tool 原封存 | 287/500（57.4%） | 314/500（62.8%） | 原运行判定保留 |
+| 同一批 Structured 候选，Compiler 离线重评 | 313/500（62.6%） | 314/500（62.8%） | 不是重新生成 |
 
-不同数据集、模型、Provider、Prompt、Registry、重试策略和评价器的结果不可直接横向比较。详见 [基准测试详情](docs/benchmarks.md)。
+最后一行 Forge-only 22 / Direct-only 23，双侧 exact p=1.0，不支持 Forge JSON 准确率优势；原生成 Forge 仍多59.57% tokens、51.69%平均生成时间。比较器v2修正后的 Contract 为284/500与294/500，Official EX不变，两种指标不得混算。
+
+额外一次DeepSeek复验每臂只有78份候选、422份缺失，并发生额度/余额失败，不构成第四轮有效500题运行。历史40题、自有LLM Judge和Spider2不同分母/重试策略的结果保留在[基准历史](docs/benchmarks.md)，不能拼成排行榜。
+
+### 本次迭代与逐轮报告（2026-09-07）
+
+- 可复用的BIRD冻结、预检、验证、原候选重放、配对比较和全请求质量指标；协议绑定源码、数据、模型、上下文及调用预算，漂移失败关闭。
+- Compiler局部别名/CTE绑定和共享Assurance边界维护；不猜缺失导出、不自动补列或按Gold返修。
+- 分母范例16次对照：Forge EX/Contract 2/4→3/4，但正确对照回退，不采纳。
+- CTE接口范例16次对照：Forge两指标3/4→3/4，md-199新增正确、md-079回退；Direct两指标3/4→2/4，其输入未变，波动不能归因于Forge范例。总67367 tokens；Forge每正确答案成本+13.11%、四次采样生成P95+41.53%，门槛失败，不启用。
+- 日期、粒度、取值上下文仍默认off。已曝光BIRD为R回归集，小样本D与隔离S不代表独立H；外部采用门禁仍未通过。
+
+[逐轮报告索引](docs/README.md)保留准备、生成、离线修复、负结果和未完成实验；[早期运行汇总](docs/benchmark-historical-runs-2026-09-07.json)与[最新CTE报告](docs/benchmark-luna-cte-interface-2026-09-07.json)分别标明来源和限制。[公开处理清单](docs/report-publication-2026-09-07.json)记录原件/公开副本hash；本机路径和个人联系样本脱敏，分数、成本与失败状态不改。原始运行数据库、Provider会话与第三方数据集不随仓库分发，本地工件路径不等于公开下载地址。
 
 ### 已落地功能
 

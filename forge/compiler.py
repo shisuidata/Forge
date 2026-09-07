@@ -26,6 +26,8 @@ import re
 from typing import Any
 
 import jsonschema
+from sqlglot import exp, parse_one
+from sqlglot.errors import SqlglotError
 
 # 在模块加载时一次性读取并解析 JSON Schema，避免重复 I/O
 _SCHEMA_PATH = pathlib.Path(__file__).parent / "schema.json"
@@ -70,6 +72,7 @@ def compile_query(forge: dict, dialect: str = "sqlite",
         dialect:      目标 SQL 方言，可选 "sqlite"（默认）、"mysql"、"postgresql"、
                       "bigquery"、"snowflake"。
                       控制日期函数、字符串聚合、JOIN 等方言差异的编译输出。
+                      SQLite 标量极值 CTE 的物化优化要求目标引擎 ≥3.35。
         nullable_cols: 可空列名集合（支持 "table.col" 或 "col" 格式）。
                       当某列被标记为可空且使用 neq 运算符时，自动展开为
                       (col != val OR col IS NULL)，避免 NULL 被静默排除。
@@ -99,7 +102,149 @@ def validate_query_contract(forge: dict) -> dict:
     return normalized
 
 
-_QUALIFIED_COLUMN_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_]\w*)\s*\.\s*[A-Za-z_]\w*")
+_IDENTIFIER_TOKEN_PATTERN = (
+    r'(?:[A-Za-z_][A-Za-z0-9_]*|"(?:[^"]|"")*"|`(?:[^`]|``)*`)'
+)
+_QUALIFIED_COLUMN_FULL_RE = re.compile(
+    rf'\s*(?P<table>{_IDENTIFIER_TOKEN_PATTERN})'
+    rf'\s*\.\s*(?P<column>{_IDENTIFIER_TOKEN_PATTERN})\s*\Z'
+)
+_IDENTIFIER_TOKEN_FULL_RE = re.compile(rf'\s*{_IDENTIFIER_TOKEN_PATTERN}\s*\Z')
+_SIMPLE_IDENTIFIER_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\Z')
+_SQL_EXPRESSION_PREFIX_RE = re.compile(
+    r"(?is)\A\s*(?:CASE\b|[A-Za-z_][A-Za-z0-9_]*\()"
+)
+_RELATION_ALIAS_RE = re.compile(
+    rf'(?is)\A(?P<source>.+?)\s+AS\s+(?P<alias>{_IDENTIFIER_TOKEN_PATTERN})\s*\Z'
+)
+_IMPLICIT_RELATION_ALIAS_RE = re.compile(
+    rf'(?is)\A(?P<source>{_IDENTIFIER_TOKEN_PATTERN}'
+    rf'(?:\s*\.\s*{_IDENTIFIER_TOKEN_PATTERN})*|\(.*\))'
+    rf'\s+(?P<alias>{_IDENTIFIER_TOKEN_PATTERN})\s*\Z'
+)
+_SQL_RESERVED_ALIASES = frozenset({
+    "ALL", "ALTER", "AND", "AS", "ASC", "BY", "CASE", "CREATE", "DELETE",
+    "DESC", "DISTINCT", "DROP", "ELSE", "END", "EXCEPT", "EXISTS", "FROM",
+    "FULL", "GROUP", "HAVING", "IN", "INNER", "INSERT", "INTERSECT", "INTO",
+    "IS", "JOIN", "LEFT", "LIKE", "LIMIT", "NOT", "NULL", "OFFSET", "ON",
+    "OR", "ORDER", "OUTER", "OVER", "PARTITION", "RANGE", "RECURSIVE", "RIGHT",
+    "ROWS", "SELECT", "TABLE", "THEN", "UNION", "UPDATE", "VALUES", "WHEN",
+    "WHERE", "WINDOW", "WITH",
+})
+
+
+def _identifier_name(token: str) -> str:
+    """Return the semantic name of one optionally quoted SQL identifier token."""
+    stripped = token.strip()
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] == '"':
+        return stripped[1:-1].replace('""', '"')
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] == "`":
+        return stripped[1:-1].replace("``", "`")
+    return stripped
+
+
+def _quote_identifier(name: str, dialect: str) -> str:
+    """Quote one semantic identifier for the target SQL dialect."""
+    delimiter = "`" if dialect in {"mysql", "bigquery"} else '"'
+    return delimiter + name.replace(delimiter, delimiter * 2) + delimiter
+
+
+def _render_identifier_token(token: str, dialect: str) -> str:
+    """Render one identifier token, preserving an explicit quoting decision."""
+    stripped = token.strip()
+    name = _identifier_name(stripped)
+    explicitly_quoted = (
+        len(stripped) >= 2
+        and stripped[0] == stripped[-1]
+        and stripped[0] in {'"', "`"}
+    )
+    if (
+        not explicitly_quoted
+        and _SIMPLE_IDENTIFIER_RE.fullmatch(name)
+        and name.upper() not in _SQL_RESERVED_ALIASES
+    ):
+        return name
+    return _quote_identifier(name, dialect)
+
+def _looks_like_sql_expression(value: str) -> bool:
+    """Distinguish explicit SQL expressions from unquoted complex identifiers."""
+    return (
+        _SQL_EXPRESSION_PREFIX_RE.match(value) is not None
+        or any(
+            operator in value
+            for operator in (" + ", " - ", " * ", " / ", " % ", " || ", " = ", " < ", " > ")
+        )
+    )
+
+
+
+def _render_column_reference(
+    reference: str,
+    dialect: str,
+    *,
+    quote_complex: bool = False,
+) -> str:
+    """Render a structural ColumnRef without rewriting raw expression escape hatches."""
+    stripped = reference.strip()
+    if stripped == "*":
+        return stripped
+    qualified = _QUALIFIED_COLUMN_FULL_RE.fullmatch(stripped)
+    if qualified is not None:
+        table = _render_identifier_token(qualified.group("table"), dialect)
+        column = _render_identifier_token(qualified.group("column"), dialect)
+        return f"{table}.{column}"
+    if _IDENTIFIER_TOKEN_FULL_RE.fullmatch(stripped):
+        return _render_identifier_token(stripped, dialect)
+    if _looks_like_sql_expression(stripped):
+        return stripped
+    if quote_complex:
+        return _quote_identifier(stripped, dialect)
+    return stripped
+
+
+def _relation_parts(relation: str) -> tuple[str, str | None]:
+    """Split a relation from its SQL alias, with or without AS."""
+    stripped = relation.strip()
+    match = _RELATION_ALIAS_RE.fullmatch(stripped)
+    if match is None:
+        # Restrict the implicit form to a table name or parenthesized source.
+        # Do not reinterpret trailing SQL clauses/keywords as an alias.
+        match = _IMPLICIT_RELATION_ALIAS_RE.fullmatch(stripped)
+        if match is None or match.group("alias").upper() in _SQL_RESERVED_ALIASES:
+            return stripped, None
+    return match.group("source").strip(), match.group("alias")
+
+
+def _relation_binding_name(relation: str) -> str:
+    """Return the name visible to qualified references in this SQL scope."""
+    source, alias = _relation_parts(relation)
+    return _identifier_name(alias if alias is not None else source)
+
+
+def _render_relation(relation: str, dialect: str) -> str:
+    """Render a relation and alias while preserving raw subquery sources."""
+    source, alias = _relation_parts(relation)
+    source_sql = (
+        _render_identifier_token(source, dialect)
+        if _IDENTIFIER_TOKEN_FULL_RE.fullmatch(source)
+        else source
+    )
+    if alias is None:
+        return source_sql
+    return f"{source_sql} AS {_render_identifier_token(alias, dialect)}"
+
+
+def _qualified_column_identity(value: str) -> tuple[str, str] | None:
+    """Normalize a complete qualified reference for binding/equality checks only."""
+    match = _QUALIFIED_COLUMN_FULL_RE.fullmatch(value)
+    if match is None:
+        return None
+    return (
+        _identifier_name(match.group("table")),
+        _identifier_name(match.group("column")),
+    )
+
+
 _NON_REFERENCE_KEYS = {
     "$date", "$preset", "as", "default", "dir", "explain", "fn", "hi",
     "lo", "mode", "name", "recursive_union", "scan", "separator", "table",
@@ -122,16 +267,17 @@ def _validate_reference_integrity(query: dict) -> None:
 
     scan = query["scan"]
     joins = query.get("joins", [])
-    visible_tables = {scan}
+    visible_tables = {_relation_binding_name(scan)}
     for join in joins:
         table = join["table"]
-        if table in visible_tables:
+        table_name = _relation_binding_name(table)
+        if table_name in visible_tables:
             raise ValueError(
                 f"JOIN 表 '{table}' 已在当前查询作用域中；Forge DSL 不支持无别名自连接。"
             )
         _validate_join_condition(join, set(visible_tables))
         if join.get("type") not in {"semi", "anti"}:
-            visible_tables.add(table)
+            visible_tables.add(table_name)
 
     local_payload = {
         key: value for key, value in query.items()
@@ -154,14 +300,22 @@ def _validate_join_condition(join: dict, prior_tables: set[str]) -> None:
         return
     conditions = on if isinstance(on, list) else [on]
     joined_table = join["table"]
+    joined_table_name = _relation_binding_name(joined_table)
     all_refs: set[str] = set()
-    allowed_tables = prior_tables | {joined_table}
+    allowed_tables = prior_tables | {joined_table_name}
     for condition in conditions:
         if not isinstance(condition, dict):
             continue
         left = condition.get("left") or condition.get("col")
         right = condition.get("right") or condition.get("col2")
-        if isinstance(left, str) and isinstance(right, str) and left == right:
+        same_reference = left == right
+        if isinstance(left, str) and isinstance(right, str):
+            left_identity = _qualified_column_identity(left)
+            right_identity = _qualified_column_identity(right)
+            same_reference = same_reference or (
+                left_identity is not None and left_identity == right_identity
+            )
+        if same_reference:
             raise ValueError("JOIN 条件不能把同一字段与自身比较。")
         refs = _collect_qualified_tables(condition)
         all_refs.update(refs)
@@ -170,7 +324,7 @@ def _validate_join_condition(join: dict, prior_tables: set[str]) -> None:
             raise ValueError(
                 "JOIN 条件引用了未声明的表：" + ", ".join(sorted(unknown)) + "。"
             )
-    if joined_table not in all_refs:
+    if joined_table_name not in all_refs:
         raise ValueError(f"JOIN 条件必须引用待连接表 '{joined_table}'。")
     if not (all_refs & prior_tables):
         raise ValueError("JOIN 条件必须连接待连接表与当前查询中的已有表。")
@@ -193,7 +347,8 @@ def _collect_qualified_tables(value: Any, key: str | None = None) -> set[str]:
     if isinstance(value, str):
         if key in _NON_REFERENCE_KEYS:
             return set()
-        return set(_QUALIFIED_COLUMN_RE.findall(value))
+        identity = _qualified_column_identity(value)
+        return {identity[0]} if identity is not None else set()
     if isinstance(value, list):
         tables: set[str] = set()
         for child in value:
@@ -227,7 +382,7 @@ def _coerce(q: dict) -> dict:
     11. 顶层缺少 scan 但有 cte 时，自动推断 scan 为最后一个 CTE 名
     12. 清理 agg items 中的非法字段
     13. select expr 字符串中出现 count_all() → 替换为 COUNT(*)
-    14. 当 scan 为 CTE 名时，剥离 table.col 中的 table. 前缀
+    14. 保留 CTE 字段的显式限定名和裸列，不猜测所属关系
     15. joins 元素中的 filter 属性 → 提取到顶层 filter
     16. filter/having 中的 expr 条件 → col（由 _coerce_condition 处理）
     17. HAVING 存在但缺少 GROUP BY → 从 select 非聚合列推断
@@ -246,7 +401,6 @@ def _coerce(q: dict) -> dict:
     q = _coerce_having_agg_refs(q)
     q = _coerce_select(q)
     q = _coerce_group(q)
-    q = _coerce_cte_refs(q)
     q = _coerce_joins(q)
     q = _coerce_filter_vals(q)
     q = _coerce_window_qualify(q)
@@ -378,23 +532,6 @@ def _coerce_select(q: dict) -> dict:
             fixed_sel.append(item)
         q["select"] = fixed_sel
 
-    # 修复 21：多 CTE JOIN 时外层 SELECT 的裸列名歧义
-    # 场景：scan=CTE_A，JOIN CTE_B，两个 CTE 都有 "month" 列，
-    #       外层 SELECT ["month", ...] → SQLite: ambiguous column name: month
-    # 策略：对外层 SELECT 中不含 "." 的裸列字符串，加上主扫描 CTE 的前缀
-    if q.get("cte") and q.get("select") and q.get("joins"):
-        _cte_names = {c["name"] for c in q["cte"] if isinstance(c, dict) and "name" in c}
-        _scan = q.get("scan", "")
-        if _scan in _cte_names:
-            _joined_ctes = {j["table"] for j in q.get("joins", []) if j.get("table") in _cte_names}
-            if _joined_ctes:
-                new_sel = []
-                for item in q["select"]:
-                    if isinstance(item, str) and "." not in item:
-                        item = f"{_scan}.{item}"
-                    new_sel.append(item)
-                q["select"] = new_sel
-
     return q
 
 
@@ -425,76 +562,6 @@ def _coerce_group(q: dict) -> dict:
                 current_group.append(sel_item)
                 group_set.add(sel_item)
         q["group"] = current_group
-
-    return q
-
-
-def _coerce_cte_refs(q: dict) -> dict:
-    """CTE 列引用前缀剥离。处理修复 14（scan 为 CTE 名时，剥离 table.col 中非 CTE 的 table. 前缀）。"""
-    # 修复 14：当 scan 为 CTE 名时，外层列引用中的 table.col 去掉 table. 前缀
-    # 场景：模型在 CTE 内 GROUP BY products.category，然后外层 SELECT products.category
-    #       CTE 输出列名不带表前缀，SQLite 报 "no such column: products.category"
-    # 策略：收集 CTE 名集合，若 scan 是 CTE 名，则对 select 字符串、agg.col、group 中
-    #       出现的 "other_table.col" 格式（other_table 不是 CTE 名）剥离表前缀
-    if q.get("cte") and q.get("scan"):
-        cte_names = {c["name"] for c in q["cte"] if isinstance(c, dict) and "name" in c}
-        if q["scan"] in cte_names:
-            def _strip_prefix(s: str) -> str:
-                """若 s 形如 table.col 且 table 是主扫描 CTE，剥离 table. 前缀。
-                JOIN 表的前缀必须保留，防止多表场景中出现 ambiguous column name。
-                """
-                if isinstance(s, str) and "." in s:
-                    parts = s.split(".", 1)
-                    if parts[0] == q["scan"]:   # 只剥主扫描 CTE 自己的前缀
-                        return parts[1]
-                return s
-
-            # select 字符串项 及 expr 对象中纯列引用（"table.col"）
-            # 修复 21 冲突：当有 joined CTE 时，SELECT 的前缀由 fix 21（_coerce_select）负责，
-            # 这里跳过剥离，避免把 fix 21 加的消歧前缀又剥掉。
-            _has_joined_ctes = any(
-                j.get("table") in cte_names for j in q.get("joins", [])
-            )
-            if q.get("select") and not _has_joined_ctes:
-                new_sel = []
-                for item in q["select"]:
-                    if isinstance(item, str):
-                        item = _strip_prefix(item)
-                    elif isinstance(item, dict) and "expr" in item:
-                        expr_val = item["expr"]
-                        # 仅当 expr 是纯 table.col 形式（无空格/括号）时才剥离
-                        if (isinstance(expr_val, str)
-                                and re.match(r'^[A-Za-z_]\w*\.[A-Za-z_]\w*$', expr_val)):
-                            stripped = _strip_prefix(expr_val)
-                            if stripped != expr_val:
-                                item = dict(item)
-                                item["expr"] = stripped
-                    new_sel.append(item)
-                q["select"] = new_sel
-            # agg.col
-            if q.get("agg"):
-                new_agg = []
-                for agg_item in q["agg"]:
-                    agg_item = dict(agg_item)
-                    if "col" in agg_item:
-                        agg_item["col"] = _strip_prefix(agg_item["col"])
-                    new_agg.append(agg_item)
-                q["agg"] = new_agg
-            # group
-            if q.get("group"):
-                q["group"] = [_strip_prefix(g) for g in q["group"]]
-            # window partition
-            # 修复 21 冲突：当外层查询 JOIN 了其他 CTE 时，window partition
-            # 中的主 CTE 前缀必须保留，否则两个 CTE 共享 category_id/month 等列名时
-            # 会产生 ambiguous column name。
-            if q.get("window") and not _has_joined_ctes:
-                new_win = []
-                for w in q["window"]:
-                    if w.get("partition"):
-                        w = dict(w)
-                        w["partition"] = [_strip_prefix(p) for p in w["partition"]]
-                    new_win.append(w)
-                q["window"] = new_win
 
     return q
 
@@ -766,6 +833,67 @@ def _friendly_error(exc: jsonschema.ValidationError) -> str:
     return f"Forge JSON 格式错误：{msg}（路径：{' > '.join(str(p) for p in path) or '根节点'}）"
 
 
+def _replace_condition_references(
+    condition: dict, replacements: dict[str, str], dialect: str,
+) -> dict:
+    """Expand local aliases on either operand throughout condition trees."""
+    expanded = dict(condition)
+    for branch_key in ("and", "or"):
+        if branch_key in expanded:
+            expanded[branch_key] = [
+                _replace_condition_references(child, replacements, dialect)
+                for child in expanded[branch_key]
+            ]
+    for reference_key in ("col", "col2"):
+        reference = expanded.get(reference_key)
+        if reference in replacements:
+            expanded[reference_key] = replacements[reference]
+        elif isinstance(reference, str) and _qualified_column_identity(reference) is None:
+            expanded[reference_key] = _expand_aliases(reference, replacements, dialect)
+    return expanded
+
+
+
+def _materialize_joined_scalar_extreme(cte: dict, body: dict, outer: dict) -> bool:
+    """Fence a one-row SQLite extremum that could be recomputed per joined row.
+
+    Do not fence arbitrary CTEs: they may depend on pushdown, recursion or
+    volatile expressions. An unused aggregate declaration is not a scalar SELECT.
+    """
+    if cte.get("recursive") or cte.get("recursive_term"):
+        return False
+    if any(key not in ("scan", "agg", "select") for key in body):
+        return False
+    aggregates = body.get("agg", [])
+    if len(aggregates) != 1 or len(body["select"]) != 1:
+        return False
+    aggregate = aggregates[0]
+    column = aggregate.get("col", "")
+    if aggregate["fn"] not in ("min", "max") or aggregate.get("filter"):
+        return False
+    if not (_IDENTIFIER_TOKEN_FULL_RE.fullmatch(column)
+            or _QUALIFIED_COLUMN_FULL_RE.fullmatch(column)):
+        return False
+    source, _ = _relation_parts(body["scan"])
+    if not _IDENTIFIER_TOKEN_FULL_RE.fullmatch(source):
+        return False
+    if any(_identifier_name(source) == _identifier_name(item["name"])
+           for item in outer["cte"]):
+        return False
+    projection = body["select"][0]
+    if isinstance(projection, dict):
+        if projection["expr"] != _agg_expr(aggregate, "sqlite"):
+            return False
+    elif projection != aggregate["as"]:
+        return False
+    name = _identifier_name(cte["name"])
+    return any(
+        join["type"] in ("inner", "cross")
+        and _identifier_name(_relation_parts(join["table"])[0]) == name
+        for join in outer.get("joins", [])
+    )
+
+
 # ── 主编译逻辑 ────────────────────────────────────────────────────────────────
 
 def _compile(q: dict, dialect: str = "sqlite",
@@ -812,7 +940,7 @@ def _compile(q: dict, dialect: str = "sqlite",
     clauses.append(select_prefix + " " + ", ".join(_select_exprs(q, dialect)))
 
     # FROM：主扫描表
-    clauses.append("FROM " + q["scan"])
+    clauses.append("FROM " + _render_relation(q["scan"], dialect))
 
     # JOIN：anti/semi 会注入额外的 WHERE 条件，收集到 extra_where
     extra_where: list[str] = []
@@ -827,12 +955,12 @@ def _compile(q: dict, dialect: str = "sqlite",
     if where_parts:
         clauses.append("WHERE " + " AND ".join(where_parts))
 
-    # GROUP BY — 支持字符串引用和 {"expr":"...","as":"alias"} 两种形式
-    if "group" in q:
+    # GROUP BY — dict expr remains an explicit SQL escape hatch; strings are ColumnRef.
+    if q.get("group"):
         def _group_item(g) -> str:
             if isinstance(g, dict) and "expr" in g:
                 return g["expr"]
-            return str(g)
+            return _render_column_reference(str(g), dialect, quote_complex=True)
         clauses.append("GROUP BY " + ", ".join(_group_item(g) for g in q["group"]))
 
     # HAVING：聚合后的行级过滤，条件间 AND 连接
@@ -842,10 +970,9 @@ def _compile(q: dict, dialect: str = "sqlite",
         agg["as"]: _agg_expr(agg, dialect) for agg in q.get("agg", [])
     }
     def _having_condition(c: dict) -> str:
-        """编译 HAVING 条件，将 agg 别名替换为完整聚合表达式。"""
-        if isinstance(c, dict) and "col" in c and c.get("col") in _having_agg_map:
-            c = dict(c, col=_having_agg_map[c["col"]])
-        return _condition(c, dialect, nullable_cols)
+        """Compile HAVING after expanding aggregate aliases on both operands."""
+        expanded = _replace_condition_references(c, _having_agg_map, dialect)
+        return _condition(expanded, dialect, nullable_cols)
     having_parts = [_having_condition(c) for c in q.get("having", [])]
     if having_parts:
         clauses.append("HAVING " + " AND ".join(having_parts))
@@ -853,8 +980,31 @@ def _compile(q: dict, dialect: str = "sqlite",
     # UNION 存在时，sort/limit/offset 需提升到整个 UNION 之后（标准 SQL 语义）。
     # 将尾部子句延迟处理：先收集，UNION 组装完再追加。
     tail_clauses: list[str] = []
+    has_set_ops = q.get("union") or q.get("intersect") or q.get("except")
     if "sort" in q:
-        sort_exprs = [f"{s['col']} {s['dir'].upper()}" for s in q["sort"]]
+        hidden_agg_exprs: dict[str, str] = {}
+        # Preserve the output contract while ordering by an intentionally hidden aggregate.
+        if q.get("agg") and not has_set_ops:
+            selected_output_names = {_output_column_name(item) for item in q["select"]}
+            hidden_agg_exprs = {
+                agg["as"]: _agg_expr(agg, dialect)
+                for agg in q["agg"]
+                if agg["as"] not in selected_output_names
+            }
+
+        defined_aliases = _defined_aliases(q)
+        sort_exprs = []
+        for item in q["sort"]:
+            source_col = item["col"]
+            col = hidden_agg_exprs.get(source_col, source_col)
+            if col == source_col:
+                if source_col in defined_aliases:
+                    col = _render_output_alias(source_col, dialect)
+                elif hidden_agg_exprs and _looks_like_sql_expression(source_col):
+                    col = _expand_aliases(source_col, hidden_agg_exprs, dialect)
+                else:
+                    col = _render_column_reference(source_col, dialect, quote_complex=True)
+            sort_exprs.append(f"{col} {item['dir'].upper()}")
         tail_clauses.append("ORDER BY " + ", ".join(sort_exprs))
     if "limit" in q:
         tail_clauses.append(f"LIMIT {q['limit']}")
@@ -862,7 +1012,6 @@ def _compile(q: dict, dialect: str = "sqlite",
         tail_clauses.append(f"OFFSET {q['offset']}")
 
     # 若无集合运算，直接合并尾部子句到主体
-    has_set_ops = q.get("union") or q.get("intersect") or q.get("except")
     if not has_set_ops:
         clauses.extend(tail_clauses)
         tail_clauses = []
@@ -872,10 +1021,24 @@ def _compile(q: dict, dialect: str = "sqlite",
     # QUALIFY：窗口函数结果过滤，将内层查询包裹为子查询
     # 用途：实现 per-group TopN，如"每个品类成本排名前3的商品"
     if "qualify" in q:
-        qualify_parts = [_condition(c, dialect, nullable_cols) for c in q["qualify"]]
+        alias_references = {
+            alias: _render_output_alias(alias, dialect)
+            for alias in _defined_aliases(q)
+        }
+        qualify_parts = [
+            _condition(
+                _replace_condition_references(c, alias_references, dialect),
+                dialect,
+                nullable_cols,
+            )
+            for c in q["qualify"]
+        ]
         outer_select = "*"
         if hidden_qualify_aliases:
-            outer_select = ", ".join(_output_column_name(item) for item in visible_select)
+            output_names = [_output_column_name(item) for item in visible_select]
+            outer_select = ", ".join(
+                alias_references.get(name, name) for name in output_names
+            )
         inner_sql = (
             f"SELECT {outer_select} FROM (\n"
             + "\n".join(f"  {line}" for line in inner_sql.splitlines())
@@ -906,8 +1069,10 @@ def _compile(q: dict, dialect: str = "sqlite",
         is_recursive = False
         for cte_item in q["cte"]:
             cte_name = cte_item["name"]
+            cte_sql_name = _render_identifier_token(cte_name, dialect)
             try:
-                anchor_sql = _compile(_coerce(cte_item["query"]), dialect, nullable_cols)
+                anchor_query = _coerce(cte_item["query"])
+                anchor_sql = _compile(anchor_query, dialect, nullable_cols)
             except (KeyError, TypeError) as exc:
                 raise ValueError(
                     f"CTE '{cte_name}' 内部查询格式错误：{exc}"
@@ -931,8 +1096,13 @@ def _compile(q: dict, dialect: str = "sqlite",
                 cte_body = anchor_sql
 
             indented = "\n".join(f"  {line}" for line in cte_body.splitlines())
-            cte_parts.append(f"{cte_name} AS (\n{indented}\n)")
-
+            materialized = (
+                " MATERIALIZED"
+                if dialect == "sqlite" and _materialize_joined_scalar_extreme(
+                    cte_item, anchor_query, q,
+                ) else ""
+            )
+            cte_parts.append(f"{cte_sql_name} AS{materialized} (\n{indented}\n)")
         prefix = "WITH RECURSIVE" if is_recursive else "WITH"
         return prefix + " " + ",\n".join(cte_parts) + "\n" + inner_sql
 
@@ -941,40 +1111,74 @@ def _compile(q: dict, dialect: str = "sqlite",
 
 # ── SELECT 表达式构建 ─────────────────────────────────────────────────────────
 
+def _render_output_alias(alias: str, dialect: str) -> str:
+    """Render a semantic output alias safely for the target SQL dialect."""
+    return _render_identifier_token(alias, dialect)
+
+
+def _defined_aliases(q: dict) -> set[str]:
+    """Return semantic aliases that may be referenced by later SQL clauses."""
+    aliases = {
+        item["as"]
+        for key in ("agg", "window")
+        for item in q.get(key, [])
+        if "as" in item
+    }
+    aliases.update(
+        item["as"]
+        for item in q.get("group", [])
+        if isinstance(item, dict) and "as" in item
+    )
+    aliases.update(
+        item["as"]
+        for item in q.get("select", [])
+        if isinstance(item, dict) and "as" in item
+    )
+    return aliases
+
+
 def _output_column_name(item: str | dict) -> str:
     """Return the column label exposed by an inner SELECT item."""
     if isinstance(item, dict):
         return item["as"]
     return item.rpartition(".")[2]
 
-def _expand_aliases(expr_str: str, alias_map: dict[str, str]) -> str:
+def _expand_aliases(expr_str: str, alias_map: dict[str, str], dialect: str) -> str:
+    """Expand only unqualified local Column references, never nested SQL scopes.
+
+    AST locations preserve all other source text and avoid revisiting inserted SQL.
+    Replacements are compiled aggregate/window expressions or rendered output names.
     """
-    将 expr 字符串中出现的别名（整词匹配）替换为对应的 SQL 表达式。
+    if not alias_map:
+        return expr_str
+    try:
+        tree = parse_one(expr_str, read="postgres" if dialect == "postgresql" else dialect)
+    except SqlglotError as exc:
+        raise ValueError(f"Cannot resolve expression aliases: {exc}") from exc
 
-    用途：select 中的 {"expr":"...","as":"..."} 可能引用同一查询的 agg/window 别名，
-    而 SQL 不允许在同一 SELECT 层级引用别名（SQLite 会报 "no such column"）。
-    展开后的 expr 直接嵌入 SQL 函数调用，避免运行时错误。
+    replacements: list[tuple[int, int, str]] = []
+    for node in tree.walk(prune=lambda node: isinstance(node, exp.Query)):
+        if not isinstance(node, exp.Column) or node.table or node.db or node.catalog:
+            continue
+        replacement = alias_map.get(node.name)
+        if replacement is None:
+            continue
+        start, end = node.this.meta.get("start"), node.this.meta.get("end")
+        if start is None or end is None:
+            raise ValueError(f"Cannot locate expression alias: {node.name}")
+        replacements.append((start, end + 1, replacement))
+    if not replacements:
+        return expr_str
 
-    示例：
-        alias_map = {"total_users": "COUNT(*)", "repeat_users": "COUNT(CASE WHEN ...)"}
-        expr = "repeat_users * 1.0 / total_users"
-        → "COUNT(CASE WHEN ...) * 1.0 / COUNT(*)"
+    replacements.sort()
+    parts: list[str] = []
+    offset = 0
+    for start, end, replacement in replacements:
+        parts.extend((expr_str[offset:start], replacement))
+        offset = end
+    parts.append(expr_str[offset:])
+    return "".join(parts)
 
-    策略：按别名长度降序替换，避免短别名误匹配长别名的子串。
-    跳过 FROM/JOIN 后的词（CTE/表名引用），避免将表名展开为聚合表达式。
-    """
-    for alias in sorted(alias_map.keys(), key=len, reverse=True):
-        replacement = alias_map[alias]
-        pattern = re.compile(r'\b' + re.escape(alias) + r'\b')
-
-        def _sub(m, _repl=replacement, _expr=expr_str):
-            before = _expr[:m.start()].rstrip()
-            if re.search(r'\b(FROM|JOIN)\s*$', before, re.IGNORECASE):
-                return m.group(0)
-            return _repl
-
-        expr_str = pattern.sub(_sub, expr_str)
-    return expr_str
 
 
 def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
@@ -998,7 +1202,7 @@ def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
         agg["as"]: _agg_expr(agg, dialect) for agg in q.get("agg", [])
     }
     win_map: dict[str, str] = {
-        w["as"]: _window_expr(w, agg_map) for w in q.get("window", [])
+        w["as"]: _window_expr(w, agg_map, dialect) for w in q.get("window", [])
     }
     # group expr 别名：{"expr": "STRFTIME(...)", "as": "month"} → "month": "STRFTIME(...)"
     group_expr_map: dict[str, str] = {
@@ -1006,37 +1210,21 @@ def _select_exprs(q: dict, dialect: str = "sqlite") -> list[str]:
         for g in q.get("group", [])
         if isinstance(g, dict) and "expr" in g and "as" in g
     }
-    # 合并 map：agg 优先（agg 别名可能被 window col 引用，已在 win_map 构建时展开）
+    # Window definitions already resolve their aggregate arguments.
     expand_map = {**agg_map, **win_map}
-
-    # expr 对象中 table.alias 形式 → 先剥离 table. 前缀再展开
-    # 场景：模型在 expr 中用 cte_name.window_alias 引用同级窗口别名，
-    # 或用 other_table.agg_alias 引用本层聚合别名（两者均需展开为完整表达式）
-    def _pre_strip_table_prefix(s: str, known_aliases: set) -> str:
-        for alias in sorted(known_aliases, key=len, reverse=True):
-            # 将 word.alias 替换为 alias（word = 任意标识符，不含操作符/括号）
-            s = re.sub(
-                r'[A-Za-z_]\w*\.' + re.escape(alias) + r'\b',
-                alias,
-                s
-            )
-        return s
-
     exprs = []
     for col in q["select"]:
         if isinstance(col, dict):
-            # expr 对象：先剥离 table.alias 前缀，再展开 agg/window 别名
-            pre = _pre_strip_table_prefix(col["expr"], set(expand_map.keys()))
-            expanded = _expand_aliases(pre, expand_map)
-            exprs.append(f"{expanded} AS {col['as']}")
+            expanded = _expand_aliases(col["expr"], expand_map, dialect)
+            exprs.append(f"{expanded} AS {_render_output_alias(col['as'], dialect)}")
         elif col in agg_map:
-            exprs.append(f"{agg_map[col]} AS {col}")
+            exprs.append(f"{agg_map[col]} AS {_render_output_alias(col, dialect)}")
         elif col in win_map:
-            exprs.append(f"{win_map[col]} AS {col}")
+            exprs.append(f"{win_map[col]} AS {_render_output_alias(col, dialect)}")
         elif col in group_expr_map:
-            exprs.append(f"{group_expr_map[col]} AS {col}")
+            exprs.append(f"{group_expr_map[col]} AS {_render_output_alias(col, dialect)}")
         else:
-            exprs.append(col)
+            exprs.append(_render_column_reference(col, dialect, quote_complex=True))
     return exprs
 
 
@@ -1057,12 +1245,12 @@ def _agg_expr(agg: dict, dialect: str = "sqlite") -> str:
         SQLite（≥3.30）和 PostgreSQL 原生支持。MySQL 不支持，需手动改写。
     """
     fn = agg["fn"]
+    col = _render_column_reference(agg.get("col", "*"), dialect)
     if fn == "count_all":
         base = "COUNT(*)"
     elif fn == "count_distinct":
-        base = f"COUNT(DISTINCT {agg['col']})"
+        base = f"COUNT(DISTINCT {col})"
     elif fn == "group_concat":
-        col = agg["col"]
         sep = agg.get("separator")
         if dialect in ("postgresql", "bigquery"):
             sep_sql = _val(sep) if sep is not None else "','"
@@ -1082,7 +1270,7 @@ def _agg_expr(agg: dict, dialect: str = "sqlite") -> str:
             else:
                 base = f"GROUP_CONCAT({col})"
     else:
-        base = f"{fn.upper()}({agg['col']})"
+        base = f"{fn.upper()}({col})"
 
     # FILTER (WHERE ...) 子句
     filter_conds = agg.get("filter", [])
@@ -1135,7 +1323,7 @@ def _frame_bound(s: str) -> str:
     return s.upper()
 
 
-def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
+def _window_expr(w: dict, agg_map: dict[str, str] | None = None, dialect: str = "sqlite") -> str:
     """
     将单条窗口函数定义编译为 SQL 窗口表达式（不含 AS 子句）。
 
@@ -1173,6 +1361,8 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
         _lag_col = w["col"]
         if agg_map and _lag_col in agg_map:
             _lag_col = agg_map[_lag_col]
+        else:
+            _lag_col = _render_column_reference(_lag_col, dialect, quote_complex=True)
         args: list[str] = [_lag_col]
         if "offset" in w:
             args.append(str(w["offset"]))
@@ -1182,24 +1372,40 @@ def _window_expr(w: dict, agg_map: dict[str, str] | None = None) -> str:
         call = f"{fn.upper()}({', '.join(args)})"
     elif fn in ("first_value", "last_value"):
         # 值函数：直接取列，无额外参数
-        call = f"{fn.upper()}({w['col']})"
+        col = w["col"]
+        if agg_map and col in agg_map:
+            col = agg_map[col]
+        else:
+            col = _render_column_reference(col, dialect, quote_complex=True)
+        call = f"{fn.upper()}({col})"
     else:
         # 聚合窗口函数：sum/avg/count/min/max
         # 若 col 是 agg 别名，展开为原始聚合表达式（支持 SUM(SUM(expr)) OVER () 模式）
         col = w["col"]
         if agg_map and col in agg_map:
             col = agg_map[col]
+        else:
+            col = _render_column_reference(col, dialect, quote_complex=True)
         call = f"{fn.upper()}({col})"
 
     # ── OVER 子句 ─────────────────────────────────────────────────────────────
     over_parts: list[str] = []
     if w.get("partition"):
-        over_parts.append("PARTITION BY " + ", ".join(w["partition"]))
-    if w.get("order"):
-        sort_exprs = [
-            f"{agg_map[s['col']] if agg_map and s['col'] in agg_map else s['col']} {s['dir'].upper()}"
-            for s in w["order"]
+        partition_cols = [
+            _render_column_reference(col, dialect, quote_complex=True)
+            for col in w["partition"]
         ]
+        over_parts.append("PARTITION BY " + ", ".join(partition_cols))
+    if w.get("order"):
+        sort_exprs = []
+        for item in w["order"]:
+            source_col = item["col"]
+            col = (
+                agg_map[source_col]
+                if agg_map and source_col in agg_map
+                else _render_column_reference(source_col, dialect, quote_complex=True)
+            )
+            sort_exprs.append(f"{col} {item['dir'].upper()}")
         over_parts.append("ORDER BY " + ", ".join(sort_exprs))
 
     # 窗口帧（frame）：ROWS/RANGE BETWEEN start AND end
@@ -1225,7 +1431,7 @@ def _join(join: dict, dialect: str = "sqlite",
 
     on 支持两种形态：
         单等值条件（dict）：{"left": "t1.col", "right": "t2.col"}
-        多条件数组（list）：[SimpleCondition, ...] — inner/left/right/full 专用
+        多条件数组（list）：[SimpleCondition, ...]
 
     普通 join（inner/left/right/full）：
         返回 JOIN 子句字符串，无额外 WHERE 条件。
@@ -1233,19 +1439,25 @@ def _join(join: dict, dialect: str = "sqlite",
     anti join（NOT IN 的安全替代）：
         返回 LEFT JOIN 子句 + WHERE right_key IS NULL 条件。
         通过 IS NULL 过滤实现"不存在于右表"的语义，自动处理 NULL 值陷阱。
-        仅支持单等值 on（需要明确的 right_key 做 IS NULL 检测）。
 
     semi join（EXISTS 模式）：
         不返回 JOIN 子句（避免行数膨胀），仅注入 WHERE EXISTS 子查询。
-        仅支持单等值 on。
     """
     jtype = join["type"]
     table = join["table"]
-    on    = join.get("on")
+    table_sql = _render_relation(table, dialect)
+    on = join.get("on")
+
+    def _join_predicate(condition: dict) -> str:
+        if "left" in condition and "right" in condition:
+            left = _render_column_reference(condition["left"], dialect)
+            right = _render_column_reference(condition["right"], dialect)
+            return f"{left} = {right}"
+        return _condition(condition, dialect, nullable_cols)
 
     # ── CROSS JOIN（无 ON 条件，用于标量 CTE 如平均值）─────────────────────
     if jtype == "cross":
-        return f"CROSS JOIN {table}", []
+        return f"CROSS JOIN {table_sql}", []
 
     # ── 多条件 join（array）─────────────────────────────────────────────────
     # MySQL 不支持 FULL OUTER JOIN，提前报错
@@ -1264,66 +1476,70 @@ def _join(join: dict, dialect: str = "sqlite",
     if isinstance(on, list):
         if jtype == "anti":
             # 多条件 anti join
-            eq_parts = [f"{c['left']} = {c['right']}" for c in on
-                        if isinstance(c, dict) and "left" in c and "right" in c]
+            condition_parts = [
+                _join_predicate(condition)
+                for condition in on
+                if isinstance(condition, dict)
+            ]
             filter_conds = join.get("filter", [])
             if filter_conds:
                 # 有 filter：用 NOT EXISTS，精确排除右表中满足条件的行
-                not_exists_conds = eq_parts + [
+                not_exists_conds = condition_parts + [
                     _condition(fc, dialect, nullable_cols)
                     for fc in filter_conds
                 ]
                 return (
                     None,
-                    [f"NOT EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(not_exists_conds)})"],
+                    [f"NOT EXISTS (SELECT 1 FROM {table_sql} WHERE {' AND '.join(not_exists_conds)})"],
                 )
-            else:
-                # 无 filter：LEFT JOIN IS NULL（等同于 NOT EXISTS 无条件版本）
-                null_check = on[0]["right"]
-                on_clause = " AND ".join(eq_parts)
-                return (
-                    f"LEFT JOIN {table} ON {on_clause}",
-                    [f"{null_check} IS NULL"],
-                )
+            # 无 filter：LEFT JOIN IS NULL（等同于 NOT EXISTS 无条件版本）
+            right_reference = on[0].get("right") or on[0].get("col2")
+            null_check = _render_column_reference(right_reference, dialect)
+            on_clause = " AND ".join(condition_parts)
+            return (
+                f"LEFT JOIN {table_sql} ON {on_clause}",
+                [f"{null_check} IS NULL"],
+            )
         if jtype == "semi":
             # 多条件 semi join：EXISTS 子查询内包含所有等值条件 + filter
-            eq_parts = [f"{c['left']} = {c['right']}" for c in on
-                        if isinstance(c, dict) and "left" in c and "right" in c]
-            semi_conds = eq_parts + [
+            condition_parts = [
+                _join_predicate(condition)
+                for condition in on
+                if isinstance(condition, dict)
+            ]
+            semi_conds = condition_parts + [
                 _condition(fc, dialect, nullable_cols)
                 for fc in join.get("filter", [])
             ]
             return (
                 None,
-                [f"EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(semi_conds)})"],
+                [f"EXISTS (SELECT 1 FROM {table_sql} WHERE {' AND '.join(semi_conds)})"],
             )
         on_clause = " AND ".join(_condition(c, dialect, nullable_cols) for c in on)
         keyword = _JOIN_KEYWORDS[jtype]
-        return f"{keyword} {table} ON {on_clause}", []
+        return f"{keyword} {table_sql} ON {on_clause}", []
 
     # ── 单等值条件（dict）───────────────────────────────────────────────────
-    left  = on["left"]
-    right = on["right"]
+    left = _render_column_reference(on["left"], dialect)
+    right = _render_column_reference(on["right"], dialect)
 
     if jtype == "anti":
         filter_conds = join.get("filter", [])
         if filter_conds:
             # 有 filter：用 NOT EXISTS，精确排除右表中满足条件的行
-            # 例：从未写过差评 → NOT EXISTS (SELECT 1 FROM t WHERE t.user_id = u.user_id AND t.type = '差评')
             not_exists_conds = [f"{left} = {right}"] + [
                 _condition(fc, dialect, nullable_cols)
                 for fc in filter_conds
             ]
             return (
                 None,
-                [f"NOT EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(not_exists_conds)})"],
+                [f"NOT EXISTS (SELECT 1 FROM {table_sql} WHERE {' AND '.join(not_exists_conds)})"],
             )
-        else:
-            # 无 filter：LEFT JOIN IS NULL（保留原有语义，排除右表中任何匹配行）
-            return (
-                f"LEFT JOIN {table} ON {left} = {right}",
-                [f"{right} IS NULL"],
-            )
+        # 无 filter：LEFT JOIN IS NULL（保留原有语义，排除右表中任何匹配行）
+        return (
+            f"LEFT JOIN {table_sql} ON {left} = {right}",
+            [f"{right} IS NULL"],
+        )
 
     if jtype == "semi":
         # EXISTS 子查询：只检查关联关系是否存在，不拉取右表列
@@ -1333,14 +1549,27 @@ def _join(join: dict, dialect: str = "sqlite",
             semi_conds.append(_condition(fc, dialect, nullable_cols))
         return (
             None,
-            [f"EXISTS (SELECT 1 FROM {table} WHERE {' AND '.join(semi_conds)})"],
+            [f"EXISTS (SELECT 1 FROM {table_sql} WHERE {' AND '.join(semi_conds)})"],
         )
 
     keyword = _JOIN_KEYWORDS[jtype]
-    return f"{keyword} {table} ON {left} = {right}", []
+    return f"{keyword} {table_sql} ON {left} = {right}", []
 
 
 # ── 条件表达式 ────────────────────────────────────────────────────────────────
+
+def _condition_value(
+    value: Any,
+    dialect: str,
+    nullable_cols: frozenset[str] | None,
+) -> str:
+    """Render a condition operand, including a scalar subquery."""
+    if isinstance(value, dict) and "subquery" in value:
+        sub_sql = _compile(_coerce(value["subquery"]), dialect, nullable_cols)
+        indented = "\n".join(f"  {line}" for line in sub_sql.splitlines())
+        return f"(\n{indented}\n)"
+    return _val(value, dialect)
+
 
 def _condition(cond: dict, dialect: str = "sqlite",
                nullable_cols: frozenset[str] | None = None) -> str:
@@ -1374,15 +1603,17 @@ def _condition(cond: dict, dialect: str = "sqlite",
         expr_str = cond["expr"]
         op = cond["op"]
         symbol = _OP_SYMBOLS.get(op, op)
-        return f"{expr_str} {symbol} {_val(cond['val'], dialect)}"
+        return f"{expr_str} {symbol} {_condition_value(cond['val'], dialect, nullable_cols)}"
 
-    col = cond["col"]
-    op  = cond["op"]
+    raw_col = cond["col"]
+    col = _render_column_reference(raw_col, dialect)
+    op = cond["op"]
 
     # col2：列与列比较，如 good_count > bad_count
     if "col2" in cond:
         symbol = _OP_SYMBOLS.get(op, op)
-        return f"{col} {symbol} {cond['col2']}"
+        col2 = _render_column_reference(cond["col2"], dialect)
+        return f"{col} {symbol} {col2}"
 
     if op == "is_null":
         return f"{col} IS NULL"
@@ -1400,18 +1631,19 @@ def _condition(cond: dict, dialect: str = "sqlite",
         items = ", ".join(_val(v, dialect) for v in val)
         return f"{col} IN ({items})"
     if op == "like":
-        return f"{col} LIKE {_val(cond['val'], dialect)}"
+        return f"{col} LIKE {_condition_value(cond['val'], dialect, nullable_cols)}"
 
     # neq + nullable 列：展开为 (col != val OR col IS NULL)，避免 NULL 被静默排除
-    if op == "neq" and nullable_cols and _col_is_nullable(col, nullable_cols):
-        return f"({col} != {_val(cond['val'], dialect)} OR {col} IS NULL)"
+    if op == "neq" and nullable_cols and _col_is_nullable(raw_col, nullable_cols):
+        value = _condition_value(cond["val"], dialect, nullable_cols)
+        return f"({col} != {value} OR {col} IS NULL)"
 
     # 标准比较运算符，从映射表取符号
     symbol = _OP_SYMBOLS[op]
     if "val" not in cond:
         # val 缺失（模型生成残缺条件），回退为 IS NOT NULL（保守处理）
         return f"{col} IS NOT NULL"
-    return f"{col} {symbol} {_val(cond['val'], dialect)}"
+    return f"{col} {symbol} {_condition_value(cond['val'], dialect, nullable_cols)}"
 
 
 # ── 值格式化 ──────────────────────────────────────────────────────────────────

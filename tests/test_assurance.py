@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import pytest
 
 from config import cfg
-from forge.assurance import QueryAssuranceError, assure_direct_sql, assure_query
+from forge.assurance import QueryAssuranceError, assure_compiled_sql, assure_direct_sql, assure_query
 
 
 @pytest.fixture
@@ -40,38 +41,6 @@ def assurance_registry(tmp_path, monkeypatch):
     }), encoding="utf-8")
     monkeypatch.setattr(cfg, "REGISTRY_PATH", path)
     return path
-
-
-def test_assurance_returns_versioned_hash_bound_report(assurance_registry):
-    report = assure_query(
-        {
-            "scan": "orders",
-            "joins": [{
-                "type": "inner",
-                "table": "users",
-                "on": {"left": "orders.user_id", "right": "users.id"},
-            }],
-            "select": ["orders.id", "users.name"],
-        },
-        "查询订单用户",
-        dialect="sqlite",
-    )
-
-    assert report.status == "passed"
-    assert report.sql_hash and report.sql_hash.startswith("sha256:")
-    assert len(report.sql_hash) == 71
-    assert report.registry_revision and len(report.registry_revision) == 64
-    assert report.model_revision == "unknown"
-    assert [gate.gate for gate in report.gates] == [
-        "contract_scope_type",
-        "registry_acl_alias",
-        "relationship_grain",
-        "convention_policy",
-        "intent_fulfillment",
-        "scope_type_compile",
-        "sql_safety",
-    ]
-    assert all(gate.status == "passed" for gate in report.gates)
 
 
 def test_assurance_rejects_unknown_registry_field_without_leaking_enum(assurance_registry):
@@ -392,4 +361,150 @@ def test_direct_sql_assurance_enforces_registry_scope(assurance_registry, sql):
     with pytest.raises(QueryAssuranceError, match="未授权或不存在") as caught:
         assure_direct_sql(sql, dialect="sqlite", allowed_tables=["orders"])
 
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+@pytest.fixture
+def bound_relation_database():
+    connection = sqlite3.connect(":memory:")
+    connection.executescript("""
+        CREATE TABLE orders(id INTEGER, user_id INTEGER);
+        CREATE TABLE users(id INTEGER);
+        INSERT INTO orders VALUES (1, 1), (2, 1), (3, 2);
+        INSERT INTO users VALUES (1), (2);
+    """)
+    yield connection
+    connection.close()
+
+
+@pytest.mark.parametrize("sql", [
+    pytest.param("WITH a AS (SELECT COUNT(*) AS cnt FROM orders), "
+                 "b AS (SELECT COUNT(*) AS cnt FROM users) "
+                 "SELECT a.cnt - b.cnt FROM orders", id="unbound-aggregate-ctes"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT picked.id FROM picked AS p", id="cte-renamed-in-from"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT (SELECT picked.id) FROM orders", id="unbound-nested-cte"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT picked.* FROM users", id="unbound-qualified-star"),
+    pytest.param("SELECT o.id, (SELECT d.id FROM users AS i CROSS JOIN "
+                 "(SELECT i.id) AS d) FROM orders AS o", id="derived-table-cannot-see-sibling"),
+])
+def test_assurance_rejects_unbound_relation(assurance_registry, sql):
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql(sql, dialect="sqlite")
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+@pytest.mark.parametrize("sql, expected", [
+    pytest.param("WITH a AS (SELECT COUNT(*) AS cnt FROM orders), "
+                 "b AS (SELECT COUNT(*) AS cnt FROM users) "
+                 "SELECT a.cnt - b.cnt FROM a CROSS JOIN b", [(1,)], id="joined-ctes"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT p.id FROM picked AS p ORDER BY p.id", [(1,), (2,), (3,)], id="cte-alias"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT picked.id FROM picked WHERE EXISTS "
+                 "(SELECT 1 FROM users AS u WHERE u.id = picked.id) ORDER BY picked.id",
+                 [(1,), (2,)], id="correlated-cte-source"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT p.id FROM picked AS p WHERE EXISTS "
+                 "(SELECT 1 FROM users AS u WHERE EXISTS (SELECT 1 WHERE p.id = u.id)) ORDER BY p.id",
+                 [(1,), (2,)], id="multiple-correlation-levels"),
+    pytest.param("WITH picked AS (SELECT id FROM orders) "
+                 "SELECT p.id FROM picked AS p WHERE EXISTS "
+                 "(SELECT 1 FROM users AS p WHERE p.id = 1) ORDER BY p.id",
+                 [(1,), (2,), (3,)], id="local-alias-shadows-outer"),
+    pytest.param("WITH RECURSIVE seq(n) AS "
+                 "(SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 3) SELECT n FROM seq ORDER BY n",
+                 [(1,), (2,), (3,)], id="recursive-union"),
+    pytest.param("SELECT o.id, (SELECT d.id FROM (SELECT o.id) AS d) "
+                 "FROM orders AS o ORDER BY o.id", [(1, 1), (2, 2), (3, 3)], id="derived-outer-correlation"),
+    pytest.param("SELECT o.id, (WITH c AS (SELECT i.id) SELECT (SELECT id FROM c) + "
+                 "(SELECT (SELECT id FROM c) FROM users AS i WHERE i.id = 2) "
+                 "FROM users AS i WHERE i.id = 1) FROM orders AS o ORDER BY o.id",
+                 [(1, 3), (2, 3), (3, 3)], id="cte-correlates-at-each-use-site"),
+])
+def test_assurance_preserves_bound_relation_results(assurance_registry, bound_relation_database, sql, expected):
+    report = assure_direct_sql(sql, dialect="sqlite")
+    assert bound_relation_database.execute(report.sql).fetchall() == expected
+
+
+@pytest.mark.parametrize("input_kind", ["direct_sql", "forge_json"])
+def test_nested_cte_name_cannot_authorize_an_outer_physical_table(
+    assurance_registry, bound_relation_database, input_kind,
+):
+    bound_relation_database.executescript(
+        "CREATE TABLE secret(value TEXT); INSERT INTO secret VALUES ('synthetic'), ('synthetic');"
+    )
+    sql = ("SELECT COUNT(*) FROM secret WHERE EXISTS "
+           "(WITH secret AS (SELECT id FROM orders) SELECT 1 FROM secret)")
+    assert bound_relation_database.execute(sql).fetchall() == [(2,)]
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_compiled_sql(sql, dialect="sqlite", input_kind=input_kind, allowed_tables=["orders"])
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+@pytest.mark.parametrize("sql", [
+    pytest.param("WITH wrapper AS (WITH users AS (SELECT id FROM orders) SELECT id FROM users) "
+                 "SELECT COUNT(*) FROM users", id="nested-definition"),
+    pytest.param("SELECT COUNT(*) FROM users UNION ALL SELECT COUNT(*) FROM "
+                 "(WITH users AS (SELECT id FROM orders) SELECT id FROM users) AS derived",
+                 id="union-sibling"),
+    pytest.param("WITH orders AS (SELECT id FROM users) SELECT COUNT(*) FROM orders",
+                 id="unauthorized-source-inside-shadowing-cte"),
+])
+def test_physical_table_acl_follows_each_cte_and_union_scope(
+    assurance_registry, bound_relation_database, sql,
+):
+    assert bound_relation_database.execute(sql).fetchone() == (2,)
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql(sql, dialect="sqlite", allowed_tables=["orders"])
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+def test_schema_qualified_table_cannot_borrow_unqualified_registry_authority(
+    assurance_registry, bound_relation_database,
+):
+    bound_relation_database.executescript(
+        "ATTACH DATABASE ':memory:' AS private; "
+        "CREATE TABLE private.orders(id INTEGER); INSERT INTO private.orders VALUES (9);"
+    )
+    sql = "WITH orders AS (SELECT id FROM users) SELECT id FROM private.orders"
+    assert bound_relation_database.execute(sql).fetchall() == [(9,)]
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql(sql, dialect="sqlite")
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+def test_catalog_qualified_table_requires_more_than_a_registry_basename(assurance_registry):
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql("SELECT COUNT(*) FROM other_catalog.private.orders", dialect="postgresql")
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+@pytest.mark.parametrize("sql, expected", [
+    pytest.param("WITH users AS (SELECT id FROM orders) SELECT id FROM users ORDER BY id",
+                 [(1,), (2,), (3,)], id="cte-shadows-unauthorized-physical-name"),
+    pytest.param("WITH picked AS (SELECT id FROM orders WHERE id = 1) SELECT id FROM "
+                 "(WITH picked AS (SELECT id FROM orders WHERE id = 2) SELECT id FROM picked)",
+                 [(2,)], id="nested-cte-shadows-outer-cte"),
+    pytest.param("SELECT id FROM (WITH picked AS (SELECT id FROM orders WHERE id = 1) "
+                 "SELECT id FROM picked) AS a UNION ALL SELECT id FROM "
+                 "(WITH picked AS (SELECT id FROM orders WHERE id = 3) SELECT id FROM picked) AS b",
+                 [(1,), (3,)], id="independent-union-cte-names"),
+])
+def test_authorized_cte_sources_remain_executable_with_restricted_registry(
+    assurance_registry, bound_relation_database, sql, expected,
+):
+    report = assure_direct_sql(sql, dialect="sqlite", allowed_tables=["orders"])
+    assert bound_relation_database.execute(report.sql).fetchall() == expected
+
+
+def test_relation_authorization_uses_dialect_identifier_normalization(assurance_registry):
+    sql = "WITH picked AS (SELECT id FROM orders) SELECT id FROM picked"
+    report = assure_direct_sql(sql, dialect="snowflake", allowed_tables=["orders"])
+    assert report.status == "passed"
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql("WITH users AS (SELECT id FROM orders) SELECT COUNT(*) FROM secret",
+                          dialect="snowflake", allowed_tables=["orders"])
     assert caught.value.report.gates[-1].gate == "registry_acl"

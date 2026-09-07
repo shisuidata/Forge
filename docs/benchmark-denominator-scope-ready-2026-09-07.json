@@ -1,0 +1,219 @@
+{
+  "schema_version": "benchmark-denominator-scope-readiness-v1",
+  "date": "2026-09-07",
+  "requirement": "REQ-2026-09-07-056",
+  "status": "ready_awaiting_explicit_model_call_authorization",
+  "experiment": {
+    "schema_version": "denominator-scope-experiment-card-v1",
+    "requirement": "REQ-2026-09-07-056",
+    "date": "2026-09-07",
+    "status": "ready_awaiting_explicit_model_call_authorization",
+    "authorization": {
+      "authorized_benchmark_model_calls": 0,
+      "actual_benchmark_model_calls": 0,
+      "proposed_maximum_model_calls": 16,
+      "formula": "4 cases × 2 conditions × 2 arms",
+      "no_inherited_budget": true
+    },
+    "model": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "provider_inference_and_readiness_not_exercised": true
+    },
+    "cohort": "D_exposed_development_not_holdout",
+    "case_ids": [
+      "md-259",
+      "md-079",
+      "md-000",
+      "md-312"
+    ],
+    "native_case_execution_order": [
+      "md-000",
+      "md-079",
+      "md-259",
+      "md-312"
+    ],
+    "cases": [
+      {
+        "case_id": "md-259",
+        "db_id": "superhero",
+        "role": "target_denominator_failure",
+        "selection_reason": "已确定目标。Luna历史存在INNER JOIN缩小全体英雄分母；另有独立投影遗漏，需把分母诊断与端到端EX分开记录。"
+      },
+      {
+        "case_id": "md-079",
+        "db_id": "thrombosis_prediction",
+        "role": "explicit_restricted_denominator_reverse_control",
+        "selection_reason": "题目和Evidence明确分母为女性患者；单表、无JOIN/去重/输出契约争议。所引用Sol历史双臂EX与Contract v2均正确，能检测范例是否误教所有分母=全表。"
+      },
+      {
+        "case_id": "md-000",
+        "db_id": "debit_card_specializing",
+        "role": "historically_correct_ratio_control",
+        "selection_reason": "Evidence显式EUR人数/CZK人数；比率而非百分比，分母是CZK子集。Sol历史双臂正确且无其他已标注错因；同时守住不乘100与条件分母。"
+      },
+      {
+        "case_id": "md-312",
+        "db_id": "codebase_community",
+        "role": "historically_correct_non_ratio_control",
+        "selection_reason": "题意/Evidence/Gold为按标题取ViewCount，一列一行、无比例/日期/聚合/姓名列歧义；有独立Luna历史双臂正确标签，并在旧实验中列为正确对照。"
+      }
+    ],
+    "conditions": {
+      "control": {
+        "protocol_revision": "sha256:ecbf3b80a754006b2cb79330f812616c9070adde94eb14ae4ffebbc65d743a97",
+        "forge_prompt_revision": "forge-structured-benchmark-v1",
+        "frozen_file": ".forge/benchmarks/denominator-scope-ready-20260907/control.frozen.json",
+        "max_model_calls": 8
+      },
+      "treatment": {
+        "protocol_revision": "sha256:2fb285844df27318335d69e950725bc1da172e95b63e3dbb9e3ab16058d6d8f0",
+        "forge_prompt_revision": "forge-structured-benchmark-denominator-v1",
+        "frozen_file": ".forge/benchmarks/denominator-scope-ready-20260907/treatment.frozen.json",
+        "max_model_calls": 8
+      }
+    },
+    "variable": "prompt",
+    "generation": {
+      "max_model_calls": 8,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "timeout_seconds": 120,
+      "sampling": "provider_default",
+      "max_output_tokens": null
+    },
+    "fixed": {
+      "metric_revision": "semantic-result-compare-v2",
+      "date_context": "off",
+      "grain_context": "off",
+      "value_context": "off",
+      "default_prompt_unchanged": true,
+      "shared_direct_instructions_unchanged": true,
+      "schema_context_compiler_assurance_gold_dataset_unchanged": true
+    },
+    "model_visible_change": {
+      "example_count": 1,
+      "synthetic_domain": "accounts/invoices; paid-account numerator and ALL-account denominator",
+      "added_forge_instruction_utf8_bytes": 2209,
+      "excludes": "BIRD case IDs/questions/schema names/Gold SQL or numeric answers, offline reverse example, fixture rows/results"
+    },
+    "proposed_execution": {
+      "condition_order": [
+        "control",
+        "treatment"
+      ],
+      "pi_case_concurrency": 1,
+      "arms": "Native Pi double-arm scheduling, unchanged",
+      "stop_both_conditions_on_run_failure": true,
+      "provider_retries": 0,
+      "replacement_calls": 0,
+      "automatic_expansion": false,
+      "automatic_default_enable": false
+    },
+    "predeclared_development_gates": {
+      "completeness": "All 16 dispatched arms yield saved candidates and known EX/Contract/usage; no unknown, drift, retries or replaced samples.",
+      "target": "md-259 Forge must move from EX=false and Contract=false in this control to EX=true and Contract=true in this treatment. Fixing denominator while omitting outputs does not pass; a correct control cannot establish this proposed repair signal.",
+      "controls": "For md-079/md-000/md-312, any control-correct EX or Contract becoming treatment-incorrect fails. Inspect all eight pairs, including Direct stability; any Direct regression also blocks advancement. Historical Sol labels select controls, not expected current Luna scores.",
+      "total_tokens_ratio_maximum": 1.2,
+      "tokens_per_correct_forge_ex_ratio_maximum": 1,
+      "forge_generation_p95_ratio_maximum": 1.25,
+      "p95_definition": "nearest-rank of four Forge generation_ms values per condition; small-sample guard only, not a stable latency estimate",
+      "zero_correct_denominator": "Undefined tokens-per-correct is reported as undefined and cannot pass the cost gate.",
+      "reporting": "Keep complete four-case denominators, paired newly_passed/regressed, output omissions, denominator semantics, mis-rejection, unscored, per-arm tokens/latencies. Freeze gates before any tested model call.",
+      "decision": "Passing is only a development signal for a separately approved R/H confirmation; no automatic adoption. Any unmet or inconclusive gate retains default and ends this budget without retry."
+    },
+    "limitations": [
+      "This example assumes a non-null primary-key population and enforced nullable foreign key; no arbitrary uniqueness or referential integrity is inferred for a real schema.",
+      "md-259 has separate denominator and output omission errors across different historical Luna candidates; do not combine them into one historical response.",
+      "Four exposed cases, single generation each, sequential conditions and historical mixed-model control labels cannot establish general accuracy or causal certainty.",
+      "Observed tokens are not a monetary quote; no real-provider usage or exact price is measured during preparation."
+    ],
+    "evidence_root": ".forge/benchmarks/denominator-scope-ready-20260907"
+  },
+  "verification": {
+    "synthetic_example": {
+      "sqlite_fixtures": 8,
+      "compiled_assured_executed_checks": 16,
+      "model_visible_query_verified": true,
+      "reverse_example_not_model_visible": true
+    },
+    "default_inputs": {
+      "cases": 500,
+      "default_all_hashes_unchanged": true,
+      "candidate_only_forge_instruction_changes": true
+    },
+    "freeze": {
+      "control_gold_ready": true,
+      "treatment_gold_ready": true,
+      "normalized_single_factor_manifests_equal": true
+    },
+    "http": {
+      "actual_authenticated_service": true,
+      "both_conditions_match_frozen_contexts": true
+    },
+    "pi": {
+      "real_runtime_and_local_http": true,
+      "synthetic_sessions": true,
+      "actual_provider_inference": false,
+      "synthetic_dispatches": 16,
+      "external_network_attempts": 0,
+      "both_conditions_completed_and_survived_reopen": true,
+      "context_drift_stopped_before_dispatch": true
+    },
+    "regression": {
+      "python": {
+        "passed": 889,
+        "skipped": 26,
+        "warning": "existing protobuf utcfromtimestamp deprecation"
+      },
+      "pi": {
+        "passed": 155,
+        "warning": "Node experimental SQLite"
+      },
+      "typecheck": "passed"
+    }
+  },
+  "changes": {
+    "source": [
+      "agent/prompts.py",
+      "forge/bird_benchmark.py",
+      "forge/cli.py",
+      "web/routes/benchmark_v2.py",
+      "services/pi-orchestrator/src/benchmark-runtime.ts"
+    ],
+    "tests": [
+      "tests/test_bird_benchmark.py",
+      "tests/test_prompts.py",
+      "services/pi-orchestrator/tests/benchmark-runtime.test.ts"
+    ],
+    "behavior": "Registered opt-in prompt revision; nondefault requires prompt factor. Freeze/HTTP/Pi bind it and compare permits only each manifest-bound prompt revision while keeping runtime/SDK and shared context fixed.",
+    "deleted_test": "Removed legacy structured-prompt wording assertions rather than re-pinning text."
+  },
+  "non_changes": [
+    "No real benchmark model calls or provider credentials used",
+    "Default prompt and optional context modes remain unchanged/off",
+    "No Gold, official snapshot, dataset, schema, compiler or Assurance changes",
+    "No historical scores or seed48 parent replacement",
+    "No additional semantic/repair/runtime architecture work or release/deployment"
+  ],
+  "evidence": {
+    "card": ".forge/benchmarks/denominator-scope-ready-20260907/experiment-card.json",
+    "cohort": ".forge/benchmarks/denominator-scope-ready-20260907/cohort-candidates.json",
+    "synthetic": ".forge/benchmarks/denominator-scope-ready-20260907/synthetic-example-proof.json",
+    "integrated_example": ".forge/benchmarks/denominator-scope-ready-20260907/integrated-example-smoke.json",
+    "default_inputs": ".forge/benchmarks/denominator-scope-ready-20260907/default-and-candidate-input-check.json",
+    "pair_validation": ".forge/benchmarks/denominator-scope-ready-20260907/pair-validation.json",
+    "preflight": ".forge/benchmarks/denominator-scope-ready-20260907/cli-preflight.json",
+    "http": ".forge/benchmarks/denominator-scope-ready-20260907/http-frozen-context-proof.json",
+    "pi": ".forge/benchmarks/denominator-scope-ready-20260907/pi-transport-proof.json",
+    "reproduction": ".forge/benchmarks/denominator-scope-ready-20260907/smoke-reproduction.json",
+    "regression": ".forge/benchmarks/denominator-scope-ready-20260907/verification-full.json"
+  },
+  "cleanup": {
+    "local_api": "stopped",
+    "temporary_pi_databases": "removed by smoke finally",
+    "throwaway_script": "removed; reproduction source retained in smoke-reproduction.json",
+    "proof": ".forge/benchmarks/denominator-scope-ready-20260907/cleanup.json",
+    "evidence_hashes": ".forge/benchmarks/denominator-scope-ready-20260907/file-hashes.json"
+  }
+}

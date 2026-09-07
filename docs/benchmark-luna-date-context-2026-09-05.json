@@ -1,0 +1,2017 @@
+{
+  "requirement": "REQ-2026-09-05-047",
+  "date": "2026-09-05",
+  "status": "completed_not_adopted",
+  "experiment": {
+    "schema_version": "bird-experiment-card-v1",
+    "requirement": "REQ-2026-09-05-047",
+    "status": "completed_not_adopted",
+    "hypothesis": "带来源和样本局限的实际日期格式事实可减少与存储布局不相容的日期绑定；不把格式事实作为业务歧义向用户提问。",
+    "model": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna"
+    },
+    "cohort": "D",
+    "exposure": "五题均已参与Luna诊断/回归；不是独立holdout或随机总体样本。",
+    "cases": [
+      {
+        "case_id": "md-483",
+        "role": "primary_date_format_failure",
+        "db_id": "financial"
+      },
+      {
+        "case_id": "md-077",
+        "role": "secondary_date_sensitive_probe",
+        "db_id": "student_club",
+        "limitation": "已有日期绑定改善但历史EX/Contract仍失败，非纯日期错误正例。"
+      },
+      {
+        "case_id": "md-085",
+        "role": "previously_correct_date_control",
+        "db_id": "thrombosis_prediction"
+      },
+      {
+        "case_id": "md-231",
+        "role": "previously_correct_date_control",
+        "db_id": "formula_1"
+      },
+      {
+        "case_id": "md-289",
+        "role": "previously_correct_no_date_cross_domain_control",
+        "db_id": "superhero"
+      }
+    ],
+    "factor": {
+      "name": "date_context",
+      "baseline": "off",
+      "treatment": "observed",
+      "max_rows_per_field": 100,
+      "shared_with_both_arms": true,
+      "default_remains": "off"
+    },
+    "protocols": {
+      "off": {
+        "path": ".forge/benchmarks/luna-date-context-20260905/off.final.frozen.json",
+        "protocol_revision": "sha256:d2199e310a545342d9de4d1de3da88a0de9847626a3ddaf70842261c2b0eb483",
+        "ready": true,
+        "gold_blocked_cases": []
+      },
+      "observed": {
+        "path": ".forge/benchmarks/luna-date-context-20260905/observed.final.frozen.json",
+        "protocol_revision": "sha256:c52e61ad4d6b32821e1bce3e908b3c68b8c573e750c99633a54800ecf1b892d6",
+        "ready": true,
+        "gold_blocked_cases": []
+      }
+    },
+    "generation": {
+      "max_model_calls": 10,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "timeout_seconds": 120,
+      "sampling": "provider_default",
+      "max_output_tokens": null,
+      "proposed_total_model_calls": 20,
+      "authorized_new_calls": 20,
+      "actual_new_calls": 20,
+      "execution_path": "Pi POST /v1/benchmarks only",
+      "conditions_order": [
+        "off",
+        "observed"
+      ],
+      "failure_policy": "无自动重试、无替换；失败保留分母，不自动续跑或扩大预算。"
+    },
+    "predeclared_assessment": {
+      "primary": "逐臂审查md-483日期条件是否与观察到的ISO存储布局相容，并比较EX/Contract；格式正确不等于完整答案正确。",
+      "positive_signal": "至少一臂md-483从基线日期不相容变为处理组相容，同时该臂EX和Contract新增通过；其他目标臂不得回退。基线本已通过时，不从旧历史失败宣称处理收益。",
+      "control_gate": "md-085/md-231/md-289处理组双臂均须保持历史EX和Contract通过；md-077单独报告机制变化，不以部分改善改判。",
+      "rollback_or_inconclusive": "目标无新增通过、任一正确对照回退、评分未知或协议漂移均不支持推广；无自动补样。开关默认off，不自动采纳。",
+      "cost": "分别报告两条件/双臂tokens、生成时延、失败与未知用量；调用上限不是token或货币硬上限。",
+      "limitation": "每条件每臂仅一次生成，provider默认采样；不能消除生成和时序波动，只作为机制诊断，不作稳定因果、总体准确率或泛化结论。"
+    },
+    "offline_evidence": {
+      "ambiguity_review": ".forge/benchmarks/luna-date-context-20260905/ambiguity-review.json",
+      "date_audit": ".forge/benchmarks/luna-date-context-20260905/date-audit.json",
+      "date_fields": 37,
+      "date_status_counts": {
+        "compatible_sample": 1,
+        "conflict": 3,
+        "missing_layout": 33
+      },
+      "input_verification": ".forge/benchmarks/luna-date-context-20260905/input-verification.json",
+      "fixed_candidate_replay": ".forge/benchmarks/luna-date-context-20260905/replay-verification.json",
+      "candidate_count": 10,
+      "candidate_scores_unchanged": true,
+      "replay_diagnostic_only": true,
+      "seed45_scored_candidates_preserved": 38
+    },
+    "verification": {
+      "python_full": {
+        "passed": 810,
+        "skipped": 26
+      },
+      "pi_tests_passed": 149,
+      "pi_typecheck": "passed",
+      "actual_cli": [
+        "freeze off/observed",
+        "preflight off/observed ready without blockers",
+        "historical diagnostic replay off/observed",
+        "outdated source-bound freeze rejected"
+      ]
+    },
+    "preserved_boundaries": [
+      "Gold/CSV/Compiler/Schema/官方EX/Contract未改",
+      "原历史成绩与分母不改",
+      "日常混合回归仍17延续+2新+1旧，未自动启动",
+      "H与R0.6外部采用门禁不变"
+    ],
+    "authorization": {
+      "user_selection": "执行完整20次",
+      "maximum_model_calls": 20,
+      "conditions": {
+        "off": 10,
+        "observed": 10
+      },
+      "provider_retries": 0,
+      "replacement_calls": 0,
+      "automatic_extension": false
+    },
+    "results": {
+      "run_ids": {
+        "off": "pbr_716a9e146af7424a858e735647680aec",
+        "observed": "pbr_f90aeca4d5544fd59aa74f6809db7886"
+      },
+      "primary_gate_met": false,
+      "treatment_correct_controls_passed": true,
+      "date_compatible_bindings_on_four_target_arms": {
+        "off": 1,
+        "observed": 4
+      },
+      "only_newly_passed": "md-289/forge; no date suffix and unchanged input",
+      "decision": "默认off；未获得完整答案正确性收益，不扩大调用。"
+    }
+  },
+  "original_runtime_model": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+    "temperature": null,
+    "max_output_tokens": null
+  },
+  "generation_contract": {
+    "forge_output_mode": "pi_tool_schema",
+    "forge_prompt_revision": "forge-structured-benchmark-v1",
+    "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "provider_json_schema_request": "required",
+    "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+    "direct_output_mode": "text_sql",
+    "sampling": "provider_default",
+    "transport": "sse",
+    "max_output_tokens": null,
+    "timeout_seconds": 120,
+    "provider_retries": 0,
+    "max_agent_turns_per_arm": 1,
+    "isolation_revision": "pi-benchmark-isolation-v1",
+    "pi_runtime_revision": "sha256:1932dec5e594bc0d507c4fd0297aac4fc495ba3cd6a04bcd2bc65e1b8c50eead",
+    "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+  },
+  "counts": {
+    "cases_per_condition": 5,
+    "conditions": 2,
+    "arms": 2,
+    "authorized_dispatches": 20,
+    "actual_dispatches": 20,
+    "returned_candidates": 20,
+    "unknown_usage_arms": 0,
+    "provider_retry_policy": 0,
+    "replacement_calls": 0,
+    "provider_http_status": "unobserved"
+  },
+  "comparison": {
+    "comparable": true,
+    "denominator": 5,
+    "scores": [
+      {
+        "forge": {
+          "official_ea": {
+            "passed": 2,
+            "failed": 3,
+            "unknown": 0,
+            "denominator": 5
+          },
+          "contract_accuracy": {
+            "passed": 2,
+            "failed": 3,
+            "unknown": 0,
+            "denominator": 5
+          }
+        },
+        "direct": {
+          "official_ea": {
+            "passed": 3,
+            "failed": 2,
+            "unknown": 0,
+            "denominator": 5
+          },
+          "contract_accuracy": {
+            "passed": 3,
+            "failed": 2,
+            "unknown": 0,
+            "denominator": 5
+          }
+        }
+      },
+      {
+        "forge": {
+          "official_ea": {
+            "passed": 3,
+            "failed": 2,
+            "unknown": 0,
+            "denominator": 5
+          },
+          "contract_accuracy": {
+            "passed": 3,
+            "failed": 2,
+            "unknown": 0,
+            "denominator": 5
+          }
+        },
+        "direct": {
+          "official_ea": {
+            "passed": 3,
+            "failed": 2,
+            "unknown": 0,
+            "denominator": 5
+          },
+          "contract_accuracy": {
+            "passed": 3,
+            "failed": 2,
+            "unknown": 0,
+            "denominator": 5
+          }
+        }
+      }
+    ],
+    "transitions": {
+      "forge": {
+        "official_ea": {
+          "newly_passed": [
+            "md-289"
+          ],
+          "regressed": [],
+          "baseline_unknown": [],
+          "candidate_unknown": [],
+          "resolved_unknown": [],
+          "became_unknown": []
+        },
+        "contract_accuracy": {
+          "newly_passed": [
+            "md-289"
+          ],
+          "regressed": [],
+          "baseline_unknown": [],
+          "candidate_unknown": [],
+          "resolved_unknown": [],
+          "became_unknown": []
+        }
+      },
+      "direct": {
+        "official_ea": {
+          "newly_passed": [],
+          "regressed": [],
+          "baseline_unknown": [],
+          "candidate_unknown": [],
+          "resolved_unknown": [],
+          "became_unknown": []
+        },
+        "contract_accuracy": {
+          "newly_passed": [],
+          "regressed": [],
+          "baseline_unknown": [],
+          "candidate_unknown": [],
+          "resolved_unknown": [],
+          "became_unknown": []
+        }
+      }
+    },
+    "generation_provenance_known": true,
+    "comparison_scope": "saved_candidates_offline",
+    "generative_gain_claim": false,
+    "interpretation": "Saved-candidate offline comparison only; unknown generation provenance is diagnostic, not generative evidence"
+  },
+  "metrics": {
+    "off": {
+      "forge": {
+        "total_cases": 5,
+        "scored_cases": 5,
+        "unscored_cases": 0,
+        "official_ea": 0.4,
+        "official_ea_correct_cases": 2,
+        "official_ea_observed_cases": 5,
+        "official_ea_missing_cases": 0,
+        "contract_accuracy": 0.4,
+        "contract_accuracy_correct_cases": 2,
+        "contract_accuracy_observed_cases": 5,
+        "contract_accuracy_missing_cases": 0,
+        "execution_success": 0.8,
+        "execution_success_cases": 4,
+        "execution_observed_cases": 5,
+        "execution_missing_cases": 0,
+        "total_tokens": 22454,
+        "observed_total_tokens": 22454,
+        "usage_observed": true,
+        "unobserved_usage_arms": 0,
+        "average_generation_ms": 9944.46,
+        "generation_observed_cases": 5,
+        "generation_missing_cases": 0
+      },
+      "direct": {
+        "total_cases": 5,
+        "scored_cases": 5,
+        "unscored_cases": 0,
+        "official_ea": 0.6,
+        "official_ea_correct_cases": 3,
+        "official_ea_observed_cases": 5,
+        "official_ea_missing_cases": 0,
+        "contract_accuracy": 0.6,
+        "contract_accuracy_correct_cases": 3,
+        "contract_accuracy_observed_cases": 5,
+        "contract_accuracy_missing_cases": 0,
+        "execution_success": 1,
+        "execution_success_cases": 5,
+        "execution_observed_cases": 5,
+        "execution_missing_cases": 0,
+        "total_tokens": 12167,
+        "observed_total_tokens": 12167,
+        "usage_observed": true,
+        "unobserved_usage_arms": 0,
+        "average_generation_ms": 6004.9400000000005,
+        "generation_observed_cases": 5,
+        "generation_missing_cases": 0
+      },
+      "delta_ea": -0.19999999999999996
+    },
+    "observed": {
+      "forge": {
+        "total_cases": 5,
+        "scored_cases": 5,
+        "unscored_cases": 0,
+        "official_ea": 0.6,
+        "official_ea_correct_cases": 3,
+        "official_ea_observed_cases": 5,
+        "official_ea_missing_cases": 0,
+        "contract_accuracy": 0.6,
+        "contract_accuracy_correct_cases": 3,
+        "contract_accuracy_observed_cases": 5,
+        "contract_accuracy_missing_cases": 0,
+        "execution_success": 1,
+        "execution_success_cases": 5,
+        "execution_observed_cases": 5,
+        "execution_missing_cases": 0,
+        "total_tokens": 24718,
+        "observed_total_tokens": 24718,
+        "usage_observed": true,
+        "unobserved_usage_arms": 0,
+        "average_generation_ms": 10315.859999999999,
+        "generation_observed_cases": 5,
+        "generation_missing_cases": 0
+      },
+      "direct": {
+        "total_cases": 5,
+        "scored_cases": 5,
+        "unscored_cases": 0,
+        "official_ea": 0.6,
+        "official_ea_correct_cases": 3,
+        "official_ea_observed_cases": 5,
+        "official_ea_missing_cases": 0,
+        "contract_accuracy": 0.6,
+        "contract_accuracy_correct_cases": 3,
+        "contract_accuracy_observed_cases": 5,
+        "contract_accuracy_missing_cases": 0,
+        "execution_success": 1,
+        "execution_success_cases": 5,
+        "execution_observed_cases": 5,
+        "execution_missing_cases": 0,
+        "total_tokens": 14226,
+        "observed_total_tokens": 14226,
+        "usage_observed": true,
+        "unobserved_usage_arms": 0,
+        "average_generation_ms": 5648.099999999999,
+        "generation_observed_cases": 5,
+        "generation_missing_cases": 0
+      },
+      "delta_ea": 0
+    }
+  },
+  "quality_proxy": {
+    "off_forge": {
+      "metric_revision": "request-quality-v1",
+      "label_basis": "official_ex",
+      "correctness_scope": "EX execution-result proxy only; not business correctness or SQL semantic equivalence",
+      "request_count": 5,
+      "metrics": {
+        "correct_completion": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "answer_coverage": {
+          "count": 4,
+          "observed_count": 4,
+          "denominator": 5,
+          "rate": 0.8,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "conditional_accuracy": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 4,
+          "rate": 0.5,
+          "known_count": 4,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "silent_error": null,
+        "EX_wrong_answer_proxy": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "clarification": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "permission_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "avoidable_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "autonomous_completion": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "failure": {
+          "count": 1,
+          "observed_count": 1,
+          "denominator": 5,
+          "rate": 0.2,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "costs": {
+        "model_calls": {
+          "total": 5,
+          "observed_total": 5,
+          "per_correct_completion": 2.5,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "total_tokens": {
+          "total": 22454,
+          "observed_total": 22454,
+          "per_correct_completion": 11227.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "elapsed_ms": {
+          "total": 49722.3,
+          "observed_total": 49722.3,
+          "per_correct_completion": 24861.15,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "user_interactions": {
+          "total": 0,
+          "observed_total": 0,
+          "per_correct_completion": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "observations": {
+        "correct": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "answerable": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "refusal_reason": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "clarification_turns": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "model_calls": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "total_tokens": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "elapsed_ms": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "user_interactions": {
+          "known_count": 5,
+          "missing_count": 0
+        }
+      }
+    },
+    "off_direct": {
+      "metric_revision": "request-quality-v1",
+      "label_basis": "official_ex",
+      "correctness_scope": "EX execution-result proxy only; not business correctness or SQL semantic equivalence",
+      "request_count": 5,
+      "metrics": {
+        "correct_completion": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "answer_coverage": {
+          "count": 5,
+          "observed_count": 5,
+          "denominator": 5,
+          "rate": 1.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "conditional_accuracy": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "silent_error": null,
+        "EX_wrong_answer_proxy": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "clarification": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "permission_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "avoidable_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "autonomous_completion": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "failure": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "costs": {
+        "model_calls": {
+          "total": 5,
+          "observed_total": 5,
+          "per_correct_completion": 1.6666666666666667,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "total_tokens": {
+          "total": 12167,
+          "observed_total": 12167,
+          "per_correct_completion": 4055.6666666666665,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "elapsed_ms": {
+          "total": 30024.7,
+          "observed_total": 30024.7,
+          "per_correct_completion": 10008.233333333334,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "user_interactions": {
+          "total": 0,
+          "observed_total": 0,
+          "per_correct_completion": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "observations": {
+        "correct": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "answerable": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "refusal_reason": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "clarification_turns": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "model_calls": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "total_tokens": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "elapsed_ms": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "user_interactions": {
+          "known_count": 5,
+          "missing_count": 0
+        }
+      }
+    },
+    "observed_forge": {
+      "metric_revision": "request-quality-v1",
+      "label_basis": "official_ex",
+      "correctness_scope": "EX execution-result proxy only; not business correctness or SQL semantic equivalence",
+      "request_count": 5,
+      "metrics": {
+        "correct_completion": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "answer_coverage": {
+          "count": 5,
+          "observed_count": 5,
+          "denominator": 5,
+          "rate": 1.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "conditional_accuracy": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "silent_error": null,
+        "EX_wrong_answer_proxy": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "clarification": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "permission_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "avoidable_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "autonomous_completion": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "failure": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "costs": {
+        "model_calls": {
+          "total": 5,
+          "observed_total": 5,
+          "per_correct_completion": 1.6666666666666667,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "total_tokens": {
+          "total": 24718,
+          "observed_total": 24718,
+          "per_correct_completion": 8239.333333333334,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "elapsed_ms": {
+          "total": 51579.3,
+          "observed_total": 51579.3,
+          "per_correct_completion": 17193.100000000002,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "user_interactions": {
+          "total": 0,
+          "observed_total": 0,
+          "per_correct_completion": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "observations": {
+        "correct": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "answerable": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "refusal_reason": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "clarification_turns": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "model_calls": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "total_tokens": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "elapsed_ms": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "user_interactions": {
+          "known_count": 5,
+          "missing_count": 0
+        }
+      }
+    },
+    "observed_direct": {
+      "metric_revision": "request-quality-v1",
+      "label_basis": "official_ex",
+      "correctness_scope": "EX execution-result proxy only; not business correctness or SQL semantic equivalence",
+      "request_count": 5,
+      "metrics": {
+        "correct_completion": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "answer_coverage": {
+          "count": 5,
+          "observed_count": 5,
+          "denominator": 5,
+          "rate": 1.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "conditional_accuracy": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "silent_error": null,
+        "EX_wrong_answer_proxy": {
+          "count": 2,
+          "observed_count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "clarification": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "permission_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "avoidable_refusal": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "autonomous_completion": {
+          "count": 3,
+          "observed_count": 3,
+          "denominator": 5,
+          "rate": 0.6,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "failure": {
+          "count": 0,
+          "observed_count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "costs": {
+        "model_calls": {
+          "total": 5,
+          "observed_total": 5,
+          "per_correct_completion": 1.6666666666666667,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "total_tokens": {
+          "total": 14226,
+          "observed_total": 14226,
+          "per_correct_completion": 4742.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "elapsed_ms": {
+          "total": 28240.5,
+          "observed_total": 28240.5,
+          "per_correct_completion": 9413.5,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        },
+        "user_interactions": {
+          "total": 0,
+          "observed_total": 0,
+          "per_correct_completion": 0.0,
+          "known_count": 5,
+          "missing_count": 0,
+          "state": "known"
+        }
+      },
+      "observations": {
+        "correct": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "answerable": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "refusal_reason": {
+          "known_count": 0,
+          "missing_count": 5
+        },
+        "clarification_turns": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "model_calls": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "total_tokens": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "elapsed_ms": {
+          "known_count": 5,
+          "missing_count": 0
+        },
+        "user_interactions": {
+          "known_count": 5,
+          "missing_count": 0
+        }
+      }
+    }
+  },
+  "costs": {
+    "off_tokens": 34621,
+    "observed_tokens": 38944,
+    "total_tokens": 73565,
+    "treatment_delta_percent": 12.486641056006476,
+    "billing_amount": null,
+    "billing_note": "SDK/Provider报告token，不是结算账单。"
+  },
+  "provenance": {
+    "runtime_contexts_match_frozen": true,
+    "model_same": true,
+    "generation_contract_same": true,
+    "source_fingerprints_unchanged": true,
+    "dataset_fingerprints_unchanged": true,
+    "independent_official_core_queries": 19,
+    "assurance_rejection_preserved": 1,
+    "replayed_arm_judgments_matched": 20,
+    "raw_response_hashes_matched": 20
+  },
+  "mechanism_observations": [
+    {
+      "case_id": "md-483",
+      "arms": [
+        "forge",
+        "direct"
+      ],
+      "date_binding": "YYMMDD边界改为ISO边界；两臂从0匹配改为65行账户计数。",
+      "remaining": "Gold是一行总计65；候选按账户分组返回65行，EX/Contract仍失败。未以输出争议改判。"
+    },
+    {
+      "case_id": "md-077",
+      "arms": [
+        "forge"
+      ],
+      "date_binding": "9/9/2019改为2019-09-09，从空结果改为两名学生及金额。",
+      "remaining": "候选姓名拼接为一列，Gold姓/名分列；Direct两条件SQL相同，四个候选均EX/Contract失败。"
+    },
+    {
+      "case_id": "md-289",
+      "arms": [
+        "forge"
+      ],
+      "date_binding": "无日期补充，两个条件输入完全相同。",
+      "remaining": "基线CTE漏投影聚合别名被Assurance拒绝，处理组恢复通过。只属同输入重生成波动，不是日期上下文收益。"
+    }
+  ],
+  "decision": {
+    "default_date_context": "off",
+    "promoted": false,
+    "additional_model_calls_authorized": 0,
+    "next": "先离线复核md-483聚合粒度与md-077姓名输出契约；不改Gold追分，不直接扩Prompt/Compiler或模型调用。",
+    "gates_unchanged": [
+      "历史成绩",
+      "日常17+2+1混合规则",
+      "独立H",
+      "R0.6外部采用"
+    ]
+  },
+  "outcomes": [
+    {
+      "condition": "off",
+      "case_id": "md-483",
+      "arm": "forge",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": {
+        "scan": "loan",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "account",
+            "on": {
+              "left": "loan.account_id",
+              "right": "account.account_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "loan.date",
+            "op": "gte",
+            "val": "950101"
+          },
+          {
+            "col": "loan.date",
+            "op": "lte",
+            "val": "971231"
+          },
+          {
+            "col": "loan.amount",
+            "op": "gte",
+            "val": 250000
+          },
+          {
+            "col": "account.frequency",
+            "op": "eq",
+            "val": "POPLATEK MESICNE"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "loan_count"
+          }
+        ],
+        "select": [
+          "loan_count"
+        ]
+      },
+      "sql": "SELECT COUNT(*) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date >= '950101' AND loan.date <= '971231' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_value_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 4288,
+      "usage_observed": true,
+      "generation_ms": 10970.1,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:82dc9c64f3fa100a6a8b4d7fc71e0d7d1d6c3dfc2eaa20b59b36358fc8c72a1d",
+        "response_output_hash": "sha256:0997f330140b23cdd2bd03989c1b5bc4f5e9f9bf5a333740ddfd05218f977893"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-483",
+      "arm": "direct",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id;",
+      "sql": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 2215,
+      "usage_observed": true,
+      "generation_ms": 7306,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:ab6e5e61d609cb1dd3574c74b81538dc8000b9569e7d66ed69dbdf12f110cb71",
+        "response_output_hash": "sha256:8da4077cdd2b887a7d7582026ebe6e99352cca025ea70f6f3d01e1cde32aa8a2"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-077",
+      "arm": "forge",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "income.date_received",
+            "op": "eq",
+            "val": "9/9/2019"
+          }
+        ],
+        "select": [
+          {
+            "expr": "member.first_name || ' ' || member.last_name",
+            "as": "full_name"
+          },
+          "income.amount"
+        ]
+      },
+      "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '9/9/2019'",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 4300,
+      "usage_observed": true,
+      "generation_ms": 9772.4,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:b7a7ee5cf23817cbda8e2cfdd2aac85eda56ec176cd05aecced6e0569ae0e194",
+        "response_output_hash": "sha256:77c22be534b2a869505aa47346675af6785b89e1ff84ae6a2ff6b5b4c5ea66ca"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-077",
+      "arm": "direct",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09';",
+      "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09'",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_column_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 2318,
+      "usage_observed": true,
+      "generation_ms": 7036.7,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:e324ed56e3973885bece2ab49e3df928fb4e264222fac223873cb8013a03ce15",
+        "response_output_hash": "sha256:730e1c19f94c8860f562b135ef40f061074c0e3578b5022e70275c9ffdec3d93"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-085",
+      "arm": "forge",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": {
+        "scan": "Patient",
+        "filter": [
+          {
+            "col": "SEX",
+            "op": "eq",
+            "val": "F"
+          },
+          {
+            "col": "strftime('%Y', \"Description\")",
+            "op": "eq",
+            "val": "1997"
+          },
+          {
+            "col": "Admission",
+            "op": "eq",
+            "val": "-"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_distinct",
+            "col": "ID",
+            "as": "count_patients"
+          }
+        ],
+        "select": [
+          "count_patients"
+        ]
+      },
+      "sql": "SELECT COUNT(DISTINCT ID) AS count_patients\nFROM Patient\nWHERE SEX = 'F' AND strftime('%Y', \"Description\") = '1997' AND Admission = '-'",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 4195,
+      "usage_observed": true,
+      "generation_ms": 8589.6,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:c6e0c7ca61c399bf1675954457bc16f1ab4d741a48d0832c52c0c77d9d11349c",
+        "response_output_hash": "sha256:498e548e9afc8c3a9b6c5f41abc2fc95a1c72ea15b6541160649614899a374c3"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-085",
+      "arm": "direct",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-';",
+      "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 2185,
+      "usage_observed": true,
+      "generation_ms": 5309.3,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:5f1a9a6fba210c46b514abde6825234660ba64af2822b59fb81db1a3051652e3",
+        "response_output_hash": "sha256:e20326f512d7178eb1b9e69778f5989400bd6703095f9387558dcea12124d370"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-231",
+      "arm": "forge",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": {
+        "scan": "drivers",
+        "filter": [
+          {
+            "col": "drivers.nationality",
+            "op": "eq",
+            "val": "German"
+          }
+        ],
+        "select": [
+          "drivers.driverRef"
+        ],
+        "sort": [
+          {
+            "col": "drivers.dob",
+            "dir": "asc"
+          }
+        ],
+        "limit": 1
+      },
+      "sql": "SELECT drivers.driverRef\nFROM drivers\nWHERE drivers.nationality = 'German'\nORDER BY drivers.dob ASC\nLIMIT 1",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 5111,
+      "usage_observed": true,
+      "generation_ms": 5701.1,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:24aac58e452299d5de225eb6b2b865d6fbbc3e4bd8a2c273babf5f57a8629f87",
+        "response_output_hash": "sha256:5d52183cb9f41b0a3887c02a2dbb5d0e2fcbab38b94cbe8d59d471218ac905a9"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-231",
+      "arm": "direct",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": "SELECT driverRef FROM drivers WHERE nationality = 'German' AND dob = (SELECT MIN(dob) FROM drivers WHERE nationality = 'German');",
+      "sql": "SELECT driverRef FROM drivers WHERE nationality = 'German' AND dob = (SELECT MIN(dob) FROM drivers WHERE nationality = 'German')",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 3225,
+      "usage_observed": true,
+      "generation_ms": 4702.5,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:cfd27c088e74d1a6a84a2c91ae65df0698e4d862d2b797c6af7d434327169f99",
+        "response_output_hash": "sha256:c4388a83315e6e68aa435b0cfa1f91485b137ffeb4cd8d6751b66b95b835cd48"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-289",
+      "arm": "forge",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": {
+        "scan": "stats",
+        "select": [
+          {
+            "expr": "100.0 * blue_count / total_count",
+            "as": "percentage"
+          }
+        ],
+        "cte": [
+          {
+            "name": "stats",
+            "query": {
+              "scan": "superhero",
+              "joins": [
+                {
+                  "type": "left",
+                  "table": "colour",
+                  "on": {
+                    "left": "superhero.eye_colour_id",
+                    "right": "colour.id"
+                  }
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "count",
+                  "col": "superhero.superhero_name",
+                  "as": "total_count"
+                },
+                {
+                  "fn": "count",
+                  "col": "superhero.superhero_name",
+                  "as": "blue_count",
+                  "filter": [
+                    {
+                      "col": "colour.colour",
+                      "op": "eq",
+                      "val": "Blue"
+                    }
+                  ]
+                }
+              ],
+              "select": [
+                "superhero.superhero_name"
+              ]
+            }
+          }
+        ]
+      },
+      "sql": "WITH stats AS (\n  SELECT superhero.superhero_name\n  FROM superhero\n  LEFT JOIN colour ON superhero.eye_colour_id = colour.id\n)\nSELECT 100.0 * blue_count / total_count AS percentage\nFROM stats",
+      "compile_status": "passed",
+      "execution_status": "skipped",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "assurance",
+        "code": "unknown_schema_reference",
+        "retryable": true
+      },
+      "total_tokens": 4560,
+      "usage_observed": true,
+      "generation_ms": 14689.1,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:daab72356e110fee7274a796054a844eedbcecce3528b8849359353692bcaace",
+        "response_output_hash": "sha256:2c4b53bf82e8b9aa5bd6524e3052bc030a02df8c2a538b1c3bd4f7337974212e"
+      }
+    },
+    {
+      "condition": "off",
+      "case_id": "md-289",
+      "arm": "direct",
+      "run_id": "pbr_716a9e146af7424a858e735647680aec",
+      "output": "SELECT 100.0 * SUM(CASE WHEN eye_colour_id = 7 THEN 1 ELSE 0 END) / COUNT(superhero_name) AS percentage\nFROM superhero;",
+      "sql": "SELECT 100.0 * SUM(CASE WHEN eye_colour_id = 7 THEN 1 ELSE 0 END) / COUNT(superhero_name) AS percentage\nFROM superhero",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 2224,
+      "usage_observed": true,
+      "generation_ms": 5670.2,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:8d070515a977ee12bffbc29093abb9686cd36db449eb81f5e1f96ada203449c1",
+        "response_output_hash": "sha256:31fe677285b95a187b887d0716b0836ce4dfea4673868cb7029c3a82c072fc39"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-483",
+      "arm": "forge",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": {
+        "scan": "loan",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "account",
+            "on": {
+              "left": "loan.account_id",
+              "right": "account.account_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "loan.date",
+            "op": "between",
+            "val": null,
+            "lo": "1995-01-01",
+            "hi": "1997-12-31"
+          },
+          {
+            "col": "loan.amount",
+            "op": "gte",
+            "val": 250000
+          },
+          {
+            "col": "account.frequency",
+            "op": "eq",
+            "val": "POPLATEK MESICNE"
+          }
+        ],
+        "group": [
+          "account.account_id"
+        ],
+        "agg": [
+          {
+            "fn": "count",
+            "col": "loan.loan_id",
+            "as": "loan_count"
+          }
+        ],
+        "select": [
+          "account.account_id",
+          "loan_count"
+        ]
+      },
+      "sql": "SELECT account.account_id, COUNT(loan.loan_id) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date BETWEEN '1995-01-01' AND '1997-12-31' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'\nGROUP BY account.account_id",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 5015,
+      "usage_observed": true,
+      "generation_ms": 13950.4,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:3344bd7514b61ee85cc139e984048e6e4b5ea4039c4a1e99ebbefd1b9d836f56",
+        "response_output_hash": "sha256:8a89b55ef491bab6a196edca0ed26759b2202dbc39e90aa6f0166532f1abb51c"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-483",
+      "arm": "direct",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE l.date BETWEEN '1995-01-01' AND '1997-12-31'\n  AND l.amount >= 250000\n  AND a.frequency = 'POPLATEK MESICNE'\nGROUP BY l.account_id;",
+      "sql": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE l.date BETWEEN '1995-01-01' AND '1997-12-31'\n  AND l.amount >= 250000\n  AND a.frequency = 'POPLATEK MESICNE'\nGROUP BY l.account_id",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_row_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 2969,
+      "usage_observed": true,
+      "generation_ms": 8609.8,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:9d1f2e0fec4a73defbef4a19459b60c8a05d2482e83205f2f9aef64539eafbc1",
+        "response_output_hash": "sha256:66078bc3b75f19832dec2ddef61e58a97f9395a74cab7c35eac50a95d8cfcba2"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-077",
+      "arm": "forge",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "income.date_received",
+            "op": "eq",
+            "val": "2019-09-09"
+          }
+        ],
+        "select": [
+          {
+            "expr": "member.first_name || ' ' || member.last_name",
+            "as": "full_name"
+          },
+          "income.amount"
+        ]
+      },
+      "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '2019-09-09'",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_column_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 4791,
+      "usage_observed": true,
+      "generation_ms": 7915.1,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:b764c200d8a2c6f38cce62eeddab107f9503a99a1806e4ddc7ba6ccaa4f65a6f",
+        "response_output_hash": "sha256:de19c031848832812268e1fe86818c05055d38848469edf6cd7ae4049c960228"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-077",
+      "arm": "direct",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09';",
+      "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09'",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": false,
+      "contract_accuracy": false,
+      "failure": {
+        "stage": "result_contract",
+        "code": "result_column_count_mismatch",
+        "retryable": true
+      },
+      "total_tokens": 2795,
+      "usage_observed": true,
+      "generation_ms": 4566.2,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:31a1ebcd9bddb655f94e78c4f3bf7d11c51be7abc13a47e63a995b56bb39147e",
+        "response_output_hash": "sha256:5b00c447f2af68af04a918570daed4ea350478bf29c44527bfbd675b27c58929"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-085",
+      "arm": "forge",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": {
+        "scan": "Patient",
+        "filter": [
+          {
+            "col": "\"SEX\"",
+            "op": "eq",
+            "val": "F"
+          },
+          {
+            "col": "\"Admission\"",
+            "op": "eq",
+            "val": "-"
+          },
+          {
+            "col": "strftime('%Y', \"Description\")",
+            "op": "eq",
+            "val": "1997"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_distinct",
+            "col": "\"ID\"",
+            "as": "count"
+          }
+        ],
+        "select": [
+          {
+            "expr": "COUNT(DISTINCT \"ID\")",
+            "as": "count"
+          }
+        ]
+      },
+      "sql": "SELECT COUNT(DISTINCT \"ID\") AS count\nFROM Patient\nWHERE \"SEX\" = 'F' AND \"Admission\" = '-' AND strftime('%Y', \"Description\") = '1997'",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 4794,
+      "usage_observed": true,
+      "generation_ms": 9303.5,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:ddf910044a9afa586b53da23bc17abfcaab2d7508f3220ee5ad9814ea00d1997",
+        "response_output_hash": "sha256:abab4a5dc3c3081f91305f757ddae6bcba138209998dd0bb8bc276c4f2cc5c51"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-085",
+      "arm": "direct",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-';",
+      "sql": "SELECT COUNT(*) FROM Patient WHERE SEX = 'F' AND strftime('%Y', Description) = '1997' AND Admission = '-'",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 2685,
+      "usage_observed": true,
+      "generation_ms": 4396.4,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:bb66ef45d36524b82f0bb8a4ebcfec4bbd3eb95936526ef1217052b3ae3d566f",
+        "response_output_hash": "sha256:cb6df5434ba83774d9d1080c56ca87c48795dd0caa82bfc01cf79f933ca0dfc8"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-231",
+      "arm": "forge",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": {
+        "scan": "drivers",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "oldest",
+            "on": {
+              "left": "drivers.dob",
+              "right": "oldest.oldest_dob"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "drivers.nationality",
+            "op": "eq",
+            "val": "German"
+          }
+        ],
+        "select": [
+          "drivers.driverRef"
+        ],
+        "cte": [
+          {
+            "name": "oldest",
+            "query": {
+              "scan": "drivers",
+              "filter": [
+                {
+                  "col": "drivers.nationality",
+                  "op": "eq",
+                  "val": "German"
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "min",
+                  "col": "drivers.dob",
+                  "as": "oldest_dob"
+                }
+              ],
+              "select": [
+                {
+                  "expr": "MIN(drivers.dob)",
+                  "as": "oldest_dob"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "sql": "WITH oldest AS (\n  SELECT MIN(drivers.dob) AS oldest_dob\n  FROM drivers\n  WHERE drivers.nationality = 'German'\n)\nSELECT drivers.driverRef\nFROM drivers\nINNER JOIN oldest ON drivers.dob = oldest.oldest_dob\nWHERE drivers.nationality = 'German'",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 5802,
+      "usage_observed": true,
+      "generation_ms": 11078.1,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:37f61ca8610998f5a54235fdb350e8fce6a2a0720043a53abb95af68106ecb29",
+        "response_output_hash": "sha256:d7c831e904ed99c6f893ab1b9f5bbbbf7b95e88b3a54a800b0809e76d361ba82"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-231",
+      "arm": "direct",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": "SELECT driverRef FROM drivers WHERE nationality = 'German' ORDER BY dob ASC LIMIT 1;",
+      "sql": "SELECT driverRef FROM drivers WHERE nationality = 'German' ORDER BY dob ASC LIMIT 1",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 3513,
+      "usage_observed": true,
+      "generation_ms": 3008.1,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:bd66bfda51bd04830968e80b96df0ec586dd944bf75c0da18f6258887112291d",
+        "response_output_hash": "sha256:adc726d3529c3903d29325c02baa409c29575de7013e7273dc1c4c4dd2a5afc6"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-289",
+      "arm": "forge",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": {
+        "scan": "superhero",
+        "joins": [
+          {
+            "type": "left",
+            "table": "colour",
+            "on": {
+              "left": "superhero.eye_colour_id",
+              "right": "colour.id"
+            }
+          }
+        ],
+        "select": [
+          {
+            "expr": "100.0 * COUNT(CASE WHEN colour.id = 7 THEN superhero.id END) / COUNT(superhero.id)",
+            "as": "percentage"
+          }
+        ]
+      },
+      "sql": "SELECT 100.0 * COUNT(CASE WHEN colour.id = 7 THEN superhero.id END) / COUNT(superhero.id) AS percentage\nFROM superhero\nLEFT JOIN colour ON superhero.eye_colour_id = colour.id",
+      "compile_status": "passed",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 4316,
+      "usage_observed": true,
+      "generation_ms": 9332.2,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:e72ac9cc6bb68611adebc733db185044117bdde59d32046091870e464e06fb64",
+        "response_output_hash": "sha256:8d7d6134535c5bc888c80559a7b14877330da5c5c87cd79ad047744b6b8df8b5"
+      }
+    },
+    {
+      "condition": "observed",
+      "case_id": "md-289",
+      "arm": "direct",
+      "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+      "output": "SELECT 100.0 * COUNT(CASE WHEN eye_colour_id = 7 THEN superhero_name END) / COUNT(superhero_name) FROM superhero;",
+      "sql": "SELECT 100.0 * COUNT(CASE WHEN eye_colour_id = 7 THEN superhero_name END) / COUNT(superhero_name) FROM superhero",
+      "compile_status": "not_applicable",
+      "execution_status": "passed",
+      "scored": true,
+      "official_ea": true,
+      "contract_accuracy": true,
+      "failure": null,
+      "total_tokens": 2264,
+      "usage_observed": true,
+      "generation_ms": 7660,
+      "evidence": {
+        "dispatches": 1,
+        "payload_hash": "sha256:e91f4dfc4ad504826824a453472689bc615fb0047314c3c7d307896a73a69444",
+        "response_output_hash": "sha256:4a650b07b9124ae06d2a18961c4e219450d13ea279e26d40644015cc2d802bc1"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/authorization.json",
+      "sha256": "4caa0f604dc1330b5518bff53b30ff707f4a27e4db3c8714b367401f423c2edd"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/experiment-card.json",
+      "sha256": "c7c0b3444a76cc529cd816c76d9ab8843cb8202766e4df5f536db9bfabf793df"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/off.final.frozen.json",
+      "sha256": "9fa9bda82b0aaf45d1941cb22751d087bb929f137eea3b0031d87b4b97b4da86"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/observed.final.frozen.json",
+      "sha256": "c6f148b1455adc7aee573b77809e8c1571b2b5a3ff14f1bd8e4f04d6c7ed10b8"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/off.run.json",
+      "sha256": "5f8b62617900a28e806c6aa74b58f4128b247817b2f6284127406789a8d5b790"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/observed.run.json",
+      "sha256": "7370af6268599b66b8be1f337cb0822113fd203843bd6e0fcf0c2a674a643dd6"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/off.logs.json",
+      "sha256": "9899144f593e6295df43aee67ef3bc5af2237d22cd25fc77e65ed26a6bd2dfde"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/observed.logs.json",
+      "sha256": "d306fd42a9f05910015a074145728766f1750d7d3da5257afeba29da4319cae9"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/off.replay.json",
+      "sha256": "b5c5ced8e354897c4fcaa79363f6b77437082031a580914edf330ce8663d4505"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/observed.replay.json",
+      "sha256": "5f66c63474d5baa8378d807adf2dfc555a454fd8082b32ed71660d90f11b0b48"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/comparison.json",
+      "sha256": "a0f381e3fb44415e91a694a4a931ca53b52ab48a6df88779cd33b21b05385409"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/integrity.json",
+      "sha256": "e902a4a23327709b24b6dff26c508801bdde3ac4c0db6cf14df5de6f84c441cc"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/official-core-verification.json",
+      "sha256": "6feeeb72be72badaab63754d9d89caa26926d58a4ff5097fe01bd11ec81f3cc7"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/input-verification.json",
+      "sha256": "80328157a93771cbd4cab486fa4914da3115b05f5a34bfb65c78e3008bdeca70"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/ambiguity-review.json",
+      "sha256": "1afc129bbfa0f241b7df116c60dee0edf10d6dbcc98a72df580e0d16742a949a"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/date-audit.json",
+      "sha256": "9055c64c1ab2ce582baca5be1c3f689d11257568975b6314f297282ef261e100"
+    },
+    {
+      "path": ".forge/benchmarks/luna-date-context-20260905/quality.json",
+      "sha256": "fd84532c3bb070d7e32be7090d34b5fef595a18aa0f7cf992abe12cde639f311"
+    }
+  ]
+}

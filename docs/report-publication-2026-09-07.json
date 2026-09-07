@@ -1,0 +1,785 @@
+{
+  "schema_version": "report-publication-v1",
+  "date": "2026-09-07",
+  "scope": "71 historical benchmark, experiment, test and acceptance report files indexed in docs/README.md; 55 accuracy/benchmark files and 16 earlier reports.",
+  "public_report_count": 71,
+  "changed_report_count": 20,
+  "original_archive": ".forge/release-publication-20260907/originals",
+  "original_archive_public": false,
+  "rules": [
+    "Replace personal workstation/home paths with relative or redacted locations; temporary test paths use <local-temp>.",
+    "Redact personal-contact email excerpts from public BIRD sample previews and derived rationale; do not synthesize replacement identities.",
+    "Convert five private .forge Markdown links into explicitly local code-path references, not public download links.",
+    "Preserve numeric, boolean and null values, metric/score fields, case membership, costs, failure states, model choices and source-hash strings."
+  ],
+  "limitations": [
+    "Public copies are not original-byte artifacts. Original hashes embedded inside historical reports continue to describe their original evidence; use the source-to-published hash mapping below.",
+    "Redacted previews and captured commands are not executable replay inputs. Model candidates and private runtime databases are not packaged as a public reproducer.",
+    "No credentials, provider-session stores, runtime databases or third-party dataset files are added by this publication.",
+    "Pattern scanning and source review are not an independent security or anonymization certification.",
+    "Older frozen benchmark protocols are historical and can reject newer source/Assurance revisions; publication does not re-score or silently rebind them."
+  ],
+  "upstream_data_notice": {
+    "source": "BIRD-SQL Mini-Dev, as attributed in the source reports",
+    "license": "CC BY-SA 4.0 per the source dataset metadata",
+    "boundary": "Repository code licensing is unchanged; this publication does not relicense third-party benchmark material."
+  },
+  "reports": [
+    {
+      "path": "docs/accuracy-csv-binding-experiment-card-2026-09-05.json",
+      "source_sha256": "sha256:c6e561599dadc969cad7b548e14fc16703c3332a593dc866377a5e0a8a73602b",
+      "published_sha256": "sha256:c6e561599dadc969cad7b548e14fc16703c3332a593dc866377a5e0a8a73602b",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/accuracy-csv-binding-experiment-card-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/accuracy-evaluation-cohorts-2026-09-05.json",
+      "source_sha256": "sha256:eedead5551d5ed7958d10fe660a6cd5fbeea6dae9ba709744a642140618b5e42",
+      "published_sha256": "sha256:393c627927eca6075ff4b567c0a2e61f74579f4c290e4885660b9583c99eb314",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/accuracy-evaluation-cohorts-2026-09-05.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        7919
+      ],
+      "changed_json_fields": [
+        "$.cohorts.R.cases.467.triage.direct.rationale"
+      ]
+    },
+    {
+      "path": "docs/accuracy-holdout-source-audit-2026-09-05.json",
+      "source_sha256": "sha256:281f97b8f56098dcd75e70f9e4dba9fbafe808847381f6fcdf7ed7ac0bbd7e2f",
+      "published_sha256": "sha256:281f97b8f56098dcd75e70f9e4dba9fbafe808847381f6fcdf7ed7ac0bbd7e2f",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/accuracy-holdout-source-audit-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/accuracy-metadata-binding-fix-2026-09-05.json",
+      "source_sha256": "sha256:f2f848448f49b6663b0c1f3a6bddde42fe4ff0063bb4982a9b36b9eac552110a",
+      "published_sha256": "sha256:f2f848448f49b6663b0c1f3a6bddde42fe4ff0063bb4982a9b36b9eac552110a",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/accuracy-metadata-binding-fix-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/accuracy-metadata-treatment-audit-2026-09-05.json",
+      "source_sha256": "sha256:3758e4820ca0fe0a106b7905e94b5ff9dd82a5ab27df402b0d1c39a4c1a4e8ec",
+      "published_sha256": "sha256:3758e4820ca0fe0a106b7905e94b5ff9dd82a5ab27df402b0d1c39a4c1a4e8ec",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/accuracy-metadata-treatment-audit-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-cte-expression-binding-fix-2026-09-07.json",
+      "source_sha256": "sha256:3675d1d464da0b4c9e91ef23c2e8a689d7013d0ba5098d2fc833d194d8193087",
+      "published_sha256": "sha256:3675d1d464da0b4c9e91ef23c2e8a689d7013d0ba5098d2fc833d194d8193087",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-cte-expression-binding-fix-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-cte-interface-ready-2026-09-07.json",
+      "source_sha256": "sha256:9a9319fe4d829f22468489c40bf436b628583d92a195a275e5facf56cdb890f4",
+      "published_sha256": "sha256:9a9319fe4d829f22468489c40bf436b628583d92a195a275e5facf56cdb890f4",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-cte-interface-ready-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-denominator-scope-ready-2026-09-07.json",
+      "source_sha256": "sha256:d92287418384517a9bfffc9c785c770fb4492497a876890c6a386fd4aebe20e9",
+      "published_sha256": "sha256:d92287418384517a9bfffc9c785c770fb4492497a876890c6a386fd4aebe20e9",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-denominator-scope-ready-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-historical-runs-2026-09-07.json",
+      "source_sha256": "sha256:56d3c2fe77adfe674a4fc2e557fa352b181285c07bcdef4f55a940253cc33396",
+      "published_sha256": "sha256:56d3c2fe77adfe674a4fc2e557fa352b181285c07bcdef4f55a940253cc33396",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-historical-runs-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-alias-fix-2026-09-05.json",
+      "source_sha256": "sha256:9e56a4d6c9fd0d9a0d84107fda2b292fd1c1cac068764c6342a2fd2c231e9e76",
+      "published_sha256": "sha256:9e56a4d6c9fd0d9a0d84107fda2b292fd1c1cac068764c6342a2fd2c231e9e76",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-alias-fix-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-binding-2026-09-05.json",
+      "source_sha256": "sha256:68f8808ad3b59fdcf0ebb99b599533e80551cf38ec9f79f5c127a0e3cc75c1e5",
+      "published_sha256": "sha256:a1dd1fddf3d2cb5140e9d452f3f81b80000c4fba93228e06581b29bb736900bf",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-binding-2026-09-05.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        1291
+      ],
+      "changed_json_fields": [
+        "$.public_database_snapshot_at_replay.path"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-cancellation-evidence-fix-2026-09-06.json",
+      "source_sha256": "sha256:fedb6175bfc8cfcd6d675cc50e08bc3d8b67ea23b07b54dd5d4391bb210b2cda",
+      "published_sha256": "sha256:68f3354dd3a4631555564312574b195de42c3bad44b617492dd8e1f55bcf4c90",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-cancellation-evidence-fix-2026-09-06.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        35,
+        70
+      ],
+      "changed_json_fields": [
+        "$.verification.regression_before.text",
+        "$.verification.checks.2.result.text"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-cte-binding-fix-2026-09-06.json",
+      "source_sha256": "sha256:9d20eeaea9fca60f664aa98f10513c1a09d42586e2b6fe1d3cfe2f6333a14b67",
+      "published_sha256": "sha256:9d20eeaea9fca60f664aa98f10513c1a09d42586e2b6fe1d3cfe2f6333a14b67",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-cte-binding-fix-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-cte-binding-fix-2026-09-06.md",
+      "source_sha256": "sha256:b47cafc030d7f54ef46c1e4eec2c4d845a9f2f905c442bc4f5c5a2a76a9874a4",
+      "published_sha256": "sha256:15ff645036c8e069f7bd083103e42bf064e630ab955d99dd4d3e31f451c05568",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-cte-binding-fix-2026-09-06.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        53
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-cte-interface-2026-09-07.json",
+      "source_sha256": "sha256:dfcb5e6a3faba7d3c2dedb4cf76fedc23696a370cb39b1b0613fdda9e4bf98d2",
+      "published_sha256": "sha256:dfcb5e6a3faba7d3c2dedb4cf76fedc23696a370cb39b1b0613fdda9e4bf98d2",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-cte-interface-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-date-context-2026-09-05.json",
+      "source_sha256": "sha256:97e7842a38a7bd3f3b0f27d9a63d9875ebf81da8e7cfd5c07a9bac21c11acd46",
+      "published_sha256": "sha256:97e7842a38a7bd3f3b0f27d9a63d9875ebf81da8e7cfd5c07a9bac21c11acd46",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-date-context-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-date-context-2026-09-05.md",
+      "source_sha256": "sha256:6e9ed6bed6bc76a3c40f0a69c0f03a5cfa6331368841d1f0f5ab783611e4b2e3",
+      "published_sha256": "sha256:6e9ed6bed6bc76a3c40f0a69c0f03a5cfa6331368841d1f0f5ab783611e4b2e3",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-date-context-2026-09-05.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-denominator-scope-2026-09-07.json",
+      "source_sha256": "sha256:69546731b83a6d0e25aa13c38084d56d45f9d6360e3ae0d17cd0f54aa7458506",
+      "published_sha256": "sha256:69546731b83a6d0e25aa13c38084d56d45f9d6360e3ae0d17cd0f54aa7458506",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-denominator-scope-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-expanded-regression-2026-09-05.json",
+      "source_sha256": "sha256:0e0280b3ab20888183d0d1476ef4f541e3d5e5a74cb5a3002fd950d08268f4ae",
+      "published_sha256": "sha256:a6a59cf5eb520ccfb7bb27ecb1faf3ef0e8931e562dd5e84b4fdd890173b4b84",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-expanded-regression-2026-09-05.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        3410,
+        3414,
+        3418,
+        3422,
+        3426,
+        3430,
+        3434,
+        3438,
+        3442,
+        3446
+      ],
+      "changed_json_fields": [
+        "$.database_snapshots.thrombosis_prediction.path",
+        "$.database_snapshots.formula_1.path",
+        "$.database_snapshots.california_schools.path",
+        "$.database_snapshots.toxicology.path",
+        "$.database_snapshots.codebase_community.path",
+        "$.database_snapshots.superhero.path",
+        "$.database_snapshots.financial.path",
+        "$.database_snapshots.student_club.path",
+        "$.database_snapshots.european_football_2.path",
+        "$.database_snapshots.card_games.path"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-from-scope-fix-2026-09-07.json",
+      "source_sha256": "sha256:9fc45cc81ebb7a25c67a73c98be4b43c3a86ee63e049bd0aa58518fe27cac87a",
+      "published_sha256": "sha256:9fc45cc81ebb7a25c67a73c98be4b43c3a86ee63e049bd0aa58518fe27cac87a",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-from-scope-fix-2026-09-07.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-from-scope-fix-2026-09-07.md",
+      "source_sha256": "sha256:a1fe8cbc2664646bd8e465f5e2f9644697ba6acbc357b344db72c2bea977855b",
+      "published_sha256": "sha256:a1fe8cbc2664646bd8e465f5e2f9644697ba6acbc357b344db72c2bea977855b",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-from-scope-fix-2026-09-07.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-generation-stages-2026-09-06.json",
+      "source_sha256": "sha256:4623e9c993ab9dd0d8d12260c2e91e3436c42e2ae980033847755485bbc5da09",
+      "published_sha256": "sha256:4623e9c993ab9dd0d8d12260c2e91e3436c42e2ae980033847755485bbc5da09",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-generation-stages-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-generation-stages-2026-09-06.md",
+      "source_sha256": "sha256:60d7602bf6e44eeff25268a0c7aa02865d229b7e21d822d4769c321440e246bb",
+      "published_sha256": "sha256:ac75c0b8b095d24e567bee0e5be7504e0678f3ec90d6f1d71587f828a1f2478c",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-generation-stages-2026-09-06.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        57,
+        58,
+        59
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-grain-context-2026-09-06.json",
+      "source_sha256": "sha256:5215f50fc11a4ecc02a2ac3d3490fa9c6739d6449cf1da6eb488d5d6a92d6e0a",
+      "published_sha256": "sha256:084f875c25afaac747deecad2eb43d126bbe1ab55c86725024469306f3aab398",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-grain-context-2026-09-06.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        23596
+      ],
+      "changed_json_fields": [
+        "$.verification.post_run_filesystem_validation.initial_attempt.error"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-grain-context-2026-09-06.md",
+      "source_sha256": "sha256:8810c9dd3f430ef0cb0f2a6035631c209e02e2c784fded89e4efa7f5e9f0c2b9",
+      "published_sha256": "sha256:8810c9dd3f430ef0cb0f2a6035631c209e02e2c784fded89e4efa7f5e9f0c2b9",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-grain-context-2026-09-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-grain-context-preparation-2026-09-06.json",
+      "source_sha256": "sha256:3ee49e50add4f82fa58db9744107d56e4a04df1621f9fac92dab4583c4d4b34a",
+      "published_sha256": "sha256:3ee49e50add4f82fa58db9744107d56e4a04df1621f9fac92dab4583c4d4b34a",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-grain-context-preparation-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-grain-maintenance-2026-09-06.json",
+      "source_sha256": "sha256:17fa2b5a2c822978b1e282cf91e5c07b7354979d05718d3df128cab6fa302a58",
+      "published_sha256": "sha256:6d62d65acdb2dc48299e12a7559eea6b9dab1c0ff62ea72009ca036ca568c7a2",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-grain-maintenance-2026-09-06.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        22
+      ],
+      "changed_json_fields": [
+        "$.regression.before.1.output"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-2026-09-05.json",
+      "source_sha256": "sha256:9bdafa66ede6b32ccaa7da344d4cd980caf9b6705449321dcea9938fe535fa94",
+      "published_sha256": "sha256:9bdafa66ede6b32ccaa7da344d4cd980caf9b6705449321dcea9938fe535fa94",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-2026-09-05.md",
+      "source_sha256": "sha256:844858561328cecb7daf8023a9a74d60a52bc325a923bb26f7ddd5c78b7b858f",
+      "published_sha256": "sha256:844858561328cecb7daf8023a9a74d60a52bc325a923bb26f7ddd5c78b7b858f",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-2026-09-05.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed44-2026-09-05.json",
+      "source_sha256": "sha256:1a09a98b738844df7120edb58926137e8eafe60a8e230f7bff6e7e04ecec3bd2",
+      "published_sha256": "sha256:1a09a98b738844df7120edb58926137e8eafe60a8e230f7bff6e7e04ecec3bd2",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed44-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed44-2026-09-05.md",
+      "source_sha256": "sha256:19894edcdec5efc6c2de3fe1d671e2e04f857dcd3bfb6fa85a0d09726272f796",
+      "published_sha256": "sha256:19894edcdec5efc6c2de3fe1d671e2e04f857dcd3bfb6fa85a0d09726272f796",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed44-2026-09-05.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed45-2026-09-05.json",
+      "source_sha256": "sha256:0fbc01fa64039f6c5106b07c778f0bce76f97236ba32258d7d0b464df8fa9b03",
+      "published_sha256": "sha256:0fbc01fa64039f6c5106b07c778f0bce76f97236ba32258d7d0b464df8fa9b03",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed45-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed45-2026-09-05.md",
+      "source_sha256": "sha256:5569655dbbe9f0e16c52ce48e2cb979ed1801f8f4b5e041ed80e59184f7851fc",
+      "published_sha256": "sha256:5569655dbbe9f0e16c52ce48e2cb979ed1801f8f4b5e041ed80e59184f7851fc",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed45-2026-09-05.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed46-2026-09-06.json",
+      "source_sha256": "sha256:e3d37fe513220923135d3fb0dfcbc0f7205ac5bc1ba41b0a45effbde2aa27225",
+      "published_sha256": "sha256:e3d37fe513220923135d3fb0dfcbc0f7205ac5bc1ba41b0a45effbde2aa27225",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed46-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed46-2026-09-06.md",
+      "source_sha256": "sha256:81e40d0667d3711cfda75955b36af003ee3d9b826008e9386fd3be1b095bc02d",
+      "published_sha256": "sha256:81e40d0667d3711cfda75955b36af003ee3d9b826008e9386fd3be1b095bc02d",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed46-2026-09-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed48-2026-09-06.json",
+      "source_sha256": "sha256:b60fe3f93d396374ea5089da0a1e2e0f9a230e72be9063669a6809f2ecf57b33",
+      "published_sha256": "sha256:5ccd523bc00603cd2a464498c6f10631162f8ae0c7c6c924dd83a0e2a2fbd7f0",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed48-2026-09-06.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        134,
+        1630,
+        1641
+      ],
+      "changed_json_fields": [
+        "$.provenance.protocol_roundtrip_maintenance.verification.0.result.text",
+        "$.verification.maintenance.python_full.text",
+        "$.verification.maintenance.focused_and_pi.0.result.text"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-mixed-d20-seed48-2026-09-06.md",
+      "source_sha256": "sha256:2ab3977b150508e789136be5963d794e0b8787407bb7de612abc2ab0cb7313ea",
+      "published_sha256": "sha256:2ab3977b150508e789136be5963d794e0b8787407bb7de612abc2ab0cb7313ea",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-mixed-d20-seed48-2026-09-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-offline-triage-2026-09-05.json",
+      "source_sha256": "sha256:253e682ed846369a3cb7e6c7d02c2c3c71ad45a22329aba9a85376ce6e5dc913",
+      "published_sha256": "sha256:253e682ed846369a3cb7e6c7d02c2c3c71ad45a22329aba9a85376ce6e5dc913",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-offline-triage-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-offline-triage-2026-09-05.md",
+      "source_sha256": "sha256:0b750f79a986bc0909e3c0a7b0d3f3f0736d58c68b9238762f631f619ef25ef7",
+      "published_sha256": "sha256:0b750f79a986bc0909e3c0a7b0d3f3f0736d58c68b9238762f631f619ef25ef7",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-offline-triage-2026-09-05.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-output-contract-review-2026-09-06.json",
+      "source_sha256": "sha256:0a0eab910f00ba3913e9200990fdf439e6e6024829e795ddcf81c317337e73a6",
+      "published_sha256": "sha256:0a0eab910f00ba3913e9200990fdf439e6e6024829e795ddcf81c317337e73a6",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-output-contract-review-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-output-contract-review-2026-09-06.md",
+      "source_sha256": "sha256:40948a5dad37d1584f093f29db74b6f16dde67f8d1a03cb4175f4e12c43e779e",
+      "published_sha256": "sha256:40948a5dad37d1584f093f29db74b6f16dde67f8d1a03cb4175f4e12c43e779e",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-output-contract-review-2026-09-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-projection-instructions-2026-09-05.json",
+      "source_sha256": "sha256:02969604f46e64c9b5cd21c6ca13a6984d2c4887075a7d051f23435ca6c25722",
+      "published_sha256": "sha256:b59dac931ff210af8ec4a38f75e6b92587758a2f1cadcbdfb951a0a8d604a602",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-projection-instructions-2026-09-05.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        2979,
+        2983,
+        2987,
+        2991,
+        2995
+      ],
+      "changed_json_fields": [
+        "$.database_snapshots.toxicology.path",
+        "$.database_snapshots.superhero.path",
+        "$.database_snapshots.thrombosis_prediction.path",
+        "$.database_snapshots.codebase_community.path",
+        "$.database_snapshots.card_games.path"
+      ]
+    },
+    {
+      "path": "docs/benchmark-luna-scalar-cte-fix-2026-09-06.json",
+      "source_sha256": "sha256:2360ad7431c6691b79152e3d0d1e60d4dc0df8504e1260d4f33119cc6e19b4b2",
+      "published_sha256": "sha256:2360ad7431c6691b79152e3d0d1e60d4dc0df8504e1260d4f33119cc6e19b4b2",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-scalar-cte-fix-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-standard-d20-2026-09-05.json",
+      "source_sha256": "sha256:eca6b674670f97aaeac58e848d287bab09b9e646bda75ee58cf0810e6ae93a7b",
+      "published_sha256": "sha256:eca6b674670f97aaeac58e848d287bab09b9e646bda75ee58cf0810e6ae93a7b",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-standard-d20-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-strict-output-2026-09-05.json",
+      "source_sha256": "sha256:ebf40971bf892a7f1522be380f34aecdf59d727471479bbe598b95c1081920bf",
+      "published_sha256": "sha256:ebf40971bf892a7f1522be380f34aecdf59d727471479bbe598b95c1081920bf",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-strict-output-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-strict-paired-2026-09-05.json",
+      "source_sha256": "sha256:d9a7c8f84eef88f28450f5842a5116ba591df712ada3aa0480fef26d02141186",
+      "published_sha256": "sha256:d9a7c8f84eef88f28450f5842a5116ba591df712ada3aa0480fef26d02141186",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-strict-paired-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-value-context-2026-09-06.json",
+      "source_sha256": "sha256:6077229f0efb9ef678eed4e14a37aa50c23575f89abb197b81c4592d16e739be",
+      "published_sha256": "sha256:6077229f0efb9ef678eed4e14a37aa50c23575f89abb197b81c4592d16e739be",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-value-context-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-value-context-2026-09-06.md",
+      "source_sha256": "sha256:e36635ae1c4a4e54466fd0ee404d21f323105026e41f9c472a2418d7e8867303",
+      "published_sha256": "sha256:e36635ae1c4a4e54466fd0ee404d21f323105026e41f9c472a2418d7e8867303",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-value-context-2026-09-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-value-context-ready-2026-09-06.json",
+      "source_sha256": "sha256:28d269aac945ce49ffc5d97e5611ba655448674fb8006564308119f0cec1644e",
+      "published_sha256": "sha256:28d269aac945ce49ffc5d97e5611ba655448674fb8006564308119f0cec1644e",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-value-context-ready-2026-09-06.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-luna-value-context-ready-2026-09-06.md",
+      "source_sha256": "sha256:bc08bc3e37efc3fe2a27cd3ed3fc1977d75689356c157a0fcf7cf189503c74f8",
+      "published_sha256": "sha256:bc08bc3e37efc3fe2a27cd3ed3fc1977d75689356c157a0fcf7cf189503c74f8",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-luna-value-context-ready-2026-09-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-r500-v8-binding-audit-2026-09-06.json",
+      "source_sha256": "sha256:070e38d6d02618b8f59e3f9435b365aed791e18cfdc2bcd09bf80122bfdf89cc",
+      "published_sha256": "sha256:e6fd6e2f267997ee134539bcfbfd8117f83fcae6ff62a7255862ea88e380eb18",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-r500-v8-binding-audit-2026-09-06.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        589,
+        634
+      ],
+      "changed_json_fields": [
+        "$.process_closure.processes.0.details.spec.cwd",
+        "$.process_closure.processes.1.details.spec.cwd"
+      ]
+    },
+    {
+      "path": "docs/benchmark-r500-v8-binding-audit-2026-09-06.md",
+      "source_sha256": "sha256:0293feda7f0facfa07d326c6d45f74b81c23f3a014960b8044d2c4b441ab5188",
+      "published_sha256": "sha256:63f55b1c754acedf17efbf7cd60f29775aa60604c7722037cdc97f4c393dd909",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-r500-v8-binding-audit-2026-09-06.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        80
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-sol-error-triage-2026-09-05.json",
+      "source_sha256": "sha256:ec2b3aa8b1aae93b55a2a03e884e408a7e74780e04f880681856aec396f92c36",
+      "published_sha256": "sha256:39cdfcf83d51d2f4dbb2618d54021f326598b668bca08f25565473fde1335573",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-sol-error-triage-2026-09-05.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        64819,
+        64820,
+        64877,
+        64878,
+        64902,
+        64909
+      ],
+      "changed_json_fields": [
+        "$.cases.467.gold.preview.0.0",
+        "$.cases.467.gold.preview.0.1",
+        "$.cases.467.arms.forge.preview.0.0",
+        "$.cases.467.arms.forge.preview.0.1",
+        "$.cases.467.arms.direct.preview.0.0",
+        "$.cases.467.arms.direct.triage.rationale"
+      ]
+    },
+    {
+      "path": "docs/benchmark-sol-metric-replay-2026-09-05.json",
+      "source_sha256": "sha256:2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796",
+      "published_sha256": "sha256:2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-sol-metric-replay-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark-standards-engineering-2026-09-05.json",
+      "source_sha256": "sha256:07181975c230e5cd80499cec17ad9f9d2c0e9428d2f91c2441d491a10f193e46",
+      "published_sha256": "sha256:07181975c230e5cd80499cec17ad9f9d2c0e9428d2f91c2441d491a10f193e46",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark-standards-engineering-2026-09-05.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/benchmark_failure_analysis_2026-03-18.md",
+      "source_sha256": "sha256:3504120a9d8e012d79b7be0dc9a52b7729f5bda91bf8633fa9f4d0356c5a0815",
+      "published_sha256": "sha256:3504120a9d8e012d79b7be0dc9a52b7729f5bda91bf8633fa9f4d0356c5a0815",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/benchmark_failure_analysis_2026-03-18.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/chart-engine-bakeoff-2026-08-24.md",
+      "source_sha256": "sha256:67a014c0fb71732caa0b3f0ec31e9561a42a64ae7b5fe86142b109fbf85c77bc",
+      "published_sha256": "sha256:e6dcefe27acf36b073942750a53422ce6ab58fb97935478df886a554e693c82b",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/chart-engine-bakeoff-2026-08-24.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        61,
+        174,
+        175
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/chart-storytelling-echarts-focused-evidence-2026-08-24.md",
+      "source_sha256": "sha256:536016a9a28b7442fe61b77a8f463b5a309e9fa64e164e6f1b98f09c924e088e",
+      "published_sha256": "sha256:3d64fdfb11e9ee9a83ad1c88c980be47eb7a63a95d521273ae16cf68ad593d61",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/chart-storytelling-echarts-focused-evidence-2026-08-24.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        74,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/chart-storytelling-r0-evidence-2026-08-24.md",
+      "source_sha256": "sha256:8c6308b5ee7799c012df582f6c3a2905ab2ff3777226d0aea6fef562723771dc",
+      "published_sha256": "sha256:5acf0a8b7446b4c45de85d353f5781f5abc7f2da3f3bc6a4ce530e80594f4705",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/chart-storytelling-r0-evidence-2026-08-24.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        80
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/delivery-assessment-2026-05-07.md",
+      "source_sha256": "sha256:e946bd83ce853b38981b23e166fd0ad503c940b9f01e9869dddbf2c63b5fff50",
+      "published_sha256": "sha256:e946bd83ce853b38981b23e166fd0ad503c940b9f01e9869dddbf2c63b5fff50",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/delivery-assessment-2026-05-07.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/golden-journey-acceptance-2026-08-24.md",
+      "source_sha256": "sha256:a52e9a43fbc2ba395c1b100b50006a62e128f904ac32d3b1d92b7792a5f8e21a",
+      "published_sha256": "sha256:af171d39d751a4f7d3c4116b099a1aaf016601159d0b62a4b4ac98ee28755657",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/golden-journey-acceptance-2026-08-24.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        55
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/golden-journey-p0-closure-2026-08-24.md",
+      "source_sha256": "sha256:b213ca2dd7b9ad04dcf3e24a9830149a8700653eafd823ca4b3cc2af29bb63dd",
+      "published_sha256": "sha256:87dc5c6aaf37eede217de17d9158f599031e4acb80163680e49d949fbbc19144",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/golden-journey-p0-closure-2026-08-24.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        89
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/product-spine-sp1-evidence-2026-08-25.md",
+      "source_sha256": "sha256:a3e746001c887a62b94d8d3c231a3dad70409289381aca7b6f357017b072756c",
+      "published_sha256": "sha256:a3e746001c887a62b94d8d3c231a3dad70409289381aca7b6f357017b072756c",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/product-spine-sp1-evidence-2026-08-25.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/product-spine-sp2-evidence-2026-08-25.md",
+      "source_sha256": "sha256:f1902264b518022fe9005ce1ff51ecbd3156fc7196d16fa7c33a64fec6f04777",
+      "published_sha256": "sha256:f1902264b518022fe9005ce1ff51ecbd3156fc7196d16fa7c33a64fec6f04777",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/product-spine-sp2-evidence-2026-08-25.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/product-spine-sp3-evidence-2026-08-25.md",
+      "source_sha256": "sha256:eea43f188d8ec01e52dfcd4892031e4d2273f1d82ad963b3ca948b58450fbd6f",
+      "published_sha256": "sha256:eea43f188d8ec01e52dfcd4892031e4d2273f1d82ad963b3ca948b58450fbd6f",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/product-spine-sp3-evidence-2026-08-25.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/product-spine-sp4-evidence-2026-08-25.md",
+      "source_sha256": "sha256:6e357681107c23ab16ce9d38a5a1b972f75b09874137b433cdf237c2afe1ee4c",
+      "published_sha256": "sha256:d4fda79e44d6d207e86675f1454d1f769c71a692d4c218bb2371287a6c1ef984",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/product-spine-sp4-evidence-2026-08-25.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        45
+      ],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/product-spine-sp5-evidence-2026-08-25.md",
+      "source_sha256": "sha256:c14a0b2387752d5d6036d48df95338783bf74080f3bce1dc612086034f77f4ca",
+      "published_sha256": "sha256:c14a0b2387752d5d6036d48df95338783bf74080f3bce1dc612086034f77f4ca",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/product-spine-sp5-evidence-2026-08-25.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/test-report-2026-05-05.md",
+      "source_sha256": "sha256:ca25b6c3ab2b156cfab1c558ece122538599d992db07705254c81abce7471c93",
+      "published_sha256": "sha256:ca25b6c3ab2b156cfab1c558ece122538599d992db07705254c81abce7471c93",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/test-report-2026-05-05.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/test-report-2026-05-06.md",
+      "source_sha256": "sha256:8a1968a6fbb79e23d165a4e5cba6fb09dee5d07917b8ab8fd8b7a6db9fbc8c78",
+      "published_sha256": "sha256:8a1968a6fbb79e23d165a4e5cba6fb09dee5d07917b8ab8fd8b7a6db9fbc8c78",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/test-report-2026-05-06.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/test-report-2026-07-13.md",
+      "source_sha256": "sha256:58ce841590d348a15ea63b19e8013696377500989006a041aa3c61d51748fcd1",
+      "published_sha256": "sha256:58ce841590d348a15ea63b19e8013696377500989006a041aa3c61d51748fcd1",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/test-report-2026-07-13.md",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/web-product-shell-w3a-evidence-2026-08-24.md",
+      "source_sha256": "sha256:8350f5cb8add0b5c703c744dbb75930decb7b0e26da50d0a2810ba52116ba8aa",
+      "published_sha256": "sha256:80f21671c9cfcc024cb71b1a3101be8b16a476f191ce543b8ac25f867e127ad9",
+      "source_archive": ".forge/release-publication-20260907/originals/docs/web-product-shell-w3a-evidence-2026-08-24.md",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        59,
+        60,
+        61,
+        62
+      ],
+      "changed_json_fields": []
+    }
+  ]
+}

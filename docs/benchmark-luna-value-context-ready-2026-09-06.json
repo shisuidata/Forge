@@ -1,0 +1,342 @@
+{
+  "schema_version": "forge-experiment-brief-v1",
+  "requirement": "REQ-2026-09-06-054",
+  "date": "2026-09-06",
+  "status": "offline_implementation_verified_paid_canary_not_authorized",
+  "model_calls": 0,
+  "model_accuracy_improvement_demonstrated": false,
+  "default": "off",
+  "scope": {
+    "factor": "value_context",
+    "mode": [
+      "off",
+      "observed"
+    ],
+    "field": [
+      "debit_card_specializing",
+      "gasstations",
+      "Segment"
+    ],
+    "max_values": 16,
+    "max_value_bytes": 256,
+    "query_timeout_seconds": 5,
+    "visibility": "Match selected db and exact table.column before scanning/projection; no same-name column substitution.",
+    "collection": "Read-only SQLite; preserve exact BINARY-distinct strings; limit+1; no values on overflow/non-text/overlong/error, empty distinguished.",
+    "provenance": "DB/table metadata hashes, exact extraction query, parameters, limits, snapshot coverage; observed values are data, not instructions or authoritative business domain.",
+    "transport": "Same suffix to both arms, separately hash value evidence and full instructions; ResultContract, base schema, Compiler, Gold unchanged.",
+    "protocol": "bird-protocol-v4, source drift forbidden for value_context factor; no old frozen resume."
+  },
+  "protocols": {
+    "control": "sha256:dc6cd1a7c04fdb847b263238553e57cc7389b46d2976716aa15df18b1a93d05a",
+    "treatment": "sha256:26631020a73758cf3c40e8318ab3f272cb597790c34cdb61faa83d67e455e66f",
+    "schema_version": "bird-protocol-v4",
+    "mode_only_comparable": true,
+    "nominal_budget_per_manifest": 8,
+    "nominal_manifest_budget_is_not_user_authorization": true,
+    "old_v3_actual_cli_exit": 2
+  },
+  "source_evidence": {
+    "version": "bird-value-context-evidence-v1",
+    "db_id": "debit_card_specializing",
+    "table": "gasstations",
+    "column": "Segment",
+    "status": "complete",
+    "values": [
+      "Discount",
+      "Noname",
+      "Other",
+      "Premium",
+      "Value for money"
+    ],
+    "extraction": {
+      "query": "SELECT DISTINCT CASE WHEN typeof(\"Segment\") = 'text' AND length(CAST(\"Segment\" AS BLOB)) <= ? THEN \"Segment\" ELSE NULL END COLLATE BINARY, typeof(\"Segment\") FROM \"gasstations\" WHERE \"Segment\" IS NOT NULL LIMIT ?",
+      "parameters": [
+        256,
+        17
+      ]
+    },
+    "bounds": {
+      "max_values": 16,
+      "max_value_bytes": 256,
+      "query_timeout_seconds": 5
+    },
+    "coverage": {
+      "method": "binary_distinct_non_null_storage_scan",
+      "scan_complete": true,
+      "business_authoritative": false,
+      "future_domain_guarantee": false,
+      "column_equality_collation_established": false
+    },
+    "source_hashes": {
+      "tables_sha256": "48aa9febe7282d1690f3ed1f222dc040c182df83812ba4e9bee956084d99c8ff",
+      "inputs": [
+        {
+          "path": "dev_tables.json",
+          "sha256": "sha256:48aa9febe7282d1690f3ed1f222dc040c182df83812ba4e9bee956084d99c8ff"
+        },
+        {
+          "path": "dev_databases/debit_card_specializing/debit_card_specializing.sqlite",
+          "sha256": "sha256:b3d149ad05746dbbe5116e229e17e18f09c39db43cf117d9ef3441753608b691"
+        }
+      ]
+    }
+  },
+  "integrity": [
+    {
+      "case_id": "md-009",
+      "before_off_bytes_identical": true,
+      "base_snapshot_schema_identical": true,
+      "arms_identical_suffix": true,
+      "added_bytes": 1642,
+      "field_visible": true,
+      "status": "complete"
+    },
+    {
+      "case_id": "md-026",
+      "before_off_bytes_identical": true,
+      "base_snapshot_schema_identical": true,
+      "arms_identical_suffix": true,
+      "added_bytes": 1642,
+      "field_visible": true,
+      "status": "complete"
+    },
+    {
+      "case_id": "md-002",
+      "before_off_bytes_identical": true,
+      "base_snapshot_schema_identical": true,
+      "arms_identical_suffix": true,
+      "added_bytes": 0,
+      "field_visible": false,
+      "status": null
+    },
+    {
+      "case_id": "md-018",
+      "before_off_bytes_identical": true,
+      "base_snapshot_schema_identical": true,
+      "arms_identical_suffix": true,
+      "added_bytes": 1642,
+      "field_visible": true,
+      "status": "complete"
+    }
+  ],
+  "source_groups": {
+    "unchanged": [
+      "prompt",
+      "schema",
+      "compiler",
+      "safety",
+      "official_snapshot"
+    ],
+    "changed": [
+      "context",
+      "evaluator"
+    ],
+    "reason": "Context implementation and same-file protocol/context routes change these source fingerprints; scorer behavior unchanged in replay.",
+    "dataset_hashes_unchanged": true
+  },
+  "saved_candidate_replay": {
+    "origin": "REQ-053 original Structured Sol run pbr_6778bf9d34ae42fba0b070a5f9c154ba, selected saved outputs",
+    "unique_candidates": 8,
+    "conditions": 2,
+    "evaluations": 16,
+    "sql_and_evaluation_equal_across_conditions": true,
+    "target_original_passes": 1,
+    "target_denominator": 4,
+    "control_original_passes": 4,
+    "control_denominator": 4,
+    "results": [
+      {
+        "case_id": "md-009",
+        "arm": "forge",
+        "official_ex": true,
+        "contract_accuracy": true,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-009",
+        "arm": "direct",
+        "official_ex": false,
+        "contract_accuracy": false,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-026",
+        "arm": "forge",
+        "official_ex": false,
+        "contract_accuracy": false,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-026",
+        "arm": "direct",
+        "official_ex": false,
+        "contract_accuracy": false,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-002",
+        "arm": "forge",
+        "official_ex": true,
+        "contract_accuracy": true,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-002",
+        "arm": "direct",
+        "official_ex": true,
+        "contract_accuracy": true,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-018",
+        "arm": "forge",
+        "official_ex": true,
+        "contract_accuracy": true,
+        "execution_status": "passed"
+      },
+      {
+        "case_id": "md-018",
+        "arm": "direct",
+        "official_ex": true,
+        "contract_accuracy": true,
+        "execution_status": "passed"
+      }
+    ],
+    "not_new_luna_generation": true
+  },
+  "verification": {
+    "python": {
+      "passed": 873,
+      "skipped": 26,
+      "warning": "Existing protobuf utcfromtimestamp deprecation"
+    },
+    "pi": {
+      "typecheck": "passed",
+      "passed": 151,
+      "warning": "Node SQLite experimental"
+    },
+    "cli": "Actual freeze/validate control+treatment pass; unsupported old-v3 freeze rejected",
+    "http": "CLI contexts equal HTTP; 16 original candidate evaluations equal; no auth401; changed field409",
+    "pi_consumer": {
+      "actual_pi_runtime": true,
+      "actual_http": true,
+      "synthetic_model_and_task_factory": true,
+      "real_sdk_provider_generation": false,
+      "synthetic_dispatches": 8,
+      "positive": "completed",
+      "drift_negative": "failed before new dispatch",
+      "external_network_attempts": 0,
+      "accuracy_evidence": false
+    },
+    "test_boundaries": [
+      "Premium/premium preserved under NOCASE declaration",
+      "NULL/empty/empty-string distinction",
+      "Case/db/table/column exact visibility",
+      "Defensive copy and cache invalidation",
+      "High cardinality and UTF-8 byte limits without partial values",
+      "Non-text/BLOB/invalid UTF-8/UTF-16 refusal",
+      "Quoted identifiers and physical-schema mismatch",
+      "Source/path drift and five-second progress timeout",
+      "Active and fully-checkpointed WAL create-sidecar regression",
+      "Frozen hash tamper and field/cap/source/other-setting drift"
+    ]
+  },
+  "runtime": {
+    "python": "3.14.7",
+    "sqlite": "3.53.4",
+    "sqlglot": "29.0.1",
+    "jsonschema": "4.26.0",
+    "numpy": "2.5.2",
+    "pydantic": "2.13.5"
+  },
+  "environment_change": {
+    "unplanned_uv_sync": true,
+    "numpy": {
+      "before": "2.5.1",
+      "after": "2.5.2"
+    },
+    "pydantic": {
+      "before": "2.13.4",
+      "after": "2.13.5"
+    },
+    "pydantic_core": {
+      "before": null,
+      "after": "2.46.5",
+      "before_unknown": true
+    },
+    "source": "Existing uv.lock/PyPI pins; no lockfile edit",
+    "final_control_and_treatment_same_environment": true,
+    "pre_change_artifact_use": "Only byte equality of off inputs, not controlled accuracy baseline"
+  },
+  "cleanup": {
+    "api_stopped": true,
+    "port_18772_closed": true,
+    "throwaway_script_removed": true,
+    "synthetic_agent_databases_removed": true,
+    "no_credentials_read": true,
+    "no_commit_push_deploy": true
+  },
+  "paid_canary_proposal": {
+    "status": "awaiting_separate_user_authorization",
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "max_model_calls": 16,
+    "design": "4 fixed D cases × 2 arms × off/observed; current Pi runtime only; not rolling seed49",
+    "cases": [
+      "md-009",
+      "md-026",
+      "md-002",
+      "md-018"
+    ],
+    "only_changed_factor": "value_context.mode",
+    "execution": {
+      "gold_policy": "require_all",
+      "generation_timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "stop_on_infrastructure_or_generation_failure": true,
+      "no_automatic_replay_or_extra_calls": true
+    },
+    "proposed_acceptance": {
+      "target_cases": [
+        "md-009",
+        "md-026"
+      ],
+      "treatment_targets": "EX and Contract both pass all four target arms; at least one previously failing concurrent-control target arm newly passes; no regression",
+      "control_cases": [
+        "md-002",
+        "md-018"
+      ],
+      "controls": "EX and Contract pass all four control arms in both conditions; md-002 unchanged-input variation never counted as treatment gain",
+      "coverage": "All 16 generations scored; no unknown labels excluded or silently repaired",
+      "token_gate": "Complete observed token usage for all 16 calls; treatment total_tokens <= 1.25 * control total_tokens. Unknown usage fails cost gate.",
+      "money": "Billing amount unknown; token gate is not a currency-cost estimate",
+      "decision": "Passing is only a tiny development canary, not adoption/generalization/H/R0.6. Otherwise keep off; no expanded sample or changed thresholds."
+    }
+  },
+  "limitations": [
+    "BINARY distinct storage values do not define equality collation or future/business domain.",
+    "Untrusted-data labeling/bounds are not proof of prompt-injection immunity.",
+    "No real model generation; no accuracy/cost improvement claim.",
+    "Historical source/environment and v3 differ; old frozen protocols are retained, not migrated.",
+    "Four known public development cases cannot replace holdout or independent adoption evidence."
+  ],
+  "evidence_root": ".forge/benchmarks/categorical-value-context-20260906",
+  "evidence_files": [
+    "experiment-card.json",
+    "control.frozen.json",
+    "treatment.frozen.json",
+    "before-off.frozen.json",
+    "environment-change.json",
+    "freeze-commands.json",
+    "cli-validation.json",
+    "http-replay-proof.json",
+    "smoke.frozen.json",
+    "pi-smoke-final.json",
+    "pi-positive-run.json",
+    "smoke-reproduction.json",
+    "verification-final.json",
+    "cleanup.json",
+    "file-hashes.json"
+  ]
+}

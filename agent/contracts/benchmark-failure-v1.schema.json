@@ -17,6 +17,7 @@
         "compile",
         "assurance",
         "execution",
+        "gold",
         "result_contract",
         "official_ea"
       ]
@@ -39,6 +40,7 @@
         "dialect_unsupported",
         "execution_timeout",
         "execution_failed",
+        "gold_execution_failed",
         "result_row_count_mismatch",
         "result_column_count_mismatch",
         "result_column_alignment_ambiguous",

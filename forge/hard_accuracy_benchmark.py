@@ -39,19 +39,54 @@ from forge.benchmark_methods import (
 )
 from forge.executor import validate_readonly_sql
 
+# SQLite folds ASCII identifier case, not arbitrary Unicode characters.
+_SQLITE_IDENTIFIER_FOLD = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
 _ROOT = Path(__file__).resolve().parents[1]
 _SUITE_DIR = _ROOT / "tests" / "datasets" / "bird_mini_dev_hard"
 _CASES_PATH = _SUITE_DIR / "cases.json"
 _TABLES_PATH = _SUITE_DIR / "tables.json"
 _MANIFEST_PATH = _SUITE_DIR / "dataset.json"
 _GOLD_RESULTS_PATH = _SUITE_DIR / "gold_results.json"
-_BIRD_RUNTIME = (
-    _ROOT
-    / ".forge"
-    / "benchmarks"
-    / "bird-mini-dev"
-    / "minidev"
-    / "MINIDEV"
+
+
+def _bird_runtime_is_complete(candidate: Path) -> bool:
+    cases_path = candidate / "mini_dev_sqlite.json"
+    tables_path = candidate / "dev_tables.json"
+    databases = candidate / "dev_databases"
+    try:
+        cases = json.loads(cases_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    db_ids = {
+        str(case.get("db_id", ""))
+        for case in cases
+        if isinstance(case, dict) and case.get("db_id")
+    }
+    return (
+        bool(db_ids)
+        and tables_path.is_file()
+        and all((databases / db_id / f"{db_id}.sqlite").is_file() for db_id in db_ids)
+    )
+
+
+def _resolve_bird_runtime_root(base: Path) -> Path:
+    """Accept flattened, partial, and official ZIP Mini-Dev layouts."""
+    candidates = (base, base / "MINIDEV")
+    for candidate in candidates:
+        if _bird_runtime_is_complete(candidate):
+            return candidate
+    for candidate in candidates:
+        if (
+            (candidate / "mini_dev_sqlite.json").is_file()
+            and (candidate / "dev_tables.json").is_file()
+            and (candidate / "dev_databases").is_dir()
+        ):
+            return candidate
+    return base
+
+_BIRD_RUNTIME = _resolve_bird_runtime_root(
+    _ROOT / ".forge" / "benchmarks" / "bird-mini-dev" / "minidev" / "MINIDEV"
 )
 _OFFICIAL_CASES_PATH = _BIRD_RUNTIME / "mini_dev_sqlite.json"
 _OFFICIAL_TABLES_PATH = _BIRD_RUNTIME / "dev_tables.json"
@@ -192,10 +227,14 @@ def _case_id(case: dict[str, Any]) -> str:
     return str(case.get("case_id", case["question_id"]))
 
 
-def _column_descriptions(db_id: str) -> dict[str, dict[str, dict[str, str]]]:
+def _column_descriptions(
+    db_id: str, *, description_dir: Path | None = None
+) -> dict[str, dict[str, dict[str, str]]]:
     result: dict[str, dict[str, dict[str, str]]] = {}
-    for path in sorted(_description_dir(db_id).glob("*.csv")):
-        table = path.stem
+    for path in sorted((_description_dir(db_id) if description_dir is None else description_dir).glob("*.csv")):
+        table = path.stem.translate(_SQLITE_IDENTIFIER_FOLD)
+        if table in result:
+            raise HardBenchmarkError("Ambiguous BIRD table descriptions")
         columns: dict[str, dict[str, str]] = {}
         rows = None
         for encoding in ("utf-8-sig", "cp1252"):
@@ -212,6 +251,9 @@ def _column_descriptions(db_id: str) -> dict[str, dict[str, dict[str, str]]]:
                 name = str(row.get("original_column_name") or "").strip()
                 if not name:
                     continue
+                name = name.translate(_SQLITE_IDENTIFIER_FOLD)
+                if name in columns:
+                    raise HardBenchmarkError("Ambiguous BIRD column descriptions")
                 columns[name] = {
                     "label": str(row.get("column_name") or "").strip(),
                     "description": str(row.get("column_description") or "").strip(),
@@ -248,7 +290,9 @@ def structure_projection(table_entry: dict[str, Any]) -> dict[str, Any]:
         if int(table_index) < 0:
             continue
         table_name = table_names[int(table_index)]
-        description = descriptions.get(table_name, {}).get(str(column_name), {})
+        description = descriptions.get(table_name.translate(_SQLITE_IDENTIFIER_FOLD), {}).get(
+            str(column_name).translate(_SQLITE_IDENTIFIER_FOLD), {}
+        )
         columns[table_name].append(
             {
                 "name": column_name,
@@ -341,7 +385,7 @@ def execute_result(
     validate_readonly_sql(sql)
     deadline = time.monotonic() + timeout_seconds
     interrupted = False
-    db = sqlite3.connect(db_path)
+    db = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
 
     def abort_overlong_query() -> int:
         nonlocal interrupted
@@ -352,6 +396,7 @@ def execute_result(
 
     db.set_progress_handler(abort_overlong_query, 10_000)
     try:
+        db.execute("PRAGMA query_only=ON")
         cursor = db.execute(sql)
         columns = [item[0] for item in cursor.description or []]
         rows = cursor.fetchall()

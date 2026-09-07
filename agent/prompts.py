@@ -48,6 +48,190 @@ Forge JSON 会被系统自动编译成 SQL——你只需要按格式填 JSON，
 只输出 JSON 对象，不要任何解释，不要 markdown 代码块。\
 """
 
+STRUCTURED_BENCHMARK_PROMPT_REVISION = "forge-structured-benchmark-v1"
+DENOMINATOR_SCOPE_PROMPT_REVISION = "forge-structured-benchmark-denominator-v1"
+CTE_INTERFACE_PROMPT_REVISION = "forge-structured-benchmark-cte-interface-v1"
+STRUCTURED_BENCHMARK_PROMPT_REVISIONS = (
+    STRUCTURED_BENCHMARK_PROMPT_REVISION, DENOMINATOR_SCOPE_PROMPT_REVISION,
+    CTE_INTERFACE_PROMPT_REVISION,
+)
+
+_CTE_INTERFACE_EXAMPLE = """\
+## 合成示例：CTE的声明、导出与下游引用
+
+以下虚构示例只说明需要CTE时的输出接口，不是当前结构或答案，不要复制示例名称。简单筛选或分组能完成的问题不必增加CTE；也可使用等价、简洁的window/qualify结构。
+
+问题：返回记录数最多的所有频道及其记录数，保留并列，按频道名排序。
+
+示例结构：
+
+```sql
+CREATE TABLE readings (reading_id INTEGER PRIMARY KEY, channel TEXT NOT NULL);
+```
+
+本层的reading_count来自agg.as，窗口排序引用该本层别名；position来自window.as。CTE的显式select导出channel、reading_count和position，外层通过实际导出名筛选，只返回所需的前两列。辅助排名不进入最终答案。
+
+Forge JSON：
+
+```json
+{
+  "cte": [
+    {
+      "name": "channel_ranks",
+      "query": {
+        "scan": "readings",
+        "group": [
+          "readings.channel"
+        ],
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "reading_count"
+          }
+        ],
+        "window": [
+          {
+            "fn": "dense_rank",
+            "order": [
+              {
+                "col": "reading_count",
+                "dir": "desc"
+              }
+            ],
+            "as": "position"
+          }
+        ],
+        "select": [
+          "readings.channel",
+          "reading_count",
+          "position"
+        ]
+      }
+    }
+  ],
+  "scan": "channel_ranks",
+  "filter": [
+    {
+      "col": "channel_ranks.position",
+      "op": "eq",
+      "val": 1
+    }
+  ],
+  "select": [
+    "channel_ranks.channel",
+    "channel_ranks.reading_count"
+  ],
+  "sort": [
+    {
+      "col": "channel_ranks.channel",
+      "dir": "asc"
+    }
+  ]
+}
+```
+
+提交唯一一次工具调用前，核对每个下游引用的CTE列是否确由该CTE的select导出；若select重命名了表达式，下游使用重命名后的列名。本层agg/window别名与引用必须一致，不能把声明本身当作已导出。只在本层having/sort/window中使用的辅助量不必全部导出；显式限定源列不是同名的本层聚合别名。
+"""
+
+_DENOMINATOR_SCOPE_EXAMPLE = """\
+## 合成示例：分母范围独立于分子的关联筛选
+
+以下是虚构数据库的一个方法示例，不是当前数据库结构或当前题目的答案；不要复制示例表名、字段或条件到当前查询。分母范围由题意决定：只有明确要求全体时才取全集，若限定为有相关记录等子集，则必须保留该范围。
+
+问题：Among ALL accounts, percentage with at least one paid invoice。
+
+示例结构（外键有效）：
+```sql
+PRAGMA foreign_keys = ON;
+CREATE TABLE accounts (
+  account_id INTEGER PRIMARY KEY NOT NULL
+);
+CREATE TABLE invoices (
+  invoice_id INTEGER PRIMARY KEY NOT NULL,
+  account_id INTEGER,
+  status TEXT NOT NULL CHECK (status IN ('paid', 'unpaid')),
+  FOREIGN KEY (account_id) REFERENCES accounts(account_id)
+);
+```
+
+先按题意确定分母范围：ALL accounts 包含没有发票的账户，分母直接统计 accounts。分子对 paid 发票的 account_id 去重；已声明的外键保证非空引用属于账户，COUNT(DISTINCT ...) 不计 NULL。两个无分组的标量 CTE 分别聚合，再 CROSS JOIN 计算百分比；NULLIF 处理空全集，只投影比例，不额外输出计数，也不自行舍入。 真实库没有相同约束时，不能假定外键引用完整。
+
+Forge JSON：
+```json
+{
+  "cte": [
+    {
+      "name": "denominator",
+      "query": {
+        "scan": "accounts",
+        "agg": [
+          {
+            "fn": "count_all",
+            "as": "n"
+          }
+        ],
+        "select": [
+          "n"
+        ]
+      }
+    },
+    {
+      "name": "numerator",
+      "query": {
+        "scan": "invoices",
+        "filter": [
+          {
+            "col": "invoices.status",
+            "op": "eq",
+            "val": "paid"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "count_distinct",
+            "col": "invoices.account_id",
+            "as": "n"
+          }
+        ],
+        "select": [
+          "n"
+        ]
+      }
+    }
+  ],
+  "scan": "denominator",
+  "joins": [
+    {
+      "type": "cross",
+      "table": "numerator"
+    }
+  ],
+  "select": [
+    {
+      "expr": "100.0 * numerator.n / NULLIF(denominator.n, 0)",
+      "as": "percentage"
+    }
+  ]
+}
+```
+"""
+
+_STRUCTURED_BENCHMARK_INSTRUCTIONS = """\
+你是 Forge 查询规划器。Forge JSON 的结构由 `emit_forge_query` 工具 Schema 提供；最终只调用该工具一次，不输出解释或 SQL。
+
+## 语义约束
+
+- 只使用当前数据库结构与 Evidence 中出现的表、字段、关系和业务定义，不猜测隐藏 schema。
+- 最终 `select` 只包含问题要求的列，严格保持要求的列顺序；计算辅助列、分母、内部 ID 和排名列除非被要求，否则只留在 CTE 内。
+- 严格遵守要求的行粒度、去重、排序和 Top N 范围。一对多 JOIN 后统计实体数量时，对实体主键去重。
+- 行级条件放 `filter`，聚合结果条件放 `having`；维度和聚合并存时按准确的展示粒度分组。
+- 百分比才乘 100；比率不自动乘 100。除非问题、Evidence 或 ResultContract 明确要求小数位或舍入，否则绝不使用 `ROUND`。
+- `expr`、`agg.col` 和字段引用会进入 SQLite SQL：只写有效 SQLite 表达式。使用 SQLite 日期函数，不使用 `YEAR()`、`SUBTRACT()` 等其他方言函数。
+- 含空格、标点或 SQLite 关键字的表名/列名必须用双引号逐段引用；有 JOIN 时限定可能歧义的字段。
+- 累计、排名、每组 Top N、前后行或多阶段聚合才使用必要的 window/CTE；不要为了展示辅助数据增加最终结果列。\
+"""
+
+
 # ── 静态 Section：Forge JSON 约束表 ──────────────────────────────────────────
 _DSL_CONSTRAINTS = """\
 ## Forge JSON 关键约束
@@ -230,3 +414,17 @@ def build_system(registry_context: str, question: str | None = None,
     sections.append(f"## 当前数据库结构\n\n{registry_context}")
 
     return "\n\n".join(sections)
+
+
+def build_structured_benchmark_system(
+    registry_context: str, *, prompt_revision: str = STRUCTURED_BENCHMARK_PROMPT_REVISION,
+) -> str:
+    """Build a registered prompt for the schema-bound Forge tool."""
+    if prompt_revision not in STRUCTURED_BENCHMARK_PROMPT_REVISIONS:
+        raise ValueError("Unknown Forge prompt revision")
+    instructions = _STRUCTURED_BENCHMARK_INSTRUCTIONS
+    if prompt_revision == DENOMINATOR_SCOPE_PROMPT_REVISION:
+        instructions += "\n\n" + _DENOMINATOR_SCOPE_EXAMPLE
+    elif prompt_revision == CTE_INTERFACE_PROMPT_REVISION:
+        instructions += "\n\n" + _CTE_INTERFACE_EXAMPLE
+    return f"{instructions}\n\n## 当前数据库结构\n\n{registry_context}"

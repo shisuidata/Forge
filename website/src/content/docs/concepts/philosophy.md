@@ -52,7 +52,7 @@ Registry 不是静态的 schema 文件，它是组织知识的沉淀：
 
 ## 工程洞察
 
-**Alias 作用域是 SQL 的暗礁。** SQL 标准不允许在同层 SELECT 中引用同层定义的 agg alias。解决方案：`_expand_aliases()` 在编译前将 alias 替换为完整表达式。
+**Alias 作用域有明确边界。** 许多数据库不允许同层 SELECT 引用同层 agg alias。`_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。
 
 **新能力文档导致过拟合。** 每向 prompt 添加新能力说明，模型就有过度使用的倾向。加了 CTE 文档后，简单 GROUP BY 也被包成 CTE。对策：每个新能力必须配一个「何时不用」的反例。
 

@@ -86,7 +86,7 @@ The browser runner itself had one harness-only error after product completion: i
 - NAS source fast-forwarded from `9fca1ea` to `b5e4884` by Git bundle; no GitHub push.
 - Backup: `~/services/forge-m4.1/backups/h4-p0-20260824T110913Z/`.
 - Golden Journey evidence: `~/services/forge-m4.1/e2e/golden-h4-20260824T111426Z/`.
-- Local visual evidence: `/tmp/forge-h4-golden-evidence/`.
+- Local visual evidence: `<local-temp>/`.
 - Isolated services and SSH tunnel stopped; ephemeral override files and unit files removed.
 - Production Forge/Pi remained active with health/readiness `ok`; production worktree clean.
 

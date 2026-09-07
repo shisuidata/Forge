@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "requirement": "REQ-2026-09-06-052",
+  "date": "2026-09-06",
+  "status": "verified",
+  "kind": "deterministic_compiler_and_assurance_fix",
+  "new_model_calls": 0,
+  "production_changes": [
+    {
+      "file": "forge/compiler.py",
+      "change": "Remove CTE-specific qualifier stripping and bare-projection source guessing; preserve caller-specified qualification and ordinary output-alias expansion."
+    },
+    {
+      "file": "forge/assurance.py",
+      "change": "Forge JSON reuses assure_compiled_sql for readonly, parsing and Registry/column-scope checks after existing JSON and policy gates; reuse the already loaded scoped Registry and preserve all prior gate evidence.",
+      "assurance_revision_before": "query-assurance-v7",
+      "assurance_revision_after": "query-assurance-v8",
+      "policy_revision_unchanged": "convention-policy-v9"
+    }
+  ],
+  "regressions": {
+    "compiler": {
+      "before_failed": 5,
+      "after_passed": 5,
+      "cases": [
+        "qualified projection joined to same-named physical columns",
+        "qualified aggregate and grouping columns",
+        "qualified window partition",
+        "uniquely resolvable joined-CTE bare column",
+        "joined-CTE window output alias and Top-N rows"
+      ]
+    },
+    "public_api": {
+      "before_unprojected_columns_allowed": 2,
+      "after_unprojected_columns_denied": 2,
+      "ambiguous_bare_column_boundary": "remains denied",
+      "actual_runtime": [
+        {
+          "name": "window-alias",
+          "http_status": 200,
+          "status": "passed",
+          "failure": null,
+          "policy": {
+            "verdict": "allow_review",
+            "review_required": true,
+            "execution_authorized": false
+          },
+          "assurance_revision": "query-assurance-v8"
+        },
+        {
+          "name": "unbound-source",
+          "http_status": 200,
+          "status": "failed",
+          "failure": {
+            "stage": "candidate_contract",
+            "code": "candidate_contract_invalid",
+            "retryable": true
+          },
+          "policy": {
+            "verdict": "deny",
+            "review_required": false,
+            "execution_authorized": false
+          },
+          "assurance_revision": "query-assurance-v8"
+        },
+        {
+          "name": "missing-output",
+          "http_status": 200,
+          "status": "failed",
+          "failure": {
+            "stage": "assurance",
+            "code": "unknown_schema_reference",
+            "retryable": true
+          },
+          "policy": {
+            "verdict": "deny",
+            "review_required": false,
+            "execution_authorized": false
+          },
+          "assurance_revision": "query-assurance-v8"
+        }
+      ]
+    },
+    "tests_removed_or_replaced": [
+      "Replace a window prefix-only assertion with real SQLite rows and visible-column verification.",
+      "Remove a report/default/gate-order plumbing test rather than repin the new gate sequence."
+    ]
+  },
+  "fixed_candidate_regression": {
+    "sources": {
+      ".forge/benchmarks/luna-mixed-d20-seed48-20260906/run.json": "sha256:45976ad899c528fac2adfbe9adc9c7512316391fd8578276d84680b9274c288f",
+      ".forge/benchmarks/luna-grain-context-20260906/off.run.json": "sha256:90a8418a47142b8bfc5a64a392ca73e7eae74ef32a03803db1882007930671f5",
+      ".forge/benchmarks/luna-grain-context-20260906/control.run.json": "sha256:17c15eea80f4d650693c33728a96919aa5f7969315043f27b24be70910da8d76",
+      ".forge/benchmarks/luna-generation-stages-20260906/md-234.run.json": "sha256:7dd11d217c44ab484c15800b5649ef6529ad8e98f7076450c1164134c8a5ed2e",
+      ".forge/benchmarks/luna-generation-stages-20260906/md-447.run.json": "sha256:db042323fd8d76cea7e5460b36935a0c522dac92b5478873e031a86a0b19c155"
+    },
+    "candidates": 40,
+    "dialects": [
+      "sqlite",
+      "mysql",
+      "postgresql",
+      "bigquery",
+      "snowflake"
+    ],
+    "compilations": 200,
+    "changed_compilations": 0,
+    "original_source_hashes_unchanged": true,
+    "reevaluated_arms": [
+      {
+        "case_id": "md-032",
+        "arm": "forge",
+        "sql_unchanged": true,
+        "EX_unchanged": true,
+        "Contract_unchanged": true,
+        "failure": {
+          "stage": "assurance",
+          "code": "unknown_schema_reference",
+          "retryable": true
+        }
+      },
+      {
+        "case_id": "md-032",
+        "arm": "direct",
+        "sql_unchanged": true,
+        "EX_unchanged": true,
+        "Contract_unchanged": true,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        }
+      },
+      {
+        "case_id": "md-199",
+        "arm": "forge",
+        "sql_unchanged": true,
+        "EX_unchanged": true,
+        "Contract_unchanged": true,
+        "failure": {
+          "stage": "assurance",
+          "code": "unknown_schema_reference",
+          "retryable": true
+        }
+      },
+      {
+        "case_id": "md-199",
+        "arm": "direct",
+        "sql_unchanged": true,
+        "EX_unchanged": true,
+        "Contract_unchanged": true,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        }
+      }
+    ],
+    "diagnostic_only": true,
+    "protocol_revision": "sha256:84604f15d02fc0ae3ddd61a2324c3e2b9c5479890449662ed0bb15918d3e6f30",
+    "model_calls": 0
+  },
+  "verification": {
+    "python": "825 passed, 26 skipped",
+    "pi": "151 passed",
+    "typescript": "typecheck passed",
+    "cli": "Real forge evaluate against local FastAPI; valid CTE window received allow_review, never execution authorization.",
+    "sql_smoke": {
+      "scope": "synthetic in-memory SQLite consuming the actual API compiled_sql",
+      "columns": [
+        "id",
+        "amount",
+        "position"
+      ],
+      "rows": [
+        [
+          1,
+          10,
+          1
+        ],
+        [
+          1,
+          20,
+          2
+        ],
+        [
+          2,
+          70,
+          1
+        ]
+      ]
+    },
+    "services_stopped": true,
+    "port_without_listener": 18771,
+    "old_protocol_gate": "Rejected after Compiler source changed; final v8 replay uses its own fresh diagnostic freeze."
+  },
+  "limits": [
+    "No new Luna generation or measured accuracy, latency or token-cost gain.",
+    "The 40 saved candidates have identical SQL/errors in all five dialects; only the selected md-032/md-199 four arms were explicitly re-evaluated. Do not present this as full R500 replay.",
+    "Missing CTE outputs are not added, unbound references are not rebound, and Gold/scoring/Prompt/Schema/timeout/retries remain unchanged.",
+    "Existing public relationship and bare-symbol prechecks still reject the separate CTE-to-physical JOIN and right-CTE-only bare-label fixtures. Compiler validity is not equivalent to passing all public policy checks; those prechecks were not relaxed.",
+    "Seed48 remains the rolling parent, historical reports are not rewritten, and H/external adoption gates do not advance.",
+    "Assurance revision changed: old frozen contexts or approvals must not be treated as current validation evidence."
+  ],
+  "artifact_sha256": {
+    "forge/compiler.py": "sha256:3d5b4f0bebacb6df431b29e593cbd4b9ab956b06e35b72fa1611c55fb1d9b697",
+    "forge/assurance.py": "sha256:95cbb185180dad1aede93c5cdfd57740262b484648f21a359024fe9e42acac21",
+    ".forge/benchmarks/luna-mixed-d20-seed48-20260906/run.json": "sha256:45976ad899c528fac2adfbe9adc9c7512316391fd8578276d84680b9274c288f",
+    ".forge/benchmarks/luna-grain-context-20260906/off.run.json": "sha256:90a8418a47142b8bfc5a64a392ca73e7eae74ef32a03803db1882007930671f5",
+    ".forge/benchmarks/luna-grain-context-20260906/control.run.json": "sha256:17c15eea80f4d650693c33728a96919aa5f7969315043f27b24be70910da8d76",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-234.run.json": "sha256:7dd11d217c44ab484c15800b5649ef6529ad8e98f7076450c1164134c8a5ed2e",
+    ".forge/benchmarks/luna-generation-stages-20260906/md-447.run.json": "sha256:db042323fd8d76cea7e5460b36935a0c522dac92b5478873e031a86a0b19c155",
+    ".forge/benchmarks/luna-cte-bindings-20260906/before-compilation.json": "sha256:0da734f21c25009e255966c8cd018e54036b1e7ba8b034e08da3b608d57508dc",
+    ".forge/benchmarks/luna-cte-bindings-20260906/after-compilation.json": "sha256:c84dccdf72b8541b72703b24badbedbd5a2ca36a7c2ead985399f86e05b8784c",
+    ".forge/benchmarks/luna-cte-bindings-20260906/regression-before.json": "sha256:9a359c2285ceef19df341470d8ca0f062f00ba7e394ebedd40dcc63b07964259",
+    ".forge/benchmarks/luna-cte-bindings-20260906/regression-after.json": "sha256:7ef8203fb47edc66e01c27d603d450eefd716e28e56e7ef4ed3c4909535dad50",
+    ".forge/benchmarks/luna-cte-bindings-20260906/public-regression-before.json": "sha256:943e70089e1b5b67b585e405cc04d18be63b6e3db37ab551537e0f6e8b650a2c",
+    ".forge/benchmarks/luna-cte-bindings-20260906/public-regression-after.json": "sha256:9d26603a5978dd6a45da6e1e6e94bf05072ca13ad0738092d166560bed4549d7",
+    ".forge/benchmarks/luna-cte-bindings-20260906/final-suites.json": "sha256:715aaa2cd9394bba72d14ed176073084ea5665458cd9baec570989aa62457193",
+    ".forge/benchmarks/luna-cte-bindings-20260906/final-diagnostic.frozen.json": "sha256:35c6da29a1ae1f3be06523635b5bdf5ceae5bf52b3605a3d87ba95560f972742",
+    ".forge/benchmarks/luna-cte-bindings-20260906/final-rejected.replay.json": "sha256:1be1c48bf189c057a221a7018bd11f9031bc7d9cc2c3724d8f755e3ea726f2f4",
+    ".forge/benchmarks/luna-cte-bindings-20260906/final-replay-checks.json": "sha256:36ae2e7d0986552475963fee4b99ac37aa72312a9c7e60c28473d324e5fff088",
+    ".forge/benchmarks/luna-cte-bindings-20260906/public-negative-before.json": "sha256:fa99238eebecbac3a17a94f468061103a283d5a8af31860e3f02c22c33cf6e65",
+    ".forge/benchmarks/luna-cte-bindings-20260906/public-smoke-final.json": "sha256:f44a5405a80620d96c851f188f2af934b7f7f9dcb68a15afb74faa4f2da92f04",
+    ".forge/benchmarks/luna-cte-bindings-20260906/public-cli-final.json": "sha256:29ab2dd084ac866c518d2aa5fb178087bf4d94a2a194b8324b16fe51f4da49bf",
+    ".forge/benchmarks/luna-cte-bindings-20260906/public-result-smoke.json": "sha256:73c38d2efdc007204a7db3e9263e6a297a33bd72810622a6b3a3fed4941fdc55",
+    ".forge/benchmarks/luna-cte-bindings-20260906/old-protocol-gate.json": "sha256:6d7d08793fd98b64723f083d4aa43ede2e68c86da951c76c9a09df708be4b5dc",
+    ".forge/benchmarks/luna-cte-bindings-20260906/service-shutdown.json": "sha256:5198c918f85ae27a9f058182ad6efef184b1f4a0a607edaf35d59b8a927fb8c7"
+  }
+}

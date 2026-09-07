@@ -57,7 +57,7 @@ SELECT COUNT(CASE WHEN order_count >= 2 THEN 1 END) * 1.0 / COUNT(*) AS repurcha
 FROM user_orders
 ```
 
-同样的 Forge JSON 永远产生同样的 SQL。编译前，`_expand_aliases()` 将 SELECT 中引用的 agg alias 展开为完整表达式，规避 SQL alias 作用域陷阱。
+在固定编译器版本与方言下，同样的 Forge JSON 产生同样的 SQL。`_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。
 
 ### Step 4 — 用户审核 + 执行
 

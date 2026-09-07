@@ -1,0 +1,3008 @@
+{
+  "requirement": "REQ-2026-09-05-040",
+  "date": "2026-09-05",
+  "status": "completed_after_local_fix_and_fixed_response_replay",
+  "model": "openai-codex/gpt-5.6-luna",
+  "model_revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+  "generation_contract": {
+    "forge_output_mode": "pi_tool_schema",
+    "forge_prompt_revision": "forge-structured-benchmark-v1",
+    "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "provider_json_schema_request": "required",
+    "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+    "direct_output_mode": "text_sql"
+  },
+  "authorized_requests": 20,
+  "actual_generation_requests": 20,
+  "provider_http_200_requests": 20,
+  "automatic_provider_retries": 0,
+  "blocked_additional_agent_turns": 1,
+  "replacement_generation_requests": 0,
+  "recovered_original_responses": 1,
+  "metrics": {
+    "control": {
+      "forge": {
+        "cases": 5,
+        "official_ea": 2,
+        "contract_accuracy": 2,
+        "contract_unknown": 0,
+        "execution_passed": 4,
+        "compile_passed": 5,
+        "total_tokens": 17246,
+        "input_tokens": 14720,
+        "output_tokens": 2526,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 12125.34,
+        "p95_generation_ms": 17815.6,
+        "historical_gains": [],
+        "historical_losses": [
+          "md-046"
+        ]
+      },
+      "direct": {
+        "cases": 5,
+        "official_ea": 3,
+        "contract_accuracy": 3,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": null,
+        "total_tokens": 6775,
+        "input_tokens": 5405,
+        "output_tokens": 1370,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 7217.920000000001,
+        "p95_generation_ms": 10709.7,
+        "historical_gains": [],
+        "historical_losses": []
+      }
+    },
+    "treatment": {
+      "forge": {
+        "cases": 5,
+        "official_ea": 3,
+        "contract_accuracy": 3,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": 5,
+        "total_tokens": 22072,
+        "input_tokens": 19704,
+        "output_tokens": 2368,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 12761.72,
+        "p95_generation_ms": 19487.4,
+        "historical_gains": [],
+        "historical_losses": []
+      },
+      "direct": {
+        "cases": 5,
+        "official_ea": 3,
+        "contract_accuracy": 3,
+        "contract_unknown": 0,
+        "execution_passed": 5,
+        "compile_passed": null,
+        "total_tokens": 11811,
+        "input_tokens": 10389,
+        "output_tokens": 1422,
+        "cache_read_tokens": 0,
+        "average_generation_ms": 7044.9800000000005,
+        "p95_generation_ms": 11444.4,
+        "historical_gains": [],
+        "historical_losses": []
+      }
+    }
+  },
+  "token_cost": {
+    "control": 24021,
+    "treatment": 33883,
+    "treatment_control_ratio": 1.410557428916365,
+    "currency_cost": null
+  },
+  "requests": [
+    {
+      "condition": "control",
+      "case_id": "md-065",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:23:39.704Z",
+      "payload_sha256": "bcffde013ae3f443e99fa87be2c727c633afaf25f9fae9ac59212425f526be3f",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-065",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:23:39.705Z",
+      "payload_sha256": "b680fdd48e517f4463a15b7efd41168e7727f71dcaa500a977d4c14dd288fa3d",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-065",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:23:53.255Z",
+      "payload_sha256": "3dd618f41a8d798e8decf5f4f7ee1dd154a15cfce0268c9ca564e2dd80a30462",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-065",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:23:53.257Z",
+      "payload_sha256": "d392fe8fd2d112bc7d59a8447658988c3c4bf651e453a10bd3e97f5ebc5ae447",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-034",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:24:02.395Z",
+      "payload_sha256": "e1eb87ce8d18ebd8718b279caf66e1a07829603b3decca5f652ee9af95fb1630",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-034",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:24:02.396Z",
+      "payload_sha256": "5bc3afce07b434e0865b4889785c8ddc3edbeb9e6cc0ea95e5634c5f495f1be7",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-034",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:24:09.925Z",
+      "payload_sha256": "e231bbe55b2bcbc451b6e604b25e7fd61b7cca3f7987390caba48dc4c8854976",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-034",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:24:09.926Z",
+      "payload_sha256": "cce5b175ff72c0263f0fc3114a9e8d262878ccd24f754992b2e96c2e556f11e1",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-046",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:24:20.271Z",
+      "payload_sha256": "cc9a054e44bbfe0a22b171cc55547f2e03f536122178afafbd0a4a94a0380586",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-046",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:24:20.272Z",
+      "payload_sha256": "16c0aa174fe3715d3abd6571523756c3643ad6b89ea1cf384869ab8dcfa4d26a",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-046",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:59:31.249Z",
+      "payload_sha256": "963c94be4511febd88be75efa99f7bfb3373c28073dd6eebc1646ed9050f30c2",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-046",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:59:31.250Z",
+      "payload_sha256": "ee6d574761300500686a56708689e8823d7f89b8be408e094c9989f39cb759a7",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-052",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:59:50.253Z",
+      "payload_sha256": "31b7842cc9da080b39f011258f7252873b3477d9eda57d6f49e2951ad7db6051",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-052",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T06:59:50.255Z",
+      "payload_sha256": "f38b2d3a914d84656bf3bd616d27b796117e805f24e5eb477d1c49b6e96e1c6e",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-052",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:00:09.800Z",
+      "payload_sha256": "bb81eb8a7762c1bbc5182da537877ac7723e7443e9b825ac07fc7ba34fdb1108",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-052",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:00:09.801Z",
+      "payload_sha256": "5e1d20e986e7c7208ae079465180b2f604a07baebc7f1cae1e7c2254ba93df45",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-077",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:00:21.645Z",
+      "payload_sha256": "9695a6cd9dea14f77d1dde754c1a213d8e02ec46e95d62fc69f27ddf82ae558f",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "control",
+      "case_id": "md-077",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:00:21.646Z",
+      "payload_sha256": "41edcae70f7a097cf4d2f7699c9fb457bb4230967d7b1cb0a6252dad9c06a24f",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-077",
+      "arm": "forge",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:00:31.195Z",
+      "payload_sha256": "5d6d95d9933e0eebb90bcce30ba7ed7f3326dd347510145ae0e620611a672a55",
+      "strict": true,
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "status": 200
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-077",
+      "arm": "direct",
+      "attempt": 1,
+      "started_at": "2026-09-05T07:00:31.197Z",
+      "payload_sha256": "b74a09f910b4b3195bfa95583cdfc9013ff45d88ad62684074b153058cc00f81",
+      "strict": null,
+      "wire_schema_revision": null,
+      "status": 200
+    }
+  ],
+  "outcomes": [
+    {
+      "condition": "control",
+      "case_id": "md-065",
+      "arm": "forge",
+      "run_id": "pbr_61d997162ad540aa86fff412fac7a428",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 3433,
+      "tokens": {
+        "input": 2934,
+        "output": 499,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3433
+      },
+      "generation_ms": 13137.1,
+      "candidate": {
+        "scan": "expense",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget",
+            "on": {
+              "left": "expense.link_to_budget",
+              "right": "budget.budget_id"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "event",
+            "on": {
+              "left": "budget.link_to_event",
+              "right": "event.event_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "event.event_name",
+            "op": "eq",
+            "val": "October Meeting"
+          },
+          {
+            "col": "expense.approved",
+            "op": "eq",
+            "val": "Yes"
+          }
+        ],
+        "group": [
+          "expense.expense_description"
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "expense.cost",
+            "as": "total_value"
+          }
+        ],
+        "select": [
+          "expense.expense_description",
+          {
+            "expr": "SUM(expense.cost)",
+            "as": "total_value"
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT expense.expense_description, SUM(expense.cost) AS total_value\nFROM expense\nINNER JOIN budget ON expense.link_to_budget = budget.budget_id\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE event.event_name = 'October Meeting' AND expense.approved = 'Yes'\nGROUP BY expense.expense_description",
+        "forge_json": {
+          "scan": "expense",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "budget",
+              "on": {
+                "left": "expense.link_to_budget",
+                "right": "budget.budget_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "event",
+              "on": {
+                "left": "budget.link_to_event",
+                "right": "event.event_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "event.event_name",
+              "op": "eq",
+              "val": "October Meeting"
+            },
+            {
+              "col": "expense.approved",
+              "op": "eq",
+              "val": "Yes"
+            }
+          ],
+          "group": [
+            "expense.expense_description"
+          ],
+          "agg": [
+            {
+              "fn": "sum",
+              "col": "expense.cost",
+              "as": "total_value"
+            }
+          ],
+          "select": [
+            "expense.expense_description",
+            {
+              "expr": "SUM(expense.cost)",
+              "as": "total_value"
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT expense.expense_description, SUM(expense.cost) AS total_value\nFROM expense\nINNER JOIN budget ON expense.link_to_budget = budget.budget_id\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE event.event_name = 'October Meeting' AND expense.approved = 'Yes'\nGROUP BY expense.expense_description",
+          "sql_hash": "sha256:4890a291687cded18c7003dce426a77db0ad8f4fd78ed07518cc84c31653bf38",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "expense_description",
+            "total_value"
+          ],
+          "rows": [],
+          "row_count": 0,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 4347
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-065",
+      "arm": "direct",
+      "run_id": "pbr_61d997162ad540aa86fff412fac7a428",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 1494,
+      "tokens": {
+        "input": 1071,
+        "output": 423,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1494
+      },
+      "generation_ms": 10709.7,
+      "candidate": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'Yes'\nGROUP BY e.expense_description;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'Yes'\nGROUP BY e.expense_description",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'Yes'\nGROUP BY e.expense_description",
+          "sql_hash": "sha256:4879cabcb2cd373a539f152777573966540998e42d4e5fbc0022f447dafeaf5f",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "expense_description",
+            "total_value"
+          ],
+          "rows": [],
+          "row_count": 0,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 1497
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-065",
+      "arm": "forge",
+      "run_id": "pbr_79885f9e41de4d82a6bf4369a4e54c7b",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 4285,
+      "tokens": {
+        "input": 3918,
+        "output": 367,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4285
+      },
+      "generation_ms": 8751.3,
+      "candidate": {
+        "scan": "expense",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget",
+            "on": {
+              "left": "expense.link_to_budget",
+              "right": "budget.budget_id"
+            }
+          },
+          {
+            "type": "inner",
+            "table": "event",
+            "on": {
+              "left": "budget.link_to_event",
+              "right": "event.event_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "event.event_name",
+            "op": "eq",
+            "val": "October Meeting"
+          },
+          {
+            "col": "expense.approved",
+            "op": "eq",
+            "val": "true"
+          }
+        ],
+        "group": [
+          "expense.expense_description"
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "expense.cost",
+            "as": "total_value"
+          }
+        ],
+        "select": [
+          "expense.expense_description",
+          "total_value"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT expense.expense_description, SUM(expense.cost) AS total_value\nFROM expense\nINNER JOIN budget ON expense.link_to_budget = budget.budget_id\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE event.event_name = 'October Meeting' AND expense.approved = 'true'\nGROUP BY expense.expense_description",
+        "forge_json": {
+          "scan": "expense",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "budget",
+              "on": {
+                "left": "expense.link_to_budget",
+                "right": "budget.budget_id"
+              }
+            },
+            {
+              "type": "inner",
+              "table": "event",
+              "on": {
+                "left": "budget.link_to_event",
+                "right": "event.event_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "event.event_name",
+              "op": "eq",
+              "val": "October Meeting"
+            },
+            {
+              "col": "expense.approved",
+              "op": "eq",
+              "val": "true"
+            }
+          ],
+          "group": [
+            "expense.expense_description"
+          ],
+          "agg": [
+            {
+              "fn": "sum",
+              "col": "expense.cost",
+              "as": "total_value"
+            }
+          ],
+          "select": [
+            "expense.expense_description",
+            "total_value"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT expense.expense_description, SUM(expense.cost) AS total_value\nFROM expense\nINNER JOIN budget ON expense.link_to_budget = budget.budget_id\nINNER JOIN event ON budget.link_to_event = event.event_id\nWHERE event.event_name = 'October Meeting' AND expense.approved = 'true'\nGROUP BY expense.expense_description",
+          "sql_hash": "sha256:798ce2387ad91204b708cdb2809b2189f8616b49276d8b1211aa1dc672629180",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "expense_description",
+            "total_value"
+          ],
+          "rows": [
+            [
+              "Pizza",
+              51.81
+            ],
+            [
+              "Posters",
+              54.25
+            ],
+            [
+              "Water, chips, cookies",
+              69.33
+            ]
+          ],
+          "row_count": 3,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 5216
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-065",
+      "arm": "direct",
+      "run_id": "pbr_79885f9e41de4d82a6bf4369a4e54c7b",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 2286,
+      "tokens": {
+        "input": 2055,
+        "output": 231,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2286
+      },
+      "generation_ms": 5370.8,
+      "candidate": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'true'\nGROUP BY e.expense_description;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'true'\nGROUP BY e.expense_description",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT e.expense_description, SUM(e.cost) AS total_value\nFROM expense AS e\nJOIN budget AS b ON e.link_to_budget = b.budget_id\nJOIN event AS ev ON b.link_to_event = ev.event_id\nWHERE ev.event_name = 'October Meeting'\n  AND e.approved = 'true'\nGROUP BY e.expense_description",
+          "sql_hash": "sha256:755e8c6f375f8aaa13a97a817af93980bbb8ce2118f76324a549e69c2e65c55b",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "expense_description",
+            "total_value"
+          ],
+          "rows": [
+            [
+              "Pizza",
+              51.81
+            ],
+            [
+              "Posters",
+              54.25
+            ],
+            [
+              "Water, chips, cookies",
+              69.33
+            ]
+          ],
+          "row_count": 3,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 2646
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-034",
+      "arm": "forge",
+      "run_id": "pbr_26e5c0dfe5254dfd8301c689e0021ea9",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 4177,
+      "tokens": {
+        "input": 3903,
+        "output": 274,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4177
+      },
+      "generation_ms": 7321.1,
+      "candidate": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "member.position",
+            "op": "eq",
+            "val": "Vice President"
+          }
+        ],
+        "select": [
+          "income.amount"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE member.position = 'Vice President'",
+        "forge_json": {
+          "scan": "income",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "member",
+              "on": {
+                "left": "income.link_to_member",
+                "right": "member.member_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "member.position",
+              "op": "eq",
+              "val": "Vice President"
+            }
+          ],
+          "select": [
+            "income.amount"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE member.position = 'Vice President'",
+          "sql_hash": "sha256:b6867f2d7688798cc3123a017903a12ce7e3d473bf7a289e3c3f9dcdb33c7cec",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "amount"
+          ],
+          "rows": [
+            [
+              50
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 5213
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-034",
+      "arm": "direct",
+      "run_id": "pbr_26e5c0dfe5254dfd8301c689e0021ea9",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 2126,
+      "tokens": {
+        "input": 2040,
+        "output": 86,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2126
+      },
+      "generation_ms": 2731.9,
+      "candidate": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+          "sql_hash": "sha256:a1dc33f964046eb44b3875e82d5ac2b51b03d293009115f54808c9c9aadd0ace",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "amount"
+          ],
+          "rows": [
+            [
+              50
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 2166
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-034",
+      "arm": "forge",
+      "run_id": "pbr_208a48411dbe4eeaae3a08b00202fc2b",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 3292,
+      "tokens": {
+        "input": 2873,
+        "output": 419,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3292
+      },
+      "generation_ms": 9989.4,
+      "candidate": {
+        "scan": "member",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "income",
+            "on": {
+              "left": "member.member_id",
+              "right": "income.link_to_member"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "member.position",
+            "op": "eq",
+            "val": "Vice President"
+          }
+        ],
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "income.amount",
+            "as": "amount"
+          }
+        ],
+        "select": [
+          "amount"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT SUM(income.amount) AS amount\nFROM member\nINNER JOIN income ON member.member_id = income.link_to_member\nWHERE member.position = 'Vice President'",
+        "forge_json": {
+          "scan": "member",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "income",
+              "on": {
+                "left": "member.member_id",
+                "right": "income.link_to_member"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "member.position",
+              "op": "eq",
+              "val": "Vice President"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "sum",
+              "col": "income.amount",
+              "as": "amount"
+            }
+          ],
+          "select": [
+            "amount"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT SUM(income.amount) AS amount\nFROM member\nINNER JOIN income ON member.member_id = income.link_to_member\nWHERE member.position = 'Vice President'",
+          "sql_hash": "sha256:63999b124a63f7f7920357be71bad7c47a54ac9a4ff434bf2fd3997ebd32d870",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "amount"
+          ],
+          "rows": [
+            [
+              50
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 4153
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-034",
+      "arm": "direct",
+      "run_id": "pbr_208a48411dbe4eeaae3a08b00202fc2b",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 1102,
+      "tokens": {
+        "input": 1010,
+        "output": 92,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1102
+      },
+      "generation_ms": 3673.2,
+      "candidate": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE m.position = 'Vice President'",
+          "sql_hash": "sha256:a1dc33f964046eb44b3875e82d5ac2b51b03d293009115f54808c9c9aadd0ace",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "amount"
+          ],
+          "rows": [
+            [
+              50
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 1157
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-046",
+      "arm": "forge",
+      "run_id": "pbr_0108940768db4eb8b2f75a8879ef3dfd",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": true,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 0,
+      "tokens": {
+        "input": 2987,
+        "output": 832,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3819
+      },
+      "generation_ms": 17815.6,
+      "candidate": {
+        "scan": "kickoff",
+        "joins": [
+          {
+            "type": "cross",
+            "table": "october"
+          }
+        ],
+        "select": [
+          {
+            "expr": "CAST(kickoff.total AS REAL) / october.total",
+            "as": "times"
+          }
+        ],
+        "cte": [
+          {
+            "name": "kickoff",
+            "query": {
+              "scan": "budget",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "event",
+                  "on": {
+                    "left": "budget.link_to_event",
+                    "right": "event.event_id"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "budget.category",
+                  "op": "eq",
+                  "val": "Advertisement"
+                },
+                {
+                  "col": "event.event_name",
+                  "op": "eq",
+                  "val": "Yearly Kickoff"
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "sum",
+                  "col": "budget.amount",
+                  "as": "total"
+                }
+              ],
+              "select": [
+                "budget.amount"
+              ]
+            }
+          },
+          {
+            "name": "october",
+            "query": {
+              "scan": "budget",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "event",
+                  "on": {
+                    "left": "budget.link_to_event",
+                    "right": "event.event_id"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "budget.category",
+                  "op": "eq",
+                  "val": "Advertisement"
+                },
+                {
+                  "col": "event.event_name",
+                  "op": "eq",
+                  "val": "October Meeting"
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "sum",
+                  "col": "budget.amount",
+                  "as": "total"
+                }
+              ],
+              "select": [
+                "budget.amount"
+              ]
+            }
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "skipped",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "assurance",
+          "code": "unknown_schema_reference",
+          "retryable": true
+        },
+        "error_code": "unknown_schema_reference",
+        "sql": "WITH kickoff AS (\n  SELECT budget.amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement' AND event.event_name = 'Yearly Kickoff'\n),\noctober AS (\n  SELECT budget.amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement' AND event.event_name = 'October Meeting'\n)\nSELECT CAST(kickoff.total AS REAL) / october.total AS times\nFROM kickoff\nCROSS JOIN october",
+        "forge_json": {
+          "scan": "kickoff",
+          "joins": [
+            {
+              "type": "cross",
+              "table": "october"
+            }
+          ],
+          "select": [
+            {
+              "expr": "CAST(kickoff.total AS REAL) / october.total",
+              "as": "times"
+            }
+          ],
+          "cte": [
+            {
+              "name": "kickoff",
+              "query": {
+                "scan": "budget",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "event",
+                    "on": {
+                      "left": "budget.link_to_event",
+                      "right": "event.event_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "budget.category",
+                    "op": "eq",
+                    "val": "Advertisement"
+                  },
+                  {
+                    "col": "event.event_name",
+                    "op": "eq",
+                    "val": "Yearly Kickoff"
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "sum",
+                    "col": "budget.amount",
+                    "as": "total"
+                  }
+                ],
+                "select": [
+                  "budget.amount"
+                ]
+              }
+            },
+            {
+              "name": "october",
+              "query": {
+                "scan": "budget",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "event",
+                    "on": {
+                      "left": "budget.link_to_event",
+                      "right": "event.event_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "budget.category",
+                    "op": "eq",
+                    "val": "Advertisement"
+                  },
+                  {
+                    "col": "event.event_name",
+                    "op": "eq",
+                    "val": "October Meeting"
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "sum",
+                    "col": "budget.amount",
+                    "as": "total"
+                  }
+                ],
+                "select": [
+                  "budget.amount"
+                ]
+              }
+            }
+          ]
+        },
+        "assurance": {
+          "status": "failed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "failed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": [
+                "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+              ]
+            }
+          ],
+          "sql": null,
+          "sql_hash": null,
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 4373
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-046",
+      "arm": "direct",
+      "run_id": "pbr_0108940768db4eb8b2f75a8879ef3dfd",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 1460,
+      "tokens": {
+        "input": 1124,
+        "output": 336,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1460
+      },
+      "generation_ms": 9035.9,
+      "candidate": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement'",
+          "sql_hash": "sha256:cfe0e9f37eb65254053eeba2179c12924c361f8570ec60c8c9edf662f4e17e83",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END)"
+          ],
+          "rows": [
+            [
+              2.727272727272727
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 1363
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-046",
+      "arm": "forge",
+      "run_id": "pbr_b36d8c43186a42a283cc79dbe5eeec4b",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 4750,
+      "tokens": {
+        "input": 3982,
+        "output": 768,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4750
+      },
+      "generation_ms": 18066.3,
+      "candidate": {
+        "scan": "y",
+        "joins": [
+          {
+            "type": "cross",
+            "table": "o"
+          }
+        ],
+        "select": [
+          {
+            "expr": "y.total_amount * 1.0 / o.total_amount",
+            "as": "times"
+          }
+        ],
+        "cte": [
+          {
+            "name": "y",
+            "query": {
+              "scan": "budget",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "event",
+                  "on": {
+                    "left": "budget.link_to_event",
+                    "right": "event.event_id"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "budget.category",
+                  "op": "eq",
+                  "val": "Advertisement"
+                },
+                {
+                  "col": "event.event_name",
+                  "op": "eq",
+                  "val": "Yearly Kickoff"
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "sum",
+                  "col": "budget.amount",
+                  "as": "total_amount"
+                }
+              ],
+              "select": [
+                {
+                  "expr": "SUM(budget.amount)",
+                  "as": "total_amount"
+                }
+              ]
+            },
+            "recursive": false
+          },
+          {
+            "name": "o",
+            "query": {
+              "scan": "budget",
+              "joins": [
+                {
+                  "type": "inner",
+                  "table": "event",
+                  "on": {
+                    "left": "budget.link_to_event",
+                    "right": "event.event_id"
+                  }
+                }
+              ],
+              "filter": [
+                {
+                  "col": "budget.category",
+                  "op": "eq",
+                  "val": "Advertisement"
+                },
+                {
+                  "col": "event.event_name",
+                  "op": "eq",
+                  "val": "October Meeting"
+                }
+              ],
+              "agg": [
+                {
+                  "fn": "sum",
+                  "col": "budget.amount",
+                  "as": "total_amount"
+                }
+              ],
+              "select": [
+                {
+                  "expr": "SUM(budget.amount)",
+                  "as": "total_amount"
+                }
+              ]
+            },
+            "recursive": false
+          }
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "WITH y AS (\n  SELECT SUM(budget.amount) AS total_amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement' AND event.event_name = 'Yearly Kickoff'\n),\no AS (\n  SELECT SUM(budget.amount) AS total_amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement' AND event.event_name = 'October Meeting'\n)\nSELECT y.total_amount * 1.0 / o.total_amount AS times\nFROM y\nCROSS JOIN o",
+        "forge_json": {
+          "scan": "y",
+          "joins": [
+            {
+              "type": "cross",
+              "table": "o"
+            }
+          ],
+          "select": [
+            {
+              "expr": "y.total_amount * 1.0 / o.total_amount",
+              "as": "times"
+            }
+          ],
+          "cte": [
+            {
+              "name": "y",
+              "query": {
+                "scan": "budget",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "event",
+                    "on": {
+                      "left": "budget.link_to_event",
+                      "right": "event.event_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "budget.category",
+                    "op": "eq",
+                    "val": "Advertisement"
+                  },
+                  {
+                    "col": "event.event_name",
+                    "op": "eq",
+                    "val": "Yearly Kickoff"
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "sum",
+                    "col": "budget.amount",
+                    "as": "total_amount"
+                  }
+                ],
+                "select": [
+                  {
+                    "expr": "SUM(budget.amount)",
+                    "as": "total_amount"
+                  }
+                ]
+              },
+              "recursive": false
+            },
+            {
+              "name": "o",
+              "query": {
+                "scan": "budget",
+                "joins": [
+                  {
+                    "type": "inner",
+                    "table": "event",
+                    "on": {
+                      "left": "budget.link_to_event",
+                      "right": "event.event_id"
+                    }
+                  }
+                ],
+                "filter": [
+                  {
+                    "col": "budget.category",
+                    "op": "eq",
+                    "val": "Advertisement"
+                  },
+                  {
+                    "col": "event.event_name",
+                    "op": "eq",
+                    "val": "October Meeting"
+                  }
+                ],
+                "agg": [
+                  {
+                    "fn": "sum",
+                    "col": "budget.amount",
+                    "as": "total_amount"
+                  }
+                ],
+                "select": [
+                  {
+                    "expr": "SUM(budget.amount)",
+                    "as": "total_amount"
+                  }
+                ]
+              },
+              "recursive": false
+            }
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "WITH y AS (\n  SELECT SUM(budget.amount) AS total_amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement' AND event.event_name = 'Yearly Kickoff'\n),\no AS (\n  SELECT SUM(budget.amount) AS total_amount\n  FROM budget\n  INNER JOIN event ON budget.link_to_event = event.event_id\n  WHERE budget.category = 'Advertisement' AND event.event_name = 'October Meeting'\n)\nSELECT y.total_amount * 1.0 / o.total_amount AS times\nFROM y\nCROSS JOIN o",
+          "sql_hash": "sha256:8115ace51332f44afed1bcbb383e9f2e6e2637d4d5a82dfeef51f4f3c02d892c",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "times"
+          ],
+          "rows": [
+            [
+              2.727272727272727
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 5573
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-046",
+      "arm": "direct",
+      "run_id": "pbr_b36d8c43186a42a283cc79dbe5eeec4b",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 2365,
+      "tokens": {
+        "input": 2119,
+        "output": 246,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2365
+      },
+      "generation_ms": 6937.2,
+      "candidate": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END) FROM budget AS b JOIN event AS e ON b.link_to_event = e.event_id WHERE b.category = 'Advertisement'",
+          "sql_hash": "sha256:cfe0e9f37eb65254053eeba2179c12924c361f8570ec60c8c9edf662f4e17e83",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "CAST(SUM(CASE WHEN e.event_name = 'Yearly Kickoff' THEN b.amount ELSE 0 END) AS REAL) / SUM(CASE WHEN e.event_name = 'October Meeting' THEN b.amount ELSE 0 END)"
+          ],
+          "rows": [
+            [
+              2.727272727272727
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 2375
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-052",
+      "arm": "forge",
+      "run_id": "pbr_049c1f6c54c34e9797a701f362124302",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 4496,
+      "tokens": {
+        "input": 3949,
+        "output": 547,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4496
+      },
+      "generation_ms": 19487.4,
+      "candidate": {
+        "scan": "event",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget",
+            "on": {
+              "left": "event.event_id",
+              "right": "budget.link_to_event"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "event.status",
+            "op": "eq",
+            "val": "Closed"
+          }
+        ],
+        "select": [
+          "event.event_name"
+        ],
+        "sort": [
+          {
+            "col": "budget.spent / budget.amount",
+            "dir": "desc"
+          }
+        ],
+        "limit": 1
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT event.event_name\nFROM event\nINNER JOIN budget ON event.event_id = budget.link_to_event\nWHERE event.status = 'Closed'\nORDER BY budget.spent / budget.amount DESC\nLIMIT 1",
+        "forge_json": {
+          "scan": "event",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "budget",
+              "on": {
+                "left": "event.event_id",
+                "right": "budget.link_to_event"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "event.status",
+              "op": "eq",
+              "val": "Closed"
+            }
+          ],
+          "select": [
+            "event.event_name"
+          ],
+          "sort": [
+            {
+              "col": "budget.spent / budget.amount",
+              "dir": "desc"
+            }
+          ],
+          "limit": 1
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT event.event_name\nFROM event\nINNER JOIN budget ON event.event_id = budget.link_to_event\nWHERE event.status = 'Closed'\nORDER BY budget.spent / budget.amount DESC\nLIMIT 1",
+          "sql_hash": "sha256:45d806332d3c76813cf790a0d9c18b108e3a1eb3ca726b50c26360d991743a68",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "event_name"
+          ],
+          "rows": [
+            [
+              "September Speaker"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 5480
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-052",
+      "arm": "direct",
+      "run_id": "pbr_049c1f6c54c34e9797a701f362124302",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 2470,
+      "tokens": {
+        "input": 2086,
+        "output": 384,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2470
+      },
+      "generation_ms": 8740.6,
+      "candidate": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / NULLIF(b.amount, 0) DESC\nLIMIT 1;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / NULLIF(b.amount, 0) DESC\nLIMIT 1",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / NULLIF(b.amount, 0) DESC\nLIMIT 1",
+          "sql_hash": "sha256:4d8af598c4b4e39518b6f384e73ddf8b324ac9e8681551ff0c5b8ebcbcfb14d1",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "event_name"
+          ],
+          "rows": [
+            [
+              "September Speaker"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 2401
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-052",
+      "arm": "forge",
+      "run_id": "pbr_63fdb67c7f0f46b385fc34fdff00ca3a",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 3403,
+      "tokens": {
+        "input": 2999,
+        "output": 404,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3403
+      },
+      "generation_ms": 10633.5,
+      "candidate": {
+        "scan": "event",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "budget",
+            "on": {
+              "left": "event.event_id",
+              "right": "budget.link_to_event"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "event.status",
+            "op": "eq",
+            "val": "Closed"
+          }
+        ],
+        "select": [
+          "event.event_name"
+        ],
+        "sort": [
+          {
+            "col": "budget.spent / budget.amount",
+            "dir": "desc"
+          }
+        ],
+        "limit": 1
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT event.event_name\nFROM event\nINNER JOIN budget ON event.event_id = budget.link_to_event\nWHERE event.status = 'Closed'\nORDER BY budget.spent / budget.amount DESC\nLIMIT 1",
+        "forge_json": {
+          "scan": "event",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "budget",
+              "on": {
+                "left": "event.event_id",
+                "right": "budget.link_to_event"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "event.status",
+              "op": "eq",
+              "val": "Closed"
+            }
+          ],
+          "select": [
+            "event.event_name"
+          ],
+          "sort": [
+            {
+              "col": "budget.spent / budget.amount",
+              "dir": "desc"
+            }
+          ],
+          "limit": 1
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT event.event_name\nFROM event\nINNER JOIN budget ON event.event_id = budget.link_to_event\nWHERE event.status = 'Closed'\nORDER BY budget.spent / budget.amount DESC\nLIMIT 1",
+          "sql_hash": "sha256:45d806332d3c76813cf790a0d9c18b108e3a1eb3ca726b50c26360d991743a68",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "event_name"
+          ],
+          "rows": [
+            [
+              "September Speaker"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 4776
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-052",
+      "arm": "direct",
+      "run_id": "pbr_63fdb67c7f0f46b385fc34fdff00ca3a",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 1459,
+      "tokens": {
+        "input": 1136,
+        "output": 323,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1459
+      },
+      "generation_ms": 7809.9,
+      "candidate": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / b.amount DESC\nLIMIT 1;",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "semantic_verdict": "multiset_equal",
+        "column_mapping": [
+          0
+        ],
+        "failure": null,
+        "error_code": null,
+        "sql": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / b.amount DESC\nLIMIT 1",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT e.event_name\nFROM event AS e\nJOIN budget AS b ON b.link_to_event = e.event_id\nWHERE e.status = 'Closed'\nORDER BY b.spent / b.amount DESC\nLIMIT 1",
+          "sql_hash": "sha256:170c44eae44e3d829aafc738072fa7dbbd7698b8214ff261658a8cc09b0623b5",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "event_name"
+          ],
+          "rows": [
+            [
+              "September Speaker"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": true,
+        "contract_accuracy": true,
+        "total_tokens": 1458
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-077",
+      "arm": "forge",
+      "run_id": "pbr_e47a6cd56de648c691012b47b2733710",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 3299,
+      "tokens": {
+        "input": 2927,
+        "output": 372,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 3299
+      },
+      "generation_ms": 9051.1,
+      "candidate": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "income.date_received",
+            "op": "eq",
+            "val": "9/9/2019"
+          }
+        ],
+        "select": [
+          "member.first_name",
+          "member.last_name",
+          "income.amount"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT member.first_name, member.last_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '9/9/2019'",
+        "forge_json": {
+          "scan": "income",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "member",
+              "on": {
+                "left": "income.link_to_member",
+                "right": "member.member_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "income.date_received",
+              "op": "eq",
+              "val": "9/9/2019"
+            }
+          ],
+          "select": [
+            "member.first_name",
+            "member.last_name",
+            "income.amount"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT member.first_name, member.last_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '9/9/2019'",
+          "sql_hash": "sha256:594f2055d614961ad035b87586358470f9de082914d6349ecc059d595b084988",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "first_name",
+            "last_name",
+            "amount"
+          ],
+          "rows": [],
+          "row_count": 0,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 4210
+      }
+    },
+    {
+      "condition": "control",
+      "case_id": "md-077",
+      "arm": "direct",
+      "run_id": "pbr_e47a6cd56de648c691012b47b2733710",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 1260,
+      "tokens": {
+        "input": 1064,
+        "output": 196,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1260
+      },
+      "generation_ms": 4860.9,
+      "candidate": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019';",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "row_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_row_count_mismatch",
+        "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019'",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '9/9/2019'",
+          "sql_hash": "sha256:5976127688c88d2979d825650cff5aafa875fdd1287b29687e67b3751370d743",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "full_name",
+            "amount"
+          ],
+          "rows": [],
+          "row_count": 0,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 1277
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-077",
+      "arm": "forge",
+      "run_id": "pbr_a2f10fce52fc48289d78f9405aced198",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 4364,
+      "tokens": {
+        "input": 3952,
+        "output": 412,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 4364
+      },
+      "generation_ms": 10182.5,
+      "candidate": {
+        "scan": "income",
+        "joins": [
+          {
+            "type": "inner",
+            "table": "member",
+            "on": {
+              "left": "income.link_to_member",
+              "right": "member.member_id"
+            }
+          }
+        ],
+        "filter": [
+          {
+            "col": "income.date_received",
+            "op": "eq",
+            "val": "2019-09-09"
+          }
+        ],
+        "select": [
+          {
+            "expr": "member.first_name || ' ' || member.last_name",
+            "as": "full_name"
+          },
+          "income.amount"
+        ]
+      },
+      "evaluation": {
+        "arm": "forge",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "column_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_column_count_mismatch",
+        "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '2019-09-09'",
+        "forge_json": {
+          "scan": "income",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "member",
+              "on": {
+                "left": "income.link_to_member",
+                "right": "member.member_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "income.date_received",
+              "op": "eq",
+              "val": "2019-09-09"
+            }
+          ],
+          "select": [
+            {
+              "expr": "member.first_name || ' ' || member.last_name",
+              "as": "full_name"
+            },
+            "income.amount"
+          ]
+        },
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '2019-09-09'",
+          "sql_hash": "sha256:17cf9deb74c897706ac3ab3f89ba0d3b2cdae6843294f15a283747d161270a89",
+          "input_kind": "forge_json",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "full_name",
+            "amount"
+          ],
+          "rows": [
+            [
+              "Sacha Harrison",
+              50
+            ],
+            [
+              "Carlo Jacobs",
+              50
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 5345
+      }
+    },
+    {
+      "condition": "treatment",
+      "case_id": "md-077",
+      "arm": "direct",
+      "run_id": "pbr_a2f10fce52fc48289d78f9405aced198",
+      "artifact_directory": ".forge/benchmarks/luna-strict-paired-20260905-resumed",
+      "recovered_after_local_failure": false,
+      "original_run_status": "completed",
+      "original_recorded_tokens": 2564,
+      "tokens": {
+        "input": 2089,
+        "output": 475,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 2564
+      },
+      "generation_ms": 11444.4,
+      "candidate": "SELECT m.first_name || ' ' || m.last_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received IN ('9/9/2019', '09/09/2019', '2019-09-09');",
+      "evaluation": {
+        "arm": "direct",
+        "metric_revision": "semantic-result-compare-v2",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "semantic_verdict": "column_count_mismatch",
+        "column_mapping": null,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "error_code": "result_column_count_mismatch",
+        "sql": "SELECT m.first_name || ' ' || m.last_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received IN ('9/9/2019', '09/09/2019', '2019-09-09')",
+        "forge_json": null,
+        "assurance": {
+          "status": "passed",
+          "assurance_revision": "query-assurance-v7",
+          "policy_revision": "convention-policy-v9",
+          "registry_revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+          "model_revision": "benchmark-v2",
+          "gates": [
+            {
+              "gate": "sql_safety",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "sql_parse",
+              "status": "passed",
+              "revision": "query-assurance-v7",
+              "diagnostics": []
+            },
+            {
+              "gate": "registry_acl",
+              "status": "passed",
+              "revision": "sha256:5c9853d4ad4d9aa41a75e03ac2af544744227e2b7ec893d45d63428055d00935",
+              "diagnostics": []
+            }
+          ],
+          "sql": "SELECT m.first_name || ' ' || m.last_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received IN ('9/9/2019', '09/09/2019', '2019-09-09')",
+          "sql_hash": "sha256:24201307b17616b56ead9d013788e9d6077f867a6355c42afc9c1867ab764cab",
+          "input_kind": "direct_sql",
+          "candidate_revision": "query-candidate-v1"
+        },
+        "result": {
+          "columns": [
+            "m.first_name || ' ' || m.last_name",
+            "amount"
+          ],
+          "rows": [
+            [
+              "Sacha Harrison",
+              50
+            ],
+            [
+              "Carlo Jacobs",
+              50
+            ]
+          ],
+          "row_count": 2,
+          "truncated": false
+        }
+      },
+      "previous_fixed_candidate": {
+        "official_ea": false,
+        "contract_accuracy": false,
+        "total_tokens": 2294
+      }
+    }
+  ],
+  "incident": {
+    "status": "fixed_offline",
+    "requests_spent": 10,
+    "provider_http_200": 10,
+    "failed_original_run": "pbr_0108940768db4eb8b2f75a8879ef3dfd",
+    "case_id": "md-046",
+    "condition": "control",
+    "arm": "forge",
+    "cause": "Pi coerceWithJsonSchema checks a recursive subschema outside its root context, overflowing its compiled validator. The raw response passes full strict validation.",
+    "fix": "Validate strict raw arguments and normalize through ToolDefinition.prepareArguments before Pi canonical schema validation. Native strict schema/prompt unchanged. Missing candidates fail the run and retain session token usage.",
+    "actual_tokens": 3819,
+    "original_run_reported_tokens": 0,
+    "original_run_reported_status": "completed",
+    "recovered_evaluation": "Assurance unknown_schema_reference: CTEs did not project total. Candidate remains incorrect; no regeneration.",
+    "tests": {
+      "typecheck": "passed",
+      "pi_passed": 132,
+      "pre_fix_new_regressions_failed": 3
+    },
+    "user_continuation": "继续剩余 10 次",
+    "total_request_cap": 20,
+    "no_failed_arm_replacement": true
+  },
+  "source_preflight": {
+    "before": {
+      "model": "openai-codex/gpt-5.6-luna",
+      "ready": true,
+      "frozen_contexts_verified": 10,
+      "frozen_user_prompts_verified": 20,
+      "local_auth_denial_verified": true,
+      "max_generation_requests": 20,
+      "prior_rejected_requests": 0,
+      "automatic_retries": 0,
+      "agent_turns_per_arm": 1,
+      "temperature_requested": null,
+      "sampling": "provider_default",
+      "output_token_hard_cap": null,
+      "global_extensions_or_context_files_loaded": false,
+      "real_auth_handled_only_by_sdk": true,
+      "source_sha256": {
+        "services/pi-orchestrator/src/benchmark-runtime.ts": "7f09fbfc813ff0d8578eb59176f66e428c9b6975a15485c166e14b487c24cb41",
+        "services/pi-orchestrator/src/strict-forge-output.ts": "33f42cb95d71eb723428ac5de5f210af70c4464dc45b8c05da6ebf2deeb4bac3",
+        "forge/compiler.py": "5e4845e7151158b21e11b3032411e253670efe67fd942545ccd07f788a194a59",
+        "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+        "forge/hard_accuracy_benchmark.py": "008d8a3fba2f83998592d2b77cd1f6c5865ae57092176fd35dd611f892e27ba1",
+        "forge/benchmark_v2.py": "966683a76b20e3e8f92f945c76b48b56124254fbcf27ece081811a843cb72777",
+        "agent/prompts.py": "8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2",
+        "web/routes/benchmark_v2.py": "c761cbc3c44bdf7744eee82880dc59604c341670f09309378bc4304e080fb1f1"
+      },
+      "generation_calls": 0
+    },
+    "after": {
+      "model": "openai-codex/gpt-5.6-luna",
+      "ready": true,
+      "frozen_contexts_verified": 10,
+      "frozen_user_prompts_verified": 20,
+      "local_auth_denial_verified": true,
+      "max_generation_requests": 20,
+      "prior_rejected_requests": 0,
+      "automatic_retries": 0,
+      "agent_turns_per_arm": 1,
+      "temperature_requested": null,
+      "sampling": "provider_default",
+      "output_token_hard_cap": null,
+      "global_extensions_or_context_files_loaded": false,
+      "real_auth_handled_only_by_sdk": true,
+      "source_sha256": {
+        "services/pi-orchestrator/src/benchmark-runtime.ts": "9e24552df12bc4e22566f8357edf989ada76e09eeaca3dde5005106a52a08ba8",
+        "services/pi-orchestrator/src/strict-forge-output.ts": "33f42cb95d71eb723428ac5de5f210af70c4464dc45b8c05da6ebf2deeb4bac3",
+        "forge/compiler.py": "5e4845e7151158b21e11b3032411e253670efe67fd942545ccd07f788a194a59",
+        "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+        "forge/hard_accuracy_benchmark.py": "008d8a3fba2f83998592d2b77cd1f6c5865ae57092176fd35dd611f892e27ba1",
+        "forge/benchmark_v2.py": "966683a76b20e3e8f92f945c76b48b56124254fbcf27ece081811a843cb72777",
+        "agent/prompts.py": "8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2",
+        "web/routes/benchmark_v2.py": "c761cbc3c44bdf7744eee82880dc59604c341670f09309378bc4304e080fb1f1"
+      },
+      "generation_calls": 10
+    }
+  },
+  "verification": {
+    "raw_forge_arguments_validated": 10,
+    "native_pi_canonical_validations": 10,
+    "original_candidates_replayed": 20,
+    "provider_payloads_verified": 20,
+    "frozen_contexts": 10,
+    "frozen_user_prompts": 20,
+    "pi_tests_passed": 132,
+    "typecheck": "passed"
+  },
+  "database_snapshot": {"path":".forge/benchmarks/bird-mini-dev/minidev/MINIDEV/MINIDEV/dev_databases/student_club/student_club.sqlite","sha256":"eb89bcfe97eefa386a27904ec5aa15159811a7eac894ec659a36e48fa9f76b77","matches_previous_replay":true},
+  "case_observations": [
+    {"case_id":"md-052","observation":"Both arms in both conditions passed; alias handling did not recur as a failure."},
+    {"case_id":"md-046","observation":"Control Forge omitted the total projection in both CTEs. Its recovered original candidate compiled but was rejected by Assurance; treatment Forge and both Direct candidates passed."},
+    {"case_id":"md-065","observation":"Treatment changed approved from Yes to true and returned three expense-description groups. Gold returns one event.type row; the semantic/reference disagreement remains unresolved, with no score override."},
+    {"case_id":"md-077","observation":"Treatment returned the same two people and amounts as Gold, but combined first/last name into one column. Both treatment arms still fail the existing column-count contract."}
+  ],
+  "limitations": [
+    "Five preselected development questions, not a representative accuracy estimate.",
+    "Provider-default sampling; no output-token or settlement-cost hard cap.",
+    "The run stopped after ten requests; the user authorized only the remaining ten, with no replacement request.",
+    "One original runtime projection falsely said completed and lost 3819 tokens. It remains preserved; session usage and recovered raw response are authoritative in this separately versioned report.",
+    "All twenty original responses were evaluated through the same final normalization/Compiler/Assurance/evaluator. No Gold-driven candidate edits.",
+    "Historical comparison includes strict-output and generation variability; no single-factor causal claim or historical 500-question score rewrite.",
+    "Latency is the existing arm duration field, includes handoff/evaluation or local failure overhead, and is only descriptive."
+  ]
+}

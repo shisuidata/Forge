@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from forge.benchmark_v2 import (
     build_context_snapshot,
     build_result_contract,
@@ -41,6 +43,13 @@ def test_context_snapshot_is_bounded_frozen_and_relationship_complete():
     assert snapshot.content_hash.startswith("sha256:")
 
 
+def test_result_contract_does_not_claim_grain_from_rate_units():
+    from dataclasses import asdict
+
+    contract = build_result_contract("How many loans require payments above 100 dollars per month?")
+    assert "expected_grain" not in asdict(contract)
+
+
 def test_semantic_compare_allows_column_permutation_when_values_identify_mapping():
     contract = build_result_contract("List user name and total revenue")
     verdict = semantic_result_compare(
@@ -76,6 +85,7 @@ def test_semantic_compare_uses_explicit_rounding_policy_only():
     exact = build_result_contract("Show the ratio")
     rounded = build_result_contract("Show the ratio rounded to 2 decimal places")
     assert semantic_result_compare([(1.234,)], [(1.23,)], exact)["correct"] is False
+    assert semantic_result_compare([(1.234,)], [(1.23,)], rounded)["correct"] is True
 
 
 def test_result_contract_requires_order_only_for_explicit_output_ordering():
@@ -129,3 +139,66 @@ def test_retrieval_requires_one_connected_relationship_component():
 
     assert snapshot.sufficiency_status == "retrieval_insufficient"
     assert snapshot.retrieval_rounds[-1].join_connected is False
+
+
+def test_semantic_compare_repeated_columns_do_not_invent_identity():
+    contract = build_result_contract("List both values")
+    result = semantic_result_compare([(1, 1), (2, 2)], [(2, 2), (1, 1)], contract)
+    assert result["correct"] is True
+    assert result["column_mapping"] is None
+    assert result["failure_code"] is None
+
+
+def test_semantic_compare_numeric_equivalence_preserves_integer_precision():
+    contract = build_result_contract("List value and identifier")
+    result = semantic_result_compare([(118.0, "x")], [("x", 118)], contract)
+    assert result["correct"] is True
+    assert result["column_mapping"] == [1, 0]
+    assert semantic_result_compare([(2**53 + 1,)], [(float(2**53 + 1),)], contract)["correct"] is False
+
+
+def test_semantic_compare_diagnoses_values_without_claiming_alignment_ambiguity():
+    contract = build_result_contract("Show the value")
+    result = semantic_result_compare([(1,)], [(2,)], contract)
+    assert result["correct"] is False
+    assert result["failure_code"] == "result_value_mismatch"
+    assert semantic_result_compare([(None,)], [(0,)], contract)["correct"] is False
+    assert semantic_result_compare([("1",)], [(1,)], contract)["correct"] is False
+
+
+def test_semantic_compare_keeps_row_correlations():
+    contract = build_result_contract("List user and amount")
+    result = semantic_result_compare([("a", 1), ("b", 2)], [("a", 2), ("b", 1)], contract)
+    assert result["correct"] is False
+    assert result["failure_code"] == "result_value_mismatch"
+
+
+def test_semantic_compare_unresolved_column_mapping_is_inconclusive():
+    contract = build_result_contract("List both values")
+    result = semantic_result_compare([(1, 1), (2, 2)], [(1, 2), (2, 1)], contract)
+    assert result["correct"] is None
+    assert result["column_mapping"] is None
+    assert result["failure_code"] == "result_column_alignment_ambiguous"
+
+
+def test_semantic_compare_handles_wide_unique_column_permutations():
+    contract = build_result_contract("List all values")
+    row = tuple(range(10))
+    result = semantic_result_compare([row], [row[::-1]], contract)
+    assert result["correct"] is True
+    assert result["column_mapping"] == list(reversed(range(10)))
+
+
+def test_semantic_compare_respects_explicit_column_positions():
+    contract = replace(build_result_contract("List both values"), column_order_significant=True)
+    assert semantic_result_compare([(1, 2)], [(2, 1)], contract)["correct"] is False
+    assert semantic_result_compare([(1, 1)], [(1, 1)], contract)["column_mapping"] == [0, 1]
+
+
+def test_semantic_compare_set_policy_ignores_only_row_multiplicity():
+    contract = build_result_contract("List statuses")
+    gold = [("paid",), ("paid",), ("open",)]
+    predicted = [("paid",), ("open",)]
+    assert semantic_result_compare(gold, predicted, contract)["correct"] is False
+    assert semantic_result_compare(gold, predicted, replace(contract, duplicate_policy="set"))["correct"] is True
+    assert semantic_result_compare(gold, [("paid",), ("void",)], replace(contract, duplicate_policy="set"))["correct"] is False

@@ -65,11 +65,12 @@ class PolicyVerdictV1(BaseModel):
 
 
 class ResultComparisonV1(BaseModel):
-    status: Literal["not_requested", "not_run", "passed", "failed"]
+    status: Literal["not_requested", "not_run", "passed", "failed", "inconclusive"]
     correct: bool | None
     verdict: str
     column_mapping: list[int] | None
     contract_revision: str | None
+    metric_revision: str | None = None
 
 
 class EvaluationLineageV1(BaseModel):

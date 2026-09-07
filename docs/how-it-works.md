@@ -50,7 +50,7 @@ Database schema:
 compile_query(forge_json)  # 同样的输入永远产生同样的 SQL
 ```
 
-编译前，`_expand_aliases()` 将 SELECT 中引用的 agg alias 展开为完整表达式，规避 SQL alias 作用域陷阱：
+编译时，`_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。例如，下面的同层聚合别名被展开为完整表达式：
 
 ```sql
 WITH user_orders AS (

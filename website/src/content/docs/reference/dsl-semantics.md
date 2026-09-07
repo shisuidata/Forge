@@ -81,7 +81,9 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 | **受约束位置的幻觉列名/表名** | LLM 生成不存在的列名 | 严格 Provider 路径下，动态 Schema 对多数表列引用强制枚举 |
 | **WHERE vs HAVING 混淆** | 聚合条件放在 WHERE | `filter` 和 `having` 是独立字段 |
 | **GROUP BY 歧义** | MySQL/PG 跨方言行为不一致 | `_coerce` 自动补齐 GROUP BY |
-| **Alias 作用域错误** | 同层 SELECT 中引用 agg alias | `_expand_aliases()` 自动展开 |
+| **同层聚合别名引用** | 同层 SELECT 引用 agg alias 通常无效 | 仅对本层未限定列引用展开；不修复缺失的CTE输出 |
+
+`_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。
 
 ---
 

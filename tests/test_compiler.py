@@ -6,8 +6,10 @@ tests/text-to-sql-failures/ and represent real AI-generated SQL mistakes
 that Forge is designed to make structurally impossible.
 """
 
-import pytest
+import sqlite3
+
 import jsonschema
+import pytest
 from forge.compiler import compile_query
 
 
@@ -242,6 +244,45 @@ def test_sort_requires_explicit_direction():
         ],
     })
     assert "ORDER BY orders.created_at DESC, orders.id ASC" in result
+
+
+def test_sort_by_unselected_aggregate_expands_expression_without_leaking_column():
+    query = {
+        "scan": "orders",
+        "agg": [{"fn": "min", "col": "orders.amount", "as": "min_amount"}],
+        "group": ["orders.user_id"],
+        "select": ["orders.user_id"],
+        "sort": [{"col": "min_amount", "dir": "asc"}],
+    }
+
+    compiled = sql(query)
+    assert compiled.startswith("SELECT orders.user_id FROM orders")
+    assert "ORDER BY MIN(orders.amount) ASC" in compiled
+    assert "AS min_amount" not in compiled
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE orders (user_id INTEGER, amount INTEGER)")
+        connection.executemany(
+            "INSERT INTO orders VALUES (?, ?)",
+            [(1, 30), (1, 10), (2, 5), (2, 50)],
+        )
+        cursor = connection.execute(compiled)
+        assert [column[0] for column in cursor.description] == ["user_id"]
+        assert cursor.fetchall() == [(2,), (1,)]
+
+
+def test_sort_by_projected_aggregate_keeps_visible_alias():
+    result = sql({
+        "scan": "orders",
+        "agg": [{"fn": "min", "col": "orders.amount", "as": "min_amount"}],
+        "group": ["orders.user_id"],
+        "select": ["orders.user_id", "min_amount"],
+        "sort": [{"col": "min_amount", "dir": "asc"}],
+    })
+
+    assert "MIN(orders.amount) AS min_amount" in result
+    assert "ORDER BY min_amount ASC" in result
+    assert "ORDER BY MIN(orders.amount)" not in result
 
 
 def test_limit():
@@ -745,3 +786,659 @@ def test_col2_condition():
         "select": ["product_stats.product_id"],
     })
     assert "product_stats.good_count > product_stats.bad_count" in result
+
+
+def test_quoted_qualified_identifiers_bind_and_execute():
+    query = {
+        "scan": "Examination",
+        "joins": [{
+            "type": "inner",
+            "table": "Patient",
+            "on": {
+                "left": '"Examination"."ID"',
+                "right": '"Patient"."ID"',
+            },
+        }],
+        "filter": [{"col": '"Examination"."RVVT"', "op": "eq", "val": "+"}],
+        "select": ['"Patient"."ID"'],
+    }
+    compiled = compile_query(query)
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute('CREATE TABLE "Examination" ("ID" INTEGER, "RVVT" TEXT)')
+        connection.execute('CREATE TABLE "Patient" ("ID" INTEGER)')
+        connection.executemany(
+            'INSERT INTO "Examination" VALUES (?, ?)',
+            [(1, "+"), (2, "-")],
+        )
+        connection.executemany('INSERT INTO "Patient" VALUES (?)', [(1,), (2,)])
+        assert connection.execute(compiled).fetchall() == [(1,)]
+
+
+def test_quoted_reserved_join_table_binds_and_executes():
+    query = {
+        "scan": "account",
+        "joins": [{
+            "type": "inner",
+            "table": '"order"',
+            "on": {
+                "left": "account.account_id",
+                "right": '"order".account_id',
+            },
+        }],
+        "filter": [{"col": '"order".amount', "op": "eq", "val": 3539}],
+        "select": ["account.frequency", '"order".k_symbol'],
+    }
+    compiled = compile_query(query)
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE account (account_id INTEGER, frequency TEXT)")
+        connection.execute(
+            'CREATE TABLE "order" (account_id INTEGER, amount INTEGER, k_symbol TEXT)'
+        )
+        connection.execute("INSERT INTO account VALUES (3, 'monthly')")
+        connection.execute("INSERT INTO \"order\" VALUES (3, 3539, 'insurance')")
+        assert connection.execute(compiled).fetchall() == [("monthly", "insurance")]
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected_alias"),
+    [
+        ("sqlite", '"eligible free rate"'),
+        ("postgresql", '"eligible free rate"'),
+        ("snowflake", '"eligible free rate"'),
+        ("mysql", "`eligible free rate`"),
+        ("bigquery", "`eligible free rate`"),
+    ],
+)
+def test_unsafe_output_alias_uses_target_dialect_quoting(dialect, expected_alias):
+    query = {
+        "scan": "metrics",
+        "select": [{"expr": "metrics.value * 100.0", "as": "eligible free rate"}],
+        "sort": [{"col": "eligible free rate", "dir": "desc"}],
+    }
+    compiled = compile_query(query, dialect=dialect)
+
+    assert f"AS {expected_alias}" in compiled
+    assert f"ORDER BY {expected_alias} DESC" in compiled
+
+    if dialect == "sqlite":
+        with sqlite3.connect(":memory:") as connection:
+            connection.execute("CREATE TABLE metrics (value REAL)")
+            connection.executemany("INSERT INTO metrics VALUES (?)", [(0.25,), (0.5,)])
+            cursor = connection.execute(compiled)
+            assert [column[0] for column in cursor.description] == ["eligible free rate"]
+            assert cursor.fetchall() == [(50.0,), (25.0,)]
+
+
+def test_reserved_word_output_alias_is_quoted():
+    compiled = compile_query({
+        "scan": "metrics",
+        "select": [{"expr": "metrics.value", "as": "order"}],
+    })
+    assert 'AS "order"' in compiled
+
+
+def test_having_expands_aggregate_aliases_on_both_operands():
+    query = {
+        "scan": "matches",
+        "group": ["matches.league"],
+        "agg": [
+            {"fn": "avg", "col": "matches.home_goals", "as": "avg_home_goals"},
+            {"fn": "avg", "col": "matches.away_goals", "as": "avg_away_goals"},
+        ],
+        "having": [{
+            "col": "avg_home_goals",
+            "op": "gt",
+            "col2": "avg_away_goals",
+        }],
+        "select": ["matches.league"],
+    }
+    compiled = compile_query(query)
+
+    assert "HAVING AVG(matches.home_goals) > AVG(matches.away_goals)" in compiled
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute(
+            "CREATE TABLE matches (league TEXT, home_goals INTEGER, away_goals INTEGER)"
+        )
+        connection.executemany(
+            "INSERT INTO matches VALUES (?, ?, ?)",
+            [("home", 3, 1), ("home", 1, 1), ("away", 0, 2)],
+        )
+        assert connection.execute(compiled).fetchall() == [("home",)]
+
+
+def test_unquoted_reserved_source_table_is_quoted_and_executes():
+    query = {
+        "scan": "account",
+        "joins": [{
+            "type": "inner",
+            "table": "order",
+            "on": {
+                "left": "account.account_id",
+                "right": "order.account_id",
+            },
+        }],
+        "filter": [{"col": "order.amount", "op": "eq", "val": 3539}],
+        "select": ["account.frequency", "order.k_symbol"],
+    }
+    compiled = compile_query(query)
+
+    assert 'INNER JOIN "order" ON account.account_id = "order".account_id' in compiled
+    assert 'WHERE "order".amount = 3539' in compiled
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE account (account_id INTEGER, frequency TEXT)")
+        connection.execute(
+            'CREATE TABLE "order" (account_id INTEGER, amount INTEGER, k_symbol TEXT)'
+        )
+        connection.execute("INSERT INTO account VALUES (3, 'monthly')")
+        connection.execute('INSERT INTO "order" VALUES (?, ?, ?)', (3, 3539, "insurance"))
+        assert connection.execute(compiled).fetchall() == [("monthly", "insurance")]
+
+
+def test_complex_source_column_is_quoted_in_select_and_sort():
+    query = {
+        "scan": "state_stats",
+        "select": ["State", "Enrollment (K-12)"],
+        "sort": [{"col": "Enrollment (K-12)", "dir": "desc"}],
+    }
+    compiled = compile_query(query)
+
+    assert 'SELECT State, "Enrollment (K-12)"' in compiled
+    assert 'ORDER BY "Enrollment (K-12)" DESC' in compiled
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute(
+            'CREATE TABLE state_stats (State TEXT, "Enrollment (K-12)" INTEGER)'
+        )
+        connection.executemany(
+            'INSERT INTO state_stats VALUES (?, ?)',
+            [("A", 100), ("B", 200)],
+        )
+        assert connection.execute(compiled).fetchall() == [("B", 200), ("A", 100)]
+
+
+@pytest.mark.parametrize("alias_separator", [" AS ", " "])
+def test_raw_subquery_scan_remains_an_expression(alias_separator):
+    compiled = compile_query({
+        "scan": f"(SELECT 1 AS value){alias_separator}source",
+        "select": ["source.value"],
+    })
+
+
+    with sqlite3.connect(":memory:") as connection:
+        assert connection.execute(compiled).fetchall() == [(1,)]
+
+
+def test_conditional_aggregate_expression_remains_sql():
+    query = {
+        "scan": "metrics",
+        "agg": [{
+            "fn": "sum",
+            "expr": "CASE WHEN category = 'x' THEN amount ELSE 0 END",
+            "as": "x_total",
+        }],
+        "select": ["x_total"],
+    }
+    compiled = compile_query(query)
+
+    assert "SUM(CASE WHEN category = 'x' THEN amount ELSE 0 END)" in compiled
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE metrics (category TEXT, amount INTEGER)")
+        connection.executemany(
+            "INSERT INTO metrics VALUES (?, ?)",
+            [("x", 10), ("y", 20), ("x", 5)],
+        )
+        assert connection.execute(compiled).fetchall() == [(15,)]
+
+
+@pytest.mark.parametrize("alias_separator", [" AS ", " "])
+def test_relation_aliases_support_self_join_execution(alias_separator):
+    query = {
+        "scan": f"connected{alias_separator}c",
+        "joins": [
+            {
+                "type": "inner",
+                "table": f"atom{alias_separator}a1",
+                "on": {"left": "c.atom_id", "right": "a1.atom_id"},
+            },
+            {
+                "type": "inner",
+                "table": f"atom{alias_separator}a2",
+                "on": {"left": "c.atom_id2", "right": "a2.atom_id"},
+            },
+        ],
+        "select": ["a1.element", "a2.element"],
+    }
+    compiled = compile_query(query)
+
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE connected (atom_id TEXT, atom_id2 TEXT)")
+        connection.execute("CREATE TABLE atom (atom_id TEXT, element TEXT)")
+        connection.executemany("INSERT INTO atom VALUES (?, ?)", [("1", "p"), ("2", "n")])
+        connection.execute("INSERT INTO connected VALUES ('1', '2')")
+        assert connection.execute(compiled).fetchall() == [("p", "n")]
+
+
+def test_quoted_relation_names_and_aliases_preserve_identifier_boundaries():
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute('CREATE TABLE "source AS data" (id INTEGER, parent_id INTEGER)')
+        connection.executemany('INSERT INTO "source AS data" VALUES (?, ?)', [(1, None), (2, 1)])
+        unaliased = {"scan": '"source AS data"', "select": ['"source AS data".id'], "sort": [{"col": "id", "dir": "asc"}]}
+        assert connection.execute(compile_query(unaliased)).fetchall() == [(1,), (2,)]
+        aliased = {
+            "scan": 'main."source AS data" "parent row"',
+            "joins": [{"type": "inner", "table": '"source AS data" "child row"',
+                       "on": {"left": '"parent row".id', "right": '"child row".parent_id'}}],
+            "select": ['"parent row".id', '"child row".id'],
+        }
+        assert connection.execute(compile_query(aliased)).fetchall() == [(1, 2)]
+
+
+@pytest.fixture
+def scalar_extreme_connection():
+    connection = sqlite3.connect(":memory:")
+    connection.executescript("""
+        CREATE TABLE samples (driver INTEGER, race INTEGER, value INTEGER);
+        CREATE TABLE drivers (id INTEGER PRIMARY KEY);
+        CREATE TABLE races (id INTEGER PRIMARY KEY);
+    """)
+    connection.executemany("INSERT INTO drivers VALUES (?)", ((i,) for i in range(100)))
+    connection.executemany("INSERT INTO races VALUES (?)", ((i,) for i in range(10)))
+    connection.executemany(
+        "INSERT INTO samples VALUES (?, ?, ?)",
+        ((i % 100, i % 10, None if i == 0 else -1 if i in (2, 7)
+          else 3000 if i in (19, 21) else i) for i in range(2000)),
+    )
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def scalar_extreme_query():
+    return {
+        "scan": "samples",
+        "cte": [{"name": "best", "query": {
+            "scan": "samples",
+            "agg": [{"fn": "min", "col": "samples.value", "as": "extreme"}],
+            "select": ["extreme"],
+        }}],
+        "joins": [
+            {"type": "inner", "table": "drivers",
+             "on": {"left": "samples.driver", "right": "drivers.id"}},
+            {"type": "inner", "table": "races",
+             "on": {"left": "samples.race", "right": "races.id"}},
+            {"type": "inner", "table": "best",
+             "on": {"left": "samples.value", "right": "best.extreme"}},
+        ],
+        "select": ["samples.value", "drivers.id", "races.id"],
+    }
+
+
+def _execute_with_step_budget(connection, query, budget):
+    compiled = compile_query(query)
+    def interrupt():
+        nonlocal budget
+        budget -= 1000
+        return budget <= 0
+    connection.set_progress_handler(interrupt, 1000)
+    try:
+        return connection.execute(compiled).fetchall()
+    finally:
+        connection.set_progress_handler(None, 0)
+
+
+@pytest.mark.parametrize("fn, explicit_projection, expected", [
+    ("min", True, [(-1, 2, 2), (-1, 7, 7)]),
+    ("max", False, [(3000, 19, 9), (3000, 21, 1)]),
+])
+def test_joined_scalar_extreme_preserves_ties_with_bounded_work(
+    scalar_extreme_connection, scalar_extreme_query, fn, explicit_projection, expected,
+):
+    body = scalar_extreme_query["cte"][0]["query"]
+    body["agg"][0]["fn"] = fn
+    if explicit_projection:
+        body["select"] = [{"expr": f"{fn.upper()}(samples.value)", "as": "extreme"}]
+    rows = _execute_with_step_budget(
+        scalar_extreme_connection, scalar_extreme_query, 500_000,
+    )
+    assert sorted(rows) == expected
+
+
+def test_scalar_extreme_keeps_null_row_for_null_and_empty_input(
+    scalar_extreme_connection, scalar_extreme_query,
+):
+    cte = scalar_extreme_query["cte"][0]
+    cte["name"] = "best time"
+    cte["query"]["scan"] = 'samples AS "source data"'
+    cte["query"]["agg"][0]["col"] = '"source data".value'
+    query = {
+        "cte": [cte], "scan": "drivers",
+        "joins": [{"type": "cross", "table": '"best time" AS b'}],
+        "filter": [{"col": "drivers.id", "op": "eq", "val": 0}],
+        "select": ["b.extreme"],
+    }
+    scalar_extreme_connection.execute("UPDATE samples SET value = NULL")
+    assert _execute_with_step_budget(scalar_extreme_connection, query, 500_000) == [(None,)]
+    scalar_extreme_connection.execute("DELETE FROM samples")
+    assert _execute_with_step_budget(scalar_extreme_connection, query, 500_000) == [(None,)]
+
+
+def test_unused_aggregate_does_not_block_nonaggregate_cte_pushdown(
+    scalar_extreme_connection, scalar_extreme_query,
+):
+    scalar_extreme_connection.execute("CREATE INDEX samples_value ON samples(value)")
+    scalar_extreme_query["cte"][0]["query"]["select"] = [
+        {"expr": "samples.value", "as": "extreme"},
+    ]
+    scalar_extreme_query["filter"] = [{"col": "samples.value", "op": "eq", "val": 3}]
+    assert _execute_with_step_budget(
+        scalar_extreme_connection, scalar_extreme_query, 5_000,
+    ) == [(3, 3, 3)]
+
+
+
+def test_implicit_alias_does_not_keep_the_original_table_in_scope():
+    with pytest.raises(ValueError):
+        compile_query({"scan": "nodes n", "select": ["nodes.id"]})
+
+
+def test_mixed_alias_syntax_cannot_redeclare_a_visible_relation():
+    with pytest.raises(ValueError):
+        compile_query({
+            "scan": "nodes n",
+            "joins": [{"type": "inner", "table": "nodes AS n",
+                       "on": {"left": "n.id", "right": "n.parent_id"}}],
+            "select": ["n.id"],
+        })
+
+
+def test_relation_suffix_is_not_reinterpreted_as_an_implicit_alias():
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE nodes (id INTEGER)")
+        connection.execute("CREATE INDEX node_index ON nodes(id)")
+        connection.execute("INSERT INTO nodes VALUES (7)")
+        compiled = compile_query({"scan": "nodes INDEXED BY node_index", "select": ["id"]})
+        assert connection.execute(compiled).fetchall() == [(7,)]
+    with pytest.raises(ValueError):
+        compile_query({"scan": "nodes WHERE", "select": ['"WHERE".id']})
+
+
+def test_inner_aliases_in_raw_subquery_do_not_leak_into_outer_scope():
+    query = {
+        "scan": "outer_table",
+        "select": [{
+            "expr": "(SELECT MAX(inner_t.value) FROM inner_table AS inner_t)",
+            "as": "maximum_value",
+        }],
+    }
+    compiled = compile_query(query)
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE outer_table (id INTEGER)")
+        connection.execute("CREATE TABLE inner_table (value INTEGER)")
+        connection.executemany("INSERT INTO outer_table VALUES (?)", [(1,), (2,)])
+        connection.executemany("INSERT INTO inner_table VALUES (?)", [(3,), (5,)])
+        assert connection.execute(compiled).fetchall() == [(5,), (5,)]
+
+
+def test_scalar_subquery_comparison_executes():
+    query = {
+        "scan": "scores",
+        "filter": [{
+            "col": "score",
+            "op": "gt",
+            "val": {
+                "subquery": {
+                    "scan": "scores",
+                    "agg": [{"fn": "avg", "col": "score", "as": "average_score"}],
+                    "select": ["average_score"],
+                },
+            },
+        }],
+        "select": ["user_id"],
+        "sort": [{"col": "user_id", "dir": "asc"}],
+    }
+    compiled = compile_query(query)
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE scores (user_id INTEGER, score INTEGER)")
+        connection.executemany("INSERT INTO scores VALUES (?, ?)", [(1, 1), (2, 5), (3, 9)])
+        assert connection.execute(compiled).fetchall() == [(3,)]
+
+
+def test_sort_sql_expression_executes_without_identifier_quoting():
+    query = {
+        "scan": "event",
+        "joins": [{
+            "type": "inner",
+            "table": "budget",
+            "on": {"left": "event.id", "right": "budget.event_id"},
+        }],
+        "select": ["event.name"],
+        "sort": [{"col": "budget.spent / budget.amount", "dir": "desc"}],
+        "limit": 1,
+    }
+    compiled = compile_query(query)
+
+    assert "ORDER BY budget.spent / budget.amount DESC" in compiled
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE event (id INTEGER, name TEXT)")
+        connection.execute("CREATE TABLE budget (event_id INTEGER, spent REAL, amount REAL)")
+        connection.executemany("INSERT INTO event VALUES (?, ?)", [(1, "A"), (2, "B")])
+        connection.executemany("INSERT INTO budget VALUES (?, ?, ?)", [(1, 50, 100), (2, 200, 100)])
+        assert connection.execute(compiled).fetchall() == [("B",)]
+
+
+def test_multi_condition_semi_join_accepts_simple_conditions():
+    query = {
+        "scan": "users",
+        "joins": [{
+            "type": "semi",
+            "table": "audit",
+            "on": [
+                {"col": "users.id", "op": "eq", "col2": "audit.user_id"},
+                {"col": "users.org_id", "op": "eq", "col2": "audit.org_id"},
+            ],
+        }],
+        "select": ["users.id"],
+        "sort": [{"col": "users.id", "dir": "asc"}],
+    }
+    compiled = compile_query(query)
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE users (id INTEGER, org_id INTEGER)")
+        connection.execute("CREATE TABLE audit (user_id INTEGER, org_id INTEGER)")
+        connection.executemany("INSERT INTO users VALUES (?, ?)", [(1, 10), (2, 20)])
+        connection.executemany("INSERT INTO audit VALUES (?, ?)", [(1, 10), (1, 10), (2, 99)])
+        assert connection.execute(compiled).fetchall() == [(1,)]
+
+
+def test_having_expression_expands_hidden_aggregate_aliases():
+    query = {
+        "scan": "sales",
+        "group": ["category"],
+        "agg": [
+            {"fn": "sum", "col": "amount", "as": "total_amount"},
+            {"fn": "count_all", "as": "item_count"},
+        ],
+        "having": [{"col": "total_amount * 1.0 / item_count", "op": "gt", "val": 5}],
+        "select": ["category"],
+    }
+    compiled = compile_query(query)
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE sales (category TEXT, amount INTEGER)")
+        connection.executemany("INSERT INTO sales VALUES (?, ?)", [("A", 4), ("A", 8), ("B", 3)])
+        assert connection.execute(compiled).fetchall() == [("A",)]
+
+
+def test_empty_group_does_not_emit_invalid_group_by_clause():
+    query = {
+        "scan": "items",
+        "group": [],
+        "agg": [{"fn": "count_all", "as": "item_count"}],
+        "select": ["item_count"],
+    }
+    compiled = compile_query(query)
+
+    assert "GROUP BY" not in compiled
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE items (id INTEGER)")
+        connection.executemany("INSERT INTO items VALUES (?)", [(1,), (2,)])
+        assert connection.execute(compiled).fetchall() == [(2,)]
+
+
+@pytest.mark.parametrize(("clauses", "expected"), [
+    pytest.param({
+        "select": ["picked.id", {"expr": "picked.amount", "as": "value"}, "dimensions.amount"],
+        "sort": [{"col": "picked.id", "dir": "asc"}, {"col": "picked.amount", "dir": "asc"}],
+    }, [(1, 10, 100), (1, 20, 100), (2, 70, 200)], id="projection"),
+    pytest.param({
+        "group": ["picked.id"],
+        "agg": [{"fn": "sum", "col": "picked.amount", "as": "total"}],
+        "select": ["picked.id", "total"],
+        "sort": [{"col": "picked.id", "dir": "asc"}],
+    }, [(1, 30), (2, 70)], id="aggregation"),
+    pytest.param({
+        "window": [{"fn": "row_number", "partition": ["picked.id"],
+                    "order": [{"col": "picked.amount", "dir": "asc"}], "as": "position"}],
+        "select": [{"expr": "picked.id + 0", "as": "fact_id"}, "position"],
+        "sort": [{"col": "picked.id", "dir": "asc"}, {"col": "picked.amount", "dir": "asc"}],
+    }, [(1, 1), (1, 2), (2, 1)], id="window-partition"),
+])
+def test_cte_qualified_columns_survive_join_with_same_named_physical_columns(clauses, expected):
+    query = {
+        "cte": [{"name": "picked", "query": {
+            "scan": "facts", "select": ["facts.id", "facts.amount"],
+        }}],
+        "scan": "picked",
+        "joins": [{"type": "inner", "table": "dimensions",
+                   "on": {"left": "picked.id", "right": "dimensions.id"}}],
+        **clauses,
+    }
+    with sqlite3.connect(":memory:") as connection:
+        connection.executescript("""
+            CREATE TABLE facts (id INTEGER, amount INTEGER);
+            CREATE TABLE dimensions (id INTEGER, amount INTEGER);
+            INSERT INTO facts VALUES (1, 10), (1, 20), (2, 70);
+            INSERT INTO dimensions VALUES (1, 100), (2, 200);
+        """)
+        assert connection.execute(compile_query(query)).fetchall() == expected
+
+
+def test_unique_joined_cte_column_is_not_rebound_to_main_cte():
+    query = {
+        "cte": [
+            {"name": "picked", "query": {"scan": "facts", "select": ["facts.id"]}},
+            {"name": "labels", "query": {"scan": "dimensions", "select": ["dimensions.id", "dimensions.label"]}},
+        ],
+        "scan": "picked",
+        "joins": [{"type": "inner", "table": "labels",
+                   "on": {"left": "picked.id", "right": "labels.id"}}],
+        "select": ["label"],
+        "sort": [{"col": "picked.id", "dir": "asc"}],
+    }
+    with sqlite3.connect(":memory:") as connection:
+        connection.executescript("""
+            CREATE TABLE facts (id INTEGER);
+            CREATE TABLE dimensions (id INTEGER, label TEXT);
+            INSERT INTO facts VALUES (1), (1), (2);
+            INSERT INTO dimensions VALUES (1, 'north'), (2, 'south');
+        """)
+        assert connection.execute(compile_query(query)).fetchall() == [("north",), ("north",), ("south",)]
+
+
+@pytest.fixture
+def expression_binding_connection():
+    with sqlite3.connect(":memory:") as connection:
+        connection.executescript("""
+            PRAGMA foreign_keys = ON;
+            CREATE TABLE facts (id INTEGER PRIMARY KEY, n INTEGER, amount INTEGER, label TEXT);
+            CREATE TABLE detail (id INTEGER PRIMARY KEY, fact_id INTEGER REFERENCES facts(id), n INTEGER);
+            INSERT INTO facts VALUES (1, 700, 5, 'n'), (2, 800, 10, 'keep');
+            INSERT INTO detail VALUES (1, 1, 40), (2, 2, 50);
+        """)
+        yield connection
+
+
+@pytest.mark.parametrize("reference", ['facts.n', '"facts"."n"', 'facts /* boundary */ . n'])
+def test_expression_binding_preserves_qualified_source_column(expression_binding_connection, reference):
+    query = {"scan": "facts", "agg": [{"fn": "sum", "col": "facts.amount", "as": "n"}],
+             "select": [{"expr": reference, "as": "value"}],
+             "sort": [{"col": "facts.id", "dir": "asc"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [(700,), (800,)]
+
+
+def test_expression_binding_distinguishes_window_alias_from_source(expression_binding_connection):
+    query = {"scan": "facts", "window": [{"fn": "row_number", "order": [{"col": "facts.id", "dir": "asc"}], "as": "n"}],
+             "select": [{"expr": "facts.n + n", "as": "value"}],
+             "sort": [{"col": "facts.id", "dir": "asc"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [(701,), (802,)]
+
+
+def test_expression_binding_preserves_literals_functions_and_types(expression_binding_connection):
+    query = {"scan": "facts", "agg": [
+        {"fn": "sum", "col": "facts.amount", "as": "total"},
+        {"fn": "count_all", "as": "abs"}, {"fn": "count_all", "as": "REAL"}],
+        "select": [{"expr": "CAST(abs(total) AS REAL)", "as": "value"},
+                   {"expr": "'total abs REAL'", "as": "label"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [(15.0, "total abs REAL")]
+
+
+def test_expression_binding_does_not_enter_scalar_subqueries(expression_binding_connection):
+    query = {"scan": "facts", "agg": [{"fn": "sum", "col": "facts.amount", "as": "n"}],
+             "select": [
+                 {"expr": "n + (SELECT n FROM detail WHERE detail.fact_id = 1)", "as": "value"},
+                 {"expr": "(WITH n AS (SELECT 8 AS n) SELECT n FROM n) + n", "as": "cte_value"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [(55, 23)]
+
+
+def test_expression_binding_does_not_rewrite_inserted_aggregate_sql(expression_binding_connection):
+    query = {"scan": "facts", "agg": [
+        {"fn": "sum", "col": "facts.n", "as": "total_value"},
+        {"fn": "min", "col": "facts.amount", "as": "n"}],
+        "select": [{"expr": "total_value", "as": "value"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [(1500,)]
+
+
+def test_expression_binding_distinguishes_quoted_aliases_and_numbers(expression_binding_connection):
+    query = {"scan": "facts", "agg": [
+        {"fn": "count_all", "as": "1"}, {"fn": "sum", "col": "facts.amount", "as": "gross total"}],
+        "select": [{"expr": '"1" + "gross total" + 1', "as": "value"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [(18,)]
+
+
+def test_expression_binding_does_not_rescue_missing_cte_output(expression_binding_connection):
+    query = {"cte": [{"name": "picked", "query": {"scan": "facts", "select": ["facts.id"]}}],
+             "scan": "picked", "agg": [{"fn": "sum", "col": "picked.id", "as": "n"}],
+             "select": [{"expr": "picked.n", "as": "value"}]}
+    with pytest.raises(sqlite3.OperationalError):
+        expression_binding_connection.execute(compile_query(query)).fetchall()
+
+
+def test_expression_binding_quoted_having_alias_uses_aggregate(expression_binding_connection):
+    query = {"scan": "facts", "group": ["facts.label"],
+             "agg": [{"fn": "sum", "col": "facts.amount", "as": "n"}],
+             "select": ["facts.label", "n"], "having": [{"col": '"n"', "op": "gt", "val": 7}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [("keep", 10)]
+
+
+def test_expression_binding_first_value_accepts_aggregate_argument(expression_binding_connection):
+    query = {"scan": "facts", "group": ["facts.label"],
+             "agg": [{"fn": "sum", "col": "facts.amount", "as": "total"}],
+             "window": [{"fn": "first_value", "col": "total", "order": [{"col": "facts.label", "dir": "asc"}], "as": "first_total"}],
+             "select": ["facts.label", "total", "first_total"],
+             "sort": [{"col": "facts.label", "dir": "asc"}]}
+    assert expression_binding_connection.execute(compile_query(query)).fetchall() == [("keep", 10, 10), ("n", 5, 10)]
+
+
+def test_expression_binding_sort_can_use_hidden_aggregate(expression_binding_connection):
+    query = {"scan": "facts", "group": ["facts.label"],
+             "agg": [{"fn": "sum", "col": "facts.amount", "as": "total"}],
+             "select": ["facts.label"], "sort": [{"col": "total + 1", "dir": "asc"}]}
+    cursor = expression_binding_connection.execute(compile_query(query))
+    assert [column[0] for column in cursor.description] == ["label"]
+    assert cursor.fetchall() == [("n",), ("keep",)]

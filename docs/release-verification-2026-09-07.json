@@ -1,0 +1,380 @@
+{
+  "schema_version": "repository-release-verification-v1",
+  "date": "2026-09-07",
+  "delivery": {
+    "branch": "main",
+    "remote": "origin",
+    "package_version": "0.1.0",
+    "existing_release_tag": "v0.1.0-beta",
+    "new_tag_created": false,
+    "package_publication": false,
+    "manual_deployment": false,
+    "scope": "Commit and push the accumulated benchmark/runtime work, public reports, README updates and pre-existing ACL vulnerability fix."
+  },
+  "model_calls_this_release": 0,
+  "implementation": {
+    "schema_version": 1,
+    "date": "2026-09-07",
+    "gate": "passed",
+    "environment": {
+      "python": "3.14.7",
+      "node": "24.4.1",
+      "os": "macOS arm64",
+      "ci_python": "3.11",
+      "ci_node": "22",
+      "ci_executed": false
+    },
+    "isolation": {
+      "runner": "<local-temp>/run-gate.sh",
+      "runner_sha256": "1c0b70db9c294725352f894614574bb19b78343626a6835394819e7ea7285285",
+      "dotenv": "FORGE_DISABLE_DOTENV=true",
+      "model_config": "FORGE_CONFIG_PATH=<local-temp>/absent-config.yaml",
+      "environment": "env -i; temporary HOME; test persistence redirected to temporary files; no inherited credentials",
+      "sandbox": "Deny external outbound network; permit localhost synthetic test servers; deny reads/writes to repository forge.yaml/.env/.forge/root runtime databases and real credential directories",
+      "e2e_url": "http://127.0.0.1:1",
+      "model_calls": 0,
+      "real_runtime_database_access": 0
+    },
+    "code_changes": [
+      {
+        "path": "forge/assurance.py",
+        "sha256": "33e0b260cad97b12c15ebaf1ece875eafa82ac491c8a175c282d6c44fe86df2b",
+        "change": "Assurance v10: per-Scope physical source authorization using the same dialect-normalized MappingSchema as SQL qualification; remove global CTE-name exemption; reject unmodeled schema/catalog-qualified physical sources."
+      },
+      {
+        "path": "tests/test_assurance.py",
+        "sha256": "9ea01e5d8f4e8e34f63e9a4b2e643ed38b7506283b81ea5ba1872ffc88d5289e",
+        "change": "11 added observable regression cases: nested CTE ACL bypass for both input kinds, nested definition and UNION source boundaries, schema/catalog qualification, legitimate CTE shadowing/UNION, Snowflake normalization."
+      }
+    ],
+    "references": {
+      "lsp": "No LSP/server capability exposed; grep references fallback",
+      "callers": "Evaluate and evaluation_runs import Assurance revision; QueryRun approval checks current revision dynamically. No caller/test updates required."
+    },
+    "final_commands": [
+      {
+        "command": "<local-temp>/run-gate.sh .venv/bin/python -m pytest tests -q",
+        "exit_code": 0,
+        "output": "<local-temp>/python-final.log",
+        "result": {
+          "passed": 910,
+          "failed": 0,
+          "skipped": 28,
+          "warnings": 1,
+          "total": 938
+        }
+      },
+      {
+        "command": "<local-temp>/run-gate.sh npm --prefix services/pi-orchestrator run typecheck",
+        "exit_code": 0,
+        "output": "<local-temp>/pi-typecheck-final.log",
+        "result": {
+          "typecheck": "passed"
+        }
+      },
+      {
+        "command": "<local-temp>/run-gate.sh npm --prefix services/pi-orchestrator test",
+        "exit_code": 0,
+        "output": "<local-temp>/pi-tests-final.log",
+        "result": {
+          "tests": 155,
+          "passed": 155,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      }
+    ],
+    "skips": [
+      {
+        "file": "tests/test_e2e.py",
+        "count": 26,
+        "reason": "24 live-browser tests have no server at isolated URL; 2 mutation tests require explicit FORGE_E2E_ALLOW_MUTATION=true on isolated Registry."
+      },
+      {
+        "file": "tests/test_hard_accuracy_benchmark.py",
+        "count": 2,
+        "lines": [
+          100,
+          115
+        ],
+        "reason": "Local Mini-Dev runtime assets intentionally unavailable inside sandbox; no real benchmark database used."
+      }
+    ],
+    "earlier_attempts": [
+      {
+        "command": "<local-temp>/run-gate.sh .venv/bin/python -m pytest tests -q",
+        "result": "9 failed, 890 passed, 28 skipped, 1 warning",
+        "output": "artifact://2736",
+        "resolution": "8 failures came from omitted FORGE_CONFIG_PATH: get_model_config stat() hit forbidden forge.yaml. One docs-link failure involved five .forge Markdown targets absent from public checkout. Temporary config override resolves the eight; parent converted private links to code paths. Final full suite passes."
+      },
+      {
+        "command": "<local-temp>/run-gate.sh npm --prefix services/pi-orchestrator run typecheck",
+        "result": "passed",
+        "output": "history://版本行为验证与实现审阅"
+      },
+      {
+        "command": "<local-temp>/run-gate.sh npm --prefix services/pi-orchestrator test",
+        "result": "155 passed, 0 failed, 0 skipped",
+        "output": "artifact://2731"
+      },
+      {
+        "command": "<local-temp>/run-gate.sh .venv/bin/python -m pytest tests/test_api.py::TestChatAPI::test_chat_with_llm tests/test_api.py::TestAdminPages::test_admin_page_loads tests/test_feishu_runtime.py::test_feishu_settings_masks_all_channel_secrets tests/test_model_control.py -q",
+        "result": "8 failed, 15 passed, 1 warning",
+        "output": "artifact://2744",
+        "resolution": "The first runner edit was rejected by the edit tool, so this subset accidentally ran without the intended config override. Same isolation failures, not independent implementation regressions."
+      },
+      {
+        "command": "<local-temp>/run-gate.sh env FORGE_CONFIG_PATH=<local-temp>/absent-config.yaml .venv/bin/python -m pytest tests/test_api.py::TestChatAPI::test_chat_with_llm tests/test_api.py::TestAdminPages::test_admin_page_loads tests/test_feishu_runtime.py::test_feishu_settings_masks_all_channel_secrets tests/test_model_control.py -q",
+        "result": "23 passed, 1 warning",
+        "output": "history://版本行为验证与实现审阅"
+      },
+      {
+        "command": "<local-temp>/run-gate.sh env FORGE_CONFIG_PATH=<local-temp>/absent-config.yaml .venv/bin/python -m pytest tests/test_assurance.py -q",
+        "result": "6 failed, 39 passed",
+        "output": "history://版本行为验证与实现审阅",
+        "resolution": "Intentional new security regression red phase: six authorization cases incorrectly did not raise QueryAssuranceError; fixed source, not expectations."
+      },
+      {
+        "command": "<local-temp>/run-gate.sh env FORGE_CONFIG_PATH=<local-temp>/absent-config.yaml .venv/bin/python -m pytest tests/test_assurance.py tests/test_evaluate.py tests/test_evaluation_runs.py tests/test_query_runs.py tests/test_enforce_api.py tests/test_benchmark_metric_revision_api.py -q",
+        "result": "exit 4; no tests ran",
+        "resolution": "Invocation typo: actual existing file is tests/test_enforce.py. Corrected command below."
+      },
+      {
+        "command": "<local-temp>/run-gate.sh env FORGE_CONFIG_PATH=<local-temp>/absent-config.yaml .venv/bin/python -m pytest tests/test_assurance.py tests/test_evaluate.py tests/test_evaluation_runs.py tests/test_query_runs.py tests/test_enforce.py tests/test_benchmark_metric_revision_api.py -q",
+        "result": "123 passed, 1 warning",
+        "output": "history://版本行为验证与实现审阅"
+      },
+      {
+        "command": "<local-temp>/run-gate.sh .venv/bin/python <local-temp>/assurance-contract-smoke.py",
+        "result": "failed on legal Snowflake CTE",
+        "output": "<local-temp>/assurance-contract-smoke.log",
+        "resolution": "Found intermediate implementation regression: qualified AST had uppercase Snowflake identifiers but raw Registry keys remained lowercase. Fixed by reusing dialect-normalized MappingSchema, not by special-casing a dialect/query."
+      },
+      {
+        "command": "<local-temp>/run-gate.sh .venv/bin/python -m pytest tests/test_assurance.py::test_relation_authorization_uses_dialect_identifier_normalization -q",
+        "result": "1 failed",
+        "output": "<local-temp>/assurance-dialect-red.log",
+        "resolution": "Regression test preserved the smoke-discovered Snowflake issue before the MappingSchema fix; included in final green suite."
+      },
+      {
+        "command": "<local-temp>/run-gate.sh .venv/bin/python -m pytest tests/test_assurance.py tests/test_evaluate.py tests/test_evaluation_runs.py tests/test_query_runs.py tests/test_enforce.py tests/test_benchmark_metric_revision_api.py -q",
+        "result": "124 passed, 1 warning",
+        "output": "<local-temp>/assurance-focused-final.log"
+      }
+    ],
+    "smoke": {
+      "command": "<local-temp>/run-gate.sh .venv/bin/python <local-temp>/assurance-contract-smoke.py",
+      "output": "<local-temp>/assurance-contract-smoke-final.log",
+      "result": "passed",
+      "checks": [
+        "Five dialects × two input kinds: unauthorized physical source rejected; legitimate authorized CTE accepted",
+        "Synthetic SQLite returns authorized rows [[1],[3]]",
+        "Public Evaluate success/failure envelopes validate against Pydantic response Contract; neither grants execution",
+        "Synthetic v9 QueryRun approval under v10 rejects with assurance_revision_drift and leaves stored run unchanged"
+      ]
+    },
+    "baseline_reproducer": {
+      "script": "<local-temp>/assurance-scope-repro.py",
+      "before_output": "<local-temp>/assurance-scope-repro-result.json",
+      "before": "Both HEAD and original worktree passed unauthorized source and synthetic SQLite returned [[2]]. Existing defect, not introduced by pending changes.",
+      "after": "Current worktree raises QueryAssuranceError at registry_acl; baseline remains reproducibly vulnerable."
+    },
+    "review": {
+      "compiler": "Alias/scope/quoted identifiers, expression alias expansion, CTE binding, scalar-extremum materialization tests exercised in full suite.",
+      "assurance": "Shared SQL gates exercised plus repaired scope-aware physical-source authorization.",
+      "metric_revision": "Comparator v2 and unknown/inconclusive verdicts; context/evaluation drift and historical unversioned fail-closed behavior exercised.",
+      "gold": "Selected-case Gold preflight, exact budget, explicit blocked-case authorization, no denominator shrink and unscored Gold failures exercised using fixtures.",
+      "pi": "Single dispatch/turn, no retry, cancellation terminal evidence/usage retention, unknown usage versus zero, native strict schema decoding and recursive Pi arguments all exercised without provider calls.",
+      "ci": "CI runs pytest -q via tests testpaths, Pi typecheck and tests on Node22, and separate SQLite/PostgreSQL/MySQL compatibility jobs. Local gates match first two jobs; hosted CI and external engine services were not run."
+    },
+    "release_notes_for_parent": [
+      "Old Assurance v9 QueryRuns require prepare again; do not rewrite historical experimental evidence.",
+      "Current Registry authorizes unqualified names only; schema/catalog-qualified physical references fail closed rather than borrowing a basename grant.",
+      "Local runtime differs from CI: Python3.14.7/Node24.4.1 versus Python3.11/Node22. Await hosted CI; local success does not claim hosted success.",
+      "Browser E2E, live Mini-Dev assets, real providers and non-SQLite compatibility services were not validated here. No direct public quickstart or website build run by this worker.",
+      "After parent adds release JSON/upgrade documentation, run only tests/test_docs_links.py as a focused final documentation check."
+    ],
+    "warnings": [
+      "Existing lark_oapi/protobuf utcfromtimestamp deprecation in Python test run.",
+      "Node experimental SQLite warnings in Pi tests."
+    ],
+    "repository_permissions": "Only two authorized code/test files edited. No root README or historical documentation writes, no stage/commit/push/tag/deployment/package publication."
+  },
+  "public_reports": {
+    "indexed_historical_reports": 71,
+    "accuracy_and_benchmark_files": 55,
+    "earlier_test_and_acceptance_files": 16,
+    "publicly_transformed_reports": 20,
+    "original_bytes_preserved_locally": true,
+    "score_values_and_denominators_preserved": true,
+    "original_and_published_hashes_independently_verified": 71,
+    "manifest": "docs/report-publication-2026-09-07.json",
+    "raw_runtime_databases_committed": false,
+    "third_party_dataset_assets_committed": false
+  },
+  "public_cli_smoke": {
+    "command": ".venv/bin/forge quickstart --yes --json",
+    "after_assurance_v10_fix": true,
+    "output": {
+      "status": "passed",
+      "query_run_id": "qr_53735d9f0ce349a095d8f886f9e47f0b",
+      "fail_closed": {
+        "status": "failed",
+        "failure": {
+          "stage": "assurance",
+          "code": "readonly_violation",
+          "retryable": false
+        }
+      },
+      "evaluate": {
+        "status": "passed",
+        "policy_verdict": "allow_review",
+        "result_comparison": "passed"
+      },
+      "enforce": {
+        "status": "completed",
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ],
+        "truncated": true
+      },
+      "explain": {
+        "integrity": "verified",
+        "evidence_types": [
+          "candidate",
+          "policy",
+          "query",
+          "assurance",
+          "source",
+          "approval",
+          "result"
+        ],
+        "limitations": [
+          "semantic_correctness_unproven",
+          "live_data_no_snapshot",
+          "result_truncated"
+        ]
+      },
+      "dashboard": {
+        "status": "passed",
+        "path": "/admin/dashboard"
+      },
+      "run_receipt": {
+        "schema_version": 1,
+        "forge_version": "0.1.0",
+        "environment": {
+          "system": "Darwin",
+          "release": "25.6.0",
+          "machine": "arm64",
+          "python_implementation": "CPython",
+          "python_version": "3.14.7"
+        },
+        "started_at": "2026-09-06T23:52:30.686648+00:00",
+        "completed_at": "2026-09-06T23:52:32.205552+00:00",
+        "runtime_duration_ms": 1521,
+        "outcome": {
+          "query_run_id": "qr_53735d9f0ce349a095d8f886f9e47f0b",
+          "fail_closed": {
+            "status": "failed",
+            "failure": {
+              "stage": "assurance",
+              "code": "readonly_violation",
+              "retryable": false
+            }
+          },
+          "evaluate": {
+            "status": "passed",
+            "policy_verdict": "allow_review",
+            "result_comparison": "passed"
+          },
+          "enforce": {
+            "status": "completed",
+            "truncated": true
+          },
+          "explain": {
+            "integrity": "verified",
+            "evidence_types": [
+              "candidate",
+              "policy",
+              "query",
+              "assurance",
+              "source",
+              "approval",
+              "result"
+            ],
+            "limitations": [
+              "semantic_correctness_unproven",
+              "live_data_no_snapshot",
+              "result_truncated"
+            ]
+          },
+          "dashboard": {
+            "status": "passed",
+            "path": "/admin/dashboard"
+          }
+        },
+        "receipt_hash": "sha256:612ac71b8bd5422b8be43c0b7f552d14d9435040ba3dc8c5389b9e0b04b65dc4"
+      }
+    },
+    "model_calls": 0,
+    "synthetic_local_data_only": true
+  },
+  "website_build": {
+    "command": "npm --prefix website run build",
+    "exit_code": 0,
+    "pages": 28,
+    "warnings": [
+      "Astro markdown plugin configuration is deprecated.",
+      "Sitemap skipped because the Astro site option is not configured."
+    ],
+    "scope": "Build only; no claim of visual or external-deployment verification."
+  },
+  "publication_validation": {
+    "command": "Independent JSON/hash/index verification against retained original report bytes",
+    "output": {
+      "report_files": 71,
+      "original_and_public_hashes_verified": 71,
+      "changed_reports": 20,
+      "json_values_and_denominators_preserved": true,
+      "all_reports_indexed": true,
+      "private_links_not_exposed_as_downloads": true
+    }
+  },
+  "upgrade": {
+    "assurance_revision": "query-assurance-v10",
+    "old_query_runs": "Re-prepare and review; v9 approval is rejected with assurance_revision_drift. No in-place evidence upgrade.",
+    "registry": "Flat Registry does not grant schema/catalog-qualified physical-source access.",
+    "historical_benchmarks": "Scores remain historical. Old frozen source revisions may reject this release; do not silently rebind or claim regeneration."
+  },
+  "final_documentation_check": {
+    "command": "Isolated .venv/bin/python -m pytest tests/test_docs_links.py -q",
+    "passed": 1,
+    "failed": 0,
+    "after_release_index_and_requirement_update": true
+  },
+  "precommit_scope_scan": {
+    "candidate_files": 120,
+    "json_files": 45,
+    "high_confidence_credential_findings": 0,
+    "sensitive_file_paths": 0,
+    "largest_file_bytes": 5557611,
+    "limitation": "Scoped pattern scan, not an independent security certification."
+  },
+  "precommit_whitespace_cleanup": {
+    "initial_check": "Rejected eight files with blank lines at EOF before commit; no commit or push occurred.",
+    "correction": "Removed trailing blank lines only; no executable statements or assertions changed."
+  },
+  "verification_limits": [
+    "Hosted CI is not claimed by this pre-push report; its result is attached to the pushed commit.",
+    "Local full suite skipped 26 browser E2E cases and 2 unavailable Mini-Dev asset tests in the protected environment.",
+    "Five-dialect Assurance smoke is static validation plus real synthetic SQLite execution, not a live PostgreSQL/MySQL/BigQuery/Snowflake run.",
+    "No new paid model experiments, rescoring of old reports, default prompt adoption, or package/website deployment is part of this delivery."
+  ]
+}

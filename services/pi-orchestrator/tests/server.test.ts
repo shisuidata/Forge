@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,28 @@ import { createOrchestratorServer } from "../src/server.js";
 import { InMemoryStageAttemptStore } from "../src/stage-attempts.js";
 
 const SQL_HASH = `sha256:${"a".repeat(64)}`;
+
+test("benchmark POST requires explicit exact-count authorization rather than coercing missing inputs", async (t) => {
+  const agentDir = await mkdtemp(join(tmpdir(), "forge-benchmark-http-"));
+  const server = createOrchestratorServer({ ...loadConfig({}), agentDir, channelServiceKeys: ["benchmark-test"], stateDbPath: join(agentDir, "state.sqlite") });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await rm(agentDir, { recursive: true, force: true });
+  });
+  const baseUrl = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
+  for (const body of [
+    { provider: "offline", model: "fixed", limit: 1 },
+    { provider: "offline", model: "fixed", confirm_model_calls: "2" },
+    { provider: "offline", model: "fixed", confirm_model_calls: 2, case_ids: ["a", "a"] },
+    { provider: "offline", model: "fixed", confirm_model_calls: 2, limit: "1" },
+  ]) {
+    const response = await fetch(baseUrl + "/v1/benchmarks", { method: "POST", headers: { "content-type": "application/json", "x-channel-service-key": "benchmark-test" }, body: JSON.stringify(body) });
+    assert.equal(response.status, 400);
+  }
+  assert.deepEqual(await (await fetch(baseUrl + "/v1/benchmarks", { headers: { "x-channel-service-key": "benchmark-test" } })).json(), { runs: [] });
+});
+
 
 
 test("health endpoints expose the restricted runtime capabilities", async (context) => {

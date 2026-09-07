@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-07",
+  "requirement": "REQ-2026-09-07-058",
+  "status": "ready_for_separate_generation_authorization",
+  "experiment": {
+    "schema_version": 1,
+    "requirement": "REQ-2026-09-07-058",
+    "status": "frozen_proposal_no_generation_authorization",
+    "user_request": "好的，继续吧",
+    "hypothesis": "One concrete CTE interface example may reduce declaration/export/reference mismatches without changing answer shape or promoting unnecessary CTEs.",
+    "single_factor": "prompt: one independently registered CTE example; no denominator example",
+    "control_prompt_revision": "forge-structured-benchmark-v1",
+    "treatment_prompt_revision": "forge-structured-benchmark-cte-interface-v1",
+    "model": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna"
+    },
+    "protocols": {
+      "control": "sha256:4a72d45a691f1585efdac6f0d025ae4f5ce4e9a74103d6bb55654e7f4b42d192",
+      "treatment": "sha256:56f314788d47aedf5895d1d8503735997a9dbd2150289d9b1d8a180fb423dd95"
+    },
+    "cases": [
+      {
+        "case_id": "md-079",
+        "role": "target",
+        "basis": "REQ-056 treatment declared a different aggregate alias than select n; prior default was correct, so not evidence of a persistent default failure.",
+        "db_id": "thrombosis_prediction",
+        "question": "What is the percentage of female patient were born after 1930?",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-199",
+        "role": "target",
+        "basis": "seed48 CTE selected milliseconds instead of exporting declared best_ms, which outer JOIN referenced.",
+        "db_id": "formula_1",
+        "question": "What is the best lap time recorded? List the driver and race with such recorded lap time.",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-312",
+        "role": "simple_correct_control",
+        "basis": "REQ-056 and earlier saved runs; guard against unnecessary CTEs/output changes.",
+        "db_id": "codebase_community",
+        "question": "How many views did the post titled 'Integration of Weka and/or RapidMiner into Informatica PowerCenter/Developer' get?",
+        "difficulty": "moderate"
+      },
+      {
+        "case_id": "md-386",
+        "role": "complex_correct_control",
+        "basis": "REQ-044 correct control and currently verified original Sol replay; not a promised new Luna result.",
+        "db_id": "card_games",
+        "question": "Which of these artists have designed a card in the set Coldsnap, Jeremy Jarvis, Aaron Miller or Chippy?",
+        "difficulty": "challenging"
+      }
+    ],
+    "generation": {
+      "proposed_max_model_calls": 16,
+      "authorized_model_calls": 0,
+      "actual_model_calls": 0,
+      "allocation": "4 cases × 2 conditions × 2 arms; Direct unchanged",
+      "order": [
+        "control",
+        "treatment"
+      ],
+      "case_concurrency": 1,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "timeout_seconds": 120,
+      "sampling": "provider_default",
+      "max_output_tokens": null,
+      "per_condition_max_model_calls": 8
+    },
+    "acceptance": {
+      "target_forge_both_ex_and_contract": true,
+      "minimum_target_conversions_from_both_failed_to_both_passed": 1,
+      "no_true_to_false_ex_or_contract_in_any_arm": true,
+      "all_16_scored": true,
+      "all_usage_known": true,
+      "treatment_total_tokens_max_control_ratio": 1.2,
+      "forge_tokens_per_ex_correct_max_control_ratio": 1,
+      "forge_generation_p95_max_control_ratio": 1.25,
+      "undefined_metrics": "not_passed",
+      "new_correct": "Must compare the fresh paired control, not historical or synthetic saved-candidate runs.",
+      "substep_success": "Compile/interface improvements alone never count as complete answer success."
+    },
+    "stop": {
+      "run_failure": "Stop remaining generation, do not launch treatment if control fails.",
+      "retry": 0,
+      "replacement": 0,
+      "adaptive_resampling": false,
+      "automatic_repair": false,
+      "budget_reuse": false,
+      "automatic_adoption": false
+    },
+    "non_changes": [
+      "Default Forge prompt bytes",
+      "Direct instructions",
+      "Context/Schema/Registry",
+      "Compiler/Assurance",
+      "Gold/EX/Contract",
+      "Pi Orchestrator/state/strict tool/single turn",
+      "Date/grain/value contexts remain off",
+      "H and R0.6 gates, rolling parent seed48"
+    ],
+    "limitations": [
+      "Exposed development selection only, not H/generalization.",
+      "One sample per case/condition cannot establish stable causality.",
+      "Direct sampling may fluctuate despite identical inputs; record all reversals.",
+      "Even passing permits only discussion of another authorized confirmation, not default adoption."
+    ]
+  },
+  "verification": {
+    "synthetic_example": {
+      "variants": 17,
+      "fixtures_per_variant": 6,
+      "cases": 102,
+      "passed": 102,
+      "failed": 0,
+      "positive_cases": 60,
+      "negative_cases": 42,
+      "constraint_checks": 2,
+      "constraint_passed": 2,
+      "source": "Actual AST-extracted model-visible DDL and Forge JSON",
+      "oracles": "Raw-row Python Counter/set and independently authored SQLite SQL",
+      "parent_replay": "102/102 with original evidence unchanged",
+      "limitations": [
+        "SQLite only; no other dialect behavior established.",
+        "assure_compiled_sql covers SQL safety/parse/registry binding, not the full assure_query intent/policy pipeline.",
+        "Negative compiled SQL is also executed directly only on ephemeral synthetic SQLite to independently observe unresolved names after assurance rejects it.",
+        "Synthetic fixtures demonstrate the stated cases, not all possible CTE or alias semantics."
+      ]
+    },
+    "default_inputs": {
+      "cases": 500,
+      "default_all_four_hashes_unchanged": true,
+      "candidate_only_forge_instruction_and_revision_changed": true,
+      "candidate_added_utf8_bytes": 2124,
+      "old_denominator_instructions_unchanged": true
+    },
+    "protocol": {
+      "normalized_single_factor_manifests_equal": true,
+      "control_gold_ready": true,
+      "treatment_gold_ready": true,
+      "actual_model_calls": 0,
+      "proposed_cap": 16,
+      "authorized_cap": 0
+    },
+    "saved_candidate_regression": {
+      "saved_originals": 8,
+      "replayed_evaluations": 16,
+      "output_sql_ex_contract_failure_unchanged": true,
+      "purpose": "Saved Sol pipeline proof, not new Luna generation or an accuracy gain"
+    },
+    "http_pi": {
+      "actual_loopback_main_app": true,
+      "lifespan": "off to isolate startup effects",
+      "synthetic_model_sessions": true,
+      "real_provider_inference": false,
+      "final_receipt_synthetic_dispatches": 16,
+      "total_synthetic_dispatches_across_fixture_attempts": 48,
+      "fixture_adjustments": [
+        {
+          "reason": "Uvicorn re-raises its termination signal after shutdown, so atexit-only network receipt did not persist. Initialized and synchronously updated the backend guard receipt; no production code changes.",
+          "first_attempt_synthetic_dispatches": 16,
+          "first_attempt_status": "Transport checks passed, backend zero-attempt evidence missing; rerun required for complete receipt."
+        },
+        {
+          "reason": "The two arms run concurrently; changed wire-response hash recording from the latest global prompt entry to the originating per-session entry and assert Forge-only ownership. Candidate outputs and existing saved response/instruction hashes were already exact.",
+          "second_attempt_synthetic_dispatches": 16
+        }
+      ],
+      "external_network_attempts": 0,
+      "all_emitted_prompts_bound_to_frozen_context": true,
+      "all_outputs_original": true,
+      "persisted_reopen_verified": true,
+      "api_unauthorized_status": 401,
+      "api_unknown_revision_status": 409,
+      "api_drift_status": 409,
+      "backend_and_consumer_drift_stop_before_dispatch": true
+    },
+    "regression": {
+      "python": {
+        "passed": 901,
+        "skipped": 26
+      },
+      "pi": {
+        "passed": 155
+      },
+      "typecheck": "passed",
+      "existing_warnings": [
+        "protobuf UTC datetime deprecation",
+        "Node SQLite experimental"
+      ]
+    }
+  },
+  "changes": [
+    "agent/prompts.py: register one opt-in CTE interface example through the existing revision mechanism",
+    "Current requirement, active plan, status and benchmark CLI documentation"
+  ],
+  "non_changes": [
+    "Default prompt, prior denominator example, Direct instructions",
+    "Schema, ContextSnapshot, Compiler, Assurance, Gold and scoring",
+    "Pi production code and native strict tool/one-turn/zero-retry contract",
+    "Production services/config, credentials or client data",
+    "Historical scores/candidates/protocols, rolling parent seed48",
+    "No new permanent tests or abstraction"
+  ],
+  "evidence": {
+    "root": ".forge/benchmarks/cte-interface-ready-20260907",
+    "card": ".forge/benchmarks/cte-interface-ready-20260907/experiment-card.json",
+    "boundaries": ".forge/benchmarks/cte-interface-ready-20260907/synthetic-boundaries.json",
+    "parent_boundaries": ".forge/benchmarks/cte-interface-ready-20260907/parent-boundary-replay.json",
+    "http_pi": ".forge/benchmarks/cte-interface-ready-20260907/http-pi-smoke.json",
+    "parent_http_pi": ".forge/benchmarks/cte-interface-ready-20260907/parent-final-http-check.json",
+    "default_before": ".forge/benchmarks/cte-interface-ready-20260907/default-inputs-before.json",
+    "default_after": ".forge/benchmarks/cte-interface-ready-20260907/default-inputs-after.json",
+    "control_protocol": ".forge/benchmarks/cte-interface-ready-20260907/control.frozen.json",
+    "treatment_protocol": ".forge/benchmarks/cte-interface-ready-20260907/treatment.frozen.json"
+  },
+  "cleanup": {
+    "service_stopped": true,
+    "port_18779_absent": true,
+    "temporary_runtime_state_removed": true,
+    "temporary_executable_files_created": false,
+    "source_scripts_retained_only_as_json_reproduction_evidence": true
+  },
+  "decision": {
+    "adopt_default": false,
+    "claim_accuracy_gain": false,
+    "model_call_authorization": 0,
+    "next": "Only after separate approval: execute at most 16 fresh native Pi/Luna requests under the frozen card. No existing budget reuse."
+  }
+}

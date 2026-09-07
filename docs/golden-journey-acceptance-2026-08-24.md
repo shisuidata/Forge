@@ -52,7 +52,7 @@ Evidence root on NAS:
 Local visual evidence:
 
 ```text
-/tmp/forge-golden-journey-evidence/
+<local-temp>/
 ```
 
 ## 3. Physical trace

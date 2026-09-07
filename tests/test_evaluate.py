@@ -151,6 +151,43 @@ async def test_public_evaluate_returns_stable_candidate_failure_codes(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("overrides", [
+    pytest.param({"select": ["picked.user_id"]}, id="unprojected-select"),
+    pytest.param({
+        "cte": [
+            {"name": "a", "query": {"scan": "orders", "agg": [{"fn": "count", "col": "orders.id", "as": "cnt"}], "select": ["cnt"]}},
+            {"name": "b", "query": {"scan": "users", "agg": [{"fn": "count", "col": "users.id", "as": "cnt"}], "select": ["cnt"]}},
+        ],
+        "scan": "orders", "select": ["a.cnt - b.cnt"],
+    }, id="unbound-cte-from"),
+    pytest.param({"filter": [{"col": "picked.user_id", "op": "eq", "val": 7}]}, id="unprojected-filter"),
+    pytest.param({
+        "cte": [
+            {"name": "picked", "query": {"scan": "orders", "select": ["orders.id"]}},
+            {"name": "user_ids", "query": {"scan": "users", "select": ["users.id"]}},
+        ],
+        "joins": [{"type": "inner", "table": "user_ids",
+                   "on": {"left": "picked.id", "right": "user_ids.id"}}],
+        "select": ["id"],
+    }, id="ambiguous-cte-column"),
+])
+async def test_public_evaluate_rejects_unresolved_cte_columns(client, evaluate_registry, overrides):
+    query = {
+        "cte": [{"name": "picked", "query": {"scan": "orders", "select": ["orders.id"]}}],
+        "scan": "picked",
+        "select": ["picked.id"],
+        **overrides,
+    }
+    response = await client.post("/api/v1/evaluate", json=_request({"kind": "forge_json", "forge_json": query}))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["failure"]["code"] == "unknown_schema_reference"
+    assert body["policy"]["verdict"] == "deny"
+    assert body["policy"]["execution_authorized"] is False
+
+
+@pytest.mark.asyncio
 async def test_public_evaluate_compares_external_results_without_executing(
     client, evaluate_registry
 ):
@@ -174,6 +211,69 @@ async def test_public_evaluate_compares_external_results_without_executing(
     assert first["evaluation_id"] == second["evaluation_id"]
     assert first["lineage"]["request_hash"] == second["lineage"]["request_hash"]
     assert first["evidence_refs"][-1].endswith("#result-comparison")
+
+
+@pytest.mark.asyncio
+async def test_metric_revision_changes_evaluation_identity(client, evaluate_registry, monkeypatch):
+    from forge import benchmark_v2
+
+    payload = _request(
+        {"kind": "direct_sql", "sql": "SELECT orders.id FROM orders"},
+        expected_result={"columns": ["id"], "rows": [[1]]},
+        actual_result={"columns": ["id"], "rows": [[1]]},
+    )
+    before = (await client.post("/api/v1/evaluate", json=payload)).json()
+    monkeypatch.setattr(benchmark_v2, "RESULT_COMPARATOR_REVISION", "test-comparator-upgrade")
+    after = (await client.post("/api/v1/evaluate", json=payload)).json()
+
+    assert before["status"] == after["status"] == "passed"
+    assert before["lineage"]["request_hash"] == after["lineage"]["request_hash"]
+    assert before["result_comparison"]["metric_revision"] != after["result_comparison"]["metric_revision"]
+    assert before["evaluation_id"] != after["evaluation_id"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rows", [[[1, 1]], []])
+async def test_unique_column_names_retain_trusted_mapping(client, evaluate_registry, rows):
+    response = await client.post("/api/v1/evaluate", json=_request(
+        {"kind": "direct_sql", "sql": "SELECT orders.id, orders.user_id FROM orders"},
+        expected_result={"columns": ["id", "user_id"], "rows": rows},
+        actual_result={"columns": ["user_id", "id"], "rows": rows},
+    ))
+    assert response.status_code == 200
+    comparison = response.json()["result_comparison"]
+    assert comparison["correct"] is True
+    assert comparison["column_mapping"] == [1, 0]
+
+
+@pytest.mark.asyncio
+async def test_equivalent_results_need_not_claim_a_unique_mapping(client, evaluate_registry):
+    response = await client.post("/api/v1/evaluate", json=_request(
+        {"kind": "direct_sql", "sql": "SELECT orders.id, orders.user_id FROM orders"},
+        expected_result={"columns": ["id", "user_id"], "rows": [[1, 1]]},
+        actual_result={"columns": ["a", "b"], "rows": [[1, 1]]},
+    ))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "passed"
+    assert body["result_comparison"]["correct"] is True
+    assert body["result_comparison"]["column_mapping"] is None
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_alignment_fails_closed_without_claiming_incorrectness(client, evaluate_registry):
+    response = await client.post("/api/v1/evaluate", json=_request(
+        {"kind": "direct_sql", "sql": "SELECT orders.id, orders.user_id FROM orders"},
+        expected_result={"columns": ["id", "user_id"], "rows": [[1, 1], [2, 2]]},
+        actual_result={"columns": ["a", "b"], "rows": [[1, 2], [2, 1]]},
+    ))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["result_comparison"]["status"] == "inconclusive"
+    assert body["result_comparison"]["correct"] is None
+    assert body["result_comparison"]["column_mapping"] is None
+    assert body["failure"]["code"] == "result_column_alignment_ambiguous"
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "experiment_id": "acc-2a0-csv-binding-20260905",
+  "requirement": "REQ-2026-09-05-037",
+  "status": "completed_diagnostic_not_promoted",
+  "objective": "Increase correctly generated answers by restoring pre-existing authoritative metadata; no evaluator change, model comparison or platform expansion.",
+  "superseded_hypothesis": {
+    "name": "append format and PK to prompts",
+    "decision": "do_not_run",
+    "reason": "0/16 target cases and 0/25 target failed arms receive new value-grounding evidence; adding format and PK together also conflates two mechanisms.",
+    "source": "docs/accuracy-metadata-treatment-audit-2026-09-05.json"
+  },
+  "treatment": {
+    "name": "CSV identifier binding restoration",
+    "control": "Frozen pre-fix CSV lookup and its reproducibly reconstructed context.",
+    "treatment": "SQLite ASCII case-insensitive lookup; preserve actual schema identifiers, reject ambiguous metadata bindings.",
+    "only_changed_production_source": "forge/hard_accuracy_benchmark.py",
+    "control_source_sha256": "bf1d807064df05233269cee3f8843ff7d80dc0d9431ecb4db8bf65abaad646bb",
+    "treatment_source_sha256": "008d8a3fba2f83998592d2b77cd1f6c5865ae57092176fd35dd611f892e27ba1",
+    "full_inputs": {
+      "path": ".forge/benchmarks/accuracy-metadata-binding-20260905/D50-binding-inputs.json",
+      "sha256": "23e21741aec80b5bb27a00f47a61e1205d6ac3b8b4376b5f5355c63267751901"
+    },
+    "bind_report_sha256": "467952482918ec3637f4a4aa4034c70e0b2f6bdd1042f2bb49e6f0e196a500cc",
+    "unchanged": [
+      "Official Gold/Evidence",
+      "Compiler",
+      "Forge tool schema",
+      "prompt templates",
+      "comparator v2",
+      "retrieval algorithm/parameters",
+      "read-only/ACL/approval gates"
+    ],
+    "known_downstream_effects": "Restored metadata changes ranked snapshot fields for the five affected D cases; table and relationship scopes are unchanged in this frozen D50. Do not claim the snapshot hash or full prompt is unchanged."
+  },
+  "population": {
+    "parent_cohort": "docs/accuracy-evaluation-cohorts-2026-09-05.json",
+    "parent_case_count": 50,
+    "selection": "Select every D case whose pre/post rendered schema input differs, before observing any new candidate. This is an input-defined diagnostic slice, not a result-selected gain sample.",
+    "affected_case_ids": [
+      "md-034",
+      "md-046",
+      "md-052",
+      "md-065",
+      "md-077"
+    ],
+    "diagnostic_case_ids": [
+      "md-065",
+      "md-077"
+    ],
+    "baseline_metric_pass_control_case_ids": [
+      "md-034",
+      "md-046",
+      "md-052"
+    ],
+    "unchanged_case_count": 45,
+    "unchanged_disposition": "Verified input identity offline; do not represent these as newly generated evaluation outcomes.",
+    "canary_case_ids": [
+      "md-065",
+      "md-034"
+    ],
+    "canary_reason": "One known missing-value target plus the lowest-ID pre-frozen affected metric-pass control; membership chosen before generation.",
+    "not_a_full_D50_or_independent_H_result": true
+  },
+  "design": {
+    "factors": [
+      "control/treatment",
+      "Forge JSON/Direct SQL"
+    ],
+    "primary_arm": "forge",
+    "primary_metric": "Official EA gain/loss on the five affected cases; diagnostic only",
+    "secondary_metrics": [
+      "Contract v2 gain/loss with full denominator",
+      "md-065 expense.approved literal binding, outcome-blind manual or separate-agent review labelled as such",
+      "controls: newly wrong, newly rejected, missing outputs",
+      "actual requests, input/output/reasoning tokens where reported, generation latency"
+    ],
+    "same_condition_shared_evidence": true,
+    "conditions_use_fresh_candidates": true,
+    "no_gold_in_generation": true,
+    "no_best_of_retry": true,
+    "case_order": [
+      "md-065",
+      "md-034",
+      "md-046",
+      "md-052",
+      "md-077"
+    ],
+    "condition_order": "Alternate control-first then treatment-first across the frozen case order. Both arms use their existing output contracts within each condition.",
+    "canary_is_part_of_total": true,
+    "no_rerun_of_canary_for_selection": true,
+    "control_backend": "Pinned pre-fix context/evaluation source in an isolated process, not a legacy branch added to production.",
+    "treatment_backend": "Pinned corrected context/evaluation source in a separate isolated process.",
+    "orchestration": "Use existing Pi Run persistence; record every condition run_id and candidate in the experiment manifest. Never disable context/revision validation, overwrite old runs, or introduce a second business task store."
+  },
+  "requested_model": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "reason": "User explicitly chose Luna; both control and treatment use Luna. No comparison against historical Sol is used to infer treatment effect.",
+    "resolved_revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+    "availability_checked": true,
+    "capability_verified_sampling": "Explicit temperature rejected by provider; omit it and use provider-default sampling in both conditions."
+  },
+  "budget_proposal": {
+    "authorization": true,
+    "recommended_max_generation_requests": 22,
+    "canary_requests_included": 8,
+    "remaining_requests_after_canary": 12,
+    "provider_and_session_auto_retries": 0,
+    "semantic_repair_calls": 0,
+    "max_output_tokens_per_request_proposed": 8192,
+    "generation_deadline_seconds_proposed": 120,
+    "max_output_tokens_total_if_limit_enforced": null,
+    "concurrency": "One case/condition at a time; retain the same within-condition two-arm policy in both conditions.",
+    "actual_requests_include": "Every generation attempt, error, invalid tool output and any retry; quota/auth checks are not answer generations and must be reported separately.",
+    "token_cost_guard_proposed": "Total treatment tokens no more than 1.20 times control on this diagnostic slice; crossing is a stop/review signal, not a statistical latency claim.",
+    "latency_guard_proposed": "Treatment P95 no more than 1.25 times control; n=5 is descriptive only.",
+    "currency_cost": null,
+    "currency_cost_reason": "No observed provider settlement price; do not fabricate money estimates.",
+    "alternative_full_D50_requests": 200,
+    "no_automatic_expansion": true,
+    "output_token_limit_status": "Installed Codex adapter does not serialize maxTokens into its request body. 8192 is an unimplemented proposal, not a verified token or financial cap.",
+    "new_paired_generations": 20,
+    "prior_parameter_rejections": 2
+  },
+  "activation_blockers": [
+    {
+      "name": "user_budget_and_scope",
+      "status": "satisfied_for_request_bounded_diagnostic",
+      "required": "Explicitly approve the 20-request diagnostic slice, including allowance to develop on D while independent H review remains pending; no generalization claim is allowed.",
+      "resolution": "Explicit user authorization"
+    },
+    {
+      "name": "actual_request_parameter_binding",
+      "status": "satisfied_for_request_bounded_diagnostic",
+      "evidence": "Current Pi Run stores temperature=0 and max_output_tokens=8192, but the createAgentSession/session.prompt path does not explicitly pass these fields; this does not prove which provider defaults or extension overrides applied historically. Executed installed Codex streamSimple with synthetic credentials and stopped in onPayload before network: explicit temperature=0 is serialized, explicit maxTokens=8192 is not. This does not exercise live provider acceptance or extension overrides.",
+      "required": "Before generation, bind or honestly record supported sampling/output settings, capture sanitized effective payload evidence, pin model and source/input revisions. Reject unsupported requirements; do not relabel historical values as verified.",
+      "resolution": "After two provider 400 rejections of explicit temperature, use default sampling symmetrically. Hook asserts temperature absent and saves effective payload. No output-token cap claimed."
+    },
+    {
+      "name": "hard_request_budget",
+      "status": "satisfied_for_request_bounded_diagnostic",
+      "evidence": "Executed SettingsManager.inMemory with the current benchmark settings: retry.enabled=true, maxRetries=3; provider maxRetries unset.",
+      "required": "Disable session/provider retries and enforce one billed-generation attempt per arm plus the total authorized cap. Prove against an isolated no-provider-call smoke before activating.",
+      "resolution": "Isolated wrapper enforces request cap and disables both retry layers before real SDK calls."
+    },
+    {
+      "name": "empty_or_incomplete_candidates",
+      "status": "enforced_stop_condition",
+      "required": "Infrastructure failure, missing candidate, token truncation or revision/context mismatch stops the experiment; do not score an incomplete run as an accuracy result.",
+      "resolution": "Isolated wrapper enforces request cap and disables both retry layers before real SDK calls."
+    }
+  ],
+  "decision_rules": {
+    "canary": "Only validate model availability, schema-bound output, request limits and complete capture; no accuracy-based retry or candidate selection.",
+    "keep_for_next_stage": "Target binding error is demonstrably corrected in fresh outputs, both official/contract changes and regressions are reported, affected controls have no unexplained regression, safety/cost limits hold.",
+    "stop_or_reassess": "No verified target improvement, new unexplained wrong controls, request/cost overflow, unsupported parameter enforcement or incomplete capture.",
+    "inference_limit": "Five affected cases cannot establish overall accuracy improvement or statistical superiority. A single target repair cannot be extrapolated to 500 cases."
+  },
+  "heldout": {
+    "source_audit": "docs/accuracy-holdout-source-audit-2026-09-05.json",
+    "final_membership_frozen": false,
+    "independent_review_complete": false,
+    "may_be_used_to_tune": false,
+    "minimum_useful_gain_proposal": 0.03,
+    "sample_size_selection": "Do not select final H membership before source/overlap/label review and a chosen precision/power target plus budget. A public same-database slice is not unseen-database generalization.",
+    "power_sensitivity": {
+      "method": "Sum over K~Binomial(n,q), G|K~Binomial(K,(q+delta)/(2q)); reject in positive direction when two-sided exact McNemar p<=0.05.",
+      "assumptions": [
+        "Independent case pairs; fixed discordance probability q; no clustering correction.",
+        "This is a design sensitivity calculation, not observed benchmark power or model performance.",
+        "No outcome-dependent sample expansion. Same-database or semantic clusters can reduce effective information."
+      ],
+      "minimum_useful_gain_proposal": 0.03,
+      "rows": [
+        {
+          "n": 100,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.087135
+        },
+        {
+          "n": 100,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.240843
+        },
+        {
+          "n": 100,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.669627
+        },
+        {
+          "n": 100,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.064551
+        },
+        {
+          "n": 100,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.142251
+        },
+        {
+          "n": 100,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.353451
+        },
+        {
+          "n": 200,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.1996
+        },
+        {
+          "n": 200,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.543292
+        },
+        {
+          "n": 200,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.964546
+        },
+        {
+          "n": 200,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.121327
+        },
+        {
+          "n": 200,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.298245
+        },
+        {
+          "n": 200,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.676997
+        },
+        {
+          "n": 400,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.418471
+        },
+        {
+          "n": 400,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.87399
+        },
+        {
+          "n": 400,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.99981
+        },
+        {
+          "n": 400,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.231611
+        },
+        {
+          "n": 400,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.569306
+        },
+        {
+          "n": 400,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.943328
+        },
+        {
+          "n": 800,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.737526
+        },
+        {
+          "n": 800,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.994828
+        },
+        {
+          "n": 800,
+          "discordance_probability": 0.1,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 1
+        },
+        {
+          "n": 800,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.03,
+          "positive_exact_mcnemar_power": 0.444924
+        },
+        {
+          "n": 800,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.05,
+          "positive_exact_mcnemar_power": 0.874636
+        },
+        {
+          "n": 800,
+          "discordance_probability": 0.2,
+          "true_paired_gain": 0.08,
+          "positive_exact_mcnemar_power": 0.999169
+        }
+      ]
+    },
+    "warning": "At q=0.1, even n=400 has only about 41.85% power for +3pp; do not call a small holdout adequately powered or reinterpret non-significance as no effect.",
+    "source_audit_sha256": "281f97b8f56098dcd75e70f9e4dba9fbafe808847381f6fcdf7ed7ac0bbd7e2f",
+    "mechanically_eligible_pool_count": 1011,
+    "dependency_components": 964,
+    "not_certified_independent": true
+  },
+  "actual_generation_requests": 22,
+  "verification": {
+    "parent_blind_integrity_and_stable_ID_question_overlap_checks": "passed",
+    "unseen_question_or_Gold_text_displayed_to_parent": false,
+    "normalizer_full_independent_reimplementation": false,
+    "normalizer_limit": "AST and near-duplicate decisions retain source-agent evidence; 159 exposure SQL parse/qualification failures and independent semantic review remain unresolved.",
+    "metadata_binding_full_D_context_smoke_cases": 50,
+    "python_tests": {
+      "passed": 725,
+      "skipped": 26
+    },
+    "typescript_typecheck": "passed",
+    "generation_requests": 0,
+    "codex_parameter_probe": {
+      "path": ".forge/benchmarks/accuracy-metadata-binding-20260905/codex-parameter-probe-recipe.json",
+      "sha256": "2138cffd4ffef8d9f29cdb04159265a56d3b83e42066fd467737725229468d43",
+      "result": {
+        "probe": "installed Codex streamSimple to request body",
+        "sampling_requested": 0,
+        "sampling_payload": 0,
+        "maxTokens_requested": 8192,
+        "max_output_tokens_present": false,
+        "max_tokens_present": false,
+        "stopped_at": "onPayload before any network code",
+        "network_attempts": 0,
+        "real_credentials_used": false,
+        "real_model_availability_or_capability_verified": false,
+        "extension_overrides_exercised": false
+      }
+    }
+  },
+  "authorization": {
+    "quote": "好的，那就用 luna 测试一波准确性吧",
+    "max_generation_requests": 22,
+    "canary_included": 8,
+    "development_diagnostic_before_H_review": true,
+    "additional_quote": "继续，最多22次",
+    "prior_rejected_requests_included": 2
+  },
+  "execution": {
+    "directory": ".forge/benchmarks/luna-binding-20260905-default-sampling",
+    "pi_runtime": "services/pi-orchestrator/src/benchmark-runtime.ts",
+    "runtime_source_unmodified": true,
+    "session_policy": "Real Pi createAgentSession; isolated resources, omit temperature, SSE, zero retries, one turn/request per arm, 120s deadline. Total cap22 includes the2 rejected parameter-canary requests.",
+    "common_system_prompt": "You are a controlled SQL benchmark agent. Follow the user instructions.",
+    "legacy_record_caveat": "Both temperature=0 and max_output_tokens=8192 in raw Pi projections are declarative legacy fields, not actual parameters. Effective payloads and session records show provider-default sampling and no output-token cap.",
+    "condition_order": "Alternate control-first/treatment-first by frozen case order; 10 distinct persisted Pi runs in one isolated task/state database."
+  },
+  "successful_candidate_count": 20,
+  "results": {
+    "path": "docs/benchmark-luna-binding-2026-09-05.json",
+    "sha256": "68f8808ad3b59fdcf0ebb99b599533e80551cf38ec9f79f5c127a0e3cc75c1e5",
+    "decision": "No promotion: zero metric gains, one regression, token ratio1.35294 exceeds1.20."
+  },
+  "manifest_sha256": "6e6cda6c9ad7492c63f696a6cc10cad04170534f631b0102394aabef67b4b95e"
+}

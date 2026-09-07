@@ -71,7 +71,7 @@ Production build：
 - PDF：5 页，`547,963 bytes`；
 - PPTX：5 张 16:9 full-slide static images，`401,400 bytes`；
 - PDF 文本包含报告标题、四项结论、增量拆解和 `qr_monthly_story#row:4,6`；
-- 不含 `file://`、`/Users/`、`localhost` 或 `127.0.0.1`。
+- 不含 `file://`、`<local-home> 或 `127.0.0.1`。
 
 PPTX 继续选择同源 static image，不承诺可编辑矢量图；HTML 是交互媒介，PDF/PPTX 不依赖 hover。
 
@@ -85,9 +85,9 @@ PPTX 继续选择同源 static image，不承诺可编辑矢量图；HTML 是交
 ## Evidence Paths
 
 - 实现：`tools/chart-storytelling-echarts-candidate/`
-- 截图：`/tmp/forge-echarts-focused/echarts-focused-full.png`
-- 增量图：`/tmp/forge-echarts-focused/echarts-contribution.png`
-- Browser gate：`/tmp/forge-echarts-focused/browser-gate.json`
-- PDF/PPTX gate：`/tmp/forge-echarts-focused/static-gate.json`
-- PDF：`/tmp/forge-echarts-focused/echarts-focused-report.pdf`
-- PPTX：`/tmp/forge-echarts-focused/echarts-focused-report.pptx`
+- 截图：`<local-temp>/echarts-focused-full.png`
+- 增量图：`<local-temp>/echarts-contribution.png`
+- Browser gate：`<local-temp>/browser-gate.json`
+- PDF/PPTX gate：`<local-temp>/static-gate.json`
+- PDF：`<local-temp>/echarts-focused-report.pdf`
+- PPTX：`<local-temp>/echarts-focused-report.pptx`

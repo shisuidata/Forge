@@ -18,11 +18,11 @@ from forge.assurance import (
     assure_direct_sql,
     assure_query,
 )
+from forge import benchmark_v2
 from forge.benchmark_v2 import build_result_contract, semantic_result_compare
 
 EVALUATE_SCHEMA_VERSION = 1
 EVALUATOR_REVISION = "evaluate-v1"
-RESULT_COMPARATOR_REVISION = "semantic-result-compare-v1"
 SUPPORTED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 
 
@@ -89,6 +89,7 @@ def _result_comparison(request: dict[str, Any]) -> tuple[dict[str, Any], dict[st
             "verdict": "not_requested",
             "column_mapping": None,
             "contract_revision": None,
+            "metric_revision": benchmark_v2.RESULT_COMPARATOR_REVISION,
         }, None
 
     contract = build_result_contract(request["question"])
@@ -127,13 +128,17 @@ def _result_comparison(request: dict[str, Any]) -> tuple[dict[str, Any], dict[st
         verdict = semantic_result_compare(expected_rows, actual_rows, contract)
 
     comparison = {
-        "status": "passed" if verdict["correct"] else "failed",
+        "status": (
+            "inconclusive" if verdict["correct"] is None
+            else "passed" if verdict["correct"] else "failed"
+        ),
         "correct": verdict["correct"],
         "verdict": verdict["verdict"],
         "column_mapping": list(verdict["column_mapping"])
         if verdict["column_mapping"] is not None
         else None,
         "contract_revision": contract.revision,
+        "metric_revision": benchmark_v2.RESULT_COMPARATOR_REVISION,
     }
     failure = None
     if not verdict["correct"]:
@@ -228,6 +233,7 @@ def evaluate_query_candidate(request: dict[str, Any]) -> dict[str, Any]:
         "verdict": "not_run",
         "column_mapping": None,
         "contract_revision": None,
+        "metric_revision": benchmark_v2.RESULT_COMPARATOR_REVISION,
     }
 
     try:

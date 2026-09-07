@@ -4,11 +4,13 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 import hashlib
-import itertools
 import json
 import math
 import re
 from typing import Any
+
+
+RESULT_COMPARATOR_REVISION = "semantic-result-compare-v2"
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[\u4e00-\u9fff]{1,8}")
@@ -43,7 +45,6 @@ class ResultContract:
     numeric_mode: str
     numeric_scale: int | None
     null_policy: str
-    expected_grain: str
     revision: str
 
 
@@ -80,7 +81,6 @@ def build_result_contract(question: str, evidence: str = "") -> ResultContract:
     numeric_mode = "rounded" if any(pattern.search(question) for pattern in _ROUND_PATTERNS) else "exact"
     scale_match = re.search(r"(\d+)\s*(?:decimal places?|位小数)", lowered)
     scale = int(scale_match.group(1)) if scale_match else None
-    grain = "grouped" if re.search(r"(?:\b(?:each|per)\b|\bgrouped?\s+by\b|每个|各(?:个|类|项)?|按.+(?:分组|统计))", lowered) else "scalar_or_detail"
     body = {
         "semantics": semantics,
         "column_order": False,
@@ -89,7 +89,6 @@ def build_result_contract(question: str, evidence: str = "") -> ResultContract:
         "numeric_mode": numeric_mode,
         "numeric_scale": scale,
         "null_policy": "exact",
-        "expected_grain": grain,
     }
     revision = "sha256:" + hashlib.sha256(_canonical(body).encode()).hexdigest()
     return ResultContract(
@@ -100,7 +99,6 @@ def build_result_contract(question: str, evidence: str = "") -> ResultContract:
         numeric_mode=numeric_mode,
         numeric_scale=scale,
         null_policy="exact",
-        expected_grain=grain,
         revision=revision,
     )
 
@@ -112,39 +110,31 @@ def _normalize_value(value: Any, contract: ResultContract) -> Any:
 
 
 def _normalize_rows(rows: list[tuple[Any, ...]], contract: ResultContract) -> list[tuple[Any, ...]]:
+    if contract.numeric_mode != "rounded" or contract.numeric_scale is None:
+        return rows
     return [tuple(_normalize_value(value, contract) for value in row) for row in rows]
 
 
-def _column_fingerprint(rows: list[tuple[Any, ...]], index: int, contract: ResultContract) -> tuple[tuple[str, int], ...]:
-    values = Counter(_canonical(_normalize_value(row[index], contract)) for row in rows)
-    return tuple(sorted(values.items()))
+def _column_fingerprint(rows: list[tuple[Any, ...]], index: int) -> frozenset[tuple[Any, int]]:
+    # Use the same equality as row comparison: 118 == 118.0, without float coercion.
+    return frozenset(Counter(row[index] for row in rows).items())
 
 
 def _column_mapping(
     gold_rows: list[tuple[Any, ...]],
     predicted_rows: list[tuple[Any, ...]],
-    contract: ResultContract,
-) -> tuple[int, ...] | None:
+) -> tuple[tuple[int, ...] | None, str | None]:
     if not gold_rows and not predicted_rows:
-        return ()
-    width = len(gold_rows[0] if gold_rows else predicted_rows[0])
-    if width > 8:
-        return tuple(range(width))
-    gold_fingerprints = [_column_fingerprint(gold_rows, index, contract) for index in range(width)]
-    predicted_fingerprints = [_column_fingerprint(predicted_rows, index, contract) for index in range(width)]
-    candidates = [
-        [index for index, fingerprint in enumerate(predicted_fingerprints) if fingerprint == gold_fingerprint]
-        for gold_fingerprint in gold_fingerprints
-    ]
-    if any(not items for items in candidates):
-        return None
-    mappings: list[tuple[int, ...]] = []
-    for mapping in itertools.product(*candidates):
-        if len(set(mapping)) == width:
-            mappings.append(tuple(mapping))
-            if len(mappings) > 1:
-                return None
-    return mappings[0] if mappings else None
+        return (), None
+    width = len(gold_rows[0])
+    gold_fingerprints = [_column_fingerprint(gold_rows, index) for index in range(width)]
+    predicted_fingerprints = [_column_fingerprint(predicted_rows, index) for index in range(width)]
+    if Counter(gold_fingerprints) != Counter(predicted_fingerprints):
+        return None, "result_value_mismatch"
+    indices = {fingerprint: index for index, fingerprint in enumerate(predicted_fingerprints)}
+    if len(indices) != width:
+        return None, "result_column_alignment_ambiguous"
+    return tuple(indices[fingerprint] for fingerprint in gold_fingerprints), None
 
 
 def semantic_result_compare(
@@ -152,54 +142,71 @@ def semantic_result_compare(
     predicted_rows: list[tuple[Any, ...]],
     contract: ResultContract,
 ) -> dict[str, Any]:
-    if len(gold_rows) != len(predicted_rows):
+    gold = _normalize_rows(gold_rows, contract)
+    predicted = _normalize_rows(predicted_rows, contract)
+    if not contract.row_order_significant and contract.duplicate_policy == "set":
+        gold = list(set(gold))
+        predicted = list(set(predicted))
+    if len(gold) != len(predicted):
         return {
             "correct": False,
             "verdict": "row_count_mismatch",
             "column_mapping": None,
             "failure_code": "result_row_count_mismatch",
         }
-    gold_width = len(gold_rows[0]) if gold_rows else 0
-    predicted_width = len(predicted_rows[0]) if predicted_rows else 0
-    if gold_width != predicted_width or any(len(row) != gold_width for row in gold_rows + predicted_rows):
+    gold_width = len(gold[0]) if gold else 0
+    predicted_width = len(predicted[0]) if predicted else 0
+    if gold_width != predicted_width or any(
+        len(row) != gold_width for rows in (gold, predicted) for row in rows
+    ):
         return {
             "correct": False,
             "verdict": "column_count_mismatch",
             "column_mapping": None,
             "failure_code": "result_column_count_mismatch",
         }
-    mapping = tuple(range(gold_width))
+    identity = tuple(range(gold_width))
+    mapping: tuple[int, ...] | None = identity
+    expected = gold if contract.row_order_significant else Counter(gold)
+    correct = expected == (predicted if contract.row_order_significant else Counter(predicted))
     if not contract.column_order_significant:
-        resolved = _column_mapping(gold_rows, predicted_rows, contract)
-        if resolved is None:
+        mapping, alignment_failure = _column_mapping(gold, predicted)
+        if alignment_failure == "result_column_alignment_ambiguous":
+            if not correct:
+                # Equal column marginals do not prove equal row relationships.
+                return {
+                    "correct": None,
+                    "verdict": "column_alignment_ambiguous",
+                    "column_mapping": None,
+                    "failure_code": alignment_failure,
+                }
+            # Positional equality proves value equivalence, not unique column identity.
+        elif alignment_failure:
             return {
                 "correct": False,
-                "verdict": "column_alignment_ambiguous",
+                "verdict": "value_mismatch",
                 "column_mapping": None,
-                "failure_code": "result_column_alignment_ambiguous",
+                "failure_code": alignment_failure,
             }
-        mapping = resolved
-    aligned = [tuple(row[index] for index in mapping) for row in predicted_rows]
-    gold = _normalize_rows(gold_rows, contract)
-    predicted = _normalize_rows(aligned, contract)
+        elif not correct and mapping != identity:
+            aligned = [tuple(row[index] for index in mapping) for row in predicted]
+            correct = expected == (aligned if contract.row_order_significant else Counter(aligned))
     if contract.row_order_significant:
-        correct = gold == predicted
         verdict = "ordered_equal" if correct else "row_order_or_value_mismatch"
         failure_code = None if correct else "result_order_or_value_mismatch"
     elif contract.duplicate_policy == "multiset":
-        correct = Counter(gold) == Counter(predicted)
         verdict = "multiset_equal" if correct else "multiset_mismatch"
         failure_code = None if correct else "result_value_mismatch"
     else:
-        correct = set(gold) == set(predicted)
         verdict = "set_equal" if correct else "set_mismatch"
         failure_code = None if correct else "result_value_mismatch"
     return {
         "correct": correct,
         "verdict": verdict,
-        "column_mapping": list(mapping),
+        "column_mapping": list(mapping) if mapping is not None else None,
         "failure_code": failure_code,
     }
+
 
 
 def _field_records(structure: dict[str, Any]) -> list[dict[str, str]]:

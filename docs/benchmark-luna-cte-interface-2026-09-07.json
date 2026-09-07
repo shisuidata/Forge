@@ -1,0 +1,530 @@
+{
+  "schema_version": "benchmark-luna-cte-interface-experiment-v1",
+  "date": "2026-09-07",
+  "timezone": "Asia/Shanghai",
+  "requirement": "REQ-2026-09-07-058",
+  "status": "completed_development_gate_failed",
+  "conclusion": {
+    "development_gate_passed": false,
+    "default_prompt_enabled": false,
+    "decision": "保留默认Prompt，不采纳CTE接口范例；不补跑、不扩样、不启动seed49。",
+    "reason": "md-199 Forge新增正确被md-079 Forge回退抵消；Direct md-079同样回退。目标全对、零回退、Forge每正确答案Token和生成P95门槛失败。"
+  },
+  "authorization": {
+    "schema_version": "benchmark-generation-budget-receipt-v1",
+    "requirement": "REQ-2026-09-07-058",
+    "max_authorized_model_calls": 16,
+    "accepted_runs": 2,
+    "actual_model_calls": 16,
+    "remaining_authorized_calls": 0,
+    "provider_retries": 0,
+    "replacement_calls": 0,
+    "unscored_candidates": 0,
+    "unknown_usage": 0,
+    "known_total_tokens": 67367,
+    "billing_amount": null,
+    "billing_note": "Token counts are measured usage, not a settled currency amount.",
+    "startup_rejected_requests": 1,
+    "startup_rejection_model_calls": 0,
+    "extra_model_calls_for_replay_or_verification": 0
+  },
+  "model": {
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+    "temperature": null,
+    "max_output_tokens": null
+  },
+  "case_ids": [
+    "md-079",
+    "md-199",
+    "md-312",
+    "md-386"
+  ],
+  "cohort": "D; four previously exposed development probes; not H or a representative 500-case result",
+  "conditions": {
+    "control": {
+      "protocol_revision": "sha256:4a72d45a691f1585efdac6f0d025ae4f5ce4e9a74103d6bb55654e7f4b42d192",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "frozen_file": ".forge/benchmarks/cte-interface-ready-20260907/control.frozen.json",
+      "max_model_calls": 8
+    },
+    "treatment": {
+      "protocol_revision": "sha256:56f314788d47aedf5895d1d8503735997a9dbd2150289d9b1d8a180fb423dd95",
+      "forge_prompt_revision": "forge-structured-benchmark-cte-interface-v1",
+      "frozen_file": ".forge/benchmarks/cte-interface-ready-20260907/treatment.frozen.json",
+      "max_model_calls": 8
+    }
+  },
+  "generation_contracts": {
+    "control": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:91818e121d5f8a42412d31f6b3495de55cca95df822e9f912c5471b6800d6ffa",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    },
+    "treatment": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-cte-interface-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:91818e121d5f8a42412d31f6b3495de55cca95df822e9f912c5471b6800d6ffa",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    }
+  },
+  "summary": {
+    "control": {
+      "run_id": "pbr_5ac3895ee65b4d3cb16f5a16b4e281ee",
+      "status": "completed",
+      "dispatched_calls": 8,
+      "arms": {
+        "forge": {
+          "ex": 3,
+          "contract": 3,
+          "denominator": 4,
+          "execution_passed": 3,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 20378,
+          "tokens_per_correct_ex": 6792.666666666667,
+          "mean_generation_ms": 10399.35,
+          "p95_generation_ms": 14351.6,
+          "generation_ms": [
+            14351.6,
+            13429.7,
+            5997,
+            7819.1
+          ],
+          "token_components": {
+            "prompt_tokens": 18618,
+            "completion_tokens": 1760,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "direct": {
+          "ex": 3,
+          "contract": 3,
+          "denominator": 4,
+          "execution_passed": 4,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 11922,
+          "tokens_per_correct_ex": 3974,
+          "mean_generation_ms": 5655.8,
+          "p95_generation_ms": 8662.2,
+          "generation_ms": [
+            8662.2,
+            4704.7,
+            1909,
+            7347.3
+          ],
+          "token_components": {
+            "prompt_tokens": 11166,
+            "completion_tokens": 756,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        }
+      },
+      "total_tokens": 32300
+    },
+    "treatment": {
+      "run_id": "pbr_d706f8085689482a86768623598443cb",
+      "status": "completed",
+      "dispatched_calls": 8,
+      "arms": {
+        "forge": {
+          "ex": 3,
+          "contract": 3,
+          "denominator": 4,
+          "execution_passed": 4,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 23049,
+          "tokens_per_correct_ex": 7683,
+          "mean_generation_ms": 12493.775,
+          "p95_generation_ms": 20312,
+          "generation_ms": [
+            17127.1,
+            20312,
+            5508.6,
+            7027.4
+          ],
+          "token_components": {
+            "prompt_tokens": 20790,
+            "completion_tokens": 2259,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "direct": {
+          "ex": 2,
+          "contract": 2,
+          "denominator": 4,
+          "execution_passed": 4,
+          "unknown_labels": 0,
+          "unknown_usage": 0,
+          "total_tokens": 12018,
+          "tokens_per_correct_ex": 6009,
+          "mean_generation_ms": 5393.275,
+          "p95_generation_ms": 8875.3,
+          "generation_ms": [
+            8875.3,
+            5316.1,
+            2778.8,
+            4602.9
+          ],
+          "token_components": {
+            "prompt_tokens": 11166,
+            "completion_tokens": 852,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        }
+      },
+      "total_tokens": 35067
+    }
+  },
+  "paired": {
+    "rows": [
+      {
+        "case_id": "md-079",
+        "forge": {
+          "control": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 4503,
+            "generation_ms": 14351.6
+          },
+          "treatment": {
+            "official_ea": false,
+            "contract_accuracy": false,
+            "execution_status": "passed",
+            "error_code": "result_column_count_mismatch",
+            "total_tokens": 5314,
+            "generation_ms": 17127.1
+          }
+        },
+        "direct": {
+          "control": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 2320,
+            "generation_ms": 8662.2
+          },
+          "treatment": {
+            "official_ea": false,
+            "contract_accuracy": false,
+            "execution_status": "passed",
+            "error_code": "result_value_mismatch",
+            "total_tokens": 2452,
+            "generation_ms": 8875.3
+          }
+        }
+      },
+      {
+        "case_id": "md-199",
+        "forge": {
+          "control": {
+            "official_ea": false,
+            "contract_accuracy": false,
+            "execution_status": "failed",
+            "error_code": "execution_timeout",
+            "total_tokens": 5568,
+            "generation_ms": 13429.7
+          },
+          "treatment": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 6426,
+            "generation_ms": 20312
+          }
+        },
+        "direct": {
+          "control": {
+            "official_ea": false,
+            "contract_accuracy": false,
+            "execution_status": "passed",
+            "error_code": "result_column_count_mismatch",
+            "total_tokens": 3245,
+            "generation_ms": 4704.7
+          },
+          "treatment": {
+            "official_ea": false,
+            "contract_accuracy": false,
+            "execution_status": "passed",
+            "error_code": "result_column_count_mismatch",
+            "total_tokens": 3276,
+            "generation_ms": 5316.1
+          }
+        }
+      },
+      {
+        "case_id": "md-312",
+        "forge": {
+          "control": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 4254,
+            "generation_ms": 5997
+          },
+          "treatment": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 4782,
+            "generation_ms": 5508.6
+          }
+        },
+        "direct": {
+          "control": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 2232,
+            "generation_ms": 1909
+          },
+          "treatment": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 2266,
+            "generation_ms": 2778.8
+          }
+        }
+      },
+      {
+        "case_id": "md-386",
+        "forge": {
+          "control": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 6053,
+            "generation_ms": 7819.1
+          },
+          "treatment": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 6527,
+            "generation_ms": 7027.4
+          }
+        },
+        "direct": {
+          "control": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 4125,
+            "generation_ms": 7347.3
+          },
+          "treatment": {
+            "official_ea": true,
+            "contract_accuracy": true,
+            "execution_status": "passed",
+            "error_code": null,
+            "total_tokens": 4024,
+            "generation_ms": 4602.9
+          }
+        }
+      }
+    ],
+    "complete_target_conversions": [
+      "md-199"
+    ],
+    "regressions": [
+      {
+        "case_id": "md-079",
+        "arm": "forge",
+        "metric": "official_ea"
+      },
+      {
+        "case_id": "md-079",
+        "arm": "forge",
+        "metric": "contract_accuracy"
+      },
+      {
+        "case_id": "md-079",
+        "arm": "direct",
+        "metric": "official_ea"
+      },
+      {
+        "case_id": "md-079",
+        "arm": "direct",
+        "metric": "contract_accuracy"
+      }
+    ]
+  },
+  "predeclared_gates": {
+    "thresholds": {
+      "target_forge_both_ex_and_contract": true,
+      "minimum_target_conversions_from_both_failed_to_both_passed": 1,
+      "no_true_to_false_ex_or_contract_in_any_arm": true,
+      "all_16_scored": true,
+      "all_usage_known": true,
+      "treatment_total_tokens_max_control_ratio": 1.2,
+      "forge_tokens_per_ex_correct_max_control_ratio": 1,
+      "forge_generation_p95_max_control_ratio": 1.25,
+      "undefined_metrics": "not_passed",
+      "new_correct": "Must compare the fresh paired control, not historical or synthetic saved-candidate runs.",
+      "substep_success": "Compile/interface improvements alone never count as complete answer success."
+    },
+    "observed": {
+      "target_forge_both_ex_and_contract": false,
+      "minimum_one_complete_target_conversion": true,
+      "no_true_to_false_ex_or_contract_in_any_arm": false,
+      "all_16_scored": true,
+      "all_usage_known": true,
+      "total_tokens_ratio_at_most_1_20": true,
+      "forge_tokens_per_ex_correct_not_increased": false,
+      "forge_generation_p95_ratio_at_most_1_25": false
+    },
+    "ratios": {
+      "total_tokens": 1.0856656346749225,
+      "forge_tokens_per_ex_correct": 1.1310727254882715,
+      "forge_generation_p95": 1.4153125783884724
+    }
+  },
+  "changes_observed": [
+    {
+      "case_id": "md-079",
+      "arm": "forge",
+      "result": "true/true -> false/false",
+      "evidence": "处理组只返回计数962和1023两列；Gold为94.03714565004887一个百分比。CTE定义未被外层消费；不是完整答案。"
+    },
+    {
+      "case_id": "md-079",
+      "arm": "direct",
+      "result": "true/true -> false/false",
+      "evidence": "处理组返回0.9403714565004888，漏乘100。Direct模型输入逐字相同，不能将本次随机波动归因于Forge范例；仍按预声明计入回退。"
+    },
+    {
+      "case_id": "md-199",
+      "arm": "forge",
+      "result": "false/false -> true/true",
+      "evidence": "本次控制组best_ms声明/导出/引用已一致，但查询原生执行30秒超时；且投影合并姓名，只列三项。处理组使用MATERIALIZED CTE，并返回67411、Lewis、Hamilton、Austrian Grand Prix四列，与原Gold完全一致。本次控制错误不是seed48的漏导出错误。"
+    },
+    {
+      "case_id": "md-199",
+      "arm": "direct",
+      "result": "false/false -> false/false",
+      "evidence": "两组均返回姓名与赛事三列，缺失Gold要求的milliseconds列。"
+    },
+    {
+      "case_ids": [
+        "md-312",
+        "md-386"
+      ],
+      "arms": [
+        "forge",
+        "direct"
+      ],
+      "result": "Both EX and Contract remain true in both conditions."
+    }
+  ],
+  "cost_and_latency": {
+    "ratios": {
+      "total_tokens": 1.0856656346749225,
+      "forge_tokens_per_ex_correct": 1.1310727254882715,
+      "forge_generation_p95": 1.4153125783884724
+    },
+    "p95_definition": "Nearest-rank of four Forge generation_ms observations; the maximum. Excludes SQL execution time and is not a production P95 estimate.",
+    "token_definition": "Sum of all 16 observed native Pi usage records, including incorrect answers. Prompt/completion/cache components are retained.",
+    "settled_billing_amount": null
+  },
+  "verification": {
+    "real_model_calls": 16,
+    "native_session_factory": true,
+    "single_turn_per_arm": true,
+    "provider_retries": 0,
+    "replacement_calls": 0,
+    "replayed_original_candidates": 16,
+    "independent_readonly_sqlite_checks": 16,
+    "independent_labels_agree": true,
+    "independent_timeout": "Control md-199 Forge also reaches the independent 30-second limit; original failed verdict is preserved.",
+    "raw_response_hashes_verified": 16,
+    "native_log_entries": 215,
+    "unknown_labels": 0,
+    "unknown_usage": 0,
+    "model_and_runtime_sdk_fixed": true,
+    "direct_reconstructed_prompts_identical": true,
+    "prompt_evidence_scope": "Reconstructed from frozen/run inputs and checked against logged character counts; not a captured provider payload.",
+    "preparation_artifacts_unchanged": 19,
+    "preparation_report_unchanged": true,
+    "source_dataset_frozen_inputs_unchanged": true,
+    "source_code_changes_this_execution": 0,
+    "test_scope": "This execution changed no production source/contract. Actual native Pi runs, offline CLI replay, and independent SQLite are the verification; no new permanent tests or repeat of the preparation full suites."
+  },
+  "scope": {
+    "optional_contexts": "date/grain/value remain off",
+    "rolling_parent_run": "seed48 unchanged",
+    "r_or_h_expansion": false,
+    "compiler_schema_assurance_gold_scoring_changed": false,
+    "automatic_repair": false,
+    "automatic_default_enable": false
+  },
+  "limitations": [
+    "Four exposed D cases, one sample per condition and arm; no statistical or general accuracy claim.",
+    "md-079 was correct in this fresh default control; do not recast it as a persistent default failure.",
+    "Native score and complete output, not successful compilation or an intermediate CTE, determine acceptance.",
+    "CLI compare reports saved-candidate comparison; fresh generation provenance is separately evidenced by native runs, raw responses, and dispatch logs.",
+    "One rejected startup POST occurred before task/run creation because the ephemeral local Pi service key pair was omitted. History was empty, with zero model dispatches; only local configuration was corrected after read-only diagnosis, then both protocol gates passed. No accepted run or model call was replayed."
+  ],
+  "evidence": {
+    "root": ".forge/benchmarks/cte-interface-ready-20260907",
+    "preparation_report": "docs/benchmark-cte-interface-ready-2026-09-07.json",
+    "authorization": ".forge/benchmarks/cte-interface-ready-20260907/generation-authorization.json",
+    "budget": ".forge/benchmarks/cte-interface-ready-20260907/generation-budget-receipt.json",
+    "startup_rejection": ".forge/benchmarks/cte-interface-ready-20260907/generation-startup-rejection.json",
+    "http_protocol_gate": ".forge/benchmarks/cte-interface-ready-20260907/generation-http-protocol-preflight.json",
+    "control_run": ".forge/benchmarks/cte-interface-ready-20260907/control.run.json",
+    "treatment_run": ".forge/benchmarks/cte-interface-ready-20260907/treatment.run.json",
+    "control_logs": ".forge/benchmarks/cte-interface-ready-20260907/control.logs.json",
+    "treatment_logs": ".forge/benchmarks/cte-interface-ready-20260907/treatment.logs.json",
+    "independent_sqlite": ".forge/benchmarks/cte-interface-ready-20260907/generation-independent-sqlite.json",
+    "raw_hash_and_replay_validation": ".forge/benchmarks/cte-interface-ready-20260907/generation-evidence-validation.json",
+    "final_input_validation": ".forge/benchmarks/cte-interface-ready-20260907/generation-final-input-validation.json"
+  },
+  "cleanup": {
+    "evidence": ".forge/benchmarks/cte-interface-ready-20260907/generation-cleanup.json",
+    "native_state_snapshot": ".forge/benchmarks/cte-interface-ready-20260907/generation-state.snapshot.sqlite3",
+    "snapshot_validation": ".forge/benchmarks/cte-interface-ready-20260907/generation-snapshot-validation.json",
+    "final_delivery_receipt": ".forge/benchmarks/cte-interface-ready-20260907/generation-delivery-receipt.json"
+  }
+}

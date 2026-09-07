@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "requirement": "REQ-2026-09-07-057",
+  "date": "2026-09-07",
+  "status": "verified_deterministic_maintenance",
+  "model_calls": 0,
+  "model_accuracy_improvement_claimed": false,
+  "production_changes": false,
+  "artifacts_root": ".forge/benchmarks/cte-interface-diagnostic-20260907",
+  "decision": "Fix deterministic expression binding, not the model-generated CTE interface mismatch. No new prompt or repair loop.",
+  "changes": {
+    "compiler": "SQLGlot AST-scoped single-pass source-span expansion; no qualifier stripping, lexical rewriting, nested-query capture or recursive replacement. Related HAVING, FIRST_VALUE/LAST_VALUE and hidden-aggregate ORDER BY expression bindings share existing alias contracts.",
+    "dependency": "sqlglot>=27,<30; 26.0.0 lacks identifier spans, 27.0.0 passed the full independent boundary matrix.",
+    "cte_export": "Explicit select determines exported columns; no inferred aliases or automatic projection additions."
+  },
+  "boundary": {
+    "cases": 42,
+    "before_passed": 16,
+    "before_failed": 26,
+    "after_passed": 42,
+    "after_failed": 0,
+    "independent_sql_oracles_verified": true,
+    "caller_json_unchanged": true,
+    "regression_before_failed": 12,
+    "compiler_tests_after_passed": 104
+  },
+  "historical_compilation": {
+    "queries": 551,
+    "compilations": 2755,
+    "statuses": {
+      "compiled": 2680,
+      "error": 75
+    },
+    "changed_compiles": 5,
+    "changed_queries": 1,
+    "changed_by_group": {
+      "initial-cte-diagnostic": 5
+    },
+    "all_original_sources_unchanged": true,
+    "all_caller_queries_unchanged": true,
+    "historical_queries": 548,
+    "historical_compilations": 2740,
+    "historical_compiles_changed": 0,
+    "synthetic_probe_queries": 3,
+    "changed_probe": "qualified_source_column_collision",
+    "note": "Compiler-only comparison. Did not rerun all R500 SQL/Gold, and did not retry md-340/md-393."
+  },
+  "saved_candidate_replay": {
+    "arms": 16,
+    "diagnostic_only": true,
+    "protocol_revision": "sha256:a84e3e46678ca126c46c6d6a23aafc22f62e095489baf69354c885c24276f46c",
+    "model_calls": 0,
+    "all_outputs_ex_contract_and_failures_unchanged": true,
+    "control": {
+      "forge_correct": 2,
+      "direct_correct": 2,
+      "per_arm_denominator": 4
+    },
+    "treatment": {
+      "forge_correct": 3,
+      "direct_correct": 2,
+      "per_arm_denominator": 4
+    },
+    "md079_treatment_forge": "Still unknown_schema_reference; not repaired or relabeled."
+  },
+  "defaults": {
+    "context_hashes_unchanged": true,
+    "dataset_files_unchanged": true,
+    "prompt_revision": "forge-structured-benchmark-v1",
+    "date_context": {
+      "mode": "off",
+      "max_rows": 100
+    },
+    "grain_context": {
+      "mode": "off"
+    },
+    "value_context": {
+      "mode": "off",
+      "field": null,
+      "max_values": 16
+    }
+  },
+  "verification": {
+    "python": {
+      "command": ".venv/bin/python -m pytest tests -q",
+      "passed": 901,
+      "skipped": 26,
+      "warning": "Dependency datetime.utcfromtimestamp deprecation",
+      "raw_output": "artifact://2521"
+    },
+    "pi": {
+      "command": "npm --prefix services/pi-orchestrator run typecheck && npm --prefix services/pi-orchestrator test",
+      "typecheck": "passed",
+      "passed": 155,
+      "failed": 0,
+      "warning": "Node SQLite experimental warning",
+      "raw_output": "artifact://2537"
+    },
+    "compiler_regressions": {
+      "before_failed": 12,
+      "after_compiler_suite_passed": 104
+    },
+    "old_protocol_gate": {
+      "command": ".venv/bin/forge benchmark bird validate .forge/benchmarks/denominator-scope-ready-20260907/control.frozen.json",
+      "exit_code": 2,
+      "error": "Protocol drift: dataset, sample, context, source, budget or undeclared fields differ",
+      "old_artifact_not_modified": true
+    }
+  },
+  "public_smoke": {
+    "surface": "Real forge evaluate CLI against main:app served on loopback, lifespan disabled to isolate startup effects; execution disabled.",
+    "positive": {
+      "status": "passed",
+      "verdict": "allow_review",
+      "execution_authorized": false,
+      "synthetic_sqlite_columns": [
+        "value"
+      ],
+      "synthetic_sqlite_rows": [
+        [
+          700
+        ],
+        [
+          800
+        ]
+      ]
+    },
+    "negative": {
+      "status": "failed",
+      "verdict": "deny",
+      "execution_authorized": false,
+      "code": "unknown_schema_reference"
+    },
+    "service_stopped": true,
+    "port": 18778
+  },
+  "limits": [
+    "No new generation budget. REQ-056 denominator prompt remains not adopted.",
+    "No claim of solving the original model alias mismatch or improving BIRD accuracy.",
+    "Current dependency runtime was not replaced by isolated minimum-version probes.",
+    "No commit, push or deploy; rolling parent remains seed48 and optional contexts stay off.",
+    "Historical devlog remains a record of earlier behavior, not the current binding contract."
+  ]
+}

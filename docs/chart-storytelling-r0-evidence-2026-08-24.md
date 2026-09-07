@@ -77,7 +77,7 @@ ChartArtifact v2 固定：
 
 ## 4. 跨媒介证据
 
-本地可重建输出：`/tmp/forge-h5-chart-candidate/`
+本地可重建输出：`<local-temp>/`
 
 | Artifact | SHA-256 | 验证 |
 |---|---|---|

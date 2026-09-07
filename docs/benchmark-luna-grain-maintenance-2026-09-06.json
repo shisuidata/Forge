@@ -1,0 +1,1218 @@
+{
+  "requirement_id": "REQ-2026-09-06-048",
+  "date": "2026-09-06",
+  "kind": "benchmark_maintenance",
+  "status": "verified",
+  "user_acceptance": "好的",
+  "model_calls": 0,
+  "fixes": {
+    "replay": "output:null with explicit scored:false stays unscored and preserves the pre-evaluation execution/failure state; actual generation failure remains a known negative",
+    "provider_evidence": "New raw_output.assistant entries retain content, stopReason and errorMessage; incomplete-response logs include the provider error text and persist across runtime reopen"
+  },
+  "regression": {
+    "before": [
+      {
+        "component": "python_replay",
+        "exit_code": 1,
+        "output": "___ test_replay_preserves_unstarted_pi_arm_without_hiding_generation_failure ___\nbenchmark_api = {'headers': {'X-Pi-Service-Key': 'test-pi-key'}, 'suite': {'manifest': {'suite': 'fixed-test-suite'}, 'tables': {'test...d308f4c7af42723e5', 'mini_dev_sqlite.json': 'sha256:40bc6e3001fe9ddd417cb7f40cf3dfe088f80e2ee2f33122741e99c803d5fe3f'}}\n    def test_replay_preserves_unstarted_pi_arm_without_hiding_generation_failure(benchmark_api):\n        response = frozen()\n        pending = {\"output\": None, \"scored\": False, \"official_ea\": None, \"contract_accuracy\": None,\n                   \"compile_status\": \"pending\", \"execution_status\": \"pending\", \"failure\": None,\n                   \"error_code\": None, \"evidence\": {\"dispatches\": 0}}\n        failed = {**pending, \"scored\": True, \"official_ea\": False, \"contract_accuracy\": False,\n                  \"execution_status\": \"skipped\", \"evidence\": {\"dispatches\": 1}}\n        exported = {\"protocol_revision\": response[\"protocol_revision\"], \"protocol_manifest\": response[\"manifest\"],\n                    \"cases\": [{\"case_id\": \"one\", \"forge\": pending, \"direct\": failed}]}\n        result = bird.replay(exported)\n        unstarted, dispatched = [record[\"evaluation\"] for record in result[\"candidates\"]]\n>       assert unstarted[\"scored\"] is False\nE       assert True is False\ntests/test_bird_benchmark.py:168: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_bird_benchmark.py::test_replay_preserves_unstarted_pi_arm_without_hiding_generation_failure - assert True is False\n1 failed, 26 deselected in 0.50s\n[raw output: artifact://1598]\n\n\nWall time: 1.35 seconds\n\nCommand exited with code 1"
+      },
+      {
+        "component": "pi_provider_evidence",
+        "exit_code": 1,
+        "output": "(node:37090) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n✖ provider termination remains diagnosable after reopening the failed run (19.697375ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1061.71525\n\n✖ failing tests:\n\ntest at tests/benchmark-runtime.test.ts:1:7917\n✖ provider termination remains diagnosable after reopening the failed run (19.697375ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  + actual - expected\n  \n  + undefined\n  - 'error'\n  \n      at TestContext.<anonymous> (./services/pi-orchestrator/tests/benchmark-runtime.test.ts:203:12)\n      at async Test.run (node:internal/test_runner/test:1069:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: 'error',\n    operator: 'strictEqual'\n  }\n\n\nWall time: 1.13 seconds\n\nCommand exited with code 1"
+      }
+    ],
+    "focused": {
+      "python_passed": 42,
+      "pi_passed": 30,
+      "typecheck": true
+    },
+    "full": {
+      "python_passed": 814,
+      "python_skipped": 26,
+      "pi_passed": 150
+    },
+    "provider_test_scope": "Synthetic SDK assistant failure with real Pi workers, SQLite persistence and log retrieval; no real Provider was called"
+  },
+  "offline_smoke": {
+    "source_epoch": "Fresh current-source diagnostic protocol; original generation source fingerprints remain historical",
+    "protocol_revision": "sha256:88e325f594fdabc971b74f9592bf09e5a7feee0b7bc477ed1e5ef3f75ec3c5d2",
+    "protocol_file": ".forge/benchmarks/luna-grain-maintenance-20260906/current-diagnostic.frozen.json",
+    "origins": [
+      {
+        "condition": "control",
+        "file": ".forge/benchmarks/luna-grain-context-20260906/control.run.json",
+        "sha256": "17c15eea80f4d650693c33728a96919aa5f7969315043f27b24be70910da8d76",
+        "run_id": "pbr_fb550c000ff34a559d1f79e7738107ec",
+        "protocol_revision": "sha256:47471caf17cbbe8bf866379cac9302b3ece3adf5a7a4e7f513fb926cdc4d3369"
+      },
+      {
+        "condition": "off",
+        "file": ".forge/benchmarks/luna-grain-context-20260906/off.run.json",
+        "sha256": "90a8418a47142b8bfc5a64a392ca73e7eae74ef32a03803db1882007930671f5",
+        "run_id": "pbr_cb5bcb3341a24f619b7e8a75bbd83236",
+        "protocol_revision": "sha256:2d96a1a6ecf593d11a73cad9d6aa0fa4560ad7d8e488fd8b4c1937aec22abd95"
+      }
+    ],
+    "arm_records": 80,
+    "valid_candidates": 48,
+    "generation_failures": 4,
+    "gold_unscored_arms": 4,
+    "unstarted_preserved": 24,
+    "original_outputs_and_raw_unchanged": true,
+    "core_fields_compared": [
+      "scored",
+      "official_ea",
+      "contract_accuracy",
+      "execution_status",
+      "sql"
+    ],
+    "core_matches": 80,
+    "core_differences": [],
+    "model_calls": 0,
+    "complete": [
+      false,
+      false
+    ],
+    "diagnostic": [
+      true,
+      true
+    ],
+    "compare": {
+      "comparable": false,
+      "reasons": [
+        "Unscored, diagnostic or old unversioned record",
+        "Unscored candidate evaluation",
+        "Unscored, diagnostic or old unversioned record",
+        "Unscored candidate evaluation",
+        "Saved candidates changed during deterministic replay comparison"
+      ]
+    },
+    "compile_projection_excluded": "Historical Gold Forge not_applicable/pending and generation-failure compile projections are not included in the core-match claim"
+  },
+  "corrections": [
+    {
+      "case_id": "md-222",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-222",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-234",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-234",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-249",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-249",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-259",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-259",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-273",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-273",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-300",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-300",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-418",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-418",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-429",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-429",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-447",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-447",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-472",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-472",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-481",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-481",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-483",
+      "arm": "forge",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    },
+    {
+      "case_id": "md-483",
+      "arm": "direct",
+      "before": {
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "execution_status": "skipped"
+      },
+      "after": {
+        "scored": false,
+        "official_ea": null,
+        "contract_accuracy": null,
+        "execution_status": "pending"
+      }
+    }
+  ],
+  "arm_audit": [
+    {
+      "condition": "control",
+      "case_id": "md-020",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-020",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-032",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-032",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-040",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-040",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-082",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-082",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-127",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-127",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-153",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-153",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-199",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-199",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-222",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-222",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-234",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-234",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-249",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-249",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-259",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-259",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-273",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-273",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-300",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-300",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-340",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-340",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "control",
+      "case_id": "md-418",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-418",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-429",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-429",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-447",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-447",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-472",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-472",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-481",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-481",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-483",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "control",
+      "case_id": "md-483",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": true
+    },
+    {
+      "condition": "off",
+      "case_id": "md-020",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-020",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-032",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-032",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-040",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-040",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-082",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-082",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-127",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-127",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-153",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-153",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-199",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-199",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-222",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-222",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-234",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-234",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-249",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-249",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-259",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-259",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-273",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-273",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-300",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-300",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-340",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-340",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-418",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-418",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-429",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-429",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-447",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-447",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-472",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-472",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-481",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-481",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-483",
+      "arm": "forge",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    },
+    {
+      "condition": "off",
+      "case_id": "md-483",
+      "arm": "direct",
+      "output_unchanged": true,
+      "raw_output_unchanged": true,
+      "core_matches": true,
+      "unstarted": false
+    }
+  ],
+  "limitations": [
+    "No new candidate generation or accuracy gain is claimed.",
+    "The original four Provider failure reasons were not saved and cannot be reconstructed.",
+    "Original usage remains 172108 observed tokens plus four unknown-consumption dispatches.",
+    "Source fingerprints changed; old paid-run frozen manifests cannot be resumed or presented as new same-version baselines.",
+    "Previous paid experiment remains incomplete; its original JSON evidence is not rewritten."
+  ],
+  "next_rolling": {
+    "parent_run_id": "pbr_cb5bcb3341a24f619b7e8a75bbd83236",
+    "carried": 19,
+    "new": 1,
+    "reviewed": 0,
+    "luna_seen": 49,
+    "luna_unseen": 451,
+    "started": false
+  },
+  "evidence_directory": ".forge/benchmarks/luna-grain-maintenance-20260906"
+}

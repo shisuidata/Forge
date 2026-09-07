@@ -1,0 +1,644 @@
+{
+  "schema_version": "bird-output-contract-review-v1",
+  "requirement": "REQ-2026-09-05-047",
+  "status": "completed_offline_review",
+  "authorization": {
+    "user_message": "继续",
+    "scope": "仅离线复核md-483粒度和md-077姓名输出；无新增模型调用授权"
+  },
+  "inputs": {
+    "source_report": "docs/benchmark-luna-date-context-2026-09-05.json",
+    "protocols": {
+      "off": "sha256:d2199e310a545342d9de4d1de3da88a0de9847626a3ddaf70842261c2b0eb483",
+      "observed": "sha256:c52e61ad4d6b32821e1bce3e908b3c68b8c573e750c99633a54800ecf1b892d6"
+    },
+    "dataset_digest": "sha256:e15fcb075b61d4a74f8496ffefdc6d9e37bedd48aec83cd3b83b11bb2fffd27a",
+    "cases": [
+      {
+        "question_id": 136,
+        "db_id": "financial",
+        "question": "Between 1/1/1995 and 12/31/1997, how many loans in the amount of at least 250,000 per account that chose monthly statement issuance were approved?",
+        "evidence": "Frequency = 'POPLATEK MESICNE' stands for monthly issurance",
+        "SQL": "SELECT COUNT(T1.account_id) FROM account AS T1 INNER JOIN loan AS T2 ON T1.account_id = T2.account_id WHERE T2.date BETWEEN '1995-01-01' AND '1997-12-31' AND T1.frequency = 'POPLATEK MESICNE' AND T2.amount >= 250000",
+        "difficulty": "moderate",
+        "case_id": "md-483",
+        "source": {
+          "dataset": "BIRD-SQL Mini-Dev",
+          "question_id": 136,
+          "instance_index": 483,
+          "repository": "https://github.com/bird-bench/mini_dev",
+          "license": "CC BY-SA 4.0"
+        }
+      },
+      {
+        "question_id": 1464,
+        "db_id": "student_club",
+        "question": "Write the full names of students who received funds on the date of 9/9/2019 and include the amount received.",
+        "evidence": "full name refers to first_name, last_name, amount of funds received refers to amount, received funds on date refers to date_received",
+        "SQL": "SELECT DISTINCT T3.first_name, T3.last_name, T4.amount FROM event AS T1 INNER JOIN attendance AS T2 ON T1.event_id = T2.link_to_event INNER JOIN member AS T3 ON T3.member_id = T2.link_to_member INNER JOIN income AS T4 ON T4.link_to_member = T3.member_id WHERE T4.date_received = '2019-09-09'",
+        "difficulty": "challenging",
+        "case_id": "md-077",
+        "source": {
+          "dataset": "BIRD-SQL Mini-Dev",
+          "question_id": 1464,
+          "instance_index": 77,
+          "repository": "https://github.com/bird-bench/mini_dev",
+          "license": "CC BY-SA 4.0"
+        }
+      }
+    ],
+    "original_outcomes": [
+      {
+        "condition": "off",
+        "case_id": "md-483",
+        "arm": "forge",
+        "run_id": "pbr_716a9e146af7424a858e735647680aec",
+        "output": {
+          "scan": "loan",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "account",
+              "on": {
+                "left": "loan.account_id",
+                "right": "account.account_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "loan.date",
+              "op": "gte",
+              "val": "950101"
+            },
+            {
+              "col": "loan.date",
+              "op": "lte",
+              "val": "971231"
+            },
+            {
+              "col": "loan.amount",
+              "op": "gte",
+              "val": 250000
+            },
+            {
+              "col": "account.frequency",
+              "op": "eq",
+              "val": "POPLATEK MESICNE"
+            }
+          ],
+          "agg": [
+            {
+              "fn": "count_all",
+              "as": "loan_count"
+            }
+          ],
+          "select": [
+            "loan_count"
+          ]
+        },
+        "sql": "SELECT COUNT(*) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date >= '950101' AND loan.date <= '971231' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_value_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 4288,
+        "usage_observed": true,
+        "generation_ms": 10970.1,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:82dc9c64f3fa100a6a8b4d7fc71e0d7d1d6c3dfc2eaa20b59b36358fc8c72a1d",
+          "response_output_hash": "sha256:0997f330140b23cdd2bd03989c1b5bc4f5e9f9bf5a333740ddfd05218f977893"
+        }
+      },
+      {
+        "condition": "off",
+        "case_id": "md-483",
+        "arm": "direct",
+        "run_id": "pbr_716a9e146af7424a858e735647680aec",
+        "output": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id;",
+        "sql": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 2215,
+        "usage_observed": true,
+        "generation_ms": 7306,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:ab6e5e61d609cb1dd3574c74b81538dc8000b9569e7d66ed69dbdf12f110cb71",
+          "response_output_hash": "sha256:8da4077cdd2b887a7d7582026ebe6e99352cca025ea70f6f3d01e1cde32aa8a2"
+        }
+      },
+      {
+        "condition": "off",
+        "case_id": "md-077",
+        "arm": "forge",
+        "run_id": "pbr_716a9e146af7424a858e735647680aec",
+        "output": {
+          "scan": "income",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "member",
+              "on": {
+                "left": "income.link_to_member",
+                "right": "member.member_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "income.date_received",
+              "op": "eq",
+              "val": "9/9/2019"
+            }
+          ],
+          "select": [
+            {
+              "expr": "member.first_name || ' ' || member.last_name",
+              "as": "full_name"
+            },
+            "income.amount"
+          ]
+        },
+        "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '9/9/2019'",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 4300,
+        "usage_observed": true,
+        "generation_ms": 9772.4,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:b7a7ee5cf23817cbda8e2cfdd2aac85eda56ec176cd05aecced6e0569ae0e194",
+          "response_output_hash": "sha256:77c22be534b2a869505aa47346675af6785b89e1ff84ae6a2ff6b5b4c5ea66ca"
+        }
+      },
+      {
+        "condition": "off",
+        "case_id": "md-077",
+        "arm": "direct",
+        "run_id": "pbr_716a9e146af7424a858e735647680aec",
+        "output": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09';",
+        "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09'",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 2318,
+        "usage_observed": true,
+        "generation_ms": 7036.7,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:e324ed56e3973885bece2ab49e3df928fb4e264222fac223873cb8013a03ce15",
+          "response_output_hash": "sha256:730e1c19f94c8860f562b135ef40f061074c0e3578b5022e70275c9ffdec3d93"
+        }
+      },
+      {
+        "condition": "observed",
+        "case_id": "md-483",
+        "arm": "forge",
+        "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+        "output": {
+          "scan": "loan",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "account",
+              "on": {
+                "left": "loan.account_id",
+                "right": "account.account_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "loan.date",
+              "op": "between",
+              "val": null,
+              "lo": "1995-01-01",
+              "hi": "1997-12-31"
+            },
+            {
+              "col": "loan.amount",
+              "op": "gte",
+              "val": 250000
+            },
+            {
+              "col": "account.frequency",
+              "op": "eq",
+              "val": "POPLATEK MESICNE"
+            }
+          ],
+          "group": [
+            "account.account_id"
+          ],
+          "agg": [
+            {
+              "fn": "count",
+              "col": "loan.loan_id",
+              "as": "loan_count"
+            }
+          ],
+          "select": [
+            "account.account_id",
+            "loan_count"
+          ]
+        },
+        "sql": "SELECT account.account_id, COUNT(loan.loan_id) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date BETWEEN '1995-01-01' AND '1997-12-31' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'\nGROUP BY account.account_id",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 5015,
+        "usage_observed": true,
+        "generation_ms": 13950.4,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:3344bd7514b61ee85cc139e984048e6e4b5ea4039c4a1e99ebbefd1b9d836f56",
+          "response_output_hash": "sha256:8a89b55ef491bab6a196edca0ed26759b2202dbc39e90aa6f0166532f1abb51c"
+        }
+      },
+      {
+        "condition": "observed",
+        "case_id": "md-483",
+        "arm": "direct",
+        "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+        "output": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE l.date BETWEEN '1995-01-01' AND '1997-12-31'\n  AND l.amount >= 250000\n  AND a.frequency = 'POPLATEK MESICNE'\nGROUP BY l.account_id;",
+        "sql": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE l.date BETWEEN '1995-01-01' AND '1997-12-31'\n  AND l.amount >= 250000\n  AND a.frequency = 'POPLATEK MESICNE'\nGROUP BY l.account_id",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_row_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 2969,
+        "usage_observed": true,
+        "generation_ms": 8609.8,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:9d1f2e0fec4a73defbef4a19459b60c8a05d2482e83205f2f9aef64539eafbc1",
+          "response_output_hash": "sha256:66078bc3b75f19832dec2ddef61e58a97f9395a74cab7c35eac50a95d8cfcba2"
+        }
+      },
+      {
+        "condition": "observed",
+        "case_id": "md-077",
+        "arm": "forge",
+        "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+        "output": {
+          "scan": "income",
+          "joins": [
+            {
+              "type": "inner",
+              "table": "member",
+              "on": {
+                "left": "income.link_to_member",
+                "right": "member.member_id"
+              }
+            }
+          ],
+          "filter": [
+            {
+              "col": "income.date_received",
+              "op": "eq",
+              "val": "2019-09-09"
+            }
+          ],
+          "select": [
+            {
+              "expr": "member.first_name || ' ' || member.last_name",
+              "as": "full_name"
+            },
+            "income.amount"
+          ]
+        },
+        "sql": "SELECT member.first_name || ' ' || member.last_name AS full_name, income.amount\nFROM income\nINNER JOIN member ON income.link_to_member = member.member_id\nWHERE income.date_received = '2019-09-09'",
+        "compile_status": "passed",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 4791,
+        "usage_observed": true,
+        "generation_ms": 7915.1,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:b764c200d8a2c6f38cce62eeddab107f9503a99a1806e4ddc7ba6ccaa4f65a6f",
+          "response_output_hash": "sha256:de19c031848832812268e1fe86818c05055d38848469edf6cd7ae4049c960228"
+        }
+      },
+      {
+        "condition": "observed",
+        "case_id": "md-077",
+        "arm": "direct",
+        "run_id": "pbr_f90aeca4d5544fd59aa74f6809db7886",
+        "output": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09';",
+        "sql": "SELECT m.first_name || ' ' || m.last_name AS full_name, i.amount\nFROM income AS i\nJOIN member AS m ON i.link_to_member = m.member_id\nWHERE i.date_received = '2019-09-09'",
+        "compile_status": "not_applicable",
+        "execution_status": "passed",
+        "scored": true,
+        "official_ea": false,
+        "contract_accuracy": false,
+        "failure": {
+          "stage": "result_contract",
+          "code": "result_column_count_mismatch",
+          "retryable": true
+        },
+        "total_tokens": 2795,
+        "usage_observed": true,
+        "generation_ms": 4566.2,
+        "evidence": {
+          "dispatches": 1,
+          "payload_hash": "sha256:31a1ebcd9bddb655f94e78c4f3bf7d11c51be7abc13a47e63a995b56bb39147e",
+          "response_output_hash": "sha256:5b00c447f2af68af04a918570daed4ea350478bf29c44527bfbd675b27c58929"
+        }
+      }
+    ]
+  },
+  "findings": [
+    {
+      "case_id": "md-483",
+      "classification": "shared_context_reference_grain_conflict",
+      "confidence": "medium_on_business_grain_high_on_source_facts",
+      "source_facts": [
+        "问题明确含per account；Gold是总计，三个原候选选择分组。",
+        "冻结ContextSnapshot.result_contract.expected_grain=grouped；forge/benchmark_v2.py的each/per正则自动推断，无确认来源或不确定性标记。",
+        "该字段进入两条件双臂的Pi构造Prompt；八份目标Prompt重建长度与日志一致，不是HTTP正文捕获。",
+        "682笔贷款对应682个账户只是当前快照；实际DDL只设外键，不限制每账户最多一笔贷款。"
+      ],
+      "strict_ambiguity_review": {
+        "scenario_evidence": "per account既可读为分组粒度，也可附着贷款金额/账户条件；how many loans支持总计。不是为任意计数题凭空发明分组。",
+        "material_difference": "实际为1行总计65 vs65行账户分布；合法合成数据为总计3 vs账户101=2、202=1，不是纯显示差异。",
+        "not_resolved_by_available_context": "没有业务确认的粒度；自动正则标签不能拿来证明自身正确，数据的一对一偶合也不能确定提问意图。",
+        "decision": "保留中等置信度粒度冲突，真实任务若必须唯一粒度且没有已确认语义再确认；不能以此豁免独立日期错误。"
+      },
+      "causal_limit": "尚未做去除grain提示的生成消融，不能声称它导致了三个分组候选。",
+      "date_counterfactuals": [
+        {
+          "arm": "forge",
+          "kind": "hand_edited_offline_diagnostic_only",
+          "original_sql": "SELECT COUNT(*) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date >= '950101' AND loan.date <= '971231' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+          "diagnostic_sql": "SELECT COUNT(*) AS loan_count\nFROM loan\nINNER JOIN account ON loan.account_id = account.account_id\nWHERE loan.date >= '1995-01-01' AND loan.date <= '1997-12-31' AND loan.amount >= 250000 AND account.frequency = 'POPLATEK MESICNE'",
+          "only_change": "two date literals",
+          "rows": 1,
+          "matches_gold_set": true,
+          "original_official_ex": false,
+          "score_updated": false
+        },
+        {
+          "arm": "direct",
+          "kind": "hand_edited_offline_diagnostic_only",
+          "original_sql": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '950101' AND '971231'\nGROUP BY l.account_id",
+          "diagnostic_sql": "SELECT l.account_id, COUNT(*) AS loan_count\nFROM loan AS l\nJOIN account AS a ON a.account_id = l.account_id\nWHERE a.frequency = 'POPLATEK MESICNE'\n  AND l.amount >= 250000\n  AND l.date BETWEEN '1995-01-01' AND '1997-12-31'\nGROUP BY l.account_id",
+          "only_change": "two date literals",
+          "rows": 65,
+          "matches_gold_set": false,
+          "original_official_ex": false,
+          "score_updated": false
+        }
+      ],
+      "original_scores_changed": false
+    },
+    {
+      "case_id": "md-077",
+      "classification": "evidence_backed_presentation_difference_with_reference_scope_restriction",
+      "confidence": "high_on_current_snapshot_information_match",
+      "business_clarification_required_for_name_format": false,
+      "source_facts": [
+        "官方member.csv明确full name is first_name + last_name，并举Angela Sanders例子；该文本在两条件双臂指令中。",
+        "修正日期后的三个候选返回与Gold相同的两名学生和金额，仅姓名拼接；原Forge基线仍有独立日期错误。",
+        "Gold额外inner join attendance/event并DISTINCT；已读问题、Evidence及相关CSV没有给出活动参与筛选条件。",
+        "两名实际收款成员分别有14/12个活动记录，Gold先产生26行再DISTINCT为2行，因此当前快照掩盖额外关联及去重差异。"
+      ],
+      "decision": "不因拼接向用户发起澄清，不为追Gold自动加入活动关联或改变输出；保持官方失败标签，业务语义判断仅限本次证据，不计算纠正后准确率。",
+      "counterexamples": [
+        {
+          "fixture": "attendance_scope",
+          "foreign_keys_valid": true,
+          "gold_rows": [
+            [
+              "Alex",
+              "Chen",
+              50
+            ]
+          ],
+          "display_only_split_rows": [
+            [
+              "Alex",
+              "Chen",
+              50
+            ],
+            [
+              "Bo",
+              "Lin",
+              75
+            ]
+          ],
+          "original_concat_rows": [
+            [
+              "Alex Chen",
+              50
+            ],
+            [
+              "Bo Lin",
+              75
+            ]
+          ]
+        },
+        {
+          "fixture": "duplicate_income",
+          "foreign_keys_valid": true,
+          "gold_rows": [
+            [
+              "Alex",
+              "Chen",
+              50
+            ]
+          ],
+          "display_only_split_rows": [
+            [
+              "Alex",
+              "Chen",
+              50
+            ],
+            [
+              "Alex",
+              "Chen",
+              50
+            ]
+          ],
+          "original_concat_rows": [
+            [
+              "Alex Chen",
+              50
+            ],
+            [
+              "Alex Chen",
+              50
+            ]
+          ]
+        },
+        {
+          "fixture": "noninvertible_name",
+          "foreign_keys_valid": true,
+          "gold_rows": [
+            [
+              "Mary Ann",
+              "Lee",
+              50
+            ],
+            [
+              "Mary",
+              "Ann Lee",
+              50
+            ]
+          ],
+          "display_only_split_rows": [
+            [
+              "Mary Ann",
+              "Lee",
+              50
+            ],
+            [
+              "Mary",
+              "Ann Lee",
+              50
+            ]
+          ],
+          "original_concat_rows": [
+            [
+              "Mary Ann Lee",
+              50
+            ],
+            [
+              "Mary Ann Lee",
+              50
+            ]
+          ]
+        },
+        {
+          "fixture": "nullable_name",
+          "foreign_keys_valid": true,
+          "gold_rows": [
+            [
+              "Sam",
+              null,
+              50
+            ]
+          ],
+          "display_only_split_rows": [
+            [
+              "Sam",
+              null,
+              50
+            ]
+          ],
+          "original_concat_rows": [
+            [
+              null,
+              50
+            ]
+          ]
+        }
+      ],
+      "generic_normalization_rejected": [
+        "活动关联会排除无活动记录的合法收款成员。",
+        "同人两笔同金额收款使原查询两行而Gold一行，涉及多重集，不是列改名。",
+        "复合姓名拆分不同可拼成同一字符串，不可逆。",
+        "原DDL允许NULL姓名；||会丢失非空的另一部分。"
+      ],
+      "original_scores_changed": false
+    }
+  ],
+  "verification": {
+    "recorded_result_queries": 26,
+    "synthetic_fixtures": 5,
+    "foreign_keys_valid": true,
+    "reconstructed_prompts": 8,
+    "runtime_sources_unchanged": true,
+    "public_dataset_unchanged": true,
+    "new_luna_calls": 0,
+    "new_luna_tokens": 0,
+    "runtime_code_changes": false,
+    "gold_changes": false,
+    "official_score_changes": false,
+    "permanent_tests_added": false
+  },
+  "next_decision": {
+    "priority": "先处理将each/per启发式包装成确定expected_grain的输入问题，而非更改Gold、自动补GROUP BY或加入更复杂关键词特判。",
+    "preferred_narrow_direction": "从生成契约中移除未经确认的expected_grain；保留原始问题和来源事实，实施前核对Python/Pi Contract及回归范围。",
+    "implementation_authorized_here": false,
+    "new_generation_authorized": false,
+    "preserved": [
+      "日期观察默认off",
+      "原20次实验结论及分母",
+      "日常17+2+1规则",
+      "H与R0.6门禁"
+    ],
+    "gold_learning_direction": "可以用Gold总结原始字段投影与展示格式分层的通用候选；须在其他姓名、NULL和重复记录对照验证，不禁止学习Gold，也不按单题硬编码。"
+  },
+  "artifacts": {
+    "query_evidence": ".forge/benchmarks/luna-output-contract-review-20260906/query-evidence.json",
+    "prompt_provenance": ".forge/benchmarks/luna-output-contract-review-20260906/prompt-provenance.json"
+  },
+  "date": "2026-09-06",
+  "gold_analysis_policy": {
+    "user_question": "但是我们在分析问题的时候可以用分析 gold sql 来寻找我们出错的原因，你觉得这样算作弊吗",
+    "decision": "允许并应主动使用Gold进行隔离的离线归因；这属于开发和调参，不是作弊。",
+    "allowed": [
+      "逐项对照Gold的实体、JOIN、筛选、粒度、聚合与投影",
+      "执行明确标记的人为离线反事实",
+      "从开发/回归题总结有依据的通用Prompt、检索、Contract或Compiler改进"
+    ],
+    "forbidden_claims": [
+      "把Gold或答案变体送入本题被测生成输入却声称独立生成",
+      "改写候选或Gold后冒充原始成绩",
+      "针对性看Gold调参后仍称该样本为独立未曝光测试集",
+      "按题号硬编码答案却声称通用能力"
+    ],
+    "validation": "在D/R开发回归层调优并如实披露；未参与调参的数据承担独立验证。Gold差异先分析，不直接当Gold错误，也不直接把每个参考JOIN当业务规则。"
+  }
+}

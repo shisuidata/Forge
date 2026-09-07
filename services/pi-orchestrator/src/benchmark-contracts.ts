@@ -7,7 +7,7 @@ export type BenchmarkNodeStatus = "pending" | "running" | "passed" | "failed" | 
 
 export const BENCHMARK_FAILURE_STAGES = [
   "context", "generation", "parse", "candidate_contract", "compile",
-  "assurance", "execution", "result_contract", "official_ea",
+  "assurance", "execution", "gold", "result_contract", "official_ea",
 ] as const;
 export type BenchmarkFailureStage = (typeof BENCHMARK_FAILURE_STAGES)[number];
 
@@ -15,11 +15,15 @@ export const BENCHMARK_FAILURE_CODES = [
   "retrieval_insufficient", "context_failed", "agent_failed", "generation_empty", "malformed_output",
   "candidate_contract_invalid", "compile_failed", "readonly_violation", "sql_parse_failed",
   "unknown_table", "unknown_column", "unknown_schema_reference", "dialect_unsupported",
-  "execution_timeout", "execution_failed", "result_row_count_mismatch",
+  "execution_timeout", "execution_failed", "gold_execution_failed", "result_row_count_mismatch",
   "result_column_count_mismatch", "result_column_alignment_ambiguous",
   "result_order_or_value_mismatch", "result_value_mismatch", "official_ea_mismatch",
 ] as const;
 export type BenchmarkFailureCode = (typeof BENCHMARK_FAILURE_CODES)[number];
+export interface BenchmarkGoldReadinessV2 {
+  policy: "require_all" | "skip_unscorable";
+  blocked_cases: Array<{ case_id: string; db_id: string; code: string }>;
+}
 
 export interface BenchmarkFailureV1 {
   stage: BenchmarkFailureStage;
@@ -31,9 +35,28 @@ export interface BenchmarkModelSnapshot {
   provider: string;
   model: string;
   revision: string;
-  temperature: number;
-  max_output_tokens: number;
+  temperature: number | null;
+  max_output_tokens: number | null;
 }
+
+export interface BenchmarkGenerationContractV2 {
+  forge_output_mode: "text_json" | "pi_tool_schema";
+  forge_prompt_revision: string;
+  forge_schema_revision: string | null;
+  provider_json_schema_request: "disabled" | "prefer" | "required";
+  forge_wire_schema_revision: string | null;
+  direct_output_mode: "text_sql";
+  sampling?: "provider_default";
+  transport?: "sse";
+  max_output_tokens?: null;
+  timeout_seconds?: 120;
+  provider_retries?: 0;
+  max_agent_turns_per_arm?: 1;
+  isolation_revision?: string;
+  pi_runtime_revision?: string;
+  pi_sdk_lock_revision?: string;
+}
+
 
 export interface RetrievalRoundV2 {
   round_index: number;
@@ -54,7 +77,6 @@ export interface ResultContractV2 {
   numeric_mode: "exact" | "rounded" | "tolerance";
   numeric_scale: number | null;
   null_policy: "exact";
-  expected_grain: string;
   revision: string;
 }
 
@@ -78,14 +100,21 @@ export interface ArmMetricsV2 {
   cache_read_tokens: number;
   cache_write_tokens: number;
   total_tokens: number;
+  /** False means token fields are unobserved placeholders, never evidence of zero cost. */
+  usage_observed?: boolean;
   compile_status: "pending" | "passed" | "failed" | "not_applicable";
   execution_status: "pending" | "passed" | "failed" | "skipped";
+  /** False leaves correctness unknown, not a negative score. */
+  scored: boolean;
   official_ea: boolean | null;
   contract_accuracy: boolean | null;
   failure?: BenchmarkFailureV1 | null;
   error_code: BenchmarkFailureCode | null;
   sql: string | null;
   output: unknown;
+  raw_output?: unknown;
+  elapsed_ms?: number;
+  evidence?: { dispatches: number; payload_hash: string | null; response_output_hash: string | null };
 }
 
 export interface BenchmarkCaseProjectionV2 {
@@ -120,7 +149,12 @@ export interface BenchmarkRunProjectionV2 {
   task_run_id: string;
   status: BenchmarkRunStatus;
   model: BenchmarkModelSnapshot;
+  generation_contract: BenchmarkGenerationContractV2;
   suite_id: string;
+  metric_revision: string | null;
+  protocol_revision?: string;
+  protocol_manifest?: Record<string, unknown>;
+  gold_readiness?: BenchmarkGoldReadinessV2;
   total_cases: number;
   completed_cases: number;
   total_calls: number;

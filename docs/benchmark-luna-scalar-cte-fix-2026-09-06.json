@@ -1,0 +1,378 @@
+{
+  "requirement_id": "REQ-2026-09-06-049",
+  "date": "2026-09-06",
+  "kind": "same-candidate deterministic compiler performance correction",
+  "status": "verified",
+  "user_acceptance": "修复执行瓶颈；零模型调用；SQLite≥3.35",
+  "model_calls": 0,
+  "implementation": {
+    "file": "forge/compiler.py",
+    "symbol": "_materialize_joined_scalar_extreme",
+    "dialect": "sqlite",
+    "minimum_sqlite_version": "3.35.0",
+    "verified_sqlite_version": "3.53.4",
+    "scope": "Nonrecursive simple single column MIN/MAX CTE projected as its aggregate alias or canonical aggregate expression and referenced by an INNER/CROSS JOIN. No filtered/grouped/complex body, raw/other-CTE source or volatile aggregate expression.",
+    "non_changes": [
+      "Original candidates and raw responses",
+      "Gold and dataset",
+      "Prompt and Schema",
+      "Scoring and failure/unknown rules",
+      "Other dialect outputs, including existing refusals"
+    ]
+  },
+  "source_hashes_before": {
+    "forge/compiler.py": "5e4845e7151158b21e11b3032411e253670efe67fd942545ccd07f788a194a59",
+    "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "agent/prompts.py": "8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2",
+    "docs/benchmark-luna-grain-context-2026-09-06.json": "5215f50fc11a4ecc02a2ac3d3490fa9c6739d6449cf1da6eb488d5d6a92d6e0a",
+    ".forge/benchmarks/luna-grain-context-20260906/control.run.json": "17c15eea80f4d650693c33728a96919aa5f7969315043f27b24be70910da8d76",
+    ".forge/benchmarks/luna-grain-context-20260906/off.run.json": "90a8418a47142b8bfc5a64a392ca73e7eae74ef32a03803db1882007930671f5"
+  },
+  "source_hashes_after": {
+    "forge/compiler.py": "52743ab514ee72eaa8a3e5c0b2af48461e6e934c72d55f318148ca9fea55e935",
+    "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "agent/prompts.py": "8198dd5dc3e03835e525093a2fc530c3c5e7c6902b6f50754bd4805bca709da2",
+    "docs/benchmark-luna-grain-context-2026-09-06.json": "5215f50fc11a4ecc02a2ac3d3490fa9c6739d6449cf1da6eb488d5d6a92d6e0a",
+    ".forge/benchmarks/luna-grain-context-20260906/control.run.json": "17c15eea80f4d650693c33728a96919aa5f7969315043f27b24be70910da8d76",
+    ".forge/benchmarks/luna-grain-context-20260906/off.run.json": "90a8418a47142b8bfc5a64a392ca73e7eae74ef32a03803db1882007930671f5"
+  },
+  "compiler_comparison": {
+    "forge_candidates": 24,
+    "dialects": 5,
+    "compilation_results": 120,
+    "changes": [
+      {
+        "condition": "off",
+        "case_id": "md-199",
+        "dialect": "sqlite",
+        "before": {
+          "sql": "WITH best AS (\n  SELECT MIN(lapTimes.milliseconds) AS best_ms\n  FROM lapTimes\n)\nSELECT lapTimes.milliseconds, drivers.forename, drivers.surname, races.name\nFROM lapTimes\nINNER JOIN drivers ON lapTimes.driverId = drivers.driverId\nINNER JOIN races ON lapTimes.raceId = races.raceId\nINNER JOIN best ON lapTimes.milliseconds = best.best_ms"
+        },
+        "after": {
+          "sql": "WITH best AS MATERIALIZED (\n  SELECT MIN(lapTimes.milliseconds) AS best_ms\n  FROM lapTimes\n)\nSELECT lapTimes.milliseconds, drivers.forename, drivers.surname, races.name\nFROM lapTimes\nINNER JOIN drivers ON lapTimes.driverId = drivers.driverId\nINNER JOIN races ON lapTimes.raceId = races.raceId\nINNER JOIN best ON lapTimes.milliseconds = best.best_ms"
+        }
+      }
+    ],
+    "other_119_results_unchanged": true,
+    "excluded_boundary_checks": [
+      {
+        "boundary": "grouped",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "filtered",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "limited",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "distinct",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "union",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "aggregate_filter",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "unused_aggregate",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "volatile_expression",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "raw_subquery_source",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "recursive",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "outer_join",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "unjoined",
+        "compiles": true,
+        "unchanged": true
+      },
+      {
+        "boundary": "dependent_cte_source",
+        "compiles": true,
+        "unchanged": true
+      }
+    ]
+  },
+  "regression": {
+    "before": "2 failed / 2 passed: MIN and MAX exceeded500000 VM steps",
+    "after": "155 compiler tests passed;4 new behavior regressions cover ties, NULL, empty input, quoted aliases and nonaggregate pushdown",
+    "python": "818 passed,26 skipped",
+    "pi": "150 passed",
+    "typecheck": "passed",
+    "time_independent_budget": true
+  },
+  "smoke": {
+    "case_id": "md-199",
+    "same_forge_json": true,
+    "original_execution": "execution_timeout at30-second budget",
+    "after_execution_ms": 79.26,
+    "timeout_seconds": 30,
+    "sql": "WITH best AS MATERIALIZED (\n  SELECT MIN(lapTimes.milliseconds) AS best_ms\n  FROM lapTimes\n)\nSELECT lapTimes.milliseconds, drivers.forename, drivers.surname, races.name\nFROM lapTimes\nINNER JOIN drivers ON lapTimes.driverId = drivers.driverId\nINNER JOIN races ON lapTimes.raceId = races.raceId\nINNER JOIN best ON lapTimes.milliseconds = best.best_ms",
+    "result": {
+      "columns": [
+        "milliseconds",
+        "forename",
+        "surname",
+        "name"
+      ],
+      "rows": [
+        [
+          67411,
+          "Lewis",
+          "Hamilton",
+          "Austrian Grand Prix"
+        ]
+      ],
+      "row_count": 1,
+      "truncated": false
+    },
+    "assurance": "passed",
+    "official_ea": true,
+    "contract_accuracy": true,
+    "latency_limit": "Single local read-only smoke, not a generation or population latency benchmark. Historical elapsed_ms in replay roots remains original; this timing was measured separately."
+  },
+  "replay": {
+    "protocol_revision": "sha256:5ce2a084329e5dced1e86087644d155991517a2cacb2340515b0c7c89b784dd2",
+    "arms": 80,
+    "valid_candidates": 48,
+    "output_and_raw_unchanged": true,
+    "core_unchanged_arms": 79,
+    "changed_arms": [
+      {
+        "condition": "off",
+        "case_id": "md-199",
+        "arm": "forge",
+        "output_unchanged": true,
+        "raw_unchanged": true,
+        "differences": [
+          {
+            "field": "official_ea",
+            "before": false,
+            "after": true
+          },
+          {
+            "field": "contract_accuracy",
+            "before": false,
+            "after": true
+          },
+          {
+            "field": "execution_status",
+            "before": "failed",
+            "after": "passed"
+          },
+          {
+            "field": "sql",
+            "before": "WITH best AS (\n  SELECT MIN(lapTimes.milliseconds) AS best_ms\n  FROM lapTimes\n)\nSELECT lapTimes.milliseconds, drivers.forename, drivers.surname, races.name\nFROM lapTimes\nINNER JOIN drivers ON lapTimes.driverId = drivers.driverId\nINNER JOIN races ON lapTimes.raceId = races.raceId\nINNER JOIN best ON lapTimes.milliseconds = best.best_ms",
+            "after": "WITH best AS MATERIALIZED (\n  SELECT MIN(lapTimes.milliseconds) AS best_ms\n  FROM lapTimes\n)\nSELECT lapTimes.milliseconds, drivers.forename, drivers.surname, races.name\nFROM lapTimes\nINNER JOIN drivers ON lapTimes.driverId = drivers.driverId\nINNER JOIN races ON lapTimes.raceId = races.raceId\nINNER JOIN best ON lapTimes.milliseconds = best.best_ms"
+          }
+        ]
+      }
+    ],
+    "prior_maintenance_changes": [
+      {
+        "condition": "off",
+        "case_id": "md-199",
+        "arm": "forge",
+        "changed_fields": [
+          "execution_status",
+          "official_ea",
+          "contract_accuracy",
+          "failure",
+          "error_code",
+          "sql"
+        ]
+      }
+    ],
+    "generation_failures_retained": 4,
+    "unstarted_unscored_retained": 24,
+    "gold_unscored_arms_retained": 4,
+    "metrics": [
+      {
+        "condition": "control",
+        "arm": "forge",
+        "denominator": 20,
+        "before": {
+          "EX": {
+            "correct": 3,
+            "failed": 4,
+            "unknown": 13
+          },
+          "Contract": {
+            "correct": 1,
+            "failed": 6,
+            "unknown": 13
+          }
+        },
+        "after": {
+          "EX": {
+            "correct": 3,
+            "failed": 4,
+            "unknown": 13
+          },
+          "Contract": {
+            "correct": 1,
+            "failed": 6,
+            "unknown": 13
+          }
+        }
+      },
+      {
+        "condition": "control",
+        "arm": "direct",
+        "denominator": 20,
+        "before": {
+          "EX": {
+            "correct": 3,
+            "failed": 4,
+            "unknown": 13
+          },
+          "Contract": {
+            "correct": 1,
+            "failed": 6,
+            "unknown": 13
+          }
+        },
+        "after": {
+          "EX": {
+            "correct": 3,
+            "failed": 4,
+            "unknown": 13
+          },
+          "Contract": {
+            "correct": 1,
+            "failed": 6,
+            "unknown": 13
+          }
+        }
+      },
+      {
+        "condition": "off",
+        "arm": "forge",
+        "denominator": 20,
+        "before": {
+          "EX": {
+            "correct": 4,
+            "failed": 15,
+            "unknown": 1
+          },
+          "Contract": {
+            "correct": 1,
+            "failed": 18,
+            "unknown": 1
+          }
+        },
+        "after": {
+          "EX": {
+            "correct": 5,
+            "failed": 14,
+            "unknown": 1
+          },
+          "Contract": {
+            "correct": 2,
+            "failed": 17,
+            "unknown": 1
+          }
+        }
+      },
+      {
+        "condition": "off",
+        "arm": "direct",
+        "denominator": 20,
+        "before": {
+          "EX": {
+            "correct": 4,
+            "failed": 15,
+            "unknown": 1
+          },
+          "Contract": {
+            "correct": 2,
+            "failed": 17,
+            "unknown": 1
+          }
+        },
+        "after": {
+          "EX": {
+            "correct": 4,
+            "failed": 15,
+            "unknown": 1
+          },
+          "Contract": {
+            "correct": 2,
+            "failed": 17,
+            "unknown": 1
+          }
+        }
+      }
+    ],
+    "complete": [
+      false,
+      false
+    ],
+    "diagnostic": [
+      true,
+      true
+    ],
+    "model_calls": 0
+  },
+  "gates": {
+    "current_protocol_valid": true,
+    "old_source_protocol_rejected": true,
+    "diagnostic_comparison_rejected": true,
+    "old_run_or_freeze_overwritten": false
+  },
+  "limitations": [
+    "Only one fixed candidate recovered. This is not evidence of new model accuracy or independent generalization.",
+    "The original paid pairing remains incomplete; historical80-arm scores and172108 observed tokens plus4unknown-usage calls remain historical.",
+    "No automatic retries, replacement questions, prompt patching or follow-on model calls.",
+    "H andR0.6 external-adoption gates unchanged.",
+    "Next rolling selection remains19carry+1new+0reviewed, with off as predeclared parent; new generation needs fresh freeze and separate authorization."
+  ],
+  "evidence_hashes": {
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/brief.json": "fef4d9b21b5fad1687b7541f41031c7268bb72f1e7ced1f928eb641487591574",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/evidence.json": "91ef275e3c7fa03c9a206c0d39de31072ad517b701addb77c03e49be0b38797d",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/before-compilation.json": "7446bbe6441ad9734e4a5f086e6d936d2478950413ec08908ff17c9746b9d76f",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/after-compilation.json": "4b406ee820eb2775363a5c68138b23df8f666db4e382eb0f819c5cbfb3b2df27",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/current-diagnostic.frozen.json": "e5022e53608e3d1a7147e5a644929c5b0e0c98eaf45001839e1a8ff125c9af4f",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/control.replay.json": "bb9911356bfbf84ad935e04edd3523e028281b87e1c5fbe176531d68c1ccd8ba",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/off.replay.json": "ad21628098e28e2f5b62715f6f23e01ac3011570035d799f2bb126121ca598f9",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/verification.json": "88cd33e53d0726c1e91fc9c00918ecdc7ce82fd3b9b422a89abc687e86c5afe4",
+    ".forge/benchmarks/luna-scalar-cte-investigation-20260906/arm-audit.json": "c1329478e73f40f5ece25d088c23d00c4939c0cb0bae871701c01e6906c9e16a"
+  },
+  "evidence_correction": "Shell text was silently middle-truncated. Complete original artifacts1651/1663 restore24 records, including md-199; baseline source hash remains pre-change.",
+  "cleanup": {
+    "temporary_script_files_created": 0,
+    "persistent_services_started": 0,
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  }
+}
