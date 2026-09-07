@@ -1402,3 +1402,4 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 用户明确要求push新版本、包含每轮报告并更新README；本次是main提交交付，不自动创建tag、发布包或部署。71份报告逐一索引，原字节留本地；公开副本的最小脱敏与hash映射见report-publication-2026-09-07.json。
 - 维护既有全局CTE名称过滤造成的表权限漏检：按SQLGlot Scope来源和MappingSchema方言归一化校验物理表；合法CTE/derived保留，扁平Registry未授权的schema/catalog限定来源拒绝。Assurance v10使旧v9 QueryRun审批漂移失败关闭，必须重新prepare/审核；不迁移旧证据。
 - 合成回归与实际API/SQLite维护零被测模型调用；旧报告、未知用量、失败/未完成实验及H/R0.6门禁不变，不把本次维护记为模型准确率增益。版本验证结果集中于release-verification-2026-09-07.json。
+- 首次push的CI暴露外部DATA旁仓依赖，随后加强隔离又暴露六项HTTP测试默认状态目录依赖；只修复测试夹具与独立配置，不跳过用例、不改生产失败关闭语义。首轮失败和隔离更正保留于同一发布验证报告。

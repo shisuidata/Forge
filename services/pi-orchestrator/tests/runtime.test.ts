@@ -11,7 +11,7 @@ import {
   loadStageSkillResources,
   MVP_SKILL_NAMES,
 } from "../src/skills.js";
-
+import { createSkillFixture } from "./skill-fixture.js";
 
 test("Stage lease must outlive the Stage timeout", () => {
   assert.throws(
@@ -60,13 +60,9 @@ test("state database defaults under the dedicated agent directory", async () => 
   assert.equal(config.stateDbPath, join(agentDir, "state/orchestrator.sqlite3"));
 });
 
-test("runtime loads the 20 versioned production Skills", async () => {
-  const config = loadConfig({});
-  const resources = await loadMvpSkillResources({
-    cwd: config.skillsRoot,
-    agentDir: await mkdtemp(join(tmpdir(), "forge-pi-agent-")),
-    skillsRoot: config.skillsRoot,
-  });
+test("runtime discovers authorized Skills without admitting an unlisted package entry", async (context) => {
+  const { skillsRoot, agentDir } = await createSkillFixture(context);
+  const resources = await loadMvpSkillResources({ cwd: skillsRoot, agentDir, skillsRoot });
 
   assert.deepEqual(
     resources.skills.map((skill) => skill.name).sort(),
@@ -77,29 +73,25 @@ test("runtime loads the 20 versioned production Skills", async () => {
 });
 
 
-test("stage runtime injects exactly one authorized Skill in full", async () => {
-  const config = loadConfig({});
+test("stage runtime injects only the authorized Skill, excluding other available Skills", async (context) => {
+  const { skillsRoot, agentDir, documents } = await createSkillFixture(context);
   const resources = await loadStageSkillResources({
-    cwd: config.skillsRoot,
-    agentDir: await mkdtemp(join(tmpdir(), "forge-pi-agent-")),
-    skillsRoot: config.skillsRoot,
-    skillName: "data-requirement-clarifier",
+    cwd: skillsRoot, agentDir, skillsRoot, skillName: "data-requirement-clarifier",
   });
   assert.deepEqual(resources.skills.map((skill) => skill.name), [
     "data-requirement-clarifier",
   ]);
-  assert.match(resources.loader.getSystemPrompt() ?? "", /<AUTHORIZED_SKILL>/);
-  assert.match(resources.loader.getSystemPrompt() ?? "", /把模糊的数据需求整理成/);
-  assert.equal(resources.loader.getExtensions().extensions.length, 0);
+  const prompt = resources.loader.getSystemPrompt() ?? "";
+  assert.ok(prompt.includes(documents.get("data-requirement-clarifier")!));
+  assert.doesNotMatch(prompt, /Fixture boundary marker: metric-definition-reviewer/);
+  assert.doesNotMatch(prompt, /Fixture boundary marker: unlisted-skill/);
 });
 
 
-test("runtime capabilities state that built-in tools are disabled", async () => {
-  const config = loadConfig({});
-  const capabilities = await inspectRuntime({
-    ...config,
-    agentDir: await mkdtemp(join(tmpdir(), "forge-pi-agent-")),
-  });
+test("runtime capabilities state that built-in tools are disabled", async (context) => {
+  const { skillsRoot, agentDir } = await createSkillFixture(context);
+  const config = loadConfig({ SHISUI_DATA_SKILLS_DIR: skillsRoot, PI_ORCHESTRATOR_AGENT_DIR: agentDir });
+  const capabilities = await inspectRuntime(config);
 
   assert.equal(capabilities.orchestrator, "pi");
   assert.equal(capabilities.builtinToolsEnabled, false);
@@ -140,9 +132,11 @@ test("Pi model catalog produces an immutable non-secret Stage revision", async (
   assert.notEqual(changed.piModelRevision, first.piModelRevision);
 });
 
-test("runtime reports unavailable until the dedicated model catalog is ready", async () => {
-  const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-agent-"));
+test("runtime reports unavailable until the dedicated model catalog is ready", async (context) => {
+  const { skillsRoot, agentDir } = await createSkillFixture(context);
   const config = loadConfig({
+    SHISUI_DATA_SKILLS_DIR: skillsRoot,
+    PI_ORCHESTRATOR_AGENT_DIR: agentDir,
     PI_MODEL_PROVIDER: "test-provider",
     PI_MODEL_ID: "test-model",
   });

@@ -2235,3 +2235,10 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 - Assurance升级query-assurance-v10；旧v9 QueryRun审批必须以assurance_revision_drift失败关闭，重新prepare/审核，不迁移旧证据。此项是既有安全行为维护，不是模型成绩提升。
 - Python/Pi全量、定向回归、跨方言静态校验与真实合成SQLite/API冒烟、Quickstart、站点构建及文档链接的实测结果与跳过范围见[发布验证报告](release-verification-2026-09-07.json)。本轮被测模型调用0。
 - 全部报告入口见[文档导航](README.md)，原件/公开副本映射见[报告公开说明](report-publication-2026-09-07.json)。产品需求与H/R0.6门禁不因仓库推送自动晋级。
+
+### 远端CI阻断与测试隔离修复
+
+- 首个提交609386b已push；CI运行34068683259的Python与数据库兼容性通过，Pi为150通过/5失败。根因是四项Skill/runtime测试依赖旁边的拾穗DATA目录，health测试因此返回503，不归因于Node版本。
+- 改用临时Skill包和真实Pi加载器验证白名单与单Skill隔离；去掉生产Skill文案及固定20数量断言，保留缺失包失败关闭，不改生产源码、跳过用例或放宽readiness。
+- 加强沙箱后另发现六项HTTP测试会写默认.runtime/state，已改用每测试独立配置。初轮本地门禁未覆盖此目录，不能声称初轮完全没有运行目录访问；未读取或清理该既有目录。
+- 禁止访问旁仓、真实.runtime及凭证，并禁止对外联网后，定向20通过、完整Pi155通过、typecheck通过；本轮模型调用仍0。首次失败、隔离更正和本地结果追加在发布验证报告中，后续远端结论以对应提交的CI为准。

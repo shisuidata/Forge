@@ -3,14 +3,22 @@ import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { OrchestratorApplication } from "../src/application.js";
 import { loadConfig } from "../src/config.js";
 import { createOrchestratorServer } from "../src/server.js";
 import { InMemoryStageAttemptStore } from "../src/stage-attempts.js";
+import { MVP_SKILL_NAMES } from "../src/skills.js";
+import { createSkillFixture } from "./skill-fixture.js";
 
 const SQL_HASH = `sha256:${"a".repeat(64)}`;
+
+async function isolatedConfig(context: TestContext, env: NodeJS.ProcessEnv = {}) {
+  const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-http-"));
+  context.after(() => rm(agentDir, { recursive: true, force: true }));
+  return loadConfig({ ...env, PI_ORCHESTRATOR_AGENT_DIR: agentDir });
+}
 
 test("benchmark POST requires explicit exact-count authorization rather than coercing missing inputs", async (t) => {
   const agentDir = await mkdtemp(join(tmpdir(), "forge-benchmark-http-"));
@@ -36,15 +44,17 @@ test("benchmark POST requires explicit exact-count authorization rather than coe
 
 
 test("health endpoints expose the restricted runtime capabilities", async (context) => {
-  const baseConfig = loadConfig({});
-  const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-agent-"));
+  const { skillsRoot, agentDir } = await createSkillFixture(context);
+  const baseConfig = loadConfig({ SHISUI_DATA_SKILLS_DIR: skillsRoot, PI_ORCHESTRATOR_AGENT_DIR: agentDir });
   const server = createOrchestratorServer({
     ...baseConfig,
     agentDir,
     stateDbPath: join(agentDir, "state.sqlite3"),
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
+  context.after(() => new Promise<void>((resolve, reject) =>
+    server.close((error) => error ? reject(error) : resolve()),
+  ));
 
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
@@ -65,7 +75,7 @@ test("health endpoints expose the restricted runtime capabilities", async (conte
   assert.equal(readiness.status, "degraded");
   assert.equal(readiness.capabilities.builtinToolsEnabled, false);
   assert.equal(readiness.capabilities.modelExecutionConfigured, false);
-  assert.equal(readiness.capabilities.skills.length, 20);
+  assert.deepEqual([...readiness.capabilities.skills].sort(), [...MVP_SKILL_NAMES].sort());
 });
 
 
@@ -115,7 +125,7 @@ test("default Server wiring restores persisted TaskRun after restart", async () 
 });
 
 test("task list endpoint scopes cross-channel tasks by org and team", async (context) => {
-  const config = loadConfig({});
+  const config = await isolatedConfig(context);
   const application = new OrchestratorApplication({ config });
   application.createTask({
     org_id: "org_demo", team_id: "team_demo", user_id: "feishu_user",
@@ -146,7 +156,7 @@ test("task list endpoint scopes cross-channel tasks by org and team", async (con
 });
 
 test("Product Projection APIs are authenticated, scoped, and bounded", async (context) => {
-  const config = loadConfig({ PI_CHANNEL_SERVICE_KEYS: "product-test-key" });
+  const config = await isolatedConfig(context, { PI_CHANNEL_SERVICE_KEYS: "product-test-key" });
   const application = new OrchestratorApplication({ config });
   const created = application.createTask({
     org_id: "org_product",
@@ -210,7 +220,7 @@ test("Product Projection APIs are authenticated, scoped, and bounded", async (co
 test("async Stage returns 202 and completes through Task polling", async (context) => {
   let releaseStage: (() => void) | undefined;
   const gate = new Promise<void>((resolve) => { releaseStage = resolve; });
-  const config = loadConfig({});
+  const config = await isolatedConfig(context);
   const application = new OrchestratorApplication({
     config,
     forgeClient: {
@@ -275,7 +285,7 @@ test("async Stage returns 202 and completes through Task polling", async (contex
 });
 
 test("expanded Skill API persists a bounded Artifact and obeys team policy CAS", async (context) => {
-  const config = loadConfig({ PI_ADMIN_SERVICE_KEYS: "admin-secret" });
+  const config = await isolatedConfig(context, { PI_ADMIN_SERVICE_KEYS: "admin-secret" });
   const application = new OrchestratorApplication({
     config,
     attempts: new InMemoryStageAttemptStore(),
@@ -372,7 +382,7 @@ test("expanded Skill API persists a bounded Artifact and obeys team policy CAS",
 });
 
 test("Task API exposes validated Skill Artifacts instead of model text", async (context) => {
-  const config = loadConfig({});
+  const config = await isolatedConfig(context);
   const application = new OrchestratorApplication({
     config,
     forgeClient: {
@@ -451,7 +461,7 @@ test("Task API exposes validated Skill Artifacts instead of model text", async (
 
 
 test("Task API returns ordered events and a non-executable review request", async (context) => {
-  const config = loadConfig({});
+  const config = await isolatedConfig(context);
   const application = new OrchestratorApplication({
     config,
     forgeClient: {
