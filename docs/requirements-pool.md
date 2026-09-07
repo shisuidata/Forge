@@ -2348,3 +2348,11 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 - 风险与控制：候选推送会公开源码和文档；先核对范围及敏感字面量，再显式暂存。真实CI失败按最小范围修复并留痕，不跳过失败测试；不得把内部CI或维护者复测算作外部采用。
 - 替代与机会成本：仅本地提交不能提供新的远端试跑版本；先补Agent示例会继续增加未封存改动。本轮选择先交付已验收成果，不合并、不tag、不Release、不部署，也不新增付费模型调用。
 - 验收：独立候选分支、可审查commit/PR与远端CI结果；历史证据完整、无私有运行资产进入本次提交；说明仍未关闭的R0.6/H及外部独立回执要求。
+
+### 交付与验证（2026-09-08）
+
+- 已创建[PR #10](https://github.com/shisuidata/Forge/pull/10)，候选代码提交为`7b267d727a9f0ee28596958cffce0b2f3996da61`，CI修复提交为`c5a3954f11a85cb3bb070363cbbda9da6ae83769`；未合并main、tag、Release或部署。
+- [首轮CI](https://github.com/shisuidata/Forge/actions/runs/34146824586)在`test_accuracy_triage.py`收集阶段因`ModuleNotFoundError: tools`失败；其余四项检查通过。Python 3.11最小隔离环境复现同一失败，在pytest配置中显式加入源根目录后，console与`python -m pytest`入口的两项TopN语义回归均通过。工具仍不进入运行时分发包，未加skip或抑制异常。移除的一个旧测试仅钉死Markdown措辞和输入回显；不把它重新钉死为新的文字。
+- [修复后CI](https://github.com/shisuidata/Forge/actions/runs/34147746296)五项检查通过：Python 982 passed / 28 skipped / 5第三方弃用warnings；Pi 215 passed与typecheck；wheel/sdist安装和Quickstart烟测；SQLite、PostgreSQL 16、MySQL 8各一项兼容性烟测。原983项本地通过记录保留为历史事实，不改写成当前测试数量。
+- 已在[候选交付记录](candidate-delivery-2026-09-08.json)保留首轮失败、修复与成功任务链接；证据回写后的最终HEAD还须通过独立PR检查，最终run在PR完成评论记录，避免为记录自身CI无限生成提交。
+- GitHub Issues API含PR记录：本轮按类型分离为8个Issue、2个PR，修正当前投影先前“9个Issue与1个PR”的重复口径；原始报告不追改。#10由本会话创建，不算外部独立贡献；#9仍为0评论，R0.6/H未通过。

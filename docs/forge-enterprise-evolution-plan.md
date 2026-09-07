@@ -1431,4 +1431,4 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 
 - 已明确授权审查后在独立候选分支commit、push并创建PR，验证远端CI；不合并main、不tag、不Release、不部署，不新增被测模型调用。
 - 本轮交付REQ-060/061/062已验收成果，并维护现行公共API接入说明，不新增#8外部Agent适配器。分支为`review/forge-engineering-evidence-2026-09-08`，阶段证据见[候选交付记录](candidate-delivery-2026-09-08.json)。
-- 公开范围审查未发现本次新增凭证／私有运行资产；历史84份归档hash匹配。63项相关契约／文档检查和隔离Quickstart通过，远端CI待完成。CI与维护者回执不是外部采用证据，R0.6/H不晋级。
+- 公开范围审查未发现本次新增凭证／私有运行资产；历史84份归档hash匹配。63项相关契约／文档检查和隔离Quickstart通过。[PR #10](https://github.com/shisuidata/Forge/pull/10)已创建：首轮CI的pytest收集失败已复现并修复，代码修订`c5a3954`的五项远端检查通过；失败与成功run均留在候选记录。证据回写提交的最终CI以PR检查与完成评论为准。CI、本会话PR与维护者回执均不是外部采用证据，R0.6/H不晋级。

@@ -65,6 +65,9 @@
 ## 候选分支交付（2026-09-08）
 
 - [REQ-063候选交付记录](candidate-delivery-2026-09-08.json)：公开范围审查、既有接口文档维护、候选分支／PR与远端CI；不代表已合并、Release、部署或外部采用。
+- [Python／打包原始审查](archive/engineering/candidate-python-publication-audit-2026-09-08.json)：67份当前文件及审查边界；原始静态审查不重写为后续CI结果。
+- [Pi／Web／工具原始审查](archive/engineering/candidate-pi-web-publication-audit-2026-09-08.json)：179份当前文件、公开前身与40份合成Gold CSV；保留继承的低风险观察。
+- [文档原始扫描](archive/engineering/candidate-documentation-publication-audit-2026-09-08.json)：107份文档与原始疑似项；最终处置、三份原件SHA-256及后续变更见候选交付记录。三份原件均按原字节保留，不构成独立安全认证。
 
 ## 本次仓库版本交付（2026-09-07）
 

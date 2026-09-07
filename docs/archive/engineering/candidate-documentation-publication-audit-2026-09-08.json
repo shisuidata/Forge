@@ -1,0 +1,19 @@
+{
+  "candidate_path_count": 556,
+  "excluded_paths": [],
+  "documentation_files_scanned": 107,
+  "findings": [
+    {
+      "path": "docs/archive/engineering/golden-journey-acceptance-2026-08-24.md",
+      "line": 122,
+      "kind": "personal_absolute_path"
+    },
+    {
+      "path": "docs/requirements-pool.md",
+      "line": 443,
+      "kind": "personal_absolute_path"
+    }
+  ],
+  "archive_files_hash_matched": 84,
+  "limitations": "Bounded pattern scan of changed/new public documentation; not an independent security certification. Private originals and existing excluded runtime assets were not inspected."
+}

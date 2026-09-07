@@ -2,7 +2,7 @@
   "schema_version": "candidate-delivery-v1",
   "date": "2026-09-08",
   "requirement": "REQ-2026-09-08-063",
-  "status": "locally_verified_awaiting_remote_ci",
+  "status": "candidate_pr_open_code_ci_passed",
   "base_commit": "018317d89edfa0f56c48c865f35c9a45204d9d11",
   "candidate_branch": "review/forge-engineering-evidence-2026-09-08",
   "authorization": {
@@ -21,7 +21,7 @@
       "REQ-2026-09-07-061",
       "REQ-2026-09-08-062"
     ],
-    "additional_maintenance": "Update existing external-agent integration guide for implemented public Evaluate/Enforce/Explain APIs; retain prepare-query compatibility boundary. No new external-agent adapter."
+    "additional_maintenance": "Update existing external-agent integration guide for implemented public Evaluate/Enforce/Explain APIs; retain prepare-query compatibility boundary. No new external-agent adapter. Fix pytest console collection of source-only tools via test-only pythonpath configuration; keep tools excluded from runtime distributions."
   },
   "publication_review": {
     "method": "Scoped public-diff/source review and bounded literal scans; not an independent security certification.",
@@ -57,7 +57,27 @@
       "Private originals, existing excluded legacy results/data/databases and full Git history were not inspected.",
       "No model calls, live credential validation, production configuration access or external channel calls were performed.",
       "gitleaks and trufflehog were not available; scans and scoped manual review do not certify absence of all secrets."
-    ]
+    ],
+    "source_reports": {
+      "scope": "Original pre-commit scoped reports are preserved byte-for-byte. The later source adjustments and final dispositions remain separately recorded here; this summary does not replace the originals.",
+      "artifacts": [
+        {
+          "path": "docs/archive/engineering/candidate-python-publication-audit-2026-09-08.json",
+          "sha256": "d83a938bfbaf86e3afaa0b579df9b1c4d1189ff88b8b8208dea56564912ece06",
+          "bytes": 8477
+        },
+        {
+          "path": "docs/archive/engineering/candidate-pi-web-publication-audit-2026-09-08.json",
+          "sha256": "998f36b546ef6f41f59c5176d54893c6996f10035ed4e89408ced90f66feb256",
+          "bytes": 31996
+        },
+        {
+          "path": "docs/archive/engineering/candidate-documentation-publication-audit-2026-09-08.json",
+          "sha256": "7b70ac7888fe5753a6de4431a03e34dc58389281e1e986a7718c0cf18c4b6baf",
+          "bytes": 615
+        }
+      ]
+    }
   },
   "local_verification": {
     "related_contract_tests": {
@@ -155,11 +175,137 @@
         }
       ],
       "staging_warning": "git add reported an ignored legacy results directory after staging; exact index comparison confirmed all 557 reviewed paths and no extras. No force-add was used."
+    },
+    "pytest_console_regression": {
+      "python": "3.11.14",
+      "pytest": "9.1.1",
+      "environment": "Fresh minimal venv, cleared environment, public source snapshot; sandbox denied network and reads of the original repository.",
+      "before_fix": "pytest tests/test_accuracy_triage.py -q exited 2 during collection with ModuleNotFoundError: No module named tools.",
+      "after_fix": {
+        "console_entry_point": "2 passed",
+        "python_module_entry_point": "2 passed"
+      },
+      "retained_behavior": "Missing per-group TopN filters are classified as topn_filter; an outer rank filter avoids that false attribution.",
+      "test_cleanup": "Removed test_triage_renders_markdown_backlog because it pinned wording and input echo. The two semantic regression tests remain; no skip or error suppression was added.",
+      "fix_commit": "c5a3954f11a85cb3bb070363cbbda9da6ae83769"
     }
   },
   "remote_ci": {
-    "status": "pending",
-    "attempts": []
+    "status": "passed_for_code_revision",
+    "verified_head_sha": "c5a3954f11a85cb3bb070363cbbda9da6ae83769",
+    "attempts": [
+      {
+        "run_id": 34146824586,
+        "url": "https://github.com/shisuidata/Forge/actions/runs/34146824586",
+        "head_sha": "7b267d727a9f0ee28596958cffce0b2f3996da61",
+        "conclusion": "failure",
+        "jobs": [
+          {
+            "name": "pi-contracts",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:15:17Z",
+            "completed_at": "2026-09-07T17:15:43Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34146824586/job/101820552086"
+          },
+          {
+            "name": "distribution (wheel)",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:15:17Z",
+            "completed_at": "2026-09-07T17:15:58Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34146824586/job/101820552265"
+          },
+          {
+            "name": "test",
+            "conclusion": "failure",
+            "started_at": "2026-09-07T17:15:17Z",
+            "completed_at": "2026-09-07T17:15:51Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34146824586/job/101820552292"
+          },
+          {
+            "name": "compatibility",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:15:17Z",
+            "completed_at": "2026-09-07T17:16:29Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34146824586/job/101820552361"
+          },
+          {
+            "name": "distribution (sdist)",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:15:17Z",
+            "completed_at": "2026-09-07T17:15:58Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34146824586/job/101820552415"
+          }
+        ],
+        "failure": {
+          "job": "test",
+          "stage": "collection",
+          "message": "ModuleNotFoundError: No module named tools",
+          "test_module": "tests/test_accuracy_triage.py",
+          "cause": "The pytest console entry point did not place the repository root on sys.path; source-only tools are intentionally absent from installed runtime packages."
+        }
+      },
+      {
+        "run_id": 34147746296,
+        "url": "https://github.com/shisuidata/Forge/actions/runs/34147746296",
+        "head_sha": "c5a3954f11a85cb3bb070363cbbda9da6ae83769",
+        "conclusion": "success",
+        "jobs": [
+          {
+            "name": "pi-contracts",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:28:26Z",
+            "completed_at": "2026-09-07T17:29:00Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34147746296/job/101823322222"
+          },
+          {
+            "name": "compatibility",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:28:26Z",
+            "completed_at": "2026-09-07T17:29:38Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34147746296/job/101823322341"
+          },
+          {
+            "name": "test",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:28:26Z",
+            "completed_at": "2026-09-07T17:29:28Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34147746296/job/101823322389"
+          },
+          {
+            "name": "distribution (wheel)",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:28:26Z",
+            "completed_at": "2026-09-07T17:29:05Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34147746296/job/101823322406"
+          },
+          {
+            "name": "distribution (sdist)",
+            "conclusion": "success",
+            "started_at": "2026-09-07T17:28:26Z",
+            "completed_at": "2026-09-07T17:29:11Z",
+            "url": "https://github.com/shisuidata/Forge/actions/runs/34147746296/job/101823322411"
+          }
+        ],
+        "python": {
+          "passed": 982,
+          "skipped": 28,
+          "warnings": 5
+        },
+        "pi": {
+          "passed": 215,
+          "failed": 0,
+          "skipped": 0,
+          "typecheck": "passed"
+        },
+        "compatibility": {
+          "sqlite": "1 passed",
+          "postgresql_16": "1 passed",
+          "mysql_8": "1 passed"
+        }
+      }
+    ],
+    "warnings": "Observed third-party lark_oapi/pkg_resources deprecations, GitHub action runtime deprecations and Node SQLite experimental warnings; these are not product test failures.",
+    "scope": "This recorded success applies to the stated code head. The subsequent evidence-only commit must independently pass PR checks; its final run is recorded in the PR completion comment, avoiding recursive evidence commits."
   },
   "adoption": {
     "issue": "https://github.com/shisuidata/Forge/issues/9",
@@ -167,6 +313,34 @@
     "external_agent_adapter_issue": "https://github.com/shisuidata/Forge/issues/8",
     "adapter_status": "not_implemented_by_this_delivery",
     "R0_6": "not_passed",
-    "holdout_H": "not_promoted"
-  }
+    "holdout_H": "not_promoted",
+    "public_signal_correction": {
+      "observed_date": "2026-09-08",
+      "issue_list_records": 10,
+      "issues_excluding_pull_requests": 8,
+      "pull_requests": 2,
+      "previous_projection": "9 Issues and 1 PR",
+      "correction": "The Issues API includes PR records. Current projection now separates record types; historical source reports are not rewritten.",
+      "candidate_pr_created_by_this_session": true,
+      "candidate_pr_counts_as_independent_adoption": false
+    }
+  },
+  "pull_request": {
+    "number": 10,
+    "url": "https://github.com/shisuidata/Forge/pull/10",
+    "state_at_recording": "open",
+    "base": "main",
+    "author": "rockythink",
+    "created_by_this_session": true
+  },
+  "candidate_commits": [
+    {
+      "sha": "7b267d727a9f0ee28596958cffce0b2f3996da61",
+      "role": "Reviewed REQ-060/061/062/063 payload and initial evidence"
+    },
+    {
+      "sha": "c5a3954f11a85cb3bb070363cbbda9da6ae83769",
+      "role": "pytest console collection fix and semantic-test cleanup"
+    }
+  ]
 }

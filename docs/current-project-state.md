@@ -80,7 +80,7 @@ Forge 当前验证的是：
 - REQ-060整体工程质量优化已按用户后续授权完成OP-1至OP-6（零模型调用）：统一Stage/State事务和取消重试协议，隔离基准Profile并使用显式ExecutionResult，修复默认方言和非editable资源，下移Benchmark核心服务，统一Stage/Artifact契约并收口Plan、Benchmark及渠道投递生命周期。Web→Pi→Forge安全诊断、未知用量和只读审计已贯通；真实浏览器丢响应同Command重送仍仅一个Task，挂起HTTP停止/超时及独立owner进程烟测通过。Assurance现为v11/scoped-policy-v1，旧QueryRun需重新prepare/审批。原[评估报告](archive/engineering/architecture-quality-review-2026-09-07.json)保留基线018317d；逐项验收、Python/Pi回归及wheel/sdist安装证据见[实施报告](archive/engineering/architecture-quality-implementation-2026-09-07.json)。未访问真实运行库、未commit/push/部署，不改历史成绩或R0.6/H门禁。
 - REQ-061文件结构专项治理已完成（零模型调用）：204个公开文件归位，独立基准工具与历史文档分离，PoC模板进入包内、造数脚本归demo；稳定核心包和公开启动入口保留。44份历史JSON原字节不变，旧公开路径与目标hash全部核验；真实配置、数据库、旧本地results及缓存未搬迁。非editable安装的PoC缺模板故障已复现并修复，wheel/sdist初始化、校验和Quickstart通过，Python/Pi回归及文档站构建/导航通过。目录职责见[CONTRIBUTING](../CONTRIBUTING.md#repository-layout)，逐文件映射、验证与待人工确认资产见[治理记录](file-structure-governance-2026-09-07.json)。未commit/push/部署，不改变R0.6/H。
 - REQ-062长期知识保全要求已确认：测试证据、负结果、报告及沟通中沉淀的决策是核心资产；代码替换、归档或新测试通过不构成删除理由。原报告、原话和后续提炼分别保留，纠错追加且可溯源；总入口与维护规则见[长期知识资产](README.md#长期知识资产)。本地落盘不等于Git提交或异地备份，本轮不授权新模型调用、发布或阶段晋级。
-- REQ-063已明确授权候选分支与PR：将REQ-060/061/062已验收成果提交到独立分支`review/forge-engineering-evidence-2026-09-08`并验证远端CI，不合并main、不Release或部署。公开范围审查与隔离公共API烟测已完成；当前GitHub #9仍无外部回执，#8独立适配器不在本轮实现。交付与CI状态以[候选记录](candidate-delivery-2026-09-08.json)为准，R0.6/H不晋级。
+- REQ-063候选交付已创建[PR #10](https://github.com/shisuidata/Forge/pull/10)：分支`review/forge-engineering-evidence-2026-09-08`交付REQ-060/061/062成果。首轮pytest收集失败已复现并修复，代码修订`c5a3954`的五项远端CI通过；证据回写提交的最终检查见PR检查与完成评论。不合并main、不Release或部署，不新增#8独立适配器；[候选记录](candidate-delivery-2026-09-08.json)保留全过程，R0.6/H不晋级。
 
 ## 4. 已完成且可复用的工程基础
 
@@ -95,7 +95,7 @@ Forge 当前验证的是：
 
 ## 5. 未关闭的验收与采用事实
 
-- 公开 GitHub 信号盘点中，现有 9 个 Issue 与 1 个 Pull Request 均由维护者身份提交；11 stars 与 1 fork 仅是传播信号。尚无可确认的外部开发者 Golden Path 回执，也没有外部 Adapter、Rule、Dataset 或真实 failure case 贡献。
+- 2026-09-08按GitHub API记录类型分离：8个Issue（不含PR）、2个PR；#10为本会话创建的候选交付，不计独立外部贡献。此前“9个Issue与1个PR”投影已纠正，原始记录不追改。stars/forks仅是传播信号；尚无可确认的外部Golden Path回执或外部Adapter、Rule、Dataset、真实failure case贡献。
 - R0.6 的失败关闭样例、隐私有界回执与公开提交表单已发布；[Issue #9](https://github.com/shisuidata/Forge/issues/9) 是维护者创建的外部试跑招募入口，不是采用证据。当前仍没有外部独立完成记录，R0.6 外部采用门禁未通过。
 - W2 主体内容规则、Product Spine 与完整 Product Shell 的 Atlas candidate 仍有历史人工复验项，但不再主导当前产品路线。
 - Governance Action Catalog 的 14 个 supported Action 中仅 `query.prepare`、`query.approve`、`query.execute` 已完成 v1 Runtime Enforcement，覆盖率为 3/14（21.4%）；Explain 是只读证据投影，不新增 Action Runtime Enforcement，Contract Coverage 不能替代其余运行时执行覆盖。
