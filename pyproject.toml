@@ -59,5 +59,6 @@ py-modules = ["config", "main", "diagnostics"]
 "web" = ["templates/**/*.html", "templates/*.html", "static/*.js", "static/*.css", "static/product/*.js", "static/product/*.css"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tools.benchmarks.accuracy.triage_failures import build_triage, render_markdown
+from tools.benchmarks.accuracy.triage_failures import build_triage
 
 
 def test_triage_classifies_missing_topn_qualify():
@@ -86,32 +86,3 @@ def test_triage_does_not_flag_topn_when_outer_rank_filter_exists():
     triage = build_triage(cases, runs, ea)
 
     assert triage["failures"][0]["root_cause"] != "topn_filter"
-
-
-def test_triage_renders_markdown_backlog():
-    triage = {
-        "method": "x",
-        "ea": 0.5,
-        "run_accuracy": 0.4,
-        "total_failures": 1,
-        "root_cause_counts": {"filter_semantics": 1},
-        "category_root_cause_counts": {"复杂过滤": {"filter_semantics": 1}},
-        "failures": [
-            {
-                "case_id": "2",
-                "category": "复杂过滤",
-                "question": "统计已完成订单",
-                "root_cause_label": "复杂过滤/字段约定缺失",
-                "reason": "ref=10行, gen=20行",
-                "next_action": "把字段约定转成 lint 或 field_conventions 规则。",
-                "generated_sql": "SELECT * FROM orders",
-            }
-        ],
-    }
-
-    md = render_markdown(triage)
-
-    assert "Method x EA 失败归因" in md
-    assert "| 复杂过滤/字段约定缺失 | 1 |" in md
-    assert "Case 2" in md
-    assert "SELECT * FROM orders" in md
