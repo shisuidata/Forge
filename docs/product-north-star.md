@@ -528,9 +528,9 @@ Forge 的学习不应是“模型自动记住一切”，而是：
 | 本文 | 产品北极星、定位、正确性与共识边界 |
 | [`product-axioms.md`](product-axioms.md) | 不可轻易违反的稳定公理 |
 | [`ai-native-enterprise-thesis.md`](ai-native-enterprise-thesis.md) | 完整论证、反证、未来情景和待验证假设 |
-| [`product-direction-architecture-review-2026-08-24.md`](product-direction-architecture-review-2026-08-24.md) | 当前代码与产品方向的证据化复审 |
+| [`archive/engineering/product-direction-architecture-review-2026-08-24.md`](archive/engineering/product-direction-architecture-review-2026-08-24.md) | 当前代码与产品方向的证据化复审 |
 | [`product-design-roadmap-2026-08-25.md`](product-design-roadmap-2026-08-25.md) | 基于北极星重建的产品面、对象、信息架构与长期阶段方向 |
-| [`short-term-product-spine-plan-2026-08-25.md`](short-term-product-spine-plan-2026-08-25.md) | 先底层 Product Projection/BFF、后真实 Web Shell 的近期实施计划 |
+| [`archive/plans/short-term-product-spine-plan-2026-08-25.md`](archive/plans/short-term-product-spine-plan-2026-08-25.md) | 先底层 Product Projection/BFF、后真实 Web Shell 的近期实施计划 |
 | [`platform-architecture.md`](platform-architecture.md) | Pi、Forge、Skills、渠道和真相源职责 |
 | [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md) | 唯一主动实施计划和阶段门禁 |
 | [`requirements-pool.md`](requirements-pool.md) | 所有需求、评估、决策和状态历史 |

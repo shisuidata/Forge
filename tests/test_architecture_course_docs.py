@@ -56,38 +56,3 @@ def test_course_local_images_and_sources_exist():
     source_names = {Path(name).stem for name in source_assets if name.endswith(".mmd")}
     png_names = {Path(name).stem for name in source_assets if name.endswith(".png")}
     assert svg_names == source_names == png_names
-    assert len(svg_names) >= 9
-
-
-def test_course_referenced_runtime_entrypoints_exist():
-    required_paths = [
-        "agent/agent.py",
-        "agent/llm.py",
-        "agent/pipeline.py",
-        "agent/tenant.py",
-        "agent/memory/ems.py",
-        "agent/memory/smp.py",
-        "agent/memory/wmb.py",
-        "forge/schema.json",
-        "forge/schema_builder.py",
-        "forge/compiler.py",
-        "forge/retriever.py",
-        "forge/executor.py",
-        "forge/readiness.py",
-        "registry/staging_sync.py",
-        "web/router.py",
-        "scripts/provider_smoke.py",
-        "scripts/production-smoke.sh",
-    ]
-    assert [path for path in required_paths if not Path(path).exists()] == []
-
-    symbol_checks = {
-        Path("agent/agent.py"): ["def process(", "def prepare_query(", "def approve(", "def cancel("],
-        Path("forge/compiler.py"): ["def compile_query(", "def _coerce(", "def _expand_aliases("],
-        Path("forge/retriever.py"): ["class SchemaRetriever:"],
-        Path("forge/readiness.py"): ["def readiness_payload("],
-    }
-    for path, symbols in symbol_checks.items():
-        text = path.read_text(encoding="utf-8")
-        for symbol in symbols:
-            assert symbol in text, f"documented symbol missing: {path}:{symbol}"

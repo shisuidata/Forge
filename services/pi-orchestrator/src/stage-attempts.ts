@@ -39,6 +39,8 @@ export interface StageAttempt {
   tool_submitted_at: string | null;
   model_revision: string | null;
   skill_policy_version: number;
+  request_id?: string | null;
+  usage_status?: "not_started" | "unknown";
 }
 
 export interface StartStageAttemptInput {
@@ -51,6 +53,21 @@ export interface StartStageAttemptInput {
   timeoutMs?: number;
   modelRevision?: string | null;
   skillPolicyVersion?: number;
+  requestId?: string | null;
+}
+
+export function validateStageAttemptInput(input: StartStageAttemptInput): void {
+  if (input.stage.trim().length === 0 || input.idempotencyKey.trim().length === 0) {
+    throw new TaskStateError("Stage and idempotency key must not be empty");
+  }
+  if (!Number.isInteger(input.leaseMs) || input.leaseMs < 1) {
+    throw new TaskStateError("Stage attempt lease must be a positive integer");
+  }
+  if (input.timeoutMs !== undefined && (
+    !Number.isInteger(input.timeoutMs) || input.timeoutMs < 1 || input.timeoutMs >= input.leaseMs
+  )) {
+    throw new TaskStateError("Stage timeout must be positive and shorter than its lease");
+  }
 }
 
 export interface StageAttemptStore {
@@ -58,10 +75,12 @@ export interface StageAttemptStore {
   get(attemptId: string): StageAttempt | undefined;
   findByIdempotencyKey(taskRunId: string, idempotencyKey: string): StageAttempt | undefined;
   list(taskRunId: string): StageAttempt[];
+  listExpired(now: Date): StageAttempt[];
+  markDispatched(attemptId: string): void;
   markProgress(attemptId: string, phase: Exclude<StageProgressPhase, "waiting_for_model">): StageAttempt;
   finish(
     attemptId: string,
-    status: Exclude<StageAttemptStatus, "running" | "interrupted">,
+    status: Exclude<StageAttemptStatus, "running">,
     error?: string,
   ): StageAttempt;
 }
@@ -69,12 +88,19 @@ export interface StageAttemptStore {
 export class InMemoryStageAttemptStore implements StageAttemptStore {
   readonly #attempts = new Map<string, StageAttempt[]>();
 
+  constructor(private readonly assertTask?: (taskRunId: string) => void) {}
+
+  checkpoint(): () => void {
+    const snapshot = structuredClone(this.#attempts);
+    return () => {
+      this.#attempts.clear();
+      for (const [key, value] of snapshot) this.#attempts.set(key, value);
+    };
+  }
+
   start(input: StartStageAttemptInput): StageAttempt {
-    if (input.timeoutMs !== undefined && (
-      !Number.isInteger(input.timeoutMs) || input.timeoutMs < 1 || input.timeoutMs >= input.leaseMs
-    )) {
-      throw new TaskStateError("Stage timeout must be positive and shorter than its lease");
-    }
+    validateStageAttemptInput(input);
+    this.assertTask?.(input.taskRunId);
     const attempts = this.#attempts.get(input.taskRunId) ?? [];
     const existing = attempts.find(
       (attempt) => attempt.idempotency_key === input.idempotencyKey,
@@ -106,6 +132,8 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
       tool_submitted_at: null,
       model_revision: input.modelRevision ?? null,
       skill_policy_version: input.skillPolicyVersion ?? 0,
+      request_id: input.requestId ?? null,
+      usage_status: "not_started",
     };
     attempts.push(attempt);
     this.#attempts.set(input.taskRunId, attempts);
@@ -129,6 +157,23 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
 
   list(taskRunId: string): StageAttempt[] {
     return (this.#attempts.get(taskRunId) ?? []).map((attempt) => structuredClone(attempt));
+  }
+
+  listExpired(now: Date): StageAttempt[] {
+    return [...this.#attempts.values()].flat().filter((attempt) =>
+      attempt.status === "running" && attempt.lease_expires_at <= now.toISOString())
+      .map((attempt) => structuredClone(attempt));
+  }
+
+  markDispatched(attemptId: string): void {
+    for (const attempts of this.#attempts.values()) {
+      const attempt = attempts.find((item) => item.attempt_id === attemptId);
+      if (attempt === undefined) continue;
+      if (attempt.status !== "running") throw new TaskStateError("Cannot dispatch a terminal StageAttempt");
+      attempt.usage_status = "unknown";
+      return;
+    }
+    throw new TaskStateError("StageAttempt not found");
   }
 
   markProgress(
@@ -164,7 +209,7 @@ export class InMemoryStageAttemptStore implements StageAttemptStore {
 
   finish(
     attemptId: string,
-    status: Exclude<StageAttemptStatus, "running" | "interrupted">,
+    status: Exclude<StageAttemptStatus, "running">,
     error?: string,
   ): StageAttempt {
     for (const attempts of this.#attempts.values()) {

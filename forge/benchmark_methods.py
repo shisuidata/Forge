@@ -182,7 +182,7 @@ def run_forge_oai(
                 continue
             return {"forge_json": None, "sql": None, "error_code": "invalid_json", "attempts": attempt + 1}
 
-        warnings = lint_conventions(forge_json, question) if max_compile_retries > 0 else []
+        warnings = lint_conventions(forge_json, question, profile="large-benchmark", revision="large-benchmark-v1") if max_compile_retries > 0 else []
         if warnings:
             if attempt < max_compile_retries:
                 messages.extend(

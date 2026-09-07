@@ -281,3 +281,64 @@ async def update_latest_pending(
         execution_ms=execution_ms,
     )
     return record_id
+
+
+async def projection(*, scopes: list[tuple[str, str]], status: str = "", keyword: str = "", limit: int = 50, offset: int = 0) -> dict[str, Any]:
+    """Read-only union of existing sources; never materialize a second audit truth.
+
+    Missing/unreadable stores remain unavailable, not an empty successful result.
+    SQL text, result rows, model input, and raw exception text are not selected.
+    """
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+    rows: list[dict[str, Any]] = []
+    sources: dict[str, dict[str, Any]] = {}
+    today = datetime.now(timezone.utc).date().isoformat()
+    for source, path in (("query_run", cfg.QUERY_RUN_DB_PATH), ("legacy", getattr(cfg, "AUDIT_DB_PATH", DB_PATH))):
+        params: list[Any] = []
+        conditions: list[str] = []
+        if source == "query_run":
+            table = "query_runs"
+            fields = "query_run_id AS id, task_run_id, user_id, created_at AS timestamp, status, model_revision, row_count, execution_ms"
+            if not scopes:
+                conditions.append("0")
+            else:
+                conditions.append("(" + " OR ".join("(org_id = ? AND team_id = ?)" for _ in scopes) + ")")
+                params.extend(value for scope in scopes for value in scope)
+            search_fields = ("query_run_id", "task_run_id")
+            timestamp = "created_at"
+        else:
+            table = "audit_log"
+            fields = "id, NULL AS task_run_id, user_id, timestamp, status, NULL AS model_revision, row_count, execution_ms"
+            search_fields = ("CAST(id AS TEXT)", "user_id")
+            timestamp = "timestamp"
+        base = " WHERE " + " AND ".join(conditions) if conditions else ""
+        try:
+            uri = Path(str(path)).expanduser().resolve().as_uri() + "?mode=ro"
+            async with aiosqlite.connect(uri, uri=True) as db:
+                db.row_factory = aiosqlite.Row
+                counts_cursor = await db.execute(f"SELECT status, COUNT(*) AS count FROM {table}{base} GROUP BY status", params)
+                counts = {row["status"]: row["count"] for row in await counts_cursor.fetchall()}
+                today_cursor = await db.execute(f"SELECT COUNT(*) FROM {table}{base}{' AND ' if base else ' WHERE '}{timestamp} >= ?", params + [today])
+                today_count = (await today_cursor.fetchone())[0]
+                if status:
+                    conditions.append("status = ?")
+                    params.append(status)
+                if keyword:
+                    conditions.append("(" + " OR ".join(f"{field} LIKE ?" for field in search_fields) + ")")
+                    params.extend([f"%{keyword}%"] * len(search_fields))
+                where = " WHERE " + " AND ".join(conditions) if conditions else ""
+                total_cursor = await db.execute(f"SELECT COUNT(*) FROM {table}{where}", params)
+                total = (await total_cursor.fetchone())[0]
+                cursor = await db.execute(f"SELECT {fields} FROM {table}{where} ORDER BY {timestamp} DESC, id DESC LIMIT ?", params + [offset + limit])
+                for row in await cursor.fetchall():
+                    rows.append({**dict(row), "id": str(row["id"]), "source": source, "usage_status": "unknown"})
+                sources[source] = {"availability": "ready", "total": total, "today": today_count, "counts": counts}
+        except (OSError, aiosqlite.Error):
+            sources[source] = {"availability": "unavailable", "total": None, "today": None, "counts": None}
+    rows.sort(key=lambda row: (row["timestamp"], row["source"], row["id"]), reverse=True)
+    complete = all(item["availability"] == "ready" for item in sources.values())
+    available_total = sum(item["total"] or 0 for item in sources.values())
+    return {"records": rows[offset:offset + limit], "sources": sources, "availability": "ready" if complete else "partial",
+            "total": available_total if complete else None, "available_total": available_total,
+            "today": sum(item["today"] for item in sources.values()) if complete else None}

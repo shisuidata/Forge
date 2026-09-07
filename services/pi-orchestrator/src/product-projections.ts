@@ -366,6 +366,10 @@ const attemptSummarySchema = Type.Object(
     finished_at: Type.Union([dateTime, Type.Null()]),
     elapsed_ms: Type.Integer({ minimum: 0 }),
     safe_error: Type.Union([Type.String({ minLength: 1, maxLength: 1_000 }), Type.Null()]),
+    request_id: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    usage_status: Type.Optional(Type.Union([Type.Literal("not_started"), Type.Literal("known"), Type.Literal("unknown")])),
+    model_revision: Type.Optional(Type.Union([Type.String({ minLength: 1 }), Type.Null()])),
+    skill_policy_version: Type.Optional(Type.Integer({ minimum: 0 })),
   },
   { additionalProperties: false },
 );

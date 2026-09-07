@@ -98,8 +98,25 @@ node --env-file=../../.env --import tsx src/server.ts
 
 Forge Web 可在设置 `PI_ORCHESTRATOR_ENABLED=true` 后访问 `/tasks`，审核 hash 绑定的 SQL 并查看只读执行结果。
 
+### State 与阶段恢复契约
+
+- `OrchestratorApplication` 只接收一个 `OrchestratorState`：Task、Event、Artifact、Attempt、ChannelEvent、Skill Policy 与事务同属一个 adapter，禁止独立 Store 与空事务拼装。SQLite 使用嵌套 SAVEPOINT；显式内存 adapter 具有同等回滚语义。
+- 默认重试创建新 Attempt 和下游 command；显式成功 key 回放已持久结果，失败、运行中或跨阶段 key 在迁移 Task 前拒绝。用户取消 abort 活跃 signal；超时或调用方中断恢复可重试状态，迟到结果不写 Artifact。Abort 只保证停止本地等待，不宣称撤销已发生的远端 SQL 或发布副作用。
+- ExecutionPlan 是 Task 的显示进度，不是第二套调度器。失败、取消、过期恢复随 Task 在同一事务收口；不完整分析保持安全暂停，失败补查不消费子任务证据。
+
+### Benchmark 生命周期与诊断
+
+- Benchmark 与关联 Task 共用一个 SQLite 连接及事务：准入失败不留下半个 Task/Run；运行、完成、失败、停止和中断同步投影到 Task。case 评价、固定预算和禁止模型自动重放的规则不变。
+- 当前是单机 SQLite、单活跃 Benchmark owner，不是 HA。owner 绑定进程 ID/主机；第二个存活 owner 只能读取，不能中断或接管；仅明确释放或确认旧进程已退出后恢复。未知主机/进程权限失败关闭。`Server.close` 等待在途 Benchmark 请求和 worker 结束后释放连接；进程意外退出通过下次启动收口，不自动续跑。
+- context、evaluation 和准入 HTTP 请求统一使用 `FORGE_REQUEST_TIMEOUT_MS`；stop 将 abort 传播到挂起请求。重启把未完成的冻结运行标为 interrupted，不重放付费调用；历史未冻结运行只读。
+- `X-Request-ID` 在 Web → Pi → Forge 链路传递，默认日志只记录安全 ID、状态与耗时，不记录 SQL、请求内容、结果行或凭证。客户端遇到响应丢失应回查原 Command/Task，再沿用同一 command ID；投递结果未知不等于请求未执行。
+- Structured Artifact 由 `contracts.ts` / TypeBox 统一定义，`npm run export:structured-contracts` 导出 Python schema；共享语义语料同时覆盖行数、行宽、时间和内容边界。Stage 扩展使用明确 descriptor 与类型化执行方法，不自动获得新的审批或数据库执行权。
+
+
 ## Channel Adapter
 
 复制 `channel-identities.example.json` 到 `PI_CHANNEL_IDENTITY_MAP` 指定位置，并为 Bot 单独注入与 `PI_CHANNEL_SERVICE_KEYS` 匹配的 `PI_CHANNEL_SERVICE_KEY`。`POST /v1/channel-events` 必须携带 `X-Channel-Service-Key`；未知飞书 `open_id` 或钉钉 `user_id` 会失败关闭。`(channel,event_id)` 在 SQLite 中唯一，平台重试不会创建第二个 TaskRun 或重复批准。
 
 飞书迁移由 `FEISHU_PI_ENABLED=true` 开启。设置页保存 App 凭证时会先调用飞书官方接口验证，再由受管 Runtime 热启动 `python -m web.feishu_pi` WebSocket 进程；无需重启 API。新消息和新 Pi 卡片只走 ChannelEvent → Pi Task API，旧卡片会提示失效。HTTP webhook 与 WebSocket 不能同时消费同一应用事件。个人部署可显式开启一次性首用户绑定；它只在飞书 Identity Map 为空、Adapter Service Key 已通过且收到 message 时生效一次，不是 wildcard 授权。
+
+飞书的投递 receipt 位于 `QUERY_RUN_DB_PATH` 同目录的 `channel_delivery.db`，独立于 Task 真相。`GET /api/pi/tasks/{task_run_id}/deliveries` 按授权 scope 查看状态，`POST /api/pi/deliveries/{delivery_id}/retry` 仅重读原 presentation 并重送，不重提 ChannelEvent 或执行 SQL。未知投递与用量不补为成功/零；进程存活与 WebSocket 连接证据分开。公共诊断只读联查既有 Store，任何来源不可用显示 partial。

@@ -98,23 +98,6 @@ test("clarification Artifact Tool accepts one schema-valid terminal submission",
   );
 });
 
-test("clarification Artifact Tool rejects invalid dates and extra fields", async () => {
-  const invalidDate = createClarificationSubmissionTool();
-  await assert.rejects(
-    () =>
-      invoke(invalidDate.tool, {
-        ...validClarification,
-        time_range: { description: "指定范围", start: "yesterday" },
-      }),
-    /RFC 3339/,
-  );
-
-  const extraField = createClarificationSubmissionTool();
-  await assert.rejects(
-    () => invoke(extraField.tool, { ...validClarification, sql: "SELECT 1" }),
-    /Invalid structured artifact payload/,
-  );
-});
 
 test("Pi Skill executor captures the terminating structured tool result", async () => {
   const executor = new PiStructuredSkillExecutor({

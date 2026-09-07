@@ -38,6 +38,7 @@
         "unknown_column",
         "unknown_schema_reference",
         "dialect_unsupported",
+        "dialect_required",
         "execution_timeout",
         "execution_failed",
         "gold_execution_failed",

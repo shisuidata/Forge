@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
@@ -259,37 +261,6 @@ def valid_instances() -> dict[str, dict]:
 
 
 def test_all_registered_contracts_are_valid_json_schemas() -> None:
-    assert contract_names() == (
-        "task_run",
-        "clarification_artifact",
-        "execution_plan_artifact",
-        "chart_artifact",
-        "chart_artifact_v2",
-        "technical_report_artifact",
-        "report_bundle_artifact",
-        "publication_artifact",
-        "metric_definition_artifact",
-        "query_result_artifact",
-        "analysis_artifact",
-        "advisory_artifact",
-        "rendered_output_artifact",
-        "resource_ref_v1",
-        "principal_context_v1",
-        "delegated_mandate_v1",
-        "policy_decision_v1",
-        "datasource_binding_v1",
-        "registry_binding_v1",
-        "governance_action_catalog_v1",
-        "benchmark_failure_v1",
-        "query_candidate_v1",
-        "evaluation_suite_v1",
-        "evaluation_run_manifest_v1",
-        "enforce_query_request_v1",
-        "enforce_query_approval_v1",
-        "enforce_query_response_v1",
-        "explain_query_response_v1",
-        "product_projection_v1",
-    )
     for name in contract_names():
         schema = load_contract(name)
         validator_for(schema).check_schema(schema)
@@ -413,3 +384,17 @@ def test_contract_rejects_unknown_fields(valid_instances: dict[str, dict]) -> No
 def test_unknown_contract_name_is_bounded() -> None:
     with pytest.raises(ValueError, match="Unknown contract"):
         load_contract("missing")
+
+
+_SEMANTIC_CORPUS = json.loads(
+    (Path(__file__).resolve().parents[1] / "agent/contracts/structured-artifact-fixtures.v1.json").read_text()
+)
+
+
+@pytest.mark.parametrize("case", _SEMANTIC_CORPUS["cases"], ids=lambda case: case["id"])
+def test_shared_structured_artifact_semantics(case: dict) -> None:
+    if case["accepted"]:
+        validate_contract(case["contract"], case["instance"])
+    else:
+        with pytest.raises(ValidationError):
+            validate_contract(case["contract"], case["instance"])

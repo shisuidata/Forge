@@ -1,0 +1,172 @@
+{
+  "schema_version": "candidate-delivery-v1",
+  "date": "2026-09-08",
+  "requirement": "REQ-2026-09-08-063",
+  "status": "locally_verified_awaiting_remote_ci",
+  "base_commit": "018317d89edfa0f56c48c865f35c9a45204d9d11",
+  "candidate_branch": "review/forge-engineering-evidence-2026-09-08",
+  "authorization": {
+    "commit": true,
+    "push_candidate_branch": true,
+    "create_pull_request": true,
+    "merge_main": false,
+    "tag": false,
+    "release": false,
+    "deploy": false,
+    "model_calls": false
+  },
+  "scope": {
+    "requirements": [
+      "REQ-2026-09-07-060",
+      "REQ-2026-09-07-061",
+      "REQ-2026-09-08-062"
+    ],
+    "additional_maintenance": "Update existing external-agent integration guide for implemented public Evaluate/Enforce/Explain APIs; retain prepare-query compatibility boundary. No new external-agent adapter."
+  },
+  "publication_review": {
+    "method": "Scoped public-diff/source review and bounded literal scans; not an independent security certification.",
+    "python_current_files": 67,
+    "pi_web_tools_current_files": 179,
+    "documentation_files": 107,
+    "archive_files_matching_governance_manifest": 84,
+    "excluded_private_paths_in_change_set": [],
+    "confirmed_new_credential_findings": [],
+    "document_scan_dispositions": [
+      {
+        "path": "docs/archive/engineering/golden-journey-acceptance-2026-08-24.md",
+        "line": 122,
+        "kind": "personal_absolute_path",
+        "disposition": "Already-redacted file:///home/.../index.html placeholder describing a historical PDF leak; not a personal path."
+      },
+      {
+        "path": "docs/requirements-pool.md",
+        "line": 443,
+        "kind": "personal_absolute_path",
+        "disposition": "Already-redacted file:///home/.../index.html placeholder describing a historical PDF leak; not a personal path."
+      }
+    ],
+    "inherited_observations": [
+      {
+        "severity": "low",
+        "path": "web/feishu.py",
+        "line": 782,
+        "reason": "A hard-coded RFC1918 address remains in the chart URL fallback. The identical literal exists at baseline line 775; this is inherited internal-endpoint publication hygiene, not a newly introduced credential. Address is intentionally redacted. Do not infer a live secret or a newly introduced blocker from this finding."
+      }
+    ],
+    "limits": [
+      "Private originals, existing excluded legacy results/data/databases and full Git history were not inspected.",
+      "No model calls, live credential validation, production configuration access or external channel calls were performed.",
+      "gitleaks and trufflehog were not available; scans and scoped manual review do not certify absence of all secrets."
+    ]
+  },
+  "local_verification": {
+    "related_contract_tests": {
+      "passed": 63,
+      "command": "pytest tests/test_evaluate.py tests/test_enforce.py tests/test_explain.py tests/test_docs_links.py -q",
+      "environment": "Isolated public source snapshot, clean environment and private-source/network sandbox.",
+      "warning": "Third-party protobuf datetime.utcfromtimestamp deprecation."
+    },
+    "actual_quickstart": {
+      "command": "forge quickstart --workdir <isolated-directory> --yes --json",
+      "run_receipt": {
+        "schema_version": 1,
+        "forge_version": "0.1.0",
+        "environment": {
+          "system": "Darwin",
+          "release": "25.6.0",
+          "machine": "arm64",
+          "python_implementation": "CPython",
+          "python_version": "3.14.7"
+        },
+        "started_at": "2026-09-07T16:59:19.238240+00:00",
+        "completed_at": "2026-09-07T16:59:22.458273+00:00",
+        "runtime_duration_ms": 3222,
+        "outcome": {
+          "query_run_id": "qr_b07af09a49b44e27aa62f742f6647a3c",
+          "fail_closed": {
+            "status": "failed",
+            "failure": {
+              "stage": "assurance",
+              "code": "readonly_violation",
+              "retryable": false
+            }
+          },
+          "evaluate": {
+            "status": "passed",
+            "policy_verdict": "allow_review",
+            "result_comparison": "passed"
+          },
+          "enforce": {
+            "status": "completed",
+            "truncated": true
+          },
+          "explain": {
+            "integrity": "verified",
+            "evidence_types": [
+              "candidate",
+              "policy",
+              "query",
+              "assurance",
+              "source",
+              "approval",
+              "result"
+            ],
+            "limitations": [
+              "semantic_correctness_unproven",
+              "live_data_no_snapshot",
+              "result_truncated"
+            ]
+          },
+          "dashboard": {
+            "status": "passed",
+            "path": "/admin/dashboard"
+          }
+        },
+        "receipt_hash": "sha256:77f035188cbc5f23a555e7e27d090e0ae00fe08c8455bc39855d401db4025557"
+      },
+      "scope": "Maintainer synthetic-data HTTP/CLI smoke; automatic approval explicitly requested, not independent adoption evidence."
+    },
+    "setup_correction": "python -m forge is not a supported entry point (no forge.__main__); the documented forge console entry point was then exercised successfully. No runtime change was made.",
+    "previous_full_validation": "See docs/file-structure-governance-2026-09-07.json for prior 983 Python passed / 28 skipped, 215 Pi passed, typecheck, wheel/sdist and documentation-site evidence; those suites were not re-labelled as fresh runs here.",
+    "pre_commit_checks": {
+      "reviewed_paths_staged": 557,
+      "unexpected_staged_paths": 0,
+      "diff_check": "passed",
+      "source_only_adjustments": [
+        {
+          "path": "agent/audit.py",
+          "change": "Remove EOF blank lines only; byte comparison against reviewed snapshot confirmed no other change."
+        },
+        {
+          "path": "services/pi-orchestrator/tests/product-projections.test.ts",
+          "change": "Remove EOF blank lines only; byte comparison against reviewed snapshot confirmed no other change."
+        },
+        {
+          "path": "tests/test_architecture_course_docs.py",
+          "change": "Remove EOF blank lines only; byte comparison against reviewed snapshot confirmed no other change."
+        },
+        {
+          "path": "tests/test_diagnostics_delivery.py",
+          "change": "Remove EOF blank lines only; byte comparison against reviewed snapshot confirmed no other change."
+        },
+        {
+          "path": "web/routes/benchmark_v2.py",
+          "change": "Remove EOF blank lines only; byte comparison against reviewed snapshot confirmed no other change."
+        }
+      ],
+      "staging_warning": "git add reported an ignored legacy results directory after staging; exact index comparison confirmed all 557 reviewed paths and no extras. No force-add was used."
+    }
+  },
+  "remote_ci": {
+    "status": "pending",
+    "attempts": []
+  },
+  "adoption": {
+    "issue": "https://github.com/shisuidata/Forge/issues/9",
+    "observed_comments": 0,
+    "external_agent_adapter_issue": "https://github.com/shisuidata/Forge/issues/8",
+    "adapter_status": "not_implemented_by_this_delivery",
+    "R0_6": "not_passed",
+    "holdout_H": "not_promoted"
+  }
+}

@@ -165,6 +165,16 @@ export class InMemoryTaskStore implements TaskStore {
   readonly #tasks = new Map<string, TaskRun>();
   #lastCreatedAtMs = 0;
 
+  checkpoint(): () => void {
+    const snapshot = structuredClone(this.#tasks);
+    const lastCreatedAtMs = this.#lastCreatedAtMs;
+    return () => {
+      this.#lastCreatedAtMs = lastCreatedAtMs;
+      this.#tasks.clear();
+      for (const [key, value] of snapshot) this.#tasks.set(key, value);
+    };
+  }
+
   create(input: CreateTaskInput): TaskRun {
     for (const [field, value] of Object.entries({
       org_id: input.org_id,
@@ -177,6 +187,9 @@ export class InMemoryTaskStore implements TaskStore {
       }
     }
 
+    if (input.parent_task_run_id != null && !this.#tasks.has(input.parent_task_run_id)) {
+      throw new TaskStateError(`Parent TaskRun not found: ${input.parent_task_run_id}`);
+    }
     const timestamp = Math.max(Date.now(), this.#lastCreatedAtMs + 1);
     this.#lastCreatedAtMs = timestamp;
     const now = new Date(timestamp).toISOString();

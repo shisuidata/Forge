@@ -136,11 +136,7 @@ test("a new Application instance resumes a persisted SQL approval wait", async (
   const firstState = new SqliteOrchestratorState(databasePath);
   const firstApplication = new OrchestratorApplication({
     config,
-    tasks: firstState.tasks,
-    events: firstState.events,
-    artifacts: firstState.artifacts,
-    attempts: firstState.attempts,
-    transactions: firstState.transactions,
+    state: firstState,
     forgeClient,
   });
   const created = firstApplication.createTask({
@@ -156,11 +152,7 @@ test("a new Application instance resumes a persisted SQL approval wait", async (
   const secondState = new SqliteOrchestratorState(databasePath);
   const secondApplication = new OrchestratorApplication({
     config,
-    tasks: secondState.tasks,
-    events: secondState.events,
-    artifacts: secondState.artifacts,
-    attempts: secondState.attempts,
-    transactions: secondState.transactions,
+    state: secondState,
     forgeClient,
   });
   assert.equal(

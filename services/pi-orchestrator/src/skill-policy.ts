@@ -31,6 +31,14 @@ export class InMemorySkillPolicyStore implements SkillPolicyStore {
     this.#defaults = [...defaults];
   }
 
+  checkpoint(): () => void {
+    const snapshot = structuredClone(this.#policies);
+    return () => {
+      this.#policies.clear();
+      for (const [key, value] of snapshot) this.#policies.set(key, value);
+    };
+  }
+
   get(orgId: string, teamId: string): TeamSkillPolicy | undefined {
     const policy = this.#policies.get(`${orgId}\0${teamId}`);
     return policy === undefined ? undefined : structuredClone(policy);

@@ -1,23 +1,58 @@
-import { announce, productStateLabel } from './product-shell.js?v=2';
+import { announce, productStateLabel, usageStatusLabel } from "./product-shell.js?v=3";
 
 const page = document.querySelector('[data-product-page]');
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    cache: 'no-store',
-    credentials: 'same-origin',
-    ...options,
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      cache: 'no-store', credentials: 'same-origin', ...options,
+      headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    });
+  } catch {
+    const error = new Error('连接中断，无法确认服务是否已接收。');
+    error.deliveryUnknown = true;
+    throw error;
+  }
   let body;
-  try { body = await response.json(); } catch { body = { status: 'invalid_response' }; }
+  try {
+    body = await response.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid response");
+  } catch {
+    const error = new Error('响应不可读取，操作结果未知。');
+    error.deliveryUnknown = true;
+    error.requestId = response.headers.get('X-Request-ID');
+    throw error;
+  }
   if (!response.ok) {
-    const error = new Error(body?.error || body?.detail?.code || body?.detail || `请求失败（${response.status}）`);
+    const error = new Error(body?.error || body?.detail?.code || '请求失败');
     error.status = response.status;
-    error.body = body;
+    error.code = body?.code || body?.detail?.code;
+    error.requestId = body?.request_id || response.headers.get('X-Request-ID');
+    error.deliveryUnknown = response.status >= 500;
     throw error;
   }
   return body;
+}
+
+// Pending transport identity only: Task state always comes from Pi projections.
+const pendingCommands = new Map();
+function pendingCommand(key, payload, prefix = 'web_message') {
+  const signature = JSON.stringify(payload);
+  let command = pendingCommands.get(key);
+  try { command ||= JSON.parse(sessionStorage.getItem('forge.pending.' + key) || 'null'); } catch { /* Storage may be disabled. */ }
+  if (!command || command.signature !== signature) command = { signature, id: messageId(prefix) };
+  pendingCommands.set(key, command);
+  try { sessionStorage.setItem('forge.pending.' + key, JSON.stringify(command)); } catch { /* In-memory retry remains available. */ }
+  return command;
+}
+function acknowledgeCommand(key, command) {
+  if (pendingCommands.get(key)?.id !== command.id) return;
+  pendingCommands.delete(key);
+  try { sessionStorage.removeItem('forge.pending.' + key); } catch { /* No persisted state. */ }
+}
+function diagnosticMessage(error) {
+  return [error.message, error.code, error.requestId && ('Request ' + error.requestId)].filter(Boolean).join(' · ');
 }
 
 function node(tag, attributes = {}, children = []) {
@@ -153,7 +188,7 @@ function itemList(items) {
 function renderError(container, error, retry) {
   container.replaceChildren(stateBox(
     error?.status === 401 ? '需要重新登录' : '当前内容不可用',
-    error?.message || '读取失败，请稍后重试。',
+    error ? diagnosticMessage(error) : "读取失败，请稍后重试。",
     node('button', { class: 'button', type: 'button', text: '重试' }),
   ));
   container.querySelector('button')?.addEventListener('click', retry);
@@ -192,6 +227,7 @@ async function loadWorkspace() {
 
 let chatConversation = null;
 let chatPoll = null;
+let conversationEpoch = 0;
 let taskPanelEpoch = 0;
 let renderedTaskId = null;
 let renderedTaskFingerprint = null;
@@ -260,11 +296,11 @@ async function loadConversationList() {
 }
 
 function actionButton(action, task, review, refresh) {
-  const disabled = action.availability !== 'enabled' || action.action_type === 'request_supplement' || !task.conversation_id;
+  const disabled = action.availability !== "enabled";
   const button = node('button', {
     class: action.action_type === 'cancel_task' ? 'button button-danger' : 'button button-primary',
     type: 'button', text: action.label, disabled,
-    title: disabled ? (action.action_type === 'request_supplement' ? '补查参数投影尚未开放，请从旧技术视图处理' : '当前操作不可用') : '',
+    title: disabled ? (action.reason_code || "当前操作不可用") : "",
   });
   if (!disabled) button.addEventListener('click', async () => {
     let currentReview = review;
@@ -280,6 +316,7 @@ function actionButton(action, task, review, refresh) {
 function taskPanelProjectionFingerprint(detail) {
   const task = detail.task ?? {};
   return JSON.stringify({
+    attempts: detail.attempts,
     task: [task.task_run_id, task.title, task.status, task.display_state],
     plan: detail.plan?.steps?.map((step) => [
       step.step_id, step.title, step.capability, step.required, step.status,
@@ -304,6 +341,23 @@ function taskPanelProjectionFingerprint(detail) {
         ]
       : null,
   });
+}
+
+
+function attemptList(attempts = []) {
+  return node('section', { class: 'task-panel-section', 'data-attempt-diagnostics': '' }, [
+    node('h3', { text: '阶段诊断' }),
+    ...attempts.slice().reverse().map((attempt) => node('div', { class: 'notice', 'data-state': attempt.safe_error ? 'failed' : 'ready' }, [
+      node('div', {}, [
+        node('p', { class: 'notice-title', text: attempt.stage + ' · ' + attempt.status }),
+        node('p', { class: 'notice-copy', text: attempt.attempt_id + (attempt.request_id ? ' · Request ' + attempt.request_id : '') }),
+        node('p', { class: 'notice-copy', text: 'Model ' + (attempt.model_revision || '版本未记录') + ' · Policy ' + (attempt.skill_policy_version ?? '未记录') }),
+        node('p', { class: 'notice-copy', text: usageStatusLabel(attempt.usage_status) }),
+        attempt.safe_error ? node('p', { class: 'notice-copy', text: typeof attempt.safe_error === 'string' ? attempt.safe_error : attempt.safe_error.message }) : null,
+      ]),
+    ])),
+    !attempts.length ? node('p', { class: 'muted-copy', text: '尚无阶段记录；不能据此推断用量为零。' }) : null,
+  ]);
 }
 
 
@@ -364,7 +418,7 @@ function renderConversationTaskPanel(detail) {
       : node('p', { class: 'muted-copy', text: '尚无任务活动。' }),
   ]);
 
-  taskPanelBody.replaceChildren(summary, plan, actionSection, artifactSection, activitySection);
+  taskPanelBody.replaceChildren(summary, plan, actionSection, artifactSection, activitySection, attemptList(detail.attempts));
 }
 
 async function loadConversationTask(taskId) {
@@ -438,19 +492,25 @@ function renderConversation(data) {
 }
 
 async function selectConversation(id, push = false) {
+  const changed = chatConversation !== id;
   chatConversation = id;
-  if (push) history.pushState({}, '', `/chat?conversation=${encodeURIComponent(id)}`);
+  const epoch = ++conversationEpoch;
+  if (changed) resetConversationTaskPanel('正在读取当前对话任务。');
+  if (push) history.pushState({}, '', '/chat?conversation=' + encodeURIComponent(id));
   clearTimeout(chatPoll);
   try {
-    const body = await api(`/api/product/conversations/${encodeURIComponent(id)}`);
+    const body = await api('/api/product/conversations/' + encodeURIComponent(id));
+    if (epoch !== conversationEpoch || chatConversation !== id) return null;
     const conversation = body.conversation;
     renderConversation(conversation);
     const latestTaskId = conversation.entries?.at(-1)?.task?.task_run_id ?? null;
     await Promise.all([loadConversationList(), loadConversationTask(latestTaskId)]);
-    return conversation;
+    return epoch === conversationEpoch && chatConversation === id ? conversation : null;
   } catch (error) {
-    if (error.status === 404) { resetConversationTaskPanel('当前对话不存在或不可见。'); return; }
+    if (epoch !== conversationEpoch || chatConversation !== id) return null;
+    resetConversationTaskPanel(error.status === 404 ? '当前对话不存在或不可见。' : '当前任务投影不可用。');
     renderError(page.querySelector('[data-conversation-feed]'), error, () => selectConversation(id));
+    return null;
   }
 }
 
@@ -460,7 +520,7 @@ async function resumeConversationPolling() {
 }
 
 function conversationNeedsPolling(conversation) {
-  if (!conversation) return true;
+  if (!conversation) return false;
   const latest = conversation.entries?.at(-1);
   const hasEnabledAction = latest?.actions?.some((action) => action.availability === 'enabled') ?? false;
   return latest?.task?.display_state === 'running'
@@ -470,13 +530,17 @@ function conversationNeedsPolling(conversation) {
 async function pollConversation(immediate = false) {
   clearTimeout(chatPoll);
   if (!chatConversation) return;
+  const id = chatConversation;
+  const epoch = conversationEpoch;
   if (!immediate) await new Promise((resolve) => setTimeout(resolve, 1200));
-  const conversation = await selectConversation(chatConversation);
-  if (conversationNeedsPolling(conversation)) chatPoll = setTimeout(() => pollConversation(true), 2500);
+  if (chatConversation !== id || conversationEpoch !== epoch) return;
+  const conversation = await selectConversation(id);
+  if (chatConversation === id && conversationNeedsPolling(conversation)) chatPoll = setTimeout(() => pollConversation(true), 2500);
 }
 
 function newConversation() {
   clearTimeout(chatPoll);
+  conversationEpoch += 1;
   chatConversation = conversationId();
   history.pushState({}, '', '/chat');
   page.querySelector('[data-conversation-title]').textContent = '新对话';
@@ -512,15 +576,28 @@ function setupChat() {
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const message = input.value.trim();
-    if (!message) return;
+    if (!message || input.disabled) return;
+    const id = chatConversation;
+    const payload = { message, conversation_id: id };
+    const key = 'message:' + id;
+    const command = pendingCommand(key, payload);
     input.disabled = true;
+    // Preserve the conversation identity across reload, including a lost response.
+    history.replaceState({}, '', '/chat?conversation=' + encodeURIComponent(id));
     try {
-      await api('/api/pi/chat/messages', { method: 'POST', body: JSON.stringify({ message, conversation_id: chatConversation, message_id: messageId() }) });
-      history.replaceState({}, '', `/chat?conversation=${encodeURIComponent(chatConversation)}`);
+      await api('/api/pi/chat/messages', { method: 'POST', body: JSON.stringify({ ...payload, message_id: command.id }) });
+      acknowledgeCommand(key, command);
+      if (chatConversation !== id) return;
       input.value = '';
       await pollConversation(true);
     } catch (error) {
-      page.querySelector('[data-conversation-feed]').append(notice('消息未发送', error.message, 'failed'));
+      if (chatConversation !== id) return;
+      const status = notice(error.deliveryUnknown ? '消息投递结果未知' : '消息被拒绝', diagnosticMessage(error) + ' · Command ' + command.id + (error.deliveryUnknown ? '。再次发送相同内容会沿用此 ID，不会另建任务。' : ''), 'partial');
+      status.append(node('a', { class: 'button', href: '/chat?conversation=' + encodeURIComponent(id), text: '回查原对话' }));
+      const feed = page.querySelector("[data-conversation-feed]");
+      feed.querySelector("[data-conversation-empty]")?.remove();
+      feed.append(status);
+      feed.scrollTop = feed.scrollHeight;
     } finally { input.disabled = false; input.focus(); }
   });
   input?.addEventListener('keydown', (event) => {
@@ -626,11 +703,46 @@ function renderTaskDetail(detail) {
   activity.replaceChildren(node('ol', { class: 'activity-list' }, detail.activity.slice().reverse().map((item) => node('li', { class: 'activity-row' }, [
     node('h3', { text: item.title }), node('p', { text: `${formatDate(item.created_at)} · ${item.state === 'ready' ? '已记录' : productStateLabel(item.state)}` }),
   ]))));
+  activity.append(attemptList(detail.attempts));
 }
+
+async function loadTaskDeliveries(task) {
+  const panel = page.querySelector('[data-task-deliveries]');
+  if (!panel) return;
+  panel.hidden = task.channel !== 'feishu';
+  if (panel.hidden) return;
+  const container = panel.querySelector('.panel-body');
+  try {
+    const data = await api('/api/pi/tasks/' + encodeURIComponent(task.task_run_id) + '/deliveries');
+    const labels = { delivered: '已送达', failed: '投递被拒绝', unknown: '送达结果未知', pending: '等待投递', sending: '正在投递' };
+    container.replaceChildren(...data.deliveries.map((receipt) => {
+      const card = notice(labels[receipt.status] || '状态未知', receipt.delivery_id + ' · Command ' + receipt.command_id + ' · Request ' + receipt.request_id + (receipt.error_code ? ' · ' + receipt.error_code : ''), receipt.status === 'delivered' ? 'ready' : 'partial');
+      if (receipt.retry_available) {
+        const retry = node('button', { class: 'button', type: 'button', text: '仅重送展示' });
+        retry.addEventListener('click', async () => {
+          retry.disabled = true;
+          try {
+            await api('/api/pi/deliveries/' + encodeURIComponent(receipt.delivery_id) + '/retry', { method: 'POST' });
+            await loadTaskDeliveries(task);
+          } catch (error) { announce(diagnosticMessage(error)); retry.disabled = false; }
+        });
+        card.append(retry);
+      }
+      return card;
+    }));
+    if (!data.deliveries.length) container.append(notice('未记录投递回执', '此任务可能早于回执功能；没有记录不等于尚未发送。'));
+  } catch (error) { renderError(container, error, () => loadTaskDeliveries(task)); }
+}
+
 
 async function loadTaskDetail() {
   const taskId = page.dataset.taskId;
-  try { renderTaskDetail((await api(`/api/product/tasks/${encodeURIComponent(taskId)}`)).detail); announce('任务详情已更新'); }
+  try {
+    const detail = (await api(`/api/product/tasks/${encodeURIComponent(taskId)}`)).detail;
+    renderTaskDetail(detail);
+    await loadTaskDeliveries(detail.task);
+    announce("任务详情已更新");
+  }
   catch (error) { renderError(page.querySelector('[data-task-plan] .panel-body'), error, loadTaskDetail); }
 }
 
@@ -655,7 +767,7 @@ function openActionDialog(action, task, review, refresh) {
   const onClose = async () => {
     dialog.removeEventListener('close', onClose);
     if (dialog.returnValue !== 'confirm') return;
-    const payload = {};
+    const payload = { ...(action.payload || {}) };
     if (requiresInput) {
       if (!input.value.trim()) { announce('补充信息不能为空'); return; }
       payload.text = input.value.trim();
@@ -665,14 +777,18 @@ function openActionDialog(action, task, review, refresh) {
       payload.sql_hash = review.sql_hash;
       payload.assurance_report_hash = review.assurance_report_hash;
     }
+    const key = "action:" + task.task_run_id + ":" + action.action_type;
+    const body = { action: action.action_type, conversation_id: task.conversation_id, payload };
+    const command = pendingCommand(key, body, "web_action");
     try {
       await api(`/api/pi/chat/tasks/${task.task_run_id}/actions`, {
-        method: 'POST', body: JSON.stringify({ action: action.action_type, conversation_id: task.conversation_id, message_id: messageId('web_action'), payload }),
+        method: "POST", body: JSON.stringify({ ...body, message_id: command.id }),
       });
+      acknowledgeCommand(key, command);
       announce('操作已提交');
       await refresh();
       window.setTimeout(() => refresh(), 1600);
-    } catch (error) { announce(`操作未完成：${error.message}`); }
+    } catch (error) { announce((error.deliveryUnknown ? "操作投递结果未知，重试会沿用原命令：" : "操作被拒绝：") + diagnosticMessage(error) + " · Command " + command.id); }
   };
   dialog.addEventListener('close', onClose);
   dialog.showModal();

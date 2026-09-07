@@ -426,7 +426,7 @@ ID / 标题 / 日期 / 状态
 - **Plan**：`forge-enterprise-evolution-plan.md` H3。
 - **Architecture**：不改变 Pi/Forge/渠道职责；测试环境只验证现有 Contract、状态和 Renderer，不成为第二套生产状态机。
 - **执行结果**：同一 TaskRun 完成 Query→Approval→Execution→Analysis→Report，物理不变量全部 PASS；桌面产品旅程与可信业务结果 FAIL。Analysis 183.265s，完整 Task 349.028s；PDF/PPTX 均 ready，重复 ChannelEvent 未重放 SQL。
-- **正式评审**：[`golden-journey-acceptance-2026-08-24.md`](golden-journey-acceptance-2026-08-24.md)。Verdict：`Physical chain PASS / Trusted product outcome FAIL`。
+- **正式评审**：[`golden-journey-acceptance-2026-08-24.md`](archive/engineering/golden-journey-acceptance-2026-08-24.md)。Verdict：`Physical chain PASS / Trusted product outcome FAIL`。
 - **证据**：NAS `~/services/forge-m4.1/e2e/golden-20260824T101129Z/`；本地 `/tmp/forge-golden-journey-evidence/`。隔离服务已停止，临时 service/channel keys 已删除，生产 Forge/Pi health 正常。
 
 ---
@@ -467,7 +467,7 @@ ID / 标题 / 日期 / 状态
 - Python `553 passed / 24 skipped`；Pi `96 passed`；typecheck、npm audit、桌面 Playwright 和实际 NAS Chrome PDF 内容扫描均通过。
 - 同一 Golden Journey 重跑 262.399s 完成，1 次审批/1 次执行，重复消息未创建第二个 QueryRun；Report/PDF/PPTX ready，数据源保持 mode `0400` 且无 WAL/SHM。
 - Report running 与 Publication complete 同页可见；PDF 不再包含 `file://`/`/home/`/默认 header；重复品类 label 使 ChartArtifact fail-closed 为 0，不再发布误导图。
-- 正式证据：[`golden-journey-p0-closure-2026-08-24.md`](golden-journey-p0-closure-2026-08-24.md)。
+- 正式证据：[`golden-journey-p0-closure-2026-08-24.md`](archive/engineering/golden-journey-p0-closure-2026-08-24.md)。
 
 ---
 
@@ -943,7 +943,7 @@ ReportRun / ReportRevision（不可变快照）
 - **阶段顺序提案**：N2 用户门禁 → W3A.2 北极星驱动原型 → W3B Human Control Plane → M1A Runtime Trust → R1 Agent Data Runtime MVP → G1 Data Trust Control Plane → Q1 Quality/Assurance → H6 Reusable Deliverables → 按证据选择 M1B/M2/M3 → M5 第二场景。
 - **关键门禁**：Agent Runtime 执行能力不得早于 M1A；W3B 只接已有 Human truth sources；G1/Q1 不用页面或 Contract 冒充 Runtime；R1 必须通过真实 Agent Golden Journey。
 
-旧 [`web-product-shell-plan-2026-08-24.md`](web-product-shell-plan-2026-08-24.md) 已标记为历史第一版；当前原型和生产代码均未修改。2026-08-25 用户进一步确认短期实施必须采用“底层真实框架 → 前端真实投影 → 持续人工测试”的顺序；完整导航和长期阶段仍可在真实测试中修订。
+旧 [`web-product-shell-plan-2026-08-24.md`](archive/plans/web-product-shell-plan-2026-08-24.md) 已标记为历史第一版；当前原型和生产代码均未修改。2026-08-25 用户进一步确认短期实施必须采用“底层真实框架 → 前端真实投影 → 持续人工测试”的顺序；完整导航和长期阶段仍可在真实测试中修订。
 
 ---
 
@@ -972,7 +972,7 @@ ReportRun / ReportRevision（不可变快照）
 
 ### 实施计划产出
 
-详细计划见 [`short-term-product-spine-plan-2026-08-25.md`](short-term-product-spine-plan-2026-08-25.md)：
+详细计划见 [`short-term-product-spine-plan-2026-08-25.md`](archive/plans/short-term-product-spine-plan-2026-08-25.md)：
 
 ```text
 SP0 Contract / Truth Source Closure
@@ -1008,7 +1008,7 @@ SP0 Contract / Truth Source Closure
 - 增加 authenticated read-only Pi API：`GET /v1/conversations`、`GET /v1/conversations/{conversation_id}`、`GET /v1/tasks/{task_run_id}/detail`；响应 `no-store`，scope mismatch 不披露对象。
 - 10K Task/1K Conversation 首版 list 约 `19,040 ms`，定位为相关子查询 + N+1 JSON scan；改为 scoped CTE + window rank + grouped first/latest 后平均约 `26.8 ms`，因此未新增 schema v5。
 - 验证：Pi `114 passed`、Python `569 passed / 24 skipped`、typecheck、npm audit、101-entry pagination、SQLite restart、auth/scope/no-store/bad cursor、2 MB boundary 和 `git diff --check` 通过。
-- 正式证据：[`product-spine-sp1-evidence-2026-08-25.md`](product-spine-sp1-evidence-2026-08-25.md)。
+- 正式证据：[`product-spine-sp1-evidence-2026-08-25.md`](archive/engineering/product-spine-sp1-evidence-2026-08-25.md)。
 
 SP2 已完成并通过 Backend Gate，现进入 SP3。
 
@@ -1020,7 +1020,7 @@ SP2 已完成并通过 Backend Gate，现进入 SP3。
 - SP2 在暴露 Task list 前补充同版本 `TaskSummaryV1`，避免前端消费 raw TaskRun metadata；Task list 明确 bounded/truncated，Report list 支持 cursor。
 - Registry revision 改为内容 SHA-256；Workspace 在 Pi/Report/Registry 或读取上限发生时显示 partial/offline，不伪装 ready。
 - 验证：Python `575 passed / 24 skipped`、SP2 定向 `34 passed`、Pi `114 passed`、typecheck、npm audit 0 vulnerabilities、scope/auth/cursor/offline tests 和 `git diff --check` 通过。
-- 正式证据：[`product-spine-sp2-evidence-2026-08-25.md`](product-spine-sp2-evidence-2026-08-25.md)。
+- 正式证据：[`product-spine-sp2-evidence-2026-08-25.md`](archive/engineering/product-spine-sp2-evidence-2026-08-25.md)。
 
 Backend Gate 已通过，SP3 已完成，现进入 SP4。
 
@@ -1031,7 +1031,7 @@ Backend Gate 已通过，SP3 已完成，现进入 SP4。
 - 建立统一 panel/status/button/field/table/notice/empty/partial/offline/skeleton/code/evidence 组件及 skip-link/focus/reduced-motion/mobile-nav 基础。
 - Shell JS 只处理导航和状态标签，不 fetch、不写 localStorage、不持有业务状态。
 - 验证：Python `581 passed / 24 skipped`、SP3/Docs 定向 `10 passed`、Pi `114 passed`、typecheck、npm audit、static serving、template render 和 `git diff --check` 通过。
-- 证据：[`product-spine-sp3-evidence-2026-08-25.md`](product-spine-sp3-evidence-2026-08-25.md)。
+- 证据：[`product-spine-sp3-evidence-2026-08-25.md`](archive/engineering/product-spine-sp3-evidence-2026-08-25.md)。
 
 SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
 
@@ -1042,7 +1042,7 @@ SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
 - 使用本地安全 DOM Markdown renderer，无 `innerHTML/eval`，不复制业务状态。
 - 首轮视觉审查发现审批操作不在主路径、pending 错标“可用”、状态层级混淆；均已修正，复审无 P0。
 - 验证：Python `583 passed / 24 skipped`、Product/Web/Docs `33 passed`、Pi `114 passed`、typecheck/npm audit/JS syntax/Playwright 1440×900 与 1600×1000/0 error/0 overflow/chat send/dialog/`git diff --check` 通过。
-- 证据：[`product-spine-sp4-evidence-2026-08-25.md`](product-spine-sp4-evidence-2026-08-25.md)；截图 `/tmp/forge-sp4-task-detail.png`。
+- 证据：[`product-spine-sp4-evidence-2026-08-25.md`](archive/engineering/product-spine-sp4-evidence-2026-08-25.md)；截图 `/tmp/forge-sp4-task-detail.png`。
 
 ### SP5 Human Golden Gate + Atlas Candidate（自动门禁已通过）
 
@@ -1051,7 +1051,7 @@ SP4 已完成并通过 SP5 入口门禁，现进入 SP5。
 - 重复消息返回原任务；过期重复批准返回 409 且不重放 SQL。等待审批与完成态通过 restart recovery；Pi offline 时 Workspace 返回 partial，Report/Data 继续可读。
 - Live Gate 修复 insecure-HTTP ID、瞬时 ready 轮询、同源 HTTP Report URL、空 Attempt error、长 SQL Grid overflow 和完成态历史审核误标权限；复杂查询 Assurance 拒绝与 Analysis `incomplete` 作为 fail-closed 反证保留。
 - 最终验证：Python `583 passed / 24 skipped`、Pi `115 passed`、typecheck/npm audit/JS syntax/`git diff --check`、双桌面 12 routes/0 external request/0 error/0 overflow 全部通过。
-- 正式证据：[`product-spine-sp5-evidence-2026-08-25.md`](product-spine-sp5-evidence-2026-08-25.md)。自动门禁 PASS；用户仍需对稳定 Atlas URL 给出 `PASS / CHANGE / REMOVE`，在此之前不选择 M1A/G1/Q1/H6，也不替换生产。
+- 正式证据：[`product-spine-sp5-evidence-2026-08-25.md`](archive/engineering/product-spine-sp5-evidence-2026-08-25.md)。自动门禁 PASS；用户仍需对稳定 Atlas URL 给出 `PASS / CHANGE / REMOVE`，在此之前不选择 M1A/G1/Q1/H6，也不替换生产。
 
 ## REQ-2026-08-25-018：Atlas 网站性能严重不可接受
 
@@ -2233,8 +2233,8 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 
 - 版本审阅发现既有全局CTE名称过滤可能把同名未授权物理表当作CTE跳过。已用按scope来源和方言归一化的物理关系校验修复；扁平Registry不授权schema/catalog限定来源，合法CTE/derived不受误伤。
 - Assurance升级query-assurance-v10；旧v9 QueryRun审批必须以assurance_revision_drift失败关闭，重新prepare/审核，不迁移旧证据。此项是既有安全行为维护，不是模型成绩提升。
-- Python/Pi全量、定向回归、跨方言静态校验与真实合成SQLite/API冒烟、Quickstart、站点构建及文档链接的实测结果与跳过范围见[发布验证报告](release-verification-2026-09-07.json)。本轮被测模型调用0。
-- 全部报告入口见[文档导航](README.md)，原件/公开副本映射见[报告公开说明](report-publication-2026-09-07.json)。产品需求与H/R0.6门禁不因仓库推送自动晋级。
+- Python/Pi全量、定向回归、跨方言静态校验与真实合成SQLite/API冒烟、Quickstart、站点构建及文档链接的实测结果与跳过范围见[发布验证报告](archive/engineering/release-verification-2026-09-07.json)。本轮被测模型调用0。
+- 全部报告入口见[文档导航](README.md)，原件/公开副本映射见[报告公开说明](archive/engineering/report-publication-2026-09-07.json)。产品需求与H/R0.6门禁不因仓库推送自动晋级。
 
 ### 远端CI阻断与测试隔离修复
 
@@ -2242,3 +2242,109 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 - 改用临时Skill包和真实Pi加载器验证白名单与单Skill隔离；去掉生产Skill文案及固定20数量断言，保留缺失包失败关闭，不改生产源码、跳过用例或放宽readiness。
 - 加强沙箱后另发现六项HTTP测试会写默认.runtime/state，已改用每测试独立配置。初轮本地门禁未覆盖此目录，不能声称初轮完全没有运行目录访问；未读取或清理该既有目录。
 - 禁止访问旁仓、真实.runtime及凭证，并禁止对外联网后，定向20通过、完整Pi155通过、typecheck通过；本轮模型调用仍0。首次失败、隔离更正和本地结果追加在发布验证报告中，后续远端结论以对应提交的CI为准。
+
+## REQ-2026-09-07-060：整体产品模式与代码演进质量评估
+
+### 原始表达
+
+> 我们从整体的产品设计模式，包括代码的模型质量上，去评估一下我们代码未来的可维护性、可观测性以及可扩展性。
+>
+> 我们要去优化一下当前所有的这些代码，看一下在一些代码复用，或者是在代码整体的全局结构上面，是不是有很多优化的地方。
+
+### 价值、边界与评估方式
+
+- 已授权整体评估：以当前产品模式和实际调用链核对职责、领域/状态建模、代码复用、故障观测及扩展成本，产出证据分级与可执行优化顺序。代码模型质量按领域/状态/Contract建模理解，同时审视模型生成质量与确定性安全边界的分离，不发起付费模型实验。
+- 当前产品主线仍是Evaluate→Enforce→Explain；Pi保持Task真相源，Forge保持可信执行权，DATA Skills保持专业方法层。不借评估扩张平台、不改变审批、权限、Evidence或历史评分。
+- 先做跨目录静态结构度量、代表性调用链审查和隔离反例验证；文件大、重复字符串或抽象数量不直接判为缺陷。未阅读部分和未测的生产规模必须明确标记，不能把评估称作穷尽证明。
+- 替代方案是全面重写、微服务拆分或统一万能基类；会引入大范围回归并推迟真实采用验证，不作为默认方案。优先考虑减少职责混合、统一确属同一业务规则的实现、建立可验证的演进边界。
+- 风险：跨Python/Pi Contract漂移、持久状态迁移、可观测性采集敏感数据、抽象后更难诊断；建议必须给出收益、反证、迁移边界和验证方式。机会成本是暂停新增特性而投入结构治理，须以具体风险和变更成本排序。
+- 本轮不自动实施未确认的全局重构，不commit/push、部署、读取凭证或真实运行数据库；候选实施包待用户基于评估结果明确接受。
+
+### 已完成评估（基线018317d）
+
+- 116个运行时代码文件完成结构解析（82 Python、31 TypeScript、3 JavaScript），共46529行；另对当前主链、契约、CI/打包及入口文档定点深审，不声称全仓逐行审计。完整范围、16项分级发现、反证、验证和6个候选工作包见[整体工程质量评估](archive/engineering/architecture-quality-review-2026-09-07.json)。
+- 已隔离复现：默认阶段重试复用终止Attempt、取消不触发阶段abort、内存/SQLite失败语义不同、数据集规则拒绝自定义Registry、Evaluate默认auto的两输入分歧、上游500/503误映射404、合法执行结果被文案前缀判错。非editable wheel实建成功但缺forge/schema.json，import forge失败；没有因此否定已验证的editable Quickstart。
+- 产品边界、QueryRun hash/审批/lease、Pi SDK隔离工具、既有Contract导出与共享fixture是应保留的基础。真正优先的复用对象是领域规则、阶段生命周期、错误/结果契约及投影语义，不是按行数拆文件或建立万能基类。
+- 推荐首批候选为外部默认入口/打包、阶段生命周期/State一致性、规则适用域/结构化执行结果；随后推进观测/投递、核心依赖边界及扩展契约。所有候选尚未获得具体实施授权，不自动转入重构执行。
+- 本轮模型调用0、生产源码改动0；未访问真实配置/运行库、未运行生产负载/外部渠道/浏览器视觉验收，静态并发与投递风险保持未实测标记。前次绿色CI不覆盖本轮新增反例；本轮没有以全套测试替代这些实验。
+
+### 实施授权（2026-09-07）
+
+> 好的，那就按照你的调研结果执行吧
+
+- 用户接受上述调研建议，授权实施OP-1至OP-6；先完成入口/分发、阶段生命周期、规则适用域及执行结果，再收敛诊断/投递、核心依赖和扩展契约。
+- 保持现有产品范围、Pi Task权威、审批/权限/失败关闭及历史证据，不新增调度器、模型实验、Connector或生产迁移。不commit/push、发布或部署。
+- 验收逐项绑定AQ-01至AQ-16：隔离反例与跨层回归、非editable安装烟测、实际Web表面验证；未知成本和交付结果必须显式表达。
+
+### 实施完成与边界（2026-09-07）
+
+- OP-1至OP-6及AQ-01至AQ-16已完成实现与本地验收；逐项变更、失败反例和实际运行证据见[实施报告](archive/engineering/architecture-quality-implementation-2026-09-07.json)，原评估不回写为实施证据。
+- Stage统一使用不可拆分State bundle、双适配器事务、默认新Attempt和成功Command回放；取消/超时/中断不允许迟到Artifact改写终态，Plan随权威Task迁移收口。Benchmark准入与Task同事务、单机单owner、挂起HTTP有界停止，不自动重放模型调用。
+- 公共Evaluate使用纯方言解析；Forge JSON缺少受信方言返回dialect_required，Direct可用generic parser。Executor统一ExecutionResult，基准数据集规则必须显式Profile；Assurance v11/scoped-policy-v1使旧审批证据按既有漂移门禁失效。wheel与sdist在Python3.11非editable安装、离开源码cwd后完成真实Quickstart。
+- Web/Pi/Forge保留安全request/业务ID、稳定错误code及未知用量；审计只读联查不双写，飞书receipt只重送原Task presentation，连接状态不由进程存活推断。真实Web/Pi/SQLite丢响应重发只有一个Task，乱序Conversation与诊断显示经浏览器验收。
+- Python3.14回归983 passed/28 skipped，隔离Python3.11为983 passed/3 skipped（其中一个为未安装Playwright的整模块跳过）；Pi215 passed及typecheck通过。数字是本次观察，不是永久完成门槛。
+- 不宣称生产HA、远端副作用撤销、真实飞书可达、已知结算成本、统计准确率收益或外部采用。模型调用0，未访问真实配置/运行库，未commit/push、发布或部署；R0.6/H未晋级。
+
+---
+
+## REQ-2026-09-07-061：仓库文件结构专项治理
+
+### 原始表达与授权
+
+> 好的，另外我们项目的文件结构也做了一遍治理了吗
+>
+> 好的，那就继续
+
+- 用户接受在REQ-060局部边界治理之外继续做全仓文件组织专项：先形成保留／迁移／归档／待确认清单，再执行有收益的归位并验证实际引用。
+- 价值：把可维护运行时、自动化回归、独立基准工具、模板资源、演示脚本和历史证据分清，避免维护者误把付费实验当测试、把旧计划当当前任务，修复包外运行资源。
+- 边界：保留Pi/Forge职责及现有CLI/API；不借目录整理改业务规则，不机械采用src布局，不删除历史证据，不读取或搬迁真实配置、凭证、数据库、未跟踪运行结果及缓存。既有未提交修改全部保留；不commit/push/部署，不调用模型或外部渠道。
+- 决策：独立Benchmark工具从tests归tools/benchmarks；历史文档按证据与旧计划归docs/archive；PoC模板归forge包内资源；造数脚本归demo。稳定核心包、公开启动文件、现有工具原型和规模适中的运维scripts保留。
+- 风险与替代：迁移可能破坏相对路径、历史链接、安装资源和忽略规则；逐项记录路径与hash，JSON历史证据保持原字节，Markdown只修复必要引用。仅加目录说明虽便宜但不能解决测试误分类和包外资源；全面重排则回归面大于收益。
+- 机会成本：本轮只做文件组织与必要入口修复，不推进产品扩张或用内部结构验收替代R0.6/H外部采用。
+- 验收：治理清单与完整move映射、受影响引用、无模型CLI/合成数据烟测、Python/Pi回归、非editable资源及文档链接；旧本地运行数据保持原位并列为人工迁移边界。
+
+### 实施与验证（2026-09-07）
+
+- 已归位204个公开文件：110个独立基准工具／语料文件、84份历史文档／证据、9个包内PoC模板和1个demo脚本。153文件字节不变，51文件仅必要路径／引用调整；44份历史JSON原字节保留。逐文件前后路径与SHA-256、保留及待人工确认清单见[治理记录](file-structure-governance-2026-09-07.json)。
+- 修复真实分发缺陷：旧非editable wheel运行`forge poc init`缺少包外模板；改为包内资源并加入现有package smoke，Python3.11 wheel与sdist安装后初始化／校验及Quickstart均通过。
+- 基准工具13个help入口、33方法发现、25方法共享夹具、40个合成CSV往返、7条失败语料参考查询、Spider合成加载／执行和无Key拒绝烟测通过；未调用模型、访问真实数据或重跑历史成绩。
+- Python3.14为983 passed/28 skipped；跳过26项浏览器E2E与2项缺少完整Mini-Dev资产测试。Pi215 passed及typecheck通过，扩展文档检查146份Markdown／512个链接，无缺失；Pi目标由主流程补核验。网站28页构建及真实浏览器课程→基准页导航通过；未检查尚未推送的GitHub URL在线可达性。
+- 目录职责纳入[CONTRIBUTING](../CONTRIBUTING.md#repository-layout)。保留旧ignored results/data、数据库和缓存的忽略规则；已跟踪的旧Method K原始结果及failure corpus test.db未读取／搬迁，是否迁移或移出版本控制须人工确认。既有未提交工作保留，不commit/push/部署；R0.6/H不晋级。
+
+---
+
+## REQ-2026-09-08-062：测试证据与沟通沉淀的长期保全
+
+### 原始表达与授权
+
+> 好的，我认为可以继续了，保存好我们之前的测试结论我报告文档和在沟通过程中沉淀出来的文档，我觉得这个项目可能最有价值的部分就是这些了
+
+- 用户明确将既有测试结论、报告和沟通中沉淀的文档视为项目长期核心资产，要求后续推进时完整保留。此要求授权文档维护和保全核对，不授权新模型实验、发布、commit/push或访问原始私有运行数据。
+- 价值：让未来实现、研究和复盘能够恢复当时的问题、证据、反例、决策理由及限制，避免重走已验证无效的路线；代码替换或计划过期不使这些知识失效。
+- 决策：复用docs/README.md作为知识资产总入口，requirements-pool.md追加沟通原话与决策，当前状态投影只保留有效结论；历史证据和被替代计划继续留在原归档路径。补齐缺失入口，将保留规则写入既有维护约定，不另建一套知识库或复制全部报告。
+- 边界与风险：不以整理、去重、压缩上下文或当前测试通过为由删除历史负结果；纠错另记依据与受影响结论，不回填原成绩。公开脱敏副本与受限原件严格分开，不从私有数据库或完整会话补造材料。当前可见沟通的归档不等于全部聊天记录已备份。
+- 替代与机会成本：仅口头承诺不能约束后续维护；复制多套报告会造成版本分叉，建设新知识平台会偏离R0.6。本轮只补索引与持久规则，保持产品、架构和实验门禁不变。
+- 验收：归档文件与既有迁移hash一致、逐文件导航无遗漏，既有需求历史保留；文档本地链接通过。明确区分本地落盘、Git提交和异地备份，不宣称未执行的备份。
+
+### 本轮保全核验（2026-09-08）
+
+- 已补齐4份历史产品／架构评审的入口，84份归档文件现均在[文档总索引](README.md)逐项可达，并与REQ-061迁移记录中的目标SHA-256一致。
+- 84份归档及38份稳定设计、课程、复盘／失败案例与图示，共122份受核验文件前后字节一致；此前需求历史未改写，既有主动计划只追加本要求。
+- 公开Markdown及CONTRIBUTING本地链接核验通过。只运行文档／hash核验，不重跑实验或修改业务代码；真实配置、私有会话和原始运行库未读取。
+- 用户原话、价值判断与保留边界已落盘，知识资产入口和维护规则已写入README、CONTRIBUTING及当前状态。此结论不代表所有历史聊天已导出，也不代表Git提交、远端发布或异地备份已完成。
+
+---
+
+## REQ-2026-09-08-063：候选分支与 PR 交付
+
+### 原始表达与授权
+
+> 我们继续下一步
+
+用户在交互选项中明确选择“候选分支与 PR”：先审查公开范围和敏感内容，再将已验收变更commit、push到独立分支并创建PR，验证远端CI；暂不合并main、不发Release、不部署。
+
+- 目标与价值：把REQ-060工程优化、REQ-061文件治理和REQ-062知识保全变成可追溯、可克隆的候选版本，为R0.6独立试跑提供固定revision。
+- 范围：审查当前未提交差异及新文件；保持历史报告hash与原始结论，排除真实配置、数据库、缓存、原始运行结果及未知私有工作。修正现行外部接入指南与已实现公共API之间的过时描述，不新增#8 Agent适配器或第二套Runtime。
+- 风险与控制：候选推送会公开源码和文档；先核对范围及敏感字面量，再显式暂存。真实CI失败按最小范围修复并留痕，不跳过失败测试；不得把内部CI或维护者复测算作外部采用。
+- 替代与机会成本：仅本地提交不能提供新的远端试跑版本；先补Agent示例会继续增加未封存改动。本轮选择先交付已验收成果，不合并、不tag、不Release、不部署，也不新增付费模型调用。
+- 验收：独立候选分支、可审查commit/PR与远端CI结果；历史证据完整、无私有运行资产进入本次提交；说明仍未关闭的R0.6/H及外部独立回执要求。

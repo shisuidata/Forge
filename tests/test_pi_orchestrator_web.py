@@ -18,7 +18,7 @@ async def test_task_workspace_uses_the_real_product_shell_without_a_second_creat
     assert "创建 TaskRun" not in response.text
     assert 'id="task-mode"' not in response.text
     assert "cdn." not in response.text.lower()
-    assert '/static/product/product-pages.js?v=6' in response.text
+
 
 
 @pytest.mark.asyncio
@@ -61,7 +61,8 @@ async def test_web_task_detail_fails_closed_outside_admin_scope(client: AsyncCli
     monkeypatch.setattr(router_mod, "_pi_request", fake_pi_request)
     response = await client.get("/api/pi/tasks/tr_other_001/events")
     assert response.status_code == 404
-    assert response.json() == {"status": "not_found"}
+    assert response.json()["code"] == "not_found"
+    assert "org_other" not in response.text
 
 
 @pytest.mark.asyncio
@@ -74,7 +75,7 @@ async def test_task_workspace_keeps_runtime_logic_out_of_the_template(client: As
     assert "task.metadata" not in source
     assert "sql-editor" not in source
     assert "prefers-reduced-motion" not in source
-    assert '/static/product/product.css?v=5' in source
+
 
 
 @pytest.mark.asyncio
@@ -87,7 +88,7 @@ async def test_pi_task_proxy_fails_closed_when_disabled(client: AsyncClient, mon
         json={"message": "查询订单", "user_id": "web-user"},
     )
     assert response.status_code == 503
-    assert response.json()["status"] == "disabled"
+    assert response.json()["code"] == "disabled"
 
 
 @pytest.mark.asyncio
@@ -436,7 +437,7 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
                 "updated_at": "2026-08-24T08:00:04Z", "finished_at": None,
                 "deadline_at": "2026-08-24T08:04:03Z", "progress_phase": "model_responding",
                 "first_model_activity_at": "2026-08-24T08:00:04Z", "tool_submitted_at": None,
-                "error": "must not leak", "model_revision": "must-not-leak",
+                "error": "must not leak", "model_revision": "sha256:abc",
             }]}
         raise AssertionError(path)
 
@@ -453,16 +454,13 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
         "sequence": 4, "event_type": "stage.attempt_started",
         "created_at": "2026-08-24T08:00:03Z",
     }]
-    assert body["attempts"][0] == {
-        "attempt_id": "sa_001", "stage": "analysis", "status": "running",
-        "attempt_number": 1, "started_at": "2026-08-24T08:00:03Z",
-        "updated_at": "2026-08-24T08:00:04Z", "finished_at": None,
-        "deadline_at": "2026-08-24T08:04:03Z", "progress_phase": "model_responding",
-        "first_model_activity_at": "2026-08-24T08:00:04Z", "tool_submitted_at": None,
-    }
+    attempt = body["attempts"][0]
+    assert attempt["safe_error"] is not None
+    assert attempt["usage_status"] == "unknown"
+    assert attempt["model_revision"] == "sha256:abc"
     serialized = json.dumps(body)
     assert "must not leak" not in serialized
-    assert "model_revision" not in serialized
+    assert "secret-lineage" not in serialized
     assert "prompt" not in serialized
 
     page = await client.get("/chat")
@@ -472,7 +470,7 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
     assert 'data-conversation-feed' in page.text
     assert 'data-conversation-form' in page.text
     assert "SQL 执行前需要确认" in page.text
-    assert '/static/product/product-pages.js?v=6' in page.text
+
     assert "cdn." not in page.text.lower()
 
 

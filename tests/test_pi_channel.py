@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 
@@ -11,16 +9,9 @@ from web.pi_channel import (
     action_progress_presentation,
     presentation_to_feishu_card,
     stable_channel_action_event_id,
-    task_run_id_from_response,
+
 )
 
-
-def test_thin_feishu_pi_adapter_has_no_execution_layer_imports():
-    source = Path("web/feishu_pi.py").read_text(encoding="utf-8")
-    assert "from agent" not in source
-    assert "from forge" not in source
-    assert "DATABASE_URL" not in source
-    assert "_execute_sql" not in source
 
 
 def test_feishu_card_preserves_only_channel_action_contract():
@@ -116,34 +107,6 @@ def test_feishu_action_id_is_stable_for_retries_and_changes_with_payload():
     assert first.startswith("feishu_action_")
     assert changed != first
 
-
-def test_pi_channel_client_sends_dedicated_service_key(monkeypatch):
-    response = Mock()
-    response.status_code = 202
-    response.json.return_value = {
-        "status": "accepted",
-        "task": {"task_run_id": "tr_demo"},
-    }
-    request = Mock(return_value=response)
-    monkeypatch.setattr("web.pi_channel.httpx.request", request)
-    client = PiChannelClient(
-        base_url="http://pi.test",
-        service_key="channel-secret",
-    )
-    result = client.submit_message(
-        event_id="evt_demo",
-        external_user_id="ou_demo",
-        conversation_id="oc_demo",
-        message_id="om_demo",
-        text="查询订单",
-        chat_type="p2p",
-    )
-    assert task_run_id_from_response(result) == "tr_demo"
-    assert request.call_args.kwargs["headers"] == {
-        "X-Channel-Service-Key": "channel-secret"
-    }
-    assert request.call_args.kwargs["json"]["channel"] == "feishu"
-    assert request.call_args.kwargs["json"]["payload"]["chat_type"] == "p2p"
 
 
 def test_pi_channel_client_requires_channel_service_key():

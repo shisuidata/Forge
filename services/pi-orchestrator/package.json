@@ -10,6 +10,7 @@
     "dev": "tsx src/server.ts",
     "start": "node --import tsx src/server.ts",
     "export:product-contract": "tsx scripts/export-product-projection-schema.ts",
+    "export:structured-contracts": "tsx scripts/export-structured-artifact-schemas.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts"
   },

@@ -56,7 +56,7 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
 from config import cfg
 from agent import agent
 from agent.memory import memory
-from forge.executor import execute_with_data as _execute_sql
+from forge.executor import execute as _execute_sql
 from forge.chart import generate as _generate_chart, generate_image as _generate_chart_image
 from web.pi_channel import (
     PiChannelClient,
@@ -760,7 +760,14 @@ def _dispatch_pi_action(
 def _handle_approve(open_id: str, query_hint: str = "") -> None:
     resp = agent.approve(open_id)
     sql  = resp.sql or ""
-    _result_text, cols, rows = _execute_sql(sql) if sql else ("", [], [])
+    if not sql:
+        _send_info_card(open_id, resp.text, template="red")
+        return
+    outcome = _execute_sql(sql)
+    if not outcome.success:
+        _send_info_card(open_id, outcome.text, template="red")
+        return
+    cols, rows = outcome.columns, outcome.rows
 
     # 生成图表图片并上传到飞书
     img_key:   str | None = None

@@ -1,4 +1,6 @@
 import type { Artifact } from "./artifacts.js";
+import type { OrchestratorState } from "./orchestrator-state.js";
+import type { TaskRun } from "./task-store.js";
 import type { ChannelIntentRoute } from "./channels/intent.js";
 
 export const PLAN_CAPABILITIES = [
@@ -179,6 +181,37 @@ export function buildExecutionPlan(route: ChannelIntentRoute, goal: string): Exe
     status: "active",
     steps,
   };
+}
+
+/** Settle display progress against authoritative attempts; a plan never schedules work. */
+export function settleExecutionPlan(state: OrchestratorState, task: TaskRun): void {
+  const artifact = state.artifacts.latest(task.task_run_id, "execution_plan");
+  if (artifact === undefined) return;
+  const current = artifact.payload as ExecutionPlanPayload;
+  const active = state.attempts.list(task.task_run_id).filter((attempt) =>
+    attempt.status === "running" && attempt.running_status === task.status);
+  const capability = (stage: string): PlanCapability | undefined => {
+    if (stage === "query_prepare" || stage === "query_execution") return "query";
+    if (stage === "business_root_cause_analysis" || stage === "supplemental_analysis") return "analysis";
+    if (stage === "data_analysis_report" || stage.startsWith("skill:")) return "report";
+    if (stage === "requirement_clarification" || stage === "metric_definition_review") return "clarification";
+    return undefined;
+  };
+  const terminal = ["completed", "cancelled", "failed", "expired"].includes(task.status);
+  const updates: Partial<Record<PlanCapability, PlanStepStatus>> = {};
+  for (const step of current.steps) {
+    if (step.status === "running" && !active.some((attempt) => capability(attempt.stage) === step.capability)) {
+      updates[step.capability] = task.status === "failed" ? "failed" : terminal ? "skipped" : "ready";
+    } else if (terminal && ["pending", "ready", "waiting_approval"].includes(step.status)) {
+      updates[step.capability] = task.status === "failed" ? "failed" : "skipped";
+    }
+  }
+  if (Object.keys(updates).length === 0) return;
+  const payload = reviseExecutionPlan(artifact, updates);
+  const revised = state.artifacts.create({ artifactType: "execution_plan", taskRunId: task.task_run_id,
+    producer: "pi-planner", payload });
+  state.events.append(task.task_run_id, "plan.revised", { artifact_id: revised.artifact_id,
+    supersedes_artifact_id: artifact.artifact_id, plan_revision: payload.plan_revision, status: payload.status });
 }
 
 export function reviseExecutionPlan(

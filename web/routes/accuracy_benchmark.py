@@ -4,12 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-from fastapi.templating import Jinja2Templates
+from web.templates import templates
 
 from agent.model_config import LLMConfigurationError, LLMNotConfiguredError
 from forge.accuracy_benchmark import (
@@ -26,7 +25,6 @@ from web.pi_client import pi_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/benchmark", tags=["accuracy-benchmark"])
-templates = Jinja2Templates(directory=str(Path(__file__).parents[1] / "templates"))
 _benchmark_tasks: set[asyncio.Task] = set()
 _TERMINAL = {"completed", "failed", "interrupted"}
 

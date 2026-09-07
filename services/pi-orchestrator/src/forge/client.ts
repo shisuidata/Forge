@@ -1,3 +1,5 @@
+import { currentRequestId } from "../request-context.js";
+
 export const FORGE_DIALECTS = [
   "auto",
   "sqlite",
@@ -28,6 +30,8 @@ export class ForgeClientError extends Error {
   constructor(
     message: string,
     readonly statusCode?: number,
+    readonly code: string = "forge_response_invalid",
+    readonly requestId: string | undefined = currentRequestId(),
   ) {
     super(message);
     this.name = "ForgeClientError";
@@ -96,6 +100,8 @@ export class ForgeClient {
       "content-type": "application/json",
     };
     if (this.#apiKey !== undefined) headers["x-api-key"] = this.#apiKey;
+    const requestId = currentRequestId();
+    if (requestId) headers["x-request-id"] = requestId;
 
     const signals = [AbortSignal.timeout(this.#timeoutMs)];
     if (signal !== undefined) signals.push(signal);
@@ -113,16 +119,11 @@ export class ForgeClient {
         signal: AbortSignal.any(signals),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown transport error";
-      throw new ForgeClientError(`Forge prepare-query request failed: ${message}`);
+      throw new ForgeClientError("Forge prepare-query transport failed", undefined, "upstream_unavailable");
     }
 
     if (!response.ok) {
-      const body = (await response.text()).slice(0, 500);
-      throw new ForgeClientError(
-        `Forge prepare-query returned HTTP ${response.status}: ${body}`,
-        response.status,
-      );
+      throw new ForgeClientError(`Forge prepare-query returned HTTP ${response.status}`, response.status, "forge_request_failed");
     }
 
     let body: unknown;

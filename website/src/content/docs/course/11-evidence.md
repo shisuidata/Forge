@@ -28,7 +28,7 @@ summary: 正确阅读 120/120、Spider2 与兼容性证据
 - Run ACC：120/120；
 - 生成/编译失败：0/120。
 
-原始说明见[测试报告](https://github.com/shisuidata/Forge/blob/main/docs/test-report-2026-07-13.md)。
+原始说明见[测试报告](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/test-report-2026-07-13.md)。
 
 **正确解读**：当前代码、模型、Provider、Registry、规则和 40 题数据集组合在该次实验中全部通过。
 
@@ -83,7 +83,7 @@ Spider2-Lite SQLite 子集历史结果：编译成功率 97.6%，EA 9.2%。其�
 教材只集中维护证据卡，详细分类与历史演化链接到：
 
 - [基准测试总览](https://github.com/shisuidata/Forge/blob/main/docs/benchmarks.md)
-- [最新 Method AI 报告](https://github.com/shisuidata/Forge/blob/main/docs/test-report-2026-07-13.md)
+- [最新 Method AI 报告](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/test-report-2026-07-13.md)
 - [兼容性矩阵](https://github.com/shisuidata/Forge/blob/main/docs/compatibility-matrix.md)
 
 更新基准时，先更新原始报告，再更新证据卡和 README，避免多处数字漂移。

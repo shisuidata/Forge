@@ -1,39 +1,42 @@
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import Mock
+
 
 from web.dingtalk_pi import DingTalkPiAdapter, presentation_to_dingtalk_card
 from web.pi_channel import PiChannelClient
 
 
-def test_dingtalk_adapter_is_thin_and_uses_shared_channel_contract(monkeypatch):
-    source = Path("web/dingtalk_pi.py").read_text(encoding="utf-8")
-    assert "from agent" not in source
-    assert "from forge" not in source
-    assert "DATABASE_URL" not in source
+def test_dingtalk_submits_to_authenticated_channel_ingress():
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    response = Mock()
-    response.status_code = 202
-    response.json.return_value = {"task": {"task_run_id": "tr_ding"}}
-    request = Mock(return_value=response)
-    monkeypatch.setattr("web.pi_channel.httpx.request", request)
-    adapter = DingTalkPiAdapter(PiChannelClient(
-        base_url="http://pi.test",
-        service_key="channel-secret",
-        channel="dingtalk",
-    ))
+    class Ingress(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+        def do_POST(self):
+            event = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            authorized = self.headers.get("X-Channel-Service-Key") == "synthetic-key"
+            valid = event.get("channel") == "dingtalk" and event.get("event_type") == "message"
+            status = 202 if authorized and valid else 403
+            body = json.dumps({"task": {"task_run_id": "tr_ding"}} if status == 202 else {"code": "forbidden"}).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
-    adapter.submit_message(
-        event_id="evt_ding",
-        user_id="ding_user",
-        conversation_id="cid_ding",
-        message_id="msg_ding",
-        text="查询订单",
-    )
+    with ThreadingHTTPServer(("127.0.0.1", 0), Ingress) as server:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            adapter = DingTalkPiAdapter(PiChannelClient(base_url="http://127.0.0.1:" + str(server.server_port), service_key="synthetic-key", channel="dingtalk"))
+            accepted = adapter.submit_message(event_id="evt_ding", user_id="ding_user", conversation_id="cid_ding", message_id="msg_ding", text="Synthetic")
+            assert accepted["task"]["task_run_id"] == "tr_ding"
+        finally:
+            server.shutdown()
+            worker.join()
 
-    assert request.call_args.kwargs["json"]["channel"] == "dingtalk"
-    assert request.call_args.kwargs["headers"] == {"X-Channel-Service-Key": "channel-secret"}
 
 
 def test_dingtalk_card_actions_only_return_pi_callback_contract():

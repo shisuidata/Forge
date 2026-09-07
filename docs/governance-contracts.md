@@ -6,7 +6,7 @@
 
 ## 1. Contract 边界
 
-M0 只固定跨 Python/TypeScript 的治理语义，不修改 Task API、SQLite Schema、Forge QueryRun、数据库授权或 OAuth Runtime。跨 Contract 评审、Threat Model 与迁移结论见 [`governance-contract-review-2026-08-24.md`](governance-contract-review-2026-08-24.md)。
+M0 只固定跨 Python/TypeScript 的治理语义，不修改 Task API、SQLite Schema、Forge QueryRun、数据库授权或 OAuth Runtime。跨 Contract 评审、Threat Model 与迁移结论见 [`archive/engineering/governance-contract-review-2026-08-24.md`](archive/engineering/governance-contract-review-2026-08-24.md)。
 
 | Contract | Owner | Truth Source | 用途 |
 |---|---|---|---|

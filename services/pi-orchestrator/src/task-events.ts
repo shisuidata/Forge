@@ -53,11 +53,22 @@ export interface TaskEventStore {
 export class InMemoryTaskEventStore implements TaskEventStore {
   readonly #events = new Map<string, TaskEvent[]>();
 
+  constructor(private readonly assertTask?: (taskRunId: string) => void) {}
+
+  checkpoint(): () => void {
+    const snapshot = structuredClone(this.#events);
+    return () => {
+      this.#events.clear();
+      for (const [key, value] of snapshot) this.#events.set(key, value);
+    };
+  }
+
   append(
     taskRunId: string,
     eventType: TaskEventType,
     payload: Record<string, unknown>,
   ): TaskEvent {
+    this.assertTask?.(taskRunId);
     const events = this.#events.get(taskRunId) ?? [];
     const event: TaskEvent = {
       event_id: `te_${randomUUID().replaceAll("-", "")}`,

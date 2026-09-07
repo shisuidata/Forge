@@ -1,19 +1,8 @@
-"""
-Forge Agent — FastAPI entry point.
-
-Endpoints:
-  GET  /                 — redirect to /chat
-  GET  /chat             — chat UI (natural language → SQL)
-  POST /api/chat         — chat API
-  POST /api/approve      — approve pending SQL
-  POST /api/cancel       — cancel pending SQL
-  POST /webhook/feishu   — Feishu event subscription + card callbacks
-  GET  /health           — health check
-  GET  /admin/*          — admin web UI (registry, audit log, settings)
-"""
+"""Forge Trust Runtime composition root: public APIs, Pi channels and legacy rollback."""
 from contextlib import asynccontextmanager
 import logging
-from pathlib import Path
+from importlib.resources import files
+from functools import lru_cache
 
 import lark_oapi as lark
 from fastapi import FastAPI, Query, Request, Response
@@ -21,25 +10,31 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import cfg
-if cfg.FEISHU_PI_ENABLED:
-    from web.feishu_pi import build_event_handler
-    dispatcher = build_event_handler()
-else:
+
+
+@lru_cache(maxsize=1)
+def _event_dispatcher():
+    if cfg.FEISHU_PI_ENABLED:
+        from web.feishu_pi import build_event_handler
+        return build_event_handler()
     from agent.feishu import dispatcher
+    return dispatcher
+
 from forge.readiness import readiness_payload
 from web.router import chat_router, router as admin_router
 from web.auth import _LoginRedirect
 from web.feishu_runtime import feishu_runtime
+from web.diagnostics import RequestCorrelationMiddleware
 
-# ── 日志配置（可通过 forge.yaml 或环境变量调整）──────────────────────────────
-_log_handlers: list[logging.Handler] = [logging.StreamHandler()]
-if cfg.LOG_FILE:
-    _log_handlers.append(logging.FileHandler(cfg.LOG_FILE, encoding="utf-8"))
-logging.basicConfig(
-    level=getattr(logging, cfg.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=_log_handlers,
-)
+def _configure_logging():
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if cfg.LOG_FILE:
+        handlers.append(logging.FileHandler(cfg.LOG_FILE, encoding="utf-8"))
+    logging.basicConfig(
+        level=getattr(logging, cfg.LOG_LEVEL.upper(), logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=handlers,
+    )
 logger = logging.getLogger("forge.startup")
 
 
@@ -118,6 +113,7 @@ async def _startup_checks():
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
+    _configure_logging()
     await _startup_checks()
     try:
         yield
@@ -125,7 +121,8 @@ async def _lifespan(_app: FastAPI):
         feishu_runtime.stop()
 
 
-app = FastAPI(title="Forge Agent", lifespan=_lifespan)
+app = FastAPI(title="Forge Trust Runtime", lifespan=_lifespan)
+app.add_middleware(RequestCorrelationMiddleware)
 
 
 # Chat + API 路由挂载到根级别（/chat, /api/*）
@@ -146,12 +143,10 @@ async def root():
     return RedirectResponse(url="/chat", status_code=302)
 
 # 本地静态文件服务；Product Shell 禁止依赖外部 CDN。
-_static_dir = Path(__file__).parent / "web" / "static"
-_static_dir.mkdir(parents=True, exist_ok=True)
+_static_dir = files("web").joinpath("static")
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
-_charts_dir = _static_dir / "charts"
-_charts_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/charts", StaticFiles(directory=str(_charts_dir)), name="charts")
+_charts_dir = _static_dir.joinpath("charts")
+app.mount("/charts", StaticFiles(directory=str(_charts_dir), check_dir=False), name="charts")
 
 
 @app.post("/webhook/feishu")
@@ -164,7 +159,7 @@ async def feishu_webhook(request: Request) -> Response:
         )
     body = await request.body()
     headers = dict(request.headers)
-    resp = dispatcher.dispatch(
+    resp = _event_dispatcher().dispatch(
         lark.RawRequest.builder().headers(headers).body(body).build()
     )
     return Response(content=resp.body, media_type="application/json")

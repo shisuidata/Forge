@@ -4,7 +4,7 @@
 >
 > Requirement：[`REQ-2026-08-25-016`](requirements-pool.md#req-2026-08-25-016基于产品北极星重建产品设计与阶段计划)
 >
-> 本文依据 [`product-north-star.md`](product-north-star.md) 重建 Forge 的产品结构与未来顺序。它不批准代码实施，不替代 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。旧 [`web-product-shell-plan-2026-08-24.md`](web-product-shell-plan-2026-08-24.md) 和 `821065f` 原型保留为第一版历史与反例。
+> 本文依据 [`product-north-star.md`](product-north-star.md) 重建 Forge 的产品结构与未来顺序。它不批准代码实施，不替代 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。旧 [`archive/plans/web-product-shell-plan-2026-08-24.md`](archive/plans/web-product-shell-plan-2026-08-24.md) 和 `821065f` 原型保留为第一版历史与反例。
 
 ## 1. 重建结论
 

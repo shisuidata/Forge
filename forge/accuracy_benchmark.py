@@ -24,7 +24,6 @@ from agent.model_config import ModelConfigSnapshot, get_model_config
 from forge.benchmark_methods import ark_coding_plan_method, bird_execution_accuracy, run_forge_oai
 
 _ROOT = Path(__file__).resolve().parents[1]
-_ACCURACY_DIR = _ROOT / "tests" / "accuracy"
 _LARGE_DATASET_DIR = _ROOT / "tests" / "datasets" / "large"
 _CASES_PATH = _LARGE_DATASET_DIR / "cases.json"
 _DATABASE_PATH = _LARGE_DATASET_DIR / "database.db"

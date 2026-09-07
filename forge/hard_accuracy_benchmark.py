@@ -18,6 +18,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -70,6 +71,7 @@ def _bird_runtime_is_complete(candidate: Path) -> bool:
     )
 
 
+@lru_cache(maxsize=4)
 def _resolve_bird_runtime_root(base: Path) -> Path:
     """Accept flattened, partial, and official ZIP Mini-Dev layouts."""
     candidates = (base, base / "MINIDEV")
@@ -85,12 +87,14 @@ def _resolve_bird_runtime_root(base: Path) -> Path:
             return candidate
     return base
 
-_BIRD_RUNTIME = _resolve_bird_runtime_root(
-    _ROOT / ".forge" / "benchmarks" / "bird-mini-dev" / "minidev" / "MINIDEV"
-)
-_OFFICIAL_CASES_PATH = _BIRD_RUNTIME / "mini_dev_sqlite.json"
-_OFFICIAL_TABLES_PATH = _BIRD_RUNTIME / "dev_tables.json"
-_DB_ROOT = _BIRD_RUNTIME / "dev_databases"
+_BIRD_RUNTIME = _ROOT / ".forge" / "benchmarks" / "bird-mini-dev" / "minidev" / "MINIDEV"
+
+
+def bird_runtime_root() -> Path:
+    """Resolve an installed dataset only when a benchmark operation needs it."""
+    return _resolve_bird_runtime_root(_BIRD_RUNTIME)
+
+
 _LEGACY_SUITE_ID = "bird-mini-dev-hard-v1"
 _FULL_SUITE_ID = "bird-mini-dev-full-v1"
 _TERMINAL = {"completed", "failed", "interrupted"}
@@ -138,14 +142,14 @@ def _load_json(path: Path) -> Any:
 
 
 def _database_path(db_id: str) -> Path:
-    path = _DB_ROOT / db_id / f"{db_id}.sqlite"
+    path = bird_runtime_root() / "dev_databases" / db_id / f"{db_id}.sqlite"
     if not path.exists():
         raise HardBenchmarkError("BIRD 官方数据库未下载。")
     return path
 
 
 def _description_dir(db_id: str) -> Path:
-    path = _DB_ROOT / db_id / "database_description"
+    path = bird_runtime_root() / "dev_databases" / db_id / "database_description"
     if not path.exists():
         raise HardBenchmarkError("BIRD 官方 database_description 不可用。")
     return path
@@ -162,7 +166,10 @@ def load_suite(suite_id: str = _FULL_SUITE_ID) -> dict[str, Any]:
         case_path = _CASES_PATH
         tables_path = _TABLES_PATH
     elif suite_id == _FULL_SUITE_ID:
-        official_cases = _load_json(_OFFICIAL_CASES_PATH)
+        root = bird_runtime_root()
+        case_path = root / "mini_dev_sqlite.json"
+        tables_path = root / "dev_tables.json"
+        official_cases = _load_json(case_path)
         cases = [
             {
                 **case,
@@ -177,7 +184,7 @@ def load_suite(suite_id: str = _FULL_SUITE_ID) -> dict[str, Any]:
             }
             for index, case in enumerate(official_cases)
         ]
-        tables = _load_json(_OFFICIAL_TABLES_PATH)
+        tables = _load_json(tables_path)
         manifest = {
             "suite": _FULL_SUITE_ID,
             "title": "BIRD-SQL Mini-Dev Full",
@@ -203,8 +210,6 @@ def load_suite(suite_id: str = _FULL_SUITE_ID) -> dict[str, Any]:
             "expected_model_calls": len(cases) * len(_METHODS),
             "result_boundary": "Complete official 500-case Mini-Dev across 11 databases with Oracle Evidence.",
         }
-        case_path = _OFFICIAL_CASES_PATH
-        tables_path = _OFFICIAL_TABLES_PATH
     else:
         raise HardBenchmarkError(f"Unknown BIRD suite: {suite_id}")
 

@@ -22,7 +22,7 @@ from config import cfg
 from web.auth import require_api_auth
 from web.pi_client import pi_request
 from web.routes.reports import get_report_store
-
+from web.diagnostics import error_response
 router = APIRouter(prefix="/api/product", dependencies=[Depends(require_api_auth)])
 
 _SCOPE_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
@@ -41,6 +41,8 @@ _REPORT_STATUSES = {"publishing", "published", "failed"}
 
 
 def _response(content: dict[str, Any], status_code: int = 200) -> JSONResponse:
+    if status_code >= 400:
+        return error_response(status_code, content.get("code") or content.get("status"))
     return JSONResponse(
         content,
         status_code=status_code,
@@ -419,7 +421,7 @@ async def list_conversations(
         _pi_path("/v1/conversations", org_id, team_id, user_id, limit=limit, cursor=cursor)
     )
     if code != 200:
-        return _response(body, code if code in {400, 404, 409} else 502)
+        return _response(body, 404 if code == 403 else code if code in {400, 404, 409, 429, 503, 504} else 502)
     conversations = body.get("conversations")
     if not isinstance(conversations, list):
         return _response({"status": "upstream_contract_invalid"}, 502)
@@ -449,7 +451,7 @@ async def get_conversation(
         )
     )
     if code != 200:
-        return _response(body, code if code in {400, 404, 409} else 502)
+        return _response(body, 404 if code == 403 else code if code in {400, 404, 409, 429, 503, 504} else 502)
     conversation = body.get("conversation")
     _validate_projection("conversation_detail_v1", conversation)
     _require_projection_scope(conversation, org_id, team_id, user_id, "web")
@@ -491,7 +493,7 @@ async def get_task(
         _pi_path(f"/v1/tasks/{task_run_id}/detail", org_id, team_id, user_id)
     )
     if code != 200:
-        return _response(body, code if code in {400, 404, 409} else 502)
+        return _response(body, 404 if code == 403 else code if code in {400, 404, 409, 429, 503, 504} else 502)
     detail = body.get("detail")
     _validate_projection("task_detail_projection_v1", detail)
     _require_projection_scope(detail, org_id, team_id, user_id, "web")

@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import { OrchestratorState, type StateTransactionPort } from "./orchestrator-state.js";
+import { SqliteOrchestratorState } from "./sqlite-store.js";
+import { currentRequestId } from "./request-context.js";
 
 import type { ChannelEventStore } from "./channels/event-store.js";
 import type { ChannelEventInput, ChannelIdentity, ChannelPresentation } from "./channels/contracts.js";
@@ -7,13 +11,13 @@ import { routeChannelMessage } from "./channels/intent.js";
 import {
   buildExecutionPlan,
   reviseExecutionPlan,
+  settleExecutionPlan,
   type PlanCapability,
   type PlanStepStatus,
 } from "./planning.js";
 import { buildChartPayload, bundleHash, type TechnicalReportPayload } from "./report-artifacts.js";
 import { attemptModelStage, resolveStageModelBinding } from "./model-bindings.js";
 import {
-  InMemoryArtifactStore,
   type Artifact,
   type ArtifactStore,
 } from "./artifacts.js";
@@ -48,9 +52,8 @@ import {
   type AdvisorySkillName,
   type AuthorizedSkillName,
 } from "./skills.js";
-import { InMemorySkillPolicyStore, type SkillPolicyStore, type TeamSkillPolicy } from "./skill-policy.js";
+import type { SkillPolicyStore, TeamSkillPolicy } from "./skill-policy.js";
 import {
-  InMemoryTaskStore,
   TaskStateError,
   type CreateTaskInput,
   type TaskChannel,
@@ -59,17 +62,12 @@ import {
   type TaskStore,
 } from "./task-store.js";
 import {
-  InMemoryTaskEventStore,
   type TaskEvent,
   type TaskEventStore,
 } from "./task-events.js";
 
 export interface CreateDataTaskInput extends CreateTaskInput {
   message: string;
-}
-
-export interface StateTransactionPort {
-  run<T>(operation: () => T): T;
 }
 
 export interface ForgeQueryRunPort {
@@ -122,41 +120,41 @@ export class OrchestratorApplication {
   readonly #skills: StructuredSkillExecutionPort;
   readonly #artifacts: ArtifactStore;
   readonly #transactions: StateTransactionPort;
-  readonly #attempts: StageAttemptStore | undefined;
+  readonly #attempts: StageAttemptStore;
+  readonly state: OrchestratorState;
+  readonly #activeStages = new Map<string, { controller: AbortController; dispose: () => void }>();
   readonly #stageTimeoutMs: number;
   readonly #stageLeaseMs: number;
-  readonly #channelEvents: ChannelEventStore | undefined;
+  readonly #channelEvents: ChannelEventStore;
   readonly #config: OrchestratorConfig;
   readonly #skillPolicies: SkillPolicyStore;
   readonly #productProjections: ProductProjectionService;
 
   constructor(options: {
     config: OrchestratorConfig;
-    tasks?: TaskStore;
-    events?: TaskEventStore;
-    artifacts?: ArtifactStore;
-    transactions?: StateTransactionPort;
-    attempts?: StageAttemptStore;
-    channelEvents?: ChannelEventStore;
-    skillPolicies?: SkillPolicyStore;
+    state?: OrchestratorState;
     forgeClient?: ForgeQueryRunPort;
     skillExecutor?: StructuredSkillExecutionPort;
   }) {
-    this.#tasks = options.tasks ?? new InMemoryTaskStore();
-    this.#events = options.events ?? new InMemoryTaskEventStore();
-    this.#artifacts = options.artifacts ?? new InMemoryArtifactStore();
-    this.#transactions = options.transactions ?? { run: (operation) => operation() };
-    this.#attempts = options.attempts;
+    if (options.state !== undefined && !(options.state instanceof OrchestratorState)) {
+      throw new TypeError("Application state must be one coherent OrchestratorState adapter");
+    }
+    this.state = options.state ?? new SqliteOrchestratorState(":memory:");
+    this.#tasks = this.state.tasks;
+    this.#events = this.state.events;
+    this.#artifacts = this.state.artifacts;
+    this.#transactions = this.state.transactions;
+    this.#attempts = this.state.attempts;
     this.#stageTimeoutMs = options.config.stageTimeoutMs;
     this.#stageLeaseMs = options.config.stageLeaseMs;
-    this.#channelEvents = options.channelEvents;
+    this.#channelEvents = this.state.channelEvents;
     this.#config = options.config;
-    this.#skillPolicies = options.skillPolicies ?? new InMemorySkillPolicyStore(AUTHORIZED_SKILL_NAMES);
+    this.#skillPolicies = this.state.skillPolicies;
     this.#productProjections = new ProductProjectionService({
       tasks: this.#tasks,
       events: this.#events,
       artifacts: this.#artifacts,
-      ...(this.#attempts === undefined ? {} : { attempts: this.#attempts }),
+      attempts: this.#attempts,
     });
     this.#skills =
       options.skillExecutor ?? new PiStructuredSkillExecutor({ config: options.config });
@@ -202,6 +200,27 @@ export class OrchestratorApplication {
         channel: task.channel,
       });
       return { task, events: this.#events.list(task.task_run_id) };
+    });
+  }
+
+  transitionBenchmarkTask(input: {
+    taskRunId: string;
+    runId: string;
+    status: "queued" | "running" | "pausing" | "paused" | "stopping" | "completed" | "stopped" | "failed" | "interrupted";
+    currentStage: string;
+  }): TaskRun {
+    return this.#transactions.run(() => {
+      const task = this.#tasks.get(input.taskRunId);
+      if (task === undefined || task.channel !== "api" || task.metadata.benchmark !== true ||
+          task.metadata.benchmark_run_id !== input.runId) {
+        throw new TaskStateError("Benchmark lifecycle does not match its TaskRun");
+      }
+      const status = input.status === "queued" ? "created"
+        : input.status === "running" || input.status === "paused" || input.status === "pausing" || input.status === "stopping" ? "analyzing"
+        : input.status === "stopped" ? "cancelled"
+        : input.status === "interrupted" ? "failed" : input.status;
+      if (task.status === status && task.current_stage === input.currentStage) return task;
+      return this.#transition(task, status, input.currentStage);
     });
   }
 
@@ -287,17 +306,18 @@ export class OrchestratorApplication {
     const task = this.#tasks.get(taskRunId);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
     if (input.prompt.trim().length === 0) throw new TaskStateError("prompt must not be empty");
-    if (this.#skills.advise === undefined) {
+    const advise = this.#skills.advise;
+    if (advise === undefined) {
       throw new TaskStateError("Advisory Skill runtime is unavailable");
     }
     if (!this.#skillPolicies.isEnabled(task.org_id, task.team_id, input.skillName)) {
       throw new TaskStateError(`Skill is disabled for this team: ${input.skillName}`);
     }
-    const attemptRound = (this.#attempts?.list(taskRunId) ?? []).filter(
+    const attemptRound = this.#attempts.list(taskRunId).filter(
       (attempt) => attempt.stage === `skill:${input.skillName}`,
     ).length + 1;
     const idempotencyKey = input.idempotencyKey ?? `${taskRunId}:skill:${input.skillName}:${attemptRound}`;
-    const existingAttempt = this.#attempts?.findByIdempotencyKey(taskRunId, idempotencyKey);
+    const existingAttempt = this.#attempts.findByIdempotencyKey(taskRunId, idempotencyKey);
     if (existingAttempt?.status === "succeeded") {
       const completedEvent = this.#events.list(taskRunId).find(
         (event) =>
@@ -327,7 +347,7 @@ export class OrchestratorApplication {
       );
     }
     const retryStatus = task.status;
-    let attempt: StageAttempt | undefined;
+    let attempt!: StageAttempt;
     const running = this.#transactions.run(() => {
       const next = this.#transition(task, "analyzing", `skill:${input.skillName}`);
       attempt = this.#startAttempt(
@@ -339,18 +359,18 @@ export class OrchestratorApplication {
       this.#events.append(taskRunId, "skill.started", { skill_name: input.skillName });
       return next;
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     try {
       const queryResults = this.#artifacts.list(taskRunId).filter(
         (artifact): artifact is Artifact<QueryResultPayload> => artifact.artifact_type === "query_result",
       );
-      const payload = await this.#skills.advise(running, input.skillName, {
+      const payload = await stageExecution.wait(() => advise.call(this.#skills, running, input.skillName, {
         prompt: input.prompt,
         queryResults,
         ...(input.contextEvidence === undefined ? {} : { contextEvidence: input.contextEvidence }),
-      }, stageExecution.signal, attempt?.model_revision);
+      }, stageExecution.signal, attempt.model_revision));
       if (stageExecution.timedOut()) throw new Error("Advisory Skill Stage timed out");
-      return this.#transactions.run(() => {
+      return this.#commitStage(attempt, () => {
         const artifact = this.#artifacts.create({
         artifactType: "advisory",
         taskRunId,
@@ -362,11 +382,11 @@ export class OrchestratorApplication {
           payload.status === "complete" ? "completed" : "incomplete",
           "skill_complete",
         );
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id });
         this.#events.append(taskRunId, "skill.completed", {
           skill_name: input.skillName,
           artifact_id: artifact.artifact_id,
-          attempt_id: attempt?.attempt_id ?? null,
+          attempt_id: attempt.attempt_id,
           idempotency_key: idempotencyKey,
           status: payload.status,
         });
@@ -375,8 +395,9 @@ export class OrchestratorApplication {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown Skill error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           this.#transition(running, retryStatus, `skill:${input.skillName}:retry`);
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -393,14 +414,14 @@ export class OrchestratorApplication {
   }
 
   getStageAttempts(taskRunId: string): StageAttempt[] {
-    return this.#attempts?.list(taskRunId) ?? [];
+    return this.#attempts.list(taskRunId);
   }
 
   getTaskRunIdForChannelEvent(
     channel: ChannelEventInput["channel"],
     eventId: string,
   ): string | null {
-    return this.#channelEvents?.get(channel, eventId)?.task_run_id ?? null;
+    return this.#channelEvents.get(channel, eventId)?.task_run_id ?? null;
   }
 
   getChannelPresentation(taskRunId: string): ChannelPresentation {
@@ -418,9 +439,6 @@ export class OrchestratorApplication {
     identity: ChannelIdentity,
     signal?: AbortSignal,
   ): Promise<{ task: TaskRun; presentation: ChannelPresentation; duplicate: boolean }> {
-    if (this.#channelEvents === undefined) {
-      throw new TaskStateError("ChannelEvent Store is not configured");
-    }
     if (event.event_type !== "message") {
       throw new TaskStateError(`Unsupported ChannelEvent type: ${event.event_type}`);
     }
@@ -431,8 +449,7 @@ export class OrchestratorApplication {
 
     const route = routeChannelMessage(text);
     const claimed = this.#transactions.run(() => {
-      const claim = this.#channelEvents?.claim(event);
-      if (claim === undefined) throw new TaskStateError("ChannelEvent Store is not configured");
+      const claim = this.#channelEvents.claim(event);
       if (!claim.created) return { record: claim.record, task: undefined };
       const created = this.createTask({
         org_id: identity.org_id,
@@ -464,7 +481,7 @@ export class OrchestratorApplication {
         plan_revision: 1,
         route_kind: route.kind,
       });
-      this.#channelEvents?.complete(event.channel, event.event_id, created.task.task_run_id);
+      this.#channelEvents.complete(event.channel, event.event_id, created.task.task_run_id);
       return { record: claim.record, task: created.task };
     });
 
@@ -626,9 +643,6 @@ export class OrchestratorApplication {
     identity: ChannelIdentity,
     signal?: AbortSignal,
   ): Promise<{ task: TaskRun; presentation: ChannelPresentation; duplicate: boolean }> {
-    if (this.#channelEvents === undefined) {
-      throw new TaskStateError("ChannelEvent Store is not configured");
-    }
     if (event.event_type !== "action" || event.task_run_id === null) {
       throw new TaskStateError("Channel action requires task_run_id");
     }
@@ -678,8 +692,7 @@ export class OrchestratorApplication {
     }
 
     const claim = this.#transactions.run(() => {
-      const claimed = this.#channelEvents?.claim(event);
-      if (claimed === undefined) throw new TaskStateError("ChannelEvent Store is not configured");
+      const claimed = this.#channelEvents.claim(event);
       return claimed;
     });
     if (!claim.created) {
@@ -871,6 +884,12 @@ export class OrchestratorApplication {
         reason: "user_cancelled",
         idempotency_key: idempotencyKey,
       });
+      for (const attempt of this.#attempts.list(taskRunId)) {
+        if (attempt.status !== "running") continue;
+        this.#activeStages.get(attempt.attempt_id)?.controller.abort(new Error("Task cancelled"));
+        this.#finishAttempt(attempt, "interrupted", "Task cancelled by user; remote effects may already have occurred");
+      }
+      settleExecutionPlan(this.state, cancelled);
       return cancelled;
     });
   }
@@ -882,32 +901,31 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     const initialTask = this.#tasks.get(taskRunId);
     if (initialTask === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    const commandKey = this.#commandKey(taskRunId, "requirement_clarification", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["clarifyRequirement"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
     this.#assertSkillEnabled(initialTask, "data-requirement-clarifier");
     if (initialTask.status !== "created" && initialTask.status !== "needs_input") {
       throw new TaskStateError(`TaskRun cannot clarify from status: ${initialTask.status}`);
     }
     const retryStatus = initialTask.status;
-    const round = this.#artifacts.list(taskRunId).filter(
-      (artifact) => artifact.artifact_type === "clarification",
-    ).length + 1;
-    let attempt: StageAttempt | undefined;
+
+    let attempt!: StageAttempt;
     let task = this.#transactions.run(() => {
       const running = this.#transition(initialTask, "clarifying", "requirement_clarification");
       attempt = this.#startAttempt(
         running,
         "requirement_clarification",
         retryStatus,
-        input.idempotencyKey ?? `${taskRunId}:clarification:${round}`,
+        commandKey,
       );
       return running;
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     try {
-      const payload = await this.#skills.clarify(
-        task, input.message, stageExecution.signal, attempt?.model_revision,
-      );
+      const payload = await stageExecution.wait(() => this.#skills.clarify(task, input.message, stageExecution.signal, attempt.model_revision,));
       if (stageExecution.timedOut()) throw new Error("Clarification Stage timed out");
-      return this.#transactions.run(() => {
+      return this.#commitStage(attempt, () => {
         const artifact = this.#artifacts.create({
           artifactType: "clarification",
           taskRunId,
@@ -925,14 +943,15 @@ export class OrchestratorApplication {
           payload.status === "confirmed" ? "ready_for_query" : "needs_input",
           payload.status === "confirmed" ? "query_prepare" : "requirement_clarification",
         );
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id });
         return { task, artifact, events: this.#events.list(taskRunId) };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           task = this.#transition(task, retryStatus, "clarification_retry");
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -957,6 +976,9 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     const initialTask = this.#tasks.get(taskRunId);
     if (initialTask === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    const commandKey = this.#commandKey(taskRunId, "metric_definition_review", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["reviewMetricDefinition"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
     this.#assertSkillEnabled(initialTask, "metric-definition-reviewer");
     if (
       initialTask.status !== "created" &&
@@ -966,27 +988,23 @@ export class OrchestratorApplication {
       throw new TaskStateError(`TaskRun cannot review a metric from status: ${initialTask.status}`);
     }
     const retryStatus = initialTask.status;
-    const round = this.#artifacts.list(taskRunId).filter(
-      (artifact) => artifact.artifact_type === "metric_definition",
-    ).length + 1;
-    let attempt: StageAttempt | undefined;
+
+    let attempt!: StageAttempt;
     let task = this.#transactions.run(() => {
       const running = this.#transition(initialTask, "clarifying", "metric_definition_review");
       attempt = this.#startAttempt(
         running,
         "metric_definition_review",
         retryStatus,
-        input.idempotencyKey ?? `${taskRunId}:metric-review:${round}`,
+        commandKey,
       );
       return running;
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     try {
-      const payload = await this.#skills.reviewMetric(
-        task, input.message, stageExecution.signal, attempt?.model_revision,
-      );
+      const payload = await stageExecution.wait(() => this.#skills.reviewMetric(task, input.message, stageExecution.signal, attempt.model_revision,));
       if (stageExecution.timedOut()) throw new Error("Metric review Stage timed out");
-      return this.#transactions.run(() => {
+      return this.#commitStage(attempt, () => {
         const artifact = this.#artifacts.create({
           artifactType: "metric_definition",
           taskRunId,
@@ -1004,14 +1022,15 @@ export class OrchestratorApplication {
           payload.status === "confirmed" ? "ready_for_query" : "needs_input",
           payload.status === "confirmed" ? "query_prepare" : "metric_definition_review",
         );
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id });
         return { task, artifact, events: this.#events.list(taskRunId) };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           task = this.#transition(task, retryStatus, "metric_review_retry");
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -1045,6 +1064,9 @@ export class OrchestratorApplication {
       throw new TaskStateError("question must not be empty");
     }
 
+    const commandKey = this.#commandKey(taskRunId, "query_prepare", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["prepareQuery"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
     if (task.status === "created" || task.status === "needs_input") {
       task = this.#transition(task, "ready_for_query", "query_prepare");
     } else if (task.status !== "ready_for_query") {
@@ -1052,40 +1074,37 @@ export class OrchestratorApplication {
     }
 
     let stageTask: TaskRun = task;
-    const prepareNumber =
-      (this.#attempts?.list(taskRunId).filter((candidate) => candidate.stage === "query_prepare")
-        .length ?? 0) + 1;
-    let attempt: StageAttempt | undefined;
+
+    let attempt!: StageAttempt;
     this.#transactions.run(() => {
       attempt = this.#startAttempt(
         stageTask,
         "query_prepare",
         "ready_for_query",
-        input.idempotencyKey ?? `${taskRunId}:query-prepare:${prepareNumber}`,
+        commandKey,
       );
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     let result: QueryRunReview;
     try {
-      result = await this.#forge.createQueryRun(
-        {
-          taskRunId: stageTask.task_run_id,
-          orgId: stageTask.org_id,
-          teamId: stageTask.team_id,
-          userId: stageTask.user_id,
-          question: input.question,
-          idempotencyKey: `${stageTask.task_run_id}:prepare`,
-          ...(input.dialect === undefined ? {} : { dialect: input.dialect }),
-          ...(input.candidate === undefined ? {} : { candidate: input.candidate }),
-        },
-        stageExecution.signal,
-      );
+      result = await stageExecution.wait(() => this.#forge.createQueryRun({
+        taskRunId: stageTask.task_run_id,
+        orgId: stageTask.org_id,
+        teamId: stageTask.team_id,
+        userId: stageTask.user_id,
+        question: input.question,
+        idempotencyKey: commandKey,
+        ...(input.dialect === undefined ? {} : { dialect: input.dialect }),
+        ...(input.candidate === undefined ? {} : { candidate: input.candidate }),
+      },
+      stageExecution.signal,));
       if (stageExecution.timedOut()) throw new Error("Query preparation Stage timed out");
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Forge error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           stageTask = this.#transition(stageTask, "ready_for_query", "query_prepare_retry");
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -1103,7 +1122,7 @@ export class OrchestratorApplication {
     }
 
     let finalizedTask = stageTask;
-    return this.#transactions.run(() => {
+    return this.#commitStage(attempt, () => {
       if (result.status === "needs_review") {
         finalizedTask = this.#transition(finalizedTask, "waiting_for_query_approval", "query_review");
         this.#events.append(taskRunId, "query.review_requested", {
@@ -1151,6 +1170,7 @@ export class OrchestratorApplication {
             ? "succeeded"
             : "failed",
         result.error,
+        { result },
       );
       return { task: finalizedTask, result, events: this.#events.list(taskRunId) };
     });
@@ -1186,16 +1206,14 @@ export class OrchestratorApplication {
     ) {
       throw new TaskStateError("Approval does not match the TaskRun review request");
     }
-    if (
-      task.status !== "waiting_for_query_approval" &&
-      task.status !== "querying" &&
-      task.status !== "completed" &&
-      task.status !== "ready_for_analysis"
-    ) {
+    const commandKey = this.#commandKey(taskRunId, "query_execution", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["approveQuery"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
+    if (task.status !== "waiting_for_query_approval") {
       throw new TaskStateError(`TaskRun cannot approve a query from status: ${task.status}`);
     }
 
-    let attempt: StageAttempt | undefined;
+    let attempt!: StageAttempt;
     let executionTask: TaskRun = task;
     if (executionTask.status === "waiting_for_query_approval") {
       let approvalTask: TaskRun = executionTask;
@@ -1215,33 +1233,27 @@ export class OrchestratorApplication {
         );
         return approvalTask;
       });
-    } else if (executionTask.status === "querying") {
-      attempt = this.#attempts?.findByIdempotencyKey(taskRunId, input.idempotencyKey);
-      if (this.#attempts !== undefined && attempt?.status !== "running") {
-        throw new TaskStateError("Query execution attempt is not resumable");
-      }
     }
 
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     let result: QueryRunResult;
     try {
-      result = await this.#forge.approveQueryRun(
-        {
-          queryRunId: input.queryRunId,
-          approverUserId: executionTask.user_id,
-          sqlHash: input.sqlHash,
-          assuranceReportHash,
-          idempotencyKey: input.idempotencyKey,
-        },
-        stageExecution.signal,
-      );
+      result = await stageExecution.wait(() => this.#forge.approveQueryRun({
+        queryRunId: input.queryRunId,
+        approverUserId: executionTask.user_id,
+        sqlHash: input.sqlHash,
+        assuranceReportHash,
+        idempotencyKey: input.idempotencyKey,
+      },
+      stageExecution.signal,));
       if (stageExecution.timedOut()) throw new Error("Query execution Stage timed out");
     } catch (error) {
       if (executionTask.status === "querying") {
         const message = error instanceof Error ? error.message : "unknown Forge error";
         this.#transactions.run(() => {
-          if (stageExecution.timedOut()) {
-            this.#finishAttempt(attempt, "timed_out", message);
+          if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+          if (stageExecution.timedOut() || stageExecution.interrupted()) {
+            this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
             executionTask = this.#transition(
               executionTask,
               "waiting_for_query_approval",
@@ -1263,7 +1275,7 @@ export class OrchestratorApplication {
 
     let artifact = this.#artifacts.latest(taskRunId, "query_result");
     if (executionTask.status === "querying") {
-      this.#transactions.run(() => {
+      this.#commitStage(attempt, () => {
         artifact = this.#artifacts.create({
           artifactType: "query_result",
           taskRunId,
@@ -1321,7 +1333,7 @@ export class OrchestratorApplication {
           artifact_id: artifact.artifact_id,
         });
         this.#advanceExecutionPlan(taskRunId, { query: "completed" });
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id, result });
       });
     }
     if (artifact === undefined) {
@@ -1444,6 +1456,9 @@ export class OrchestratorApplication {
       }
       return { task: parent, artifact, events: this.#events.list(taskRunId) };
     }
+    const commandKey = this.#commandKey(taskRunId, "supplemental_analysis", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["resumeAnalysisWithSupplement"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
     this.#assertSkillEnabled(parent, "business-root-cause-analysis");
     if (parent.status !== "incomplete") {
       throw new TaskStateError(`TaskRun cannot resume analysis from status: ${parent.status}`);
@@ -1483,7 +1498,7 @@ export class OrchestratorApplication {
     const originalMessage = parent.metadata.original_message;
     const question =
       typeof originalMessage === "string" ? originalMessage : parent.intent;
-    let attempt: StageAttempt | undefined;
+    let attempt!: StageAttempt;
     let stageTask: TaskRun = parent;
     stageTask = this.#transactions.run(() => {
       const running = this.#transition(stageTask, "analyzing", "supplemental_analysis");
@@ -1491,20 +1506,18 @@ export class OrchestratorApplication {
         running,
         "supplemental_analysis",
         "incomplete",
-        input.idempotencyKey,
+        commandKey,
       );
       return running;
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     try {
       const queryResults = [primaryResult, supplementResult];
-      const payload = await this.#skills.analyze(
-        stageTask,
-        { question, queryResults, priorAnalysis },
-        stageExecution.signal,
-        attempt?.model_revision,
-        (progress) => this.#markAttemptProgress(attempt, progress.phase),
-      );
+      const payload = await stageExecution.wait(() => this.#skills.analyze(stageTask,
+      { question, queryResults, priorAnalysis },
+      stageExecution.signal,
+      attempt.model_revision,
+      (progress) => this.#markAttemptProgress(attempt, progress.phase),));
       if (stageExecution.timedOut()) throw new Error("Supplemental Analysis Stage timed out");
       const allowedEvidenceRefs = new Set(
         queryResults.flatMap((result) =>
@@ -1520,7 +1533,7 @@ export class OrchestratorApplication {
       if (references.some((reference) => !allowedEvidenceRefs.has(reference))) {
         throw new Error("Supplement analysis evidence is absent from parent/child QueryResults");
       }
-      return this.#transactions.run(() => {
+      return this.#commitStage(attempt, () => {
         const artifact = this.#artifacts.create({
           artifactType: "analysis",
           taskRunId,
@@ -1548,14 +1561,15 @@ export class OrchestratorApplication {
           suggested_queries: payload.suggested_queries,
           supplemental: true,
         });
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id });
         return { task: stageTask, artifact, events: this.#events.list(taskRunId) };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           stageTask = this.#transition(stageTask, "incomplete", "supplemental_analysis_retry");
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -1581,6 +1595,9 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     let task = this.#tasks.get(taskRunId);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    const commandKey = this.#commandKey(taskRunId, "business_root_cause_analysis", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["analyzeTask"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
     this.#assertSkillEnabled(task, "business-root-cause-analysis");
     if (task.status !== "ready_for_analysis") {
       throw new TaskStateError(`TaskRun cannot analyze from status: ${task.status}`);
@@ -1595,7 +1612,7 @@ export class OrchestratorApplication {
     const question =
       input.question?.trim() ||
       (typeof originalMessage === "string" ? originalMessage : task.intent);
-    let attempt: StageAttempt | undefined;
+    let attempt!: StageAttempt;
     let stageTask: TaskRun = task;
     stageTask = this.#transactions.run(() => {
       const running = this.#transition(stageTask, "analyzing", "business_root_cause_analysis");
@@ -1604,19 +1621,17 @@ export class OrchestratorApplication {
         running,
         "business_root_cause_analysis",
         "ready_for_analysis",
-        input.idempotencyKey ?? `${taskRunId}:analysis:${queryResult.artifact_id}`,
+        commandKey,
       );
       return running;
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     try {
-      const payload = await this.#skills.analyze(
-        stageTask,
-        { question, queryResults: [queryResult] },
-        stageExecution.signal,
-        attempt?.model_revision,
-        (progress) => this.#markAttemptProgress(attempt, progress.phase),
-      );
+      const payload = await stageExecution.wait(() => this.#skills.analyze(stageTask,
+      { question, queryResults: [queryResult] },
+      stageExecution.signal,
+      attempt.model_revision,
+      (progress) => this.#markAttemptProgress(attempt, progress.phase),));
       if (stageExecution.timedOut()) throw new Error("Analysis Stage timed out");
       const allowedEvidenceRefs = new Set(
         queryResult.payload.rows.map(
@@ -1631,7 +1646,7 @@ export class OrchestratorApplication {
         throw new Error("Analysis evidence is not present in QueryResultArtifact");
       }
       let finalizedTask = stageTask;
-      return this.#transactions.run(() => {
+      return this.#commitStage(attempt, () => {
         const artifact = this.#artifacts.create({
           artifactType: "analysis",
           taskRunId,
@@ -1654,16 +1669,17 @@ export class OrchestratorApplication {
           suggested_queries: payload.suggested_queries,
         });
         this.#advanceExecutionPlan(taskRunId, {
-          analysis: payload.status === "complete" ? "completed" : "running",
+          analysis: payload.status === "complete" ? "completed" : "ready",
         });
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id });
         return { task: finalizedTask, artifact, events: this.#events.list(taskRunId) };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           stageTask = this.#transition(stageTask, "ready_for_analysis", "analysis_retry");
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -1688,6 +1704,9 @@ export class OrchestratorApplication {
   ): Promise<{ task: TaskRun; artifact: Artifact; events: TaskEvent[] }> {
     let task = this.#tasks.get(taskRunId);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+    const commandKey = this.#commandKey(taskRunId, "data_analysis_report", input.idempotencyKey);
+    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["renderReport"]>>>(taskRunId, commandKey);
+    if (replay !== undefined) return replay;
     this.#assertSkillEnabled(task, "data-analysis-report-writer");
     if (task.status !== "ready_for_report") {
       throw new TaskStateError(`TaskRun cannot render a report from status: ${task.status}`);
@@ -1712,7 +1731,7 @@ export class OrchestratorApplication {
       comparison_baseline: "当前已审批查询结果内部对比",
       approach_steps: ["核验结果字段与范围", "比较主要维度", "提炼证据绑定结论"],
     };
-    let attempt: StageAttempt | undefined;
+    let attempt!: StageAttempt;
     let stageTask: TaskRun = task;
     stageTask = this.#transactions.run(() => {
       const running = this.#transition(stageTask, "rendering", "data_analysis_report");
@@ -1721,18 +1740,16 @@ export class OrchestratorApplication {
         running,
         "data_analysis_report",
         "ready_for_report",
-        input.idempotencyKey ?? `${taskRunId}:report:${analysis.artifact_id}`,
+        commandKey,
       );
       return running;
     });
-    const stageExecution = this.#stageSignal(signal);
+    const stageExecution = this.#stageSignal(attempt, signal);
     try {
-      const payload = await this.#skills.writeReport(
-        stageTask,
-        { audience: input.audience, analysis },
-        stageExecution.signal,
-        attempt?.model_revision,
-      );
+      const payload = await stageExecution.wait(() => this.#skills.writeReport(stageTask,
+      { audience: input.audience, analysis },
+      stageExecution.signal,
+      attempt.model_revision,));
       if (stageExecution.timedOut()) throw new Error("Report Stage timed out");
       const analysisStatements = new Set(
         analysis.payload.findings.map((finding) => finding.statement),
@@ -1756,7 +1773,7 @@ export class OrchestratorApplication {
       ) {
         throw new Error("Report introduced findings outside AnalysisArtifact");
       }
-      const assembled = this.#transactions.run(() => {
+      const assembled = this.#commitStage(attempt, () => {
         const artifact = this.#artifacts.create({
           artifactType: "rendered_output",
           taskRunId,
@@ -1846,10 +1863,12 @@ export class OrchestratorApplication {
         }
         return { artifact, queryResult, technical, technicalPayload, charts, bundle, reportBundlePayload };
       });
-      if (this.#forge.createReport === undefined || this.#forge.getReport === undefined) {
+      const createReport = this.#forge.createReport;
+      const getReport = this.#forge.getReport;
+      if (createReport === undefined || getReport === undefined) {
         throw new Error("Forge Report Service is not configured");
       }
-      let publication = await this.#forge.createReport({
+      let publication = await stageExecution.wait(() => createReport.call(this.#forge, {
         report_id: assembled.reportBundlePayload.report_id,
         task_run_id: taskRunId,
         org_id: stageTask.org_id,
@@ -1863,14 +1882,14 @@ export class OrchestratorApplication {
         query_result: assembled.queryResult.payload,
         charts: assembled.charts.map((chart) => chart.payload),
         technical_report: assembled.technicalPayload,
-      }, input.idempotencyKey ?? `${taskRunId}:publish:${assembled.bundle.artifact_id}`, stageExecution.signal);
+      }, input.idempotencyKey ?? `${taskRunId}:publish:${assembled.bundle.artifact_id}`, stageExecution.signal));
       while (publication.status === "publishing") {
         if (stageExecution.timedOut()) throw new Error("Report publication Stage timed out");
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        publication = await this.#forge.getReport(publication.report_id, stageExecution.signal);
+        await stageExecution.wait(() => delay(500, undefined, { signal: stageExecution.signal }));
+        publication = await stageExecution.wait(() => getReport.call(this.#forge, publication.report_id, stageExecution.signal));
       }
       if (publication.status !== "published") throw new Error("Report publication failed");
-      const completedReport = this.#transactions.run(() => {
+      const completedReport = this.#commitStage(attempt, () => {
         const publicationArtifact = this.#artifacts.create({
           artifactType: "publication",
           taskRunId,
@@ -1900,7 +1919,7 @@ export class OrchestratorApplication {
           status: payload.status,
         });
         this.#advanceExecutionPlan(taskRunId, { report: "completed" });
-        this.#finishAttempt(attempt, "succeeded");
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: assembled.artifact.artifact_id });
         return { task: finalizedTask, artifact: assembled.artifact, events: this.#events.list(taskRunId) };
       });
       await this.#persistSessionSummary(
@@ -1913,8 +1932,9 @@ export class OrchestratorApplication {
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
       this.#transactions.run(() => {
-        if (stageExecution.timedOut()) {
-          this.#finishAttempt(attempt, "timed_out", message);
+        if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
+        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           stageTask = this.#transition(stageTask, "ready_for_report", "report_retry");
         } else {
           this.#finishAttempt(attempt, "failed", message);
@@ -1946,13 +1966,41 @@ export class OrchestratorApplication {
     }
   }
 
+  #commandKey(taskRunId: string, stage: string, explicit?: string): string {
+    const key = explicit ?? `${taskRunId}:${stage}:${this.#attempts.list(taskRunId).filter((item) => item.stage === stage).length + 1}`;
+    if (key.trim().length === 0) throw new TaskStateError("idempotency_key must not be empty");
+    const existing = this.#attempts.findByIdempotencyKey(taskRunId, key);
+    if (existing !== undefined && (existing.stage !== stage || existing.status !== "succeeded")) {
+      throw new TaskStateError("Stage command already exists; retry with a new idempotency key");
+    }
+    return key;
+  }
+
+  #replayStage<T>(taskRunId: string, key: string): T | undefined {
+    const attempt = this.#attempts.findByIdempotencyKey(taskRunId, key);
+    if (attempt === undefined) return undefined;
+    const completed = this.#events.list(taskRunId).find((event) =>
+      event.event_type === "stage.attempt_succeeded" && event.payload.attempt_id === attempt.attempt_id);
+    const response = completed?.payload.response as { artifact_id?: string; result?: unknown } | undefined;
+    if (response === undefined) throw new TaskStateError("Idempotent Stage response is missing");
+    const artifact = response.artifact_id === undefined ? undefined : this.#artifacts.list(taskRunId)
+      .find((item) => item.artifact_id === response.artifact_id);
+    if (response.artifact_id !== undefined && artifact === undefined) throw new TaskStateError("Idempotent Stage Artifact is missing");
+    return { task: this.#tasks.get(taskRunId), events: this.#events.list(taskRunId),
+      ...(artifact === undefined ? {} : { artifact }),
+      ...(response.result === undefined ? {} : { result: response.result }),
+    } as T;
+  }
+
   #startAttempt(
     task: TaskRun,
     stage: string,
     retryStatus: TaskRun["status"],
     idempotencyKey: string,
-  ): StageAttempt | undefined {
-    if (this.#attempts === undefined) return undefined;
+  ): StageAttempt {
+    if (this.#attempts.findByIdempotencyKey(task.task_run_id, idempotencyKey) !== undefined) {
+      throw new TaskStateError("StageAttempt already exists; command must be checked before execution");
+    }
     const stageBinding = resolveStageModelBinding(this.#config, attemptModelStage(stage));
     const modelRevision = stageBinding?.revisionId ?? computePiModelRevision({
       agentDir: this.#config.agentDir,
@@ -1972,11 +2020,13 @@ export class OrchestratorApplication {
       timeoutMs: this.#stageTimeoutMs,
       modelRevision,
       skillPolicyVersion: this.#skillPolicies.get(task.org_id, task.team_id)?.version ?? 0,
+      requestId: currentRequestId() ?? task.correlation_id,
     });
     this.#events.append(task.task_run_id, "stage.attempt_started", {
       attempt_id: attempt.attempt_id,
       stage,
       attempt_number: attempt.attempt_number,
+      request_id: attempt.request_id ?? null,
       deadline_at: attempt.deadline_at,
       lease_expires_at: attempt.lease_expires_at,
       progress_phase: attempt.progress_phase,
@@ -1985,39 +2035,107 @@ export class OrchestratorApplication {
   }
 
   #markAttemptProgress(
-    attempt: StageAttempt | undefined,
+    attempt: StageAttempt,
     phase: Exclude<StageProgressPhase, "waiting_for_model">,
   ): void {
-    if (attempt === undefined || this.#attempts === undefined) return;
     this.#attempts.markProgress(attempt.attempt_id, phase);
   }
 
+  #releaseAttempt(attempt: StageAttempt): void {
+    this.#activeStages.get(attempt.attempt_id)?.dispose();
+    this.#activeStages.delete(attempt.attempt_id);
+  }
+
   #finishAttempt(
-    attempt: StageAttempt | undefined,
-    status: "succeeded" | "failed" | "timed_out",
+    attempt: StageAttempt,
+    status: "succeeded" | "failed" | "timed_out" | "interrupted",
     error?: string,
+    response?: { artifact_id?: string; result?: QueryRunReview | QueryRunResult },
   ): void {
-    if (attempt === undefined || this.#attempts === undefined) return;
     const finished = this.#attempts.finish(attempt.attempt_id, status, error);
+    this.#releaseAttempt(attempt);
     const eventType =
       status === "succeeded"
         ? "stage.attempt_succeeded"
         : status === "timed_out"
           ? "stage.attempt_timed_out"
-          : "stage.attempt_failed";
+          : status === "interrupted" ? "stage.attempt_interrupted" : "stage.attempt_failed";
     this.#events.append(attempt.task_run_id, eventType, {
       attempt_id: attempt.attempt_id,
       stage: attempt.stage,
       status: finished.status,
+      request_id: attempt.request_id ?? null,
+      ...(response === undefined ? {} : { response }),
       ...(error === undefined ? {} : { error: error.slice(0, 2_000) }),
     });
   }
 
-  #stageSignal(parent?: AbortSignal): { signal: AbortSignal; timedOut: () => boolean } {
-    const timeoutSignal = AbortSignal.timeout(this.#stageTimeoutMs);
+  #commitStage<T>(attempt: StageAttempt, operation: () => T): T {
+    try {
+      return this.#transactions.run(() => {
+        this.#assertAttemptOwner(attempt);
+        return operation();
+      });
+    } catch (error) {
+      if (this.#ownsAttempt(attempt)) {
+        this.#transactions.run(() => {
+          this.#finishAttempt(attempt, "failed", "Stage result could not be committed");
+          const current = this.#tasks.get(attempt.task_run_id)!;
+          this.#transition(current, "failed", attempt.stage);
+        });
+      }
+      throw error;
+    }
+  }
+
+  #ownsAttempt(attempt: StageAttempt): boolean {
+    return this.#attempts.get(attempt.attempt_id)?.status === "running" &&
+      this.#tasks.get(attempt.task_run_id)?.status === attempt.running_status;
+  }
+
+  #assertAttemptOwner(attempt: StageAttempt): void {
+    if (!this.#ownsAttempt(attempt)) throw new TaskStateError("Stage result no longer owns its TaskRun");
+  }
+
+  #stageSignal(attempt: StageAttempt, parent?: AbortSignal) {
+    const controller = new AbortController();
+    let expired = false;
+    const timer = setTimeout(() => {
+      expired = true;
+      controller.abort(new Error("Stage deadline exceeded"));
+    }, this.#stageTimeoutMs);
+    timer.unref();
+    const abortParent = () => controller.abort(parent?.reason);
+    parent?.addEventListener("abort", abortParent, { once: true });
+    if (parent?.aborted) abortParent();
+    this.#activeStages.set(attempt.attempt_id, {
+      controller,
+      dispose: () => { clearTimeout(timer); parent?.removeEventListener("abort", abortParent); },
+    });
+    const signal = controller.signal;
+    let dispatched = false;
     return {
-      signal: parent === undefined ? timeoutSignal : AbortSignal.any([parent, timeoutSignal]),
-      timedOut: () => timeoutSignal.aborted,
+      signal,
+      timedOut: () => expired,
+      interrupted: () => signal.aborted && !expired,
+      wait: <T>(operation: () => Promise<T>): Promise<T> => {
+        this.#assertAttemptOwner(attempt);
+        if (signal.aborted) return Promise.reject(signal.reason);
+        return new Promise<T>((resolve, reject) => {
+          const abort = () => reject(signal.reason);
+          signal.addEventListener("abort", abort, { once: true });
+          Promise.resolve().then(() => {
+            signal.throwIfAborted();
+            this.#assertAttemptOwner(attempt);
+            if (!dispatched) { this.#attempts.markDispatched(attempt.attempt_id); dispatched = true; }
+            return operation();
+          }).then((result) => {
+            signal.throwIfAborted();
+            this.#assertAttemptOwner(attempt);
+            resolve(result);
+          }, reject).catch(reject).finally(() => signal.removeEventListener("abort", abort));
+        });
+      },
     };
   }
 
@@ -2107,6 +2225,7 @@ export class OrchestratorApplication {
         to: updated.status,
         current_stage: stage,
       });
+      settleExecutionPlan(this.state, updated);
       return updated;
     });
   }

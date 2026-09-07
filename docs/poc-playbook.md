@@ -25,13 +25,13 @@ customer-poc/
 └── results/
 ```
 
-仓库提供了 `customer-poc-template/` 作为起点，包含 `cases.example.json`、`failure_triage.template.md`、`delivery_report.template.md` 和空 Registry 文件。优先使用 CLI 初始化客户私有目录：
+仓库提供了 `forge/templates/poc/` 作为起点，包含 `cases.example.json`、`failure_triage.template.md`、`delivery_report.template.md` 和空 Registry 文件。优先使用 CLI 初始化客户私有目录：
 
 ```bash
 forge poc init /path/to/customer-poc
 ```
 
-手工 fallback：`cp -R customer-poc-template /path/to/customer-poc`，然后把 `cases.example.json` 复制为 `cases.json`，把两个 `*.template.md` 复制为正式交付文件。
+手工 fallback：`cp -R forge/templates/poc /path/to/customer-poc`，然后把 `cases.example.json` 复制为 `cases.json`，把两个 `*.template.md` 复制为正式交付文件。
 
 当前 EA 自动比较器以 SQLite fixture 为标准入口。客户可以使用脱敏后的最小数据副本；真实 PostgreSQL/MySQL 连接用于 compatibility smoke 和最终人工审核，不要把生产数据复制进仓库。
 
@@ -68,15 +68,15 @@ forge sync --db "$DATABASE_URL" --out customer-poc/registry/schema.registry.json
 
 3. 验证数据库账号确实只读，再设置 `DATABASE_READONLY_CONFIRMED=true`。只有当客户环境已确认该账号无法写入、无法 DDL、无法访问超出授权的敏感表时，才能打开这个开关；否则 `forge doctor --profile poc` 的 fail 是可信执行门禁，不能为了通过检查而绕过。
 4. 录入 5–10 个核心原子指标及必要衍生指标，补充歧义和字段约定。
-5. 复制一个现有 `tests/accuracy/methods/method_*.py`，只调整客户 Registry、cases、provider 和模型，不在文件中写 API Key。
+5. 复制一个现有 `tools/benchmarks/accuracy/methods/method_*.py`，只调整客户 Registry、cases、provider 和模型，不在文件中写 API Key。
 6. 每题至少运行三次：
 
 ```bash
-python tests/accuracy/runner.py --method <id> --runs 3 --retry 2 --fresh
-python tests/accuracy/evaluate_ea.py --methods <id> \
+python tools/benchmarks/accuracy/runner.py --method <id> --runs 3 --retry 2 --fresh
+python tools/benchmarks/accuracy/evaluate_ea.py --methods <id> \
   --cases /absolute/path/customer-poc/cases.json \
   --db /absolute/path/customer-poc/database.db --save
-python tests/accuracy/triage_failures.py --method <id> \
+python tools/benchmarks/accuracy/triage_failures.py --method <id> \
   --cases /absolute/path/customer-poc/cases.json
 ```
 

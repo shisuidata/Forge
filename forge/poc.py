@@ -4,11 +4,10 @@ from __future__ import annotations
 import json
 import shutil
 from datetime import datetime, timezone
+from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_DIR = ROOT / "customer-poc-template"
 REGISTRY_FILES = (
     "schema.registry.json",
     "metrics.registry.yaml",
@@ -22,7 +21,8 @@ def init_workspace(target: Path) -> dict:
     target = target.expanduser()
     if target.exists() and any(target.iterdir()):
         raise ValueError(f"PoC 目录已存在且非空：{target}")
-    shutil.copytree(TEMPLATE_DIR, target, dirs_exist_ok=True)
+    with as_file(files("forge").joinpath("templates", "poc")) as template:
+        shutil.copytree(template, target, dirs_exist_ok=True)
     (target / "results").mkdir(parents=True, exist_ok=True)
     _copy_if_missing(target / "cases.example.json", target / "cases.json")
     _copy_if_missing(target / "delivery_report.template.md", target / "delivery_report.md")

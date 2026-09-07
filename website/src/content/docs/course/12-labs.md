@@ -186,7 +186,7 @@ pytest tests/test_compiler.py tests/test_compiler_extended.py tests/test_compile
 pytest tests/test_executor.py tests/test_lint.py -q
 ```
 
-阅读 `tests/text-to-sql-failures/`，将失败归为生成、业务或算法逻辑错误。
+阅读 `tools/benchmarks/text_to_sql_failures/`，将失败归为生成、业务或算法逻辑错误。
 
 **练习**：编译测试全部通过，能否说明客户问数准确？
 

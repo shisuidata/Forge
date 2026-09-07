@@ -1,0 +1,527 @@
+{
+  "schema_version": "architecture-quality-implementation-v1",
+  "date": "2026-09-07",
+  "requirement": "REQ-2026-09-07-060",
+  "baseline_commit": "018317d89edfa0f56c48c865f35c9a45204d9d11",
+  "status": "implemented_and_locally_verified",
+  "implementation_commit": null,
+  "authorization": {
+    "quote": "好的，那就按照你的调研结果执行吧",
+    "packages": [
+      "OP-1",
+      "OP-2",
+      "OP-3",
+      "OP-4",
+      "OP-5",
+      "OP-6"
+    ],
+    "model_calls_authorized": 0,
+    "commit_push_release_deploy_authorized": false
+  },
+  "boundary": {
+    "pi": "唯一主 Orchestrator 与 Task 真相源",
+    "forge": "受控准备、校验、审批、执行与 Evidence",
+    "skills": "专业方法层，不获得数据库执行权",
+    "channels": "投影与投递回执，不拥有第二套 Task 状态",
+    "product_gate_change": false,
+    "historical_accuracy_rewritten": false,
+    "real_configuration_or_runtime_accessed": false,
+    "model_calls": 0
+  },
+  "findings": [
+    {
+      "id": "AQ-01",
+      "optimization_package": "OP-2",
+      "title": "阶段重试先改变Task，再复用已终止Attempt，产生无法正常回收的状态",
+      "acceptance": "timeout/interrupted后新attempt可成功；同成功key不再调用Skill；同失败key处理一致；不得留下running Task+terminal Attempt。",
+      "status": "implemented_and_verified",
+      "change": "默认重试使用新 Attempt/下游 command；成功显式 key 回放，失败或跨阶段 key 在 Task 迁移前拒绝。",
+      "files": [
+        "services/pi-orchestrator/src/application.ts",
+        "services/pi-orchestrator/tests/stage-lifecycle.test.ts",
+        "services/pi-orchestrator/tests/application.test.ts"
+      ],
+      "evidence": [
+        "dual_state_adapters"
+      ]
+    },
+    {
+      "id": "AQ-02",
+      "optimization_package": "OP-2",
+      "title": "用户取消与真实阶段执行、Attempt收口没有形成同一协议",
+      "acceptance": "取消触发真实abort；迟到成功/错误不落Artifact、不改变cancelled、不留下running Attempt；覆盖timeout/cancel竞争。",
+      "status": "implemented_and_verified",
+      "change": "取消传播活跃 abort；超时及调用方中断有界返回；迟到成功/错误不写 Artifact、不改终态。",
+      "files": [
+        "services/pi-orchestrator/src/application.ts",
+        "services/pi-orchestrator/tests/stage-lifecycle.test.ts"
+      ],
+      "evidence": [
+        "dual_state_adapters"
+      ]
+    },
+    {
+      "id": "AQ-03",
+      "optimization_package": "OP-2",
+      "title": "内存Store和SQLite没有同等事务语义，测试模型可能掩盖生产失败",
+      "acceptance": "相同失败、取消、重试、错误Artifact语料在两个适配器观察一致；不允许持久Store配no-op事务。",
+      "status": "implemented_and_verified",
+      "change": "不可拆分 OrchestratorState 包含全部 Store 与事务；内存 checkpoint、SQLite SAVEPOINT 使用同一失败语料。",
+      "files": [
+        "services/pi-orchestrator/src/orchestrator-state.ts",
+        "services/pi-orchestrator/src/sqlite-store.ts",
+        "services/pi-orchestrator/tests/stage-lifecycle.test.ts"
+      ],
+      "evidence": [
+        "dual_state_adapters"
+      ]
+    },
+    {
+      "id": "AQ-04",
+      "optimization_package": "OP-3",
+      "title": "数据集专用字段规则进入通用Assurance，污染Registry接入边界",
+      "acceptance": "自定义合法Registry通过；原large profile仍拒绝自己的错误字段；未选择profile不运行数据集规则；保留历史基线与policy/approval drift。",
+      "status": "implemented_and_verified",
+      "change": "数据集规则须显式 assurance_profile；默认 not_applicable，未知 Profile 拒绝；Profile/版本进入审批漂移边界。",
+      "files": [
+        "forge/assurance.py",
+        "forge/lint.py",
+        "forge/benchmark_methods.py",
+        "tests/test_assurance.py",
+        "tests/test_query_runs.py"
+      ],
+      "evidence": [
+        "python_regression"
+      ]
+    },
+    {
+      "id": "AQ-05",
+      "optimization_package": "OP-1",
+      "title": "公开Evaluate默认auto与Compiler契约冲突",
+      "acceptance": "两输入覆盖省略/auto/具体方言/不支持方言；默认不能落内部compile_failed；评估不能偷偷依赖生产数据库URL。",
+      "status": "implemented_and_verified",
+      "change": "纯 requested/resolved/provenance 方言解析：Direct 可 generic，Forge 缺绑定返回 dialect_required，未知值返回 dialect_unsupported。",
+      "files": [
+        "forge/dialects.py",
+        "forge/evaluate.py",
+        "web/routes/evaluate.py",
+        "tests/test_evaluate.py"
+      ],
+      "evidence": [
+        "python_regression",
+        "installed_distributions"
+      ]
+    },
+    {
+      "id": "AQ-06",
+      "optimization_package": "OP-3",
+      "title": "执行领域状态依赖展示文本前缀，而非结构化结果",
+      "acceptance": "警告列名、空结果、截断成功；权限、超时、语法失败具有稳定code；更换展示语言不改变QueryRun状态；统一迁移所有caller。",
+      "status": "implemented_and_verified",
+      "change": "execute 仅返回 ExecutionResult；所有 caller 按 success/error_code 判定，删除旧 tuple/dict API 和文案前缀推断。",
+      "files": [
+        "forge/executor.py",
+        "forge/query_runs.py",
+        "web/feishu.py",
+        "web/router.py",
+        "tests/test_executor.py"
+      ],
+      "evidence": [
+        "python_regression",
+        "installed_distributions"
+      ]
+    },
+    {
+      "id": "AQ-07",
+      "optimization_package": "OP-1",
+      "title": "非editable分发缺少必需资源，构建成功不等于可使用",
+      "acceptance": "wheel/sdist包含核心Schema及所声明Web资源；非源码cwd中import、compile与公开Quickstart可用；不靠editable路径补资源。",
+      "status": "implemented_and_verified",
+      "change": "使用 importlib.resources 并声明 Schema/Web 资源；新增 wheel/sdist 非 editable CI 门禁和实测 Python 3.11 约束。",
+      "files": [
+        "pyproject.toml",
+        ".github/workflows/ci.yml",
+        "constraints/ci-python311.txt",
+        "scripts/package_smoke.py"
+      ],
+      "evidence": [
+        "installed_distributions"
+      ]
+    },
+    {
+      "id": "AQ-08",
+      "optimization_package": "OP-4",
+      "title": "上游故障被映射成资源不存在，已有领域code在HTTP边界丢失",
+      "acceptance": "200/404/不可见403/500/503/invalid JSON矩阵正确；不泄露scope或raw异常。",
+      "status": "implemented_and_verified",
+      "change": "HTTP 边界保留安全稳定 code：不可见403隐藏为404，500转502，503保留，非法协议为502；不泄露 raw 异常。",
+      "files": [
+        "web/diagnostics.py",
+        "web/pi_client.py",
+        "web/router.py",
+        "tests/test_diagnostics_delivery.py"
+      ],
+      "evidence": [
+        "python_regression"
+      ]
+    },
+    {
+      "id": "AQ-09",
+      "optimization_package": "OP-4",
+      "title": "业务证据强，运维诊断和用户可见审计未串联当前主链",
+      "acceptance": "按任一业务ID关联Web→Pi→Forge；失败区分not_started/known/unknown花费；存储失联显示partial而非0；默认不记录SQL rows/凭证。",
+      "status": "implemented_and_verified",
+      "change": "X-Request-ID、Task/QueryRun/Attempt、模型及策略版本贯通；未知用量不补零；审计只读联查、不可用为 partial。",
+      "files": [
+        "diagnostics.py",
+        "agent/audit.py",
+        "agent/llm.py",
+        "services/pi-orchestrator/src/request-context.ts",
+        "services/pi-orchestrator/src/product-projection-builder.ts"
+      ],
+      "evidence": [
+        "python_regression",
+        "real_web_pi_replay",
+        "delivery_stale_completion"
+      ]
+    },
+    {
+      "id": "AQ-10",
+      "optimization_package": "OP-4",
+      "title": "浏览器把未知投递结果当未发送，重试生成新命令身份",
+      "acceptance": "接受后丢响应再重试只产生一个ChannelEvent/Task；更改内容才新建ID；可以回查原命令结果。",
+      "status": "implemented_and_verified",
+      "change": "待确认 Command 按内容匹配保留身份；未知响应显示回查入口，同内容重送复用 ID，成功确认才清理。",
+      "files": [
+        "web/static/product/product-pages.js",
+        "web/static/product/product-shell.js"
+      ],
+      "evidence": [
+        "real_web_pi_replay"
+      ]
+    },
+    {
+      "id": "AQ-11",
+      "optimization_package": "OP-6",
+      "title": "Benchmark拥有专用运行引擎，但关联Task生命周期及多owner边界未收口",
+      "acceptance": "零模型运行的Task/run终态一致；并发create只有一个admitted；第二owner不干扰活动run；挂起端口能停止。",
+      "status": "implemented_and_verified",
+      "change": "Benchmark 与 Task 同 SQLite 事务；并发准入只有一个 owner；第二进程只读；context/evaluate 请求支持 stop/timeout/shutdown。",
+      "files": [
+        "services/pi-orchestrator/src/benchmark-runtime.ts",
+        "services/pi-orchestrator/src/server.ts",
+        "services/pi-orchestrator/tests/benchmark-runtime.test.ts"
+      ],
+      "evidence": [
+        "benchmark_http_process"
+      ]
+    },
+    {
+      "id": "AQ-12",
+      "optimization_package": "OP-6",
+      "title": "ExecutionPlan是手工同步的影子进度，失败和取消可能留下running步骤",
+      "acceptance": "失败、取消、超时、恢复后计划不保留与Task终态冲突的running步骤。",
+      "status": "implemented_and_verified",
+      "change": "ExecutionPlan 为显示进度，失败/取消/超时/恢复随 Task 同事务收口；不完整分析不遗留 running，失败补查不消费 child。",
+      "files": [
+        "services/pi-orchestrator/src/application.ts",
+        "services/pi-orchestrator/src/planning.ts",
+        "services/pi-orchestrator/tests/stage-lifecycle.test.ts"
+      ],
+      "evidence": [
+        "dual_state_adapters"
+      ]
+    },
+    {
+      "id": "AQ-13",
+      "optimization_package": "OP-5",
+      "title": "依赖方向与导入生命周期混杂，单纯拆大文件不能降低耦合",
+      "acceptance": "核心不依赖Web适配；禁用legacy的纯校验不初始化旧Memory；不丢tenant ACL交集；临时阻断非必需模块仍能跑核心。",
+      "status": "implemented_and_verified",
+      "change": "Benchmark 服务下沉 Forge；方言/校验脱离旧 Agent；Memory/cache/BIRD 资源首次使用初始化；共享模板 loader。",
+      "files": [
+        "forge/benchmark_service.py",
+        "forge/hard_accuracy_benchmark.py",
+        "agent/memory/__init__.py",
+        "agent/agent.py",
+        "web/templates.py",
+        "main.py"
+      ],
+      "evidence": [
+        "installed_distributions",
+        "python_regression"
+      ]
+    },
+    {
+      "id": "AQ-14",
+      "optimization_package": "OP-6",
+      "title": "新增一等Stage的契约和模型scope仍依赖多处手工同步",
+      "acceptance": "新增Advisory与新Stage各做一次变更面演练；Python/TS消费同语料并一致接受/拒绝；model scope不靠字符串猜测。",
+      "status": "implemented_and_verified",
+      "change": "Stage descriptor 明确身份、输出与证据策略；TypeBox 为六种 Structured Artifact Schema 来源；Python/TS 共用语义语料。",
+      "files": [
+        "services/pi-orchestrator/src/stage-descriptors.ts",
+        "services/pi-orchestrator/src/contracts.ts",
+        "services/pi-orchestrator/scripts/export-structured-artifact-schemas.ts",
+        "agent/contracts/artifact_semantics.py",
+        "agent/contracts/structured-artifact-fixtures.v1.json"
+      ],
+      "evidence": [
+        "structured_contracts",
+        "extension_drill"
+      ]
+    },
+    {
+      "id": "AQ-15",
+      "optimization_package": "OP-5",
+      "title": "稳定架构入口仍描述旧产品主链，误导未来维护者的边界判断",
+      "acceptance": "文档能准确指出Evaluate/Enforce/Explain、Pi主Task及legacy开关；不存在第二份自称当前主架构的矛盾说明。",
+      "status": "implemented_and_verified",
+      "change": "当前架构说明明确 Evaluate/Enforce/Explain、Pi Task 权威、Forge QueryRun 执行权和 Legacy 开关；不引入第二调度器。",
+      "files": [
+        "docs/architecture.md",
+        "docs/platform-architecture.md",
+        "services/pi-orchestrator/README.md"
+      ],
+      "evidence": [
+        "documentation_links"
+      ]
+    },
+    {
+      "id": "AQ-16",
+      "optimization_package": "OP-4",
+      "title": "渠道投递与Conversation视图缺少独立的恢复边界",
+      "acceptance": "任务完成而投递失败可定位原Task并仅重送；乱序A/B响应只呈现当前对话；进程存活与渠道连接状态可区分。",
+      "status": "implemented_and_verified",
+      "change": "飞书 receipt 独立于 Task，授权后仅重读并重送 presentation；Conversation epoch 防乱序，进程存活不等于已连接。",
+      "files": [
+        "web/channel_delivery.py",
+        "web/routes/deliveries.py",
+        "web/feishu_pi.py",
+        "web/feishu_runtime.py",
+        "web/static/product/product-pages.js",
+        "tests/test_diagnostics_delivery.py"
+      ],
+      "evidence": [
+        "python_regression",
+        "conversation_browser",
+        "delivery_stale_completion"
+      ]
+    }
+  ],
+  "verification": {
+    "python_regression": {
+      "command": "python -m pytest tests -q -rs",
+      "environment": "隔离源码副本；移除私有配置、运行库及凭证；sandbox 仅允许本地网络",
+      "python_314": {
+        "version": "3.14.7",
+        "passed": 983,
+        "skipped": 28,
+        "skip_details": ["24项浏览器E2E未启动其默认localhost:8000服务", "2项指标CRUD E2E要求显式隔离Registry", "2项依赖完整Mini-Dev runtime assets"],
+        "warnings": [
+          "第三方 lark protobuf utcfromtimestamp 弃用警告"
+        ]
+      },
+      "python_311": {
+        "version": "3.11.14",
+        "passed": 983,
+        "skipped": 3,
+        "skip_details": [
+          "Playwright 未安装：整份 test_e2e.py 在 collection 跳过",
+          "2项依赖完整 Mini-Dev runtime assets 的测试跳过"
+        ]
+      },
+      "note": "跳过项不计为通过；Web 行为另外由真实 Chromium 验证。"
+    },
+    "pi_regression": {
+      "commands": [
+        "npm --prefix services/pi-orchestrator test",
+        "npm --prefix services/pi-orchestrator run typecheck"
+      ],
+      "node": "24.4.1",
+      "passed": 215,
+      "failed": 0,
+      "skipped": 0,
+      "typecheck": "passed",
+      "isolation": "临时 HOME；阻断真实运行库/凭证和外部网络，允许 localhost",
+      "warning": "node:sqlite experimental warning；未改变 ES2022 target"
+    },
+    "dual_state_adapters": {
+      "adapters": [
+        "InMemoryOrchestratorState",
+        "SqliteOrchestratorState"
+      ],
+      "status": "passed",
+      "cases": [
+        "timeout/interrupted 新 Attempt",
+        "成功 key 回放、失败 key 拒绝",
+        "cancel 与 timeout 竞争",
+        "迟到成功/错误不得写 Artifact",
+        "非法 Artifact 与嵌套事务全 Store 回滚",
+        "派发前中断 not_started",
+        "过期恢复与 Plan 收口",
+        "补查失败不消费 child",
+        "下游失败 command cache 不困住新重试"
+      ]
+    },
+    "benchmark_http_process": {
+      "status": "passed",
+      "transport": "实际本地 Pi HTTP Server → 挂起的合成 Forge HTTP Server；独立子进程共用临时 SQLite",
+      "pre_fix": [
+        "并发 start 产生两个 admitted Run",
+        "第二 Runtime 把活跃 Run 标成 interrupted"
+      ],
+      "post_fix": {
+        "single_owner": true,
+        "independent_process_cannot_interrupt": true,
+        "stopped_task": "cancelled",
+        "deadline_task": "failed",
+        "request_correlation": "passed",
+        "disconnected_contexts": 2,
+        "model_calls": 0
+      },
+      "additional_regression": [
+        "准入失败 Task/Run/case 全回滚",
+        "context 与 evaluate 可停止",
+        "shutdown 后 Task interrupted，重开不重放"
+      ]
+    },
+    "installed_distributions": {
+      "status": "passed",
+      "python": "3.11.14",
+      "artifacts": [
+        "wheel",
+        "sdist"
+      ],
+      "build": "已安装的实测 build/setuptools，离线构建 sdist 再构建 wheel",
+      "install": "分别非 editable 安装到临时环境，复用 constraints/ci-python311.txt 对应依赖；不是源码目录导入",
+      "cwd": "临时目录，不在源码 checkout",
+      "checks": [
+        "Schema/HTML/CSS/JS 打入包；无 charts、数据库或私有配置",
+        "实际 import/compile/CLI/公开合成 Quickstart",
+        "main import 阻断 SQLite/SQLAlchemy 连接并禁止私有 runtime open",
+        "阻断 web/legacy Agent/Memory 后仍可使用核心方言与 Evaluate"
+      ],
+      "quickstart": {
+        "status": "passed",
+        "enforce": "completed",
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ],
+        "truncated": true,
+        "explain_integrity": "verified",
+        "evidence_types": [
+          "candidate",
+          "policy",
+          "query",
+          "assurance",
+          "source",
+          "approval",
+          "result"
+        ]
+      },
+      "remote_ci_executed": false
+    },
+    "real_web_pi_replay": {
+      "status": "passed",
+      "surface": "真实 Chromium → 隔离 Python main:app → 真实 Pi Server → 临时 SQLite",
+      "fault": "POST chat message 已返回 HTTP 200 后，在 Chromium CDP response 阶段注入网络失败",
+      "observed": [
+        "UI 显示消息投递结果未知及原 Command ID",
+        "相同内容重送复用同一 message_id",
+        "原 Conversation 仅一个真实 Task，状态 completed",
+        "最新 pages v7/CSS v6 reload 后仍能回查原结果",
+        "两侧日志相同 request_id，Web 日志包含 task_run_id"
+      ],
+      "models": "问候语走确定性无模型通道",
+      "model_calls": 0,
+      "visual_confirmation": true
+    },
+    "conversation_browser": {
+      "status": "passed",
+      "surface": "真实 Product 模板/JS/CSS + 本地合成 API",
+      "observed": [
+        "A 延迟700ms/B延迟30ms，只呈现当前 B",
+        "safe_error、model revision、policy version、request ID、未知用量可见",
+        "长 ID 和未知提示按钮完整可见"
+      ],
+      "external_channel_delivery_exercised": false
+    },
+    "delivery_stale_completion": {
+      "status": "passed",
+      "scenario": "旧 sending lease 过期，新 attempt 已失败后，旧 attempt 迟到成功",
+      "before": {
+        "persisted": "failed",
+        "logged": "delivered"
+      },
+      "after": {
+        "persisted": "failed",
+        "logged": "failed",
+        "current_attempt": 2
+      },
+      "note": "诊断以 CAS 后的持久状态为准，不伪报迟到 worker 的期望状态。"
+    },
+    "structured_contracts": {
+      "status": "passed",
+      "shared_fixture_cases": 42,
+      "consumers": [
+        "TypeBox/TypeScript",
+        "generated JSON Schema + Python semantics"
+      ],
+      "boundaries": [
+        "row_count/rows 与行宽",
+        "重复列",
+        "RFC3339 日历/时区/闰秒",
+        "证据 lineage",
+        "不完整输出所需问题",
+        "因果与私密内容边界"
+      ]
+    },
+    "extension_drill": {
+      "status": "passed",
+      "environment": "隔离源码复制，扩展脚本已删除",
+      "scope": [
+        "新增 Advisory",
+        "新增一等 Stage"
+      ],
+      "notes": [
+        "实际执行类型化输出及 Python 生成契约验证",
+        "模型 scope 来自 descriptor 而非名字子串",
+        "保留显式 Application stage/审批边界，不引入任意 DAG 权限"
+      ]
+    },
+    "documentation_links": {
+      "status": "passed",
+      "command": "python -m pytest tests/test_docs_links.py -q"
+    }
+  },
+  "migration_notes": [
+    "Assurance query-assurance-v11 / scoped-policy-v1；旧 QueryRun 审批不得直接沿用，按既有漂移门禁重新 prepare/审批。",
+    "基准专用 Registry 显式使用 assurance_profile={id:large-benchmark,revision:large-benchmark-v1}；自定义 Registry 默认不运行该规则。",
+    "execute 统一为 ExecutionResult(success,text,columns,rows,truncated,error_code)；旧执行结果 API 已移除，不留 shim。",
+    "Application 构造仅传 coherent State bundle；已有 caller 已迁移。",
+    "缺方言绑定的 Forge Evaluate 返回 dialect_required；Pi disabled 为 HTTP503/code=disabled。"
+  ],
+  "limitations": [
+    "本地实现/验收，不是远端 CI 结果或已发布版本。",
+    "未调用模型、真实数据库、飞书/钉钉网络或真实 WebSocket。",
+    "单机 SQLite 单 owner 不是 HA；PID/主机不确定时失败关闭。",
+    "Abort 不保证撤销已经发生的远端 SQL/发布副作用。",
+    "Provider 缺少 usage 保持 unknown；已知 Token 不等于已知结算成本。",
+    "未做生产规模压测、PostgreSQL/MySQL 实库复验或模型准确率实验。",
+    "历史成绩、可选 Prompt 开关与 R0.6/H 外部采用门禁不变。"
+  ],
+  "cleanup": {
+    "throwaway_scripts_removed": true,
+    "synthetic_services_stopped": true,
+    "managed_browser_closed": true,
+    "temporary_distribution_cleanup": "临时构建包、验证环境及合成运行库已删除；永久保留 package_smoke CI 门禁和必要行为回归",
+    "user_preexisting_work_preserved": true,
+    "commit_push_release_deploy": false
+  }
+}

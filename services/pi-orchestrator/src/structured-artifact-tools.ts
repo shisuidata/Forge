@@ -1,7 +1,7 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type, type Static, type TSchema } from "typebox";
-import { IsDateTime } from "typebox/format";
 import { Value } from "typebox/value";
+import { STAGE_OUTPUTS } from "./stage-descriptors.js";
 
 export const clarificationPayloadSchema = Type.Object(
   {
@@ -18,8 +18,8 @@ export const clarificationPayloadSchema = Type.Object(
     time_range: Type.Object(
       {
         description: Type.String({ minLength: 1 }),
-        start: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-        end: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+        start: Type.Optional(Type.Union([Type.String({ format: "date-time" }), Type.Null()])),
+        end: Type.Optional(Type.Union([Type.String({ format: "date-time" }), Type.Null()])),
         timezone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
         granularity: Type.Optional(Type.Union([Type.String(), Type.Null()])),
       },
@@ -105,7 +105,7 @@ export const queryResultPayloadSchema = Type.Object(
     model_revision: Type.Optional(Type.String({ minLength: 1 })),
     assurance_registry_revision: Type.Optional(Type.String({ minLength: 1 })),
     execution_ms: Type.Integer({ minimum: 0 }),
-    executed_at: Type.String({ minLength: 1 }),
+    executed_at: Type.String({ minLength: 1, format: "date-time" }),
     result_contract: Type.Optional(Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()])),
   },
   { additionalProperties: false },
@@ -281,12 +281,6 @@ export function validateClarificationPayload(value: unknown): string | undefined
   if (!Value.Check(clarificationPayloadSchema, value)) {
     return "payload does not match ClarificationArtifact schema";
   }
-  for (const field of ["start", "end"] as const) {
-    const dateValue = value.time_range[field];
-    if (typeof dateValue === "string" && !IsDateTime(dateValue)) {
-      return `time_range.${field} must be an RFC 3339 date-time`;
-    }
-  }
   return undefined;
 }
 
@@ -300,7 +294,6 @@ export function validateQueryResultPayload(value: unknown): string | undefined {
   if (!Value.Check(queryResultPayloadSchema, value)) {
     return "payload does not match QueryResultArtifact schema";
   }
-  if (!IsDateTime(value.executed_at)) return "executed_at must be an RFC 3339 date-time";
   if (value.row_count !== value.rows.length) return "row_count must equal persisted rows length";
   if (value.rows.some((row) => row.length !== value.columns.length)) {
     return "every result row must match the columns length";
@@ -428,7 +421,7 @@ function createSubmissionTool<T extends TSchema>(options: {
 
 export function createClarificationSubmissionTool() {
   return createSubmissionTool({
-    name: "submit_clarification_artifact",
+    name: STAGE_OUTPUTS.clarification.toolName,
     label: "Clarification Artifact",
     description:
       "Submit the final structured requirement clarification. This is the only valid final output for this stage.",
@@ -439,7 +432,7 @@ export function createClarificationSubmissionTool() {
 
 export function createMetricDefinitionSubmissionTool() {
   return createSubmissionTool({
-    name: "submit_metric_definition_artifact",
+    name: STAGE_OUTPUTS.metric_definition.toolName,
     label: "Metric Definition Artifact",
     description:
       "Submit the final structured metric definition review. Unconfirmed business rules must remain in open_questions.",
@@ -452,7 +445,7 @@ export function createAnalysisSubmissionTool(options: {
   allowedEvidenceRefs?: ReadonlySet<string>;
 } = {}) {
   return createSubmissionTool({
-    name: "submit_analysis_artifact",
+    name: STAGE_OUTPUTS.analysis.toolName,
     label: "Analysis Artifact",
     description:
       "Submit evidence-bound analysis. Every finding must cite one or more supplied QueryRun evidence references; unverified causes remain hypotheses.",
@@ -478,7 +471,7 @@ export function createAdvisorySubmissionTool(options: {
   requiresQueryEvidence?: boolean;
 }) {
   return createSubmissionTool({
-    name: "submit_advisory_artifact",
+    name: STAGE_OUTPUTS.advisory.toolName,
     label: "AdvisoryArtifact",
     description: "Submit the bounded professional advisory result. Factual claims must cite only supplied QueryResult or Context evidence references.",
     schema: advisoryPayloadSchema,
@@ -490,7 +483,8 @@ export function createAdvisorySubmissionTool(options: {
       if (
         options.requiresQueryEvidence === true &&
         payload.status === "complete" &&
-        (payload.findings.length === 0 || payload.findings.some((item) => item.evidence_refs.length === 0))
+        (payload.findings.length === 0 || payload.findings.some((item) =>
+          !item.evidence_refs.some((ref) => ref.startsWith("qr_"))))
       ) {
         return "every finding in a complete data analysis advisory requires QueryResult evidence";
       }
@@ -508,7 +502,7 @@ export function createRenderedOutputSubmissionTool(options: {
   allowedEvidenceRefs?: ReadonlySet<string>;
 } = {}) {
   return createSubmissionTool({
-    name: "submit_rendered_output_artifact",
+    name: STAGE_OUTPUTS.report.toolName,
     label: "Rendered Output Artifact",
     description:
       "Submit the report structure derived only from the supplied AnalysisArtifact. Every key finding must preserve QueryRun evidence references. Set markdown to the exact sentinel SERVER_RENDERED; the trusted service renders Markdown deterministically.",

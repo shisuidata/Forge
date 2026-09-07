@@ -122,12 +122,7 @@ test("channel greeting completes without calling Forge or a model", async () => 
   let forgeCalls = 0;
   const application = new OrchestratorApplication({
     config,
-    tasks: state.tasks,
-    events: state.events,
-    artifacts: state.artifacts,
-    attempts: state.attempts,
-    channelEvents: state.channelEvents,
-    transactions: state.transactions,
+    state,
     forgeClient: {
       async createQueryRun() { forgeCalls += 1; throw new Error("must not query"); },
       async approveQueryRun() { throw new Error("must not execute"); },
@@ -167,12 +162,7 @@ test("channel knowledge answer is bound to Forge context evidence without a Quer
   }];
   const application = new OrchestratorApplication({
     config,
-    tasks: state.tasks,
-    events: state.events,
-    artifacts: state.artifacts,
-    attempts: state.attempts,
-    channelEvents: state.channelEvents,
-    transactions: state.transactions,
+    state,
     forgeClient: {
       async searchContext() {
         return { status: "ok", question: "销售额口径", evidence: contextEvidence,
@@ -293,8 +283,7 @@ test("personal memory requires an explicit channel approval and never escalates 
   const state = new SqliteOrchestratorState(config.stateDbPath);
   const memoryWrites: Array<Record<string, unknown>> = [];
   const application = new OrchestratorApplication({
-    config, tasks: state.tasks, events: state.events, artifacts: state.artifacts,
-    attempts: state.attempts, channelEvents: state.channelEvents, transactions: state.transactions,
+    config, state,
     forgeClient: {
       async createQueryRun() { throw new Error("not used"); },
       async approveQueryRun() { throw new Error("not used"); },
@@ -385,12 +374,7 @@ test("channel cancel action is owned, persisted, and idempotent", async () => {
   const state = new SqliteOrchestratorState(config.stateDbPath);
   const application = new OrchestratorApplication({
     config,
-    tasks: state.tasks,
-    events: state.events,
-    artifacts: state.artifacts,
-    attempts: state.attempts,
-    channelEvents: state.channelEvents,
-    transactions: state.transactions,
+    state,
   });
   const created = application.createTask({
     org_id: "org_demo",
@@ -446,12 +430,7 @@ test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", 
   const approvalGate = new Promise<void>((resolve) => { releaseApproval = resolve; });
   const application = new OrchestratorApplication({
     config,
-    tasks: state.tasks,
-    events: state.events,
-    artifacts: state.artifacts,
-    attempts: state.attempts,
-    channelEvents: state.channelEvents,
-    transactions: state.transactions,
+    state,
     forgeClient: {
       async createQueryRun(input) {
         prepareCalls += 1;
@@ -513,8 +492,8 @@ test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", 
   });
   const server = createOrchestratorServer(config, application);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => {
-    server.close();
+  context.after(async () => {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     state.close();
   });
   const address = server.address() as AddressInfo;

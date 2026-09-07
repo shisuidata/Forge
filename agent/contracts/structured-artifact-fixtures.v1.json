@@ -1,0 +1,1431 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "clarification-valid",
+      "contract": "clarification_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "clarification",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "needs_input",
+          "goal": "Define comparison",
+          "known_facts": [],
+          "assumptions": [],
+          "open_questions": [
+            "Which period?"
+          ],
+          "dimensions": [],
+          "time_range": {
+            "description": "Pending",
+            "start": null,
+            "end": "2026-09-07T08:00:00+08:00"
+          },
+          "acceptance_criteria": []
+        }
+      }
+    },
+    {
+      "id": "metric_definition-valid",
+      "contract": "metric_definition_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "metric_definition",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "draft",
+          "metric_name": "Conversion",
+          "numerator": "buyers",
+          "denominator": "visitors",
+          "grain": "day",
+          "window": "week",
+          "filters": [],
+          "boundary_conditions": [],
+          "open_questions": []
+        }
+      }
+    },
+    {
+      "id": "query_result-valid",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "analysis-valid",
+      "contract": "analysis_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "method_summary": {
+            "objective": "Compare channels",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "Web value is one.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": []
+        }
+      }
+    },
+    {
+      "id": "advisory-valid",
+      "contract": "advisory_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "advisory",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "skill_name": "data-doc-writer",
+          "title": "Guide",
+          "summary": "The supplied context defines the metric.",
+          "findings": [
+            {
+              "statement": "Definition is available.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "assumptions": [],
+          "limitations": [],
+          "open_questions": [],
+          "deliverables": []
+        }
+      }
+    },
+    {
+      "id": "rendered_output-valid",
+      "contract": "rendered_output_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "rendered_output",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "title": "Report",
+          "audience": "Analyst",
+          "executive_summary": "Web has one observation.",
+          "key_findings": [
+            {
+              "statement": "Web value is one.",
+              "interpretation": "Inspect additional periods.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "limitations": [],
+          "next_steps": [],
+          "source_artifact_ids": [
+            "ar_analysis"
+          ],
+          "markdown": "# Trusted rendered report"
+        }
+      }
+    },
+    {
+      "id": "query-empty",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [],
+          "row_count": 0,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-truncated-counts-persisted-only",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": true,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-zero-columns",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [],
+          "rows": [
+            []
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-row-count-mismatch",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 99,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-truncated-count-mismatch",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 99,
+          "truncated": true,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-short-row",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web"
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-long-row",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1,
+              2
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-duplicate-column",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "v",
+            "v"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-boolean-count",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": true,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "query-invalid-timestamp",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "yesterday"
+        }
+      }
+    },
+    {
+      "id": "query-non-forge-producer",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "envelope-unknown-version",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 2,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    },
+    {
+      "id": "envelope-unknown-property",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        },
+        "database_password": "synthetic"
+      }
+    },
+    {
+      "id": "payload-unknown-property",
+      "contract": "clarification_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "clarification",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "needs_input",
+          "goal": "Define comparison",
+          "known_facts": [],
+          "assumptions": [],
+          "open_questions": [
+            "Which period?"
+          ],
+          "dimensions": [],
+          "time_range": {
+            "description": "Pending",
+            "start": null,
+            "end": "2026-09-07T08:00:00+08:00"
+          },
+          "acceptance_criteria": [],
+          "sql": "SELECT 1"
+        }
+      }
+    },
+    {
+      "id": "clarification-invalid-date",
+      "contract": "clarification_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "clarification",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "needs_input",
+          "goal": "Define comparison",
+          "known_facts": [],
+          "assumptions": [],
+          "open_questions": [
+            "Which period?"
+          ],
+          "dimensions": [],
+          "time_range": {
+            "description": "Pending",
+            "start": "yesterday",
+            "end": "2026-09-07T08:00:00+08:00"
+          },
+          "acceptance_criteria": []
+        }
+      }
+    },
+    {
+      "id": "analysis-incomplete-missing-query",
+      "contract": "analysis_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "incomplete",
+          "method_summary": {
+            "objective": "Compare channels",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "Web value is one.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": []
+        }
+      }
+    },
+    {
+      "id": "analysis-incomplete-with-query",
+      "contract": "analysis_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "incomplete",
+          "method_summary": {
+            "objective": "Compare channels",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "Web value is one.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": [
+            {
+              "question": "Compare prior period?",
+              "reason": "Need baseline",
+              "priority": "high"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "analysis-disclosure",
+      "contract": "analysis_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "method_summary": {
+            "objective": "System prompt: secret",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "Web value is one.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": []
+        }
+      }
+    },
+    {
+      "id": "analysis-causal-finding",
+      "contract": "analysis_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "method_summary": {
+            "objective": "Compare channels",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "This proves causation.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": []
+        }
+      }
+    },
+    {
+      "id": "analysis-causal-hypothesis-remains-unverified",
+      "contract": "analysis_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "method_summary": {
+            "objective": "Compare channels",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "Web value is one.",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [
+            {
+              "statement": "This caused by change is unverified.",
+              "evidence_refs": [],
+              "status": "unverified"
+            }
+          ],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": []
+        }
+      }
+    },
+    {
+      "id": "analysis-empty-finding-evidence",
+      "contract": "analysis_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "analysis",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "method_summary": {
+            "objective": "Compare channels",
+            "dimensions": [
+              "channel"
+            ],
+            "comparison_baseline": "Current period",
+            "approach_steps": [
+              "Compare observed values"
+            ]
+          },
+          "summary": "Web has one observation.",
+          "findings": [
+            {
+              "statement": "Web value is one.",
+              "evidence_refs": [],
+              "confidence": "high"
+            }
+          ],
+          "hypotheses": [],
+          "recommendations": [],
+          "limitations": [],
+          "suggested_queries": []
+        }
+      }
+    },
+    {
+      "id": "advisory-incomplete-missing-question",
+      "contract": "advisory_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "advisory",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "incomplete",
+          "skill_name": "data-doc-writer",
+          "title": "Guide",
+          "summary": "The supplied context defines the metric.",
+          "findings": [
+            {
+              "statement": "Definition is available.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "assumptions": [],
+          "limitations": [],
+          "open_questions": [],
+          "deliverables": []
+        }
+      }
+    },
+    {
+      "id": "advisory-incomplete-with-question",
+      "contract": "advisory_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "advisory",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "incomplete",
+          "skill_name": "data-doc-writer",
+          "title": "Guide",
+          "summary": "The supplied context defines the metric.",
+          "findings": [
+            {
+              "statement": "Definition is available.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "assumptions": [],
+          "limitations": [],
+          "open_questions": [
+            "Which source?"
+          ],
+          "deliverables": []
+        }
+      }
+    },
+    {
+      "id": "advisory-causal-english",
+      "contract": "advisory_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "advisory",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "skill_name": "data-doc-writer",
+          "title": "Guide",
+          "summary": "Definitely the cause.",
+          "findings": [
+            {
+              "statement": "Definition is available.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "assumptions": [],
+          "limitations": [],
+          "open_questions": [],
+          "deliverables": []
+        }
+      }
+    },
+    {
+      "id": "advisory-causal-cjk-boundary",
+      "contract": "advisory_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "advisory",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "skill_name": "data-doc-writer",
+          "title": "Guide",
+          "summary": "结果proves因果",
+          "findings": [
+            {
+              "statement": "Definition is available.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "assumptions": [],
+          "limitations": [],
+          "open_questions": [],
+          "deliverables": []
+        }
+      }
+    },
+    {
+      "id": "advisory-causal-substring-not-word",
+      "contract": "advisory_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "advisory",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "skill_name": "data-doc-writer",
+          "title": "Guide",
+          "summary": "The reprovescence term is not a causal claim.",
+          "findings": [
+            {
+              "statement": "Definition is available.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "assumptions": [],
+          "limitations": [],
+          "open_questions": [],
+          "deliverables": []
+        }
+      }
+    },
+    {
+      "id": "report-causal-interpretation",
+      "contract": "rendered_output_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "rendered_output",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "title": "Report",
+          "audience": "Analyst",
+          "executive_summary": "Web has one observation.",
+          "key_findings": [
+            {
+              "statement": "Web value is one.",
+              "interpretation": "直接导致下降",
+              "evidence_refs": [
+                "qr_corpus#row:1"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "limitations": [],
+          "next_steps": [],
+          "source_artifact_ids": [
+            "ar_analysis"
+          ],
+          "markdown": "# Trusted rendered report"
+        }
+      }
+    },
+    {
+      "id": "report-invalid-evidence",
+      "contract": "rendered_output_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "rendered_output",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "synthetic-skill",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "status": "complete",
+          "title": "Report",
+          "audience": "Analyst",
+          "executive_summary": "Web has one observation.",
+          "key_findings": [
+            {
+              "statement": "Web value is one.",
+              "interpretation": "Inspect additional periods.",
+              "evidence_refs": [
+                "ctx_aaaaaaaaaaaaaaaaaaaaaaaa"
+              ],
+              "confidence": "high"
+            }
+          ],
+          "recommendations": [],
+          "limitations": [],
+          "next_steps": [],
+          "source_artifact_ids": [
+            "ar_analysis"
+          ],
+          "markdown": "# Trusted rendered report"
+        }
+      }
+    },
+    {
+      "id": "timestamp-valid-leap-day",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2024-02-29T12:30:00Z"
+        }
+      }
+    },
+    {
+      "id": "timestamp-invalid-calendar-day",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2023-02-29T12:30:00Z"
+        }
+      }
+    },
+    {
+      "id": "timestamp-requires-timezone",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T12:30:00"
+        }
+      }
+    },
+    {
+      "id": "timestamp-valid-leap-second",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-06-30T23:59:60Z"
+        }
+      }
+    },
+    {
+      "id": "timestamp-invalid-leap-second-position",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-06-30T12:30:60Z"
+        }
+      }
+    },
+    {
+      "id": "timestamp-invalid-offset",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T12:30:00+24:00"
+        }
+      }
+    },
+    {
+      "id": "timestamp-lowercase-and-fraction",
+      "contract": "query_result_artifact",
+      "accepted": true,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "2026-09-07T00:00:00Z",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07t12:30:00.123z"
+        }
+      }
+    },
+    {
+      "id": "envelope-invalid-timestamp",
+      "contract": "query_result_artifact",
+      "accepted": false,
+      "instance": {
+        "artifact_id": "ar_corpus",
+        "artifact_type": "query_result",
+        "schema_version": 1,
+        "task_run_id": "tr_corpus",
+        "producer": "forge",
+        "created_at": "yesterday",
+        "payload": {
+          "query_run_id": "qr_corpus",
+          "sql_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "columns": [
+            "channel",
+            "value"
+          ],
+          "rows": [
+            [
+              "web",
+              1
+            ]
+          ],
+          "row_count": 1,
+          "truncated": false,
+          "dialect": "sqlite",
+          "registry_version": "synthetic-v1",
+          "execution_ms": 1,
+          "executed_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    }
+  ]
+}

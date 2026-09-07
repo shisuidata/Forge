@@ -34,6 +34,8 @@ from agent.prompts import build_system
 from forge.schema_builder import build_tool_schema
 from forge.retriever import SchemaRetriever, make_embed_fn, make_query_embed_fn
 
+from diagnostics import model_usage, record
+
 logger = logging.getLogger(__name__)
 RUNTIME_CONTEXT_REVISION = "runtime-context-v9"
 
@@ -448,10 +450,14 @@ def _call_anthropic(
         request["tool_choice"] = {"type": "tool", "name": tools[0]["name"]}
     try:
         client = anthropic.Anthropic(**kwargs)
+        record("model_request", model_revision=config.revision, usage_status="unknown")
         response = client.messages.create(**request)
+        record("model_response", model_revision=config.revision, **model_usage(getattr(response, "usage", None), anthropic=True))
     except anthropic.APITimeoutError as exc:
+        record("model_failure", model_revision=config.revision, error_code="model_timeout", usage_status="unknown")
         raise LLMRequestTimeoutError("LLM Provider 调用超时") from exc
     except Exception as exc:
+        record("model_failure", model_revision=config.revision, error_code="model_unavailable", usage_status="unknown")
         raise LLMCompatibilityError(
             "LLM Provider 调用失败，请检查协议、Base URL、模型和凭证"
         ) from exc
@@ -525,6 +531,7 @@ def _call_openai(
 
     endpoint = f"{base_url.rstrip('/')}/chat/completions"
     try:
+        record("model_request", model_revision=config.revision, usage_status="unknown")
         r = httpx.post(
             endpoint,
             headers=headers,
@@ -534,9 +541,11 @@ def _call_openai(
         r.raise_for_status()
         body = r.json()
     except httpx.TimeoutException as exc:
+        record("model_failure", model_revision=config.revision, error_code="model_timeout", usage_status="unknown")
         raise LLMRequestTimeoutError("LLM Provider 调用超时") from exc
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
+        record("model_failure", model_revision=config.revision, error_code="model_rejected", status_code=status, usage_status="unknown")
         provider_code = ""
         if exc.response is not None:
             try:
@@ -555,12 +564,15 @@ def _call_openai(
             f"LLM Provider 拒绝请求（HTTP {status}），请检查协议、模型和凭证"
         ) from exc
     except httpx.RequestError as exc:
+        record("model_failure", model_revision=config.revision, error_code="model_unavailable", usage_status="unknown")
         raise LLMCompatibilityError(
             "无法连接 LLM Provider，请检查 Base URL、网络和协议配置"
         ) from exc
     except (TypeError, ValueError) as exc:
+        record("model_failure", model_revision=config.revision, error_code="model_contract_invalid", usage_status="unknown")
         raise LLMCompatibilityError("Provider 返回的响应不是合法 JSON。") from exc
 
+    record("model_response", model_revision=config.revision, **model_usage(body.get("usage") if isinstance(body, dict) else None))
     choices = body.get("choices") if isinstance(body, dict) else None
     if not choices:
         raise LLMCompatibilityError("Provider 响应缺少非空 choices。")

@@ -2606,6 +2606,42 @@
                     "type": "null"
                   }
                 ]
+              },
+              "request_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "usage_status": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "not_started"
+                  },
+                  {
+                    "type": "string",
+                    "const": "known"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                ]
+              },
+              "model_revision": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "skill_policy_version": {
+                "type": "integer",
+                "minimum": 0
               }
             },
             "additionalProperties": false

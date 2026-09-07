@@ -1,8 +1,8 @@
 # Forge 企业演进阶段性实施计划 v1.2
 
-> 状态：`REQ-2026-09-03-025` 为当前产品主线；`REQ-2026-08-26-024` SQL Accuracy Benchmark 已验证并作为反证基线；`REQ-2026-08-25-023` 已吸收为历史短期切口。当前阶段为 R0 Open-source Trust Runtime Product Cut / Adoption Baseline，R0.1–R0.5 已完成，当前切片为 R0.6 External Adoption Evidence；Runtime Governance Coverage 为 3/14（21.4%） · Last updated: 2026-09-05
+> 状态：`REQ-2026-09-03-025` 为当前产品主线；`REQ-2026-08-26-024` SQL Accuracy Benchmark 已验证并作为反证基线；`REQ-2026-08-25-023` 已吸收为历史短期切口。当前阶段为 R0 Open-source Trust Runtime Product Cut / Adoption Baseline，R0.1–R0.5 已完成，当前切片为 R0.6 External Adoption Evidence；Runtime Governance Coverage 为 3/14（21.4%） · Last updated: 2026-09-08
 >
-> 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`pi-forge-integration-plan.md`](pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；当前产品决策见 [`requirements-pool.md`](requirements-pool.md#req-2026-09-03-025以开源-trust-runtime-收敛-forge-产品方向)。
+> 本文是 2026-08-24 起的**唯一主动计划真相源**。历史实施与验收证据保留在 [`archive/plans/pi-forge-integration-plan.md`](archive/plans/pi-forge-integration-plan.md)；目标职责边界见 [`platform-architecture.md`](platform-architecture.md)；产品约束见 [`product-axioms.md`](product-axioms.md)；当前产品决策见 [`requirements-pool.md`](requirements-pool.md#req-2026-09-03-025以开源-trust-runtime-收敛-forge-产品方向)。
 >
 > 每个工作包继续遵循“先更新计划 → 再实现 → 验证 → 回写状态、风险与下一步”。真实客户数据、生产凭证、权限变化和高风险副作用必须单独授权。
 
@@ -124,7 +124,7 @@ GTM：Open-source Developer First
 仅修改文档和仓库基线，不改变运行时行为：
 
 1. 统一状态：产品方向与四平面框架标记为“已确认”；本文标记为当前唯一主动计划；是否进入运行时 M1 与计划确认分开记录。
-2. 将 `docs/pi-forge-integration-plan.md` 明确标记为历史实施快照；章节中的“进行中/当前”增加历史时间语义，避免被误当作当前 TODO。
+2. 将 `docs/archive/plans/pi-forge-integration-plan.md` 明确标记为历史实施快照；章节中的“进行中/当前”增加历史时间语义，避免被误当作当前 TODO。
 3. 更新实际验证基线为 Python `540 passed / 24 skipped`、Pi `86 passed`、TypeScript typecheck 通过、npm audit 0 vulnerabilities。
 4. 恢复 `tests/datasets/spider/data` 为仓库记录的 symlink `../../spider2/data`，不修改 benchmark 数据内容，使全局 `git diff --check` 可复现。
 5. 将新战略文档和对应测试纳入版本管理范围；不提交 `.env`、运行状态、个人 `.pi/.codex` 配置或凭证。
@@ -221,7 +221,7 @@ JSON Schema/TypeBox 继续负责形状；共享 review fixture 和 Python/TypeSc
 - 新增 `governance-review-fixtures.v1.json`，以 Web Human、Feishu Human 和 Agent 三条 review-only trace 组合 Principal、Mandate、Policy、Binding、Action、human approval snapshot、request binding 与 Query lineage；Economics/Context 扩展显式为 `null`。
 - Python `governance_semantics.py` 与 TypeScript `validateGovernanceReviewTrace` 对同一共享 corpus 验证 Organization/Workspace、时间、delegation、Task/Audience/Purpose/Capability/Resource、Policy/Binding、approval 和 SQL/Assurance lineage。
 - 40 个命名 mutation 覆盖跨租户、过期/撤销、扩权、默认拒绝前置条件、漂移审批、请求重用和隐式 Context；两端使用同一稳定 reason code 断言。
-- [`governance-contract-review-2026-08-24.md`](governance-contract-review-2026-08-24.md) 完成 Threat Model、legacy migration、TaskRun v2、切换与 rollback 设计；Verdict 为 **Approved for M1A proposal**。
+- [`archive/engineering/governance-contract-review-2026-08-24.md`](archive/engineering/governance-contract-review-2026-08-24.md) 完成 Threat Model、legacy migration、TaskRun v2、切换与 rollback 设计；Verdict 为 **Approved for M1A proposal**。
 - 当前验证：Python `550 passed / 24 skipped`；Pi `91 passed`；TypeScript typecheck 通过；npm audit 0 vulnerabilities；JSON 与 `git diff --check` 通过。
 - 未修改 Task API、数据库 Schema、现有授权逻辑、QueryRun 行为或 OAuth Runtime；Action Catalog 的 Runtime Governance Coverage 保持 0%。
 
@@ -238,7 +238,7 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 
 ### M0.1–M0.3 实施结果（2026-08-24）
 
-- 计划状态已收口：产品方向与四平面框架确认，本文成为唯一主动计划；`pi-forge-integration-plan.md` 明确为历史快照。
+- 计划状态已收口：产品方向与四平面框架确认，本文成为唯一主动计划；`archive/plans/pi-forge-integration-plan.md` 明确为历史快照。
 - `tests/datasets/spider/data` 已恢复为仓库记录的 `../../spider2/data` symlink，未修改 benchmark 数据内容。
 - 初版 `agent/contracts/` 新增 `PrincipalContext v1`、`AgentMandate v1`、`PolicyDecision v1`、`ResourceRef v1`、`DatasourceBinding v1`、`RegistryBinding v1` 及共享有效/无效 fixture；Contract 评审发现 AgentMandate 与 Coverage 语义问题，当前正在修订，不能据初版进入 M1A。
 - `services/pi-orchestrator/src/governance-contracts.ts` 提供对应 TypeBox 类型；Python JSON Schema 与 TypeScript 使用同一 fixture corpus 做行为 parity。
@@ -295,7 +295,7 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 2. 明确 Conversation、Task、Plan、Decision、Artifact、Evidence、Data Asset、Agent Client 和 Outcome 的关系、Owner、真相源和当前实现差距。
 3. 提出按角色分组的信息架构、深链接 Route、核心 Human/Agent/Steward Journeys，以及 loading/needs_input/waiting_decision/partial/failed/forbidden 等状态投影。
 4. 重新排序 W3A/W3B、M1A、Agent Runtime MVP、Data Trust Control Plane、平台 Assurance、Reusable Deliverables、Economics/Coordination 和第二场景；每阶段必须有证伪门禁与不做项。
-5. 标明旧 `web-product-shell-plan-2026-08-24.md` 和 `821065f` 原型中可保留、需删除和必须重建的部分；不修改现有原型和生产 Web。
+5. 标明旧 `archive/plans/web-product-shell-plan-2026-08-24.md` 和 `821065f` 原型中可保留、需删除和必须重建的部分；不修改现有原型和生产 Web。
 6. 用户对提案给出 `PASS / CHANGE / REMOVE` 后，才回写批准后的实施顺序并启动下一版 W3A。
 
 ### N2 提案结果（2026-08-25）
@@ -304,12 +304,12 @@ M0 通过后单独进行 Contract 评审，才进入 M1A。
 - 定义 Workspace/Principal/Agent Client/Conversation/Task/Plan/Decision/Action/Artifact/Evidence/Data Asset/Deliverable/Outcome 的产品关系、Owner、当前真相源和实现缺口。
 - 提出按“工作 / 信任 / 接入 / 系统”分组的 IA、Route 兼容、H1/H2/A1/S1/F1 五条 Journey、统一状态语言、旧 W3A 的保留/修改/删除清单和质量/Agent 指标。
 - 初版曾建议 W3A.2 隔离原型 → W3B Human Control Plane → M1A/R1/G1/Q1/H6；用户随后通过 `REQ-2026-08-25-017` 明确改为底层 Product Spine 先行，初版短期顺序不再生效。
-- 旧 [`web-product-shell-plan-2026-08-24.md`](web-product-shell-plan-2026-08-24.md) 已标记为历史第一版；N2 本身未修改 `tools/web-product-shell-prototype/`、生产 Web、Runtime、API、数据库或部署。
+- 旧 [`archive/plans/web-product-shell-plan-2026-08-24.md`](archive/plans/web-product-shell-plan-2026-08-24.md) 已标记为历史第一版；N2 本身未修改 `tools/web-product-shell-prototype/`、生产 Web、Runtime、API、数据库或部署。
 - 文档链接/内容测试 `4 passed`，提案 8 项必要结构断言与 `git diff --check` 通过；长期 Agent/Governance 阶段仍需后续真实测试证据，不由 N2 自动批准。
 
 ## SP0–SP5：短期 Product Spine（自动门禁通过，待用户 Atlas 确认）
 
-> Requirement：[`REQ-2026-08-25-017`](requirements-pool.md#req-2026-08-25-017短期-product-spine-底层优先实施计划) · 详细计划：[`short-term-product-spine-plan-2026-08-25.md`](short-term-product-spine-plan-2026-08-25.md)
+> Requirement：[`REQ-2026-08-25-017`](requirements-pool.md#req-2026-08-25-017短期-product-spine-底层优先实施计划) · 详细计划：[`archive/plans/short-term-product-spine-plan-2026-08-25.md`](archive/plans/short-term-product-spine-plan-2026-08-25.md)
 
 用户确认近期不再以隔离 fixture 原型作为主路径，而是先完成足以支撑真实产品 Journey 的底层框架，再接 Web Product Shell：
 
@@ -335,35 +335,35 @@ SP0 Projection Contract / truth source closure
 
 - 从真实 Pi Store 构建 Conversation/Task Product Projection，增加 authenticated/no-store read API、opaque pagination、scope/lineage/redaction/2 MB boundary 与 restart recovery。
 - 10K Task Conversation list 从首版约 19,040 ms 优化到平均约 26.8 ms；使用单次 window CTE 消除相关子查询/N+1，没有提前增加 schema v5。
-- Pi `114 passed`、Python `569 passed / 24 skipped`、typecheck/npm audit/`git diff --check` 通过；正式证据见 [`product-spine-sp1-evidence-2026-08-25.md`](product-spine-sp1-evidence-2026-08-25.md)。
+- Pi `114 passed`、Python `569 passed / 24 skipped`、typecheck/npm audit/`git diff --check` 通过；正式证据见 [`archive/engineering/product-spine-sp1-evidence-2026-08-25.md`](archive/engineering/product-spine-sp1-evidence-2026-08-25.md)。
 - 未新增 Conversation Store、DB Schema、Task 状态或 Web 页面。SP2 当前开始。
 
 ### SP2 验证结果（2026-08-25）
 
 - ReportStore scope-aware list/index 与 authenticated Product BFF 已完成；Workspace 可在 Pi/Report/Registry 失效时 partial/offline，不复制 Task/Report 状态。
 - 增加同版本 `TaskSummaryV1`，BFF 执行二次 Contract/scope gate、去敏、bounded 和 no-store；Registry revision 使用内容 hash。
-- Python `575 passed / 24 skipped`、SP2 定向 `34 passed`、Pi `114 passed`、typecheck/npm audit/`git diff --check` 通过；证据见 [`product-spine-sp2-evidence-2026-08-25.md`](product-spine-sp2-evidence-2026-08-25.md)。
+- Python `575 passed / 24 skipped`、SP2 定向 `34 passed`、Pi `114 passed`、typecheck/npm audit/`git diff --check` 通过；证据见 [`archive/engineering/product-spine-sp2-evidence-2026-08-25.md`](archive/engineering/product-spine-sp2-evidence-2026-08-25.md)。
 - Backend Gate PASS，SP3 当前开始；仍无 Product 页面或部署变更。
 
 ### SP3 验证结果（2026-08-25）
 
 - 新增 local-only Product Shell template/CSS/JS 与 `/static` mount；短期导航、共享状态、focus/reduced-motion/mobile navigation 基础完成。
 - 0 CDN、0 inline style/script、0 fixture、0 data fetch/localStorage；现有 Admin 未被一次性重写。
-- Python `581 passed / 24 skipped`、SP3/Docs `10 passed`、Pi `114 passed`、typecheck/npm audit/`git diff --check` 通过；证据见 [`product-spine-sp3-evidence-2026-08-25.md`](product-spine-sp3-evidence-2026-08-25.md)。
+- Python `581 passed / 24 skipped`、SP3/Docs `10 passed`、Pi `114 passed`、typecheck/npm audit/`git diff --check` 通过；证据见 [`archive/engineering/product-spine-sp3-evidence-2026-08-25.md`](archive/engineering/product-spine-sp3-evidence-2026-08-25.md)。
 - SP4 当前开始，首次将 Shell 接到真实 Product BFF。
 
 ### SP4 验证结果（2026-08-25）
 
 - Workspace/Conversation/Task list+detail/Report Library/Data 页面已接 Product BFF；Chat/Task action 复用原 typed ChannelEvent endpoint。
 - 任务详情首轮视觉审查的主审批可发现性、pending 状态和层级 P0 已修正；复审无 P0。
-- Python `583 passed / 24 skipped`、Product/Web/Docs `33 passed`、Pi `114 passed`、typecheck/npm audit/JS syntax/Playwright 双桌面 viewport/0 error/0 overflow/`git diff --check` 通过；证据见 [`product-spine-sp4-evidence-2026-08-25.md`](product-spine-sp4-evidence-2026-08-25.md)。
+- Python `583 passed / 24 skipped`、Product/Web/Docs `33 passed`、Pi `114 passed`、typecheck/npm audit/JS syntax/Playwright 双桌面 viewport/0 error/0 overflow/`git diff --check` 通过；证据见 [`archive/engineering/product-spine-sp4-evidence-2026-08-25.md`](archive/engineering/product-spine-sp4-evidence-2026-08-25.md)。
 ### SP5 验证结果（2026-08-25）
 
 - Candidate `product-spine-5dcd4715941a` 已使用独立 Pi/QueryRun/Report/Registry/Artifact 状态和 candidate 内 mode `0400` 只读数据副本，认证开启；生产 Forge/Pi 未替换。
 - 固定渠道指标问题在最终配置下连续 3 次完成真实 Conversation → SQL Review → 单次只读执行 → Analysis → Report → Report Library；每次 1 个 QueryRun/`query.completed`、4 个 succeeded StageAttempt，PDF/PPTX ready。
 - 重复消息返回原任务，过期重复批准 409 且不重放 SQL；等待审批/完成态 restart recovery、Pi offline partial、双桌面 12 routes/0 external request/0 error/0 overflow 通过。
 - Live Gate 修复 insecure-HTTP ID、瞬时 ready 轮询、同源 HTTP Report URL、空 Attempt error、长 SQL Grid overflow 和完成态历史审核误标权限；复杂查询 Assurance 拒绝与 Analysis `incomplete` 作为反证保留。
-- Python `583 passed / 24 skipped`、Pi `115 passed`、typecheck/npm audit/JS syntax/`git diff --check` 通过；证据见 [`product-spine-sp5-evidence-2026-08-25.md`](product-spine-sp5-evidence-2026-08-25.md)。
+- Python `583 passed / 24 skipped`、Pi `115 passed`、typecheck/npm audit/JS syntax/`git diff --check` 通过；证据见 [`archive/engineering/product-spine-sp5-evidence-2026-08-25.md`](archive/engineering/product-spine-sp5-evidence-2026-08-25.md)。
 
 每个工作包单独门禁。SP0–SP5 自动门禁现已通过，但用户尚未给出 Atlas `PASS / CHANGE / REMOVE`，因此 Product Spine 不能标记为最终接受，也不能据此自动启动 M1A、G1、Q1 或 H6。
 
@@ -577,7 +577,7 @@ Forge 当前从可查询数据库/数仓开始，不承担外部内容、支付�
 
 实施结果：
 
-- 已审计 `web/templates/` 19 个模板及 Web 暴露的 Architecture Atlas，命中与保留理由见 [`web-product-content-audit-2026-08-24.md`](web-product-content-audit-2026-08-24.md)。
+- 已审计 `web/templates/` 19 个模板及 Web 暴露的 Architecture Atlas，命中与保留理由见 [`archive/engineering/web-product-content-audit-2026-08-24.md`](archive/engineering/web-product-content-audit-2026-08-24.md)。
 - 已清理 Chat slogan/营销空状态、Tasks integration/架构宣传、Registry 控制面 eyebrow、全局与登录页产品描述，以及 Architecture Atlas 中的产品主张；管理员技术状态、架构事实与审批/DDL 风险说明保留。
 - H5 candidate 删除“可信数据报告”、英文氛围标签和 Renderer/版本/候选说明；业务 Evidence 与报告限制保留。
 - `tests/test_web_product_content.py` 与相关 Web 定向测试共 76 passed；桌面 H5 candidate 0 browser errors。等待用户视觉确认后再标记 verified。
@@ -607,7 +607,7 @@ Forge 当前从可查询数据库/数仓开始，不承担外部内容、支付�
 
 ### W3.3 分门顺序
 
-1. **W3A 产品地图与高保真骨架**：按 [`web-product-shell-plan-2026-08-24.md`](web-product-shell-plan-2026-08-24.md) 的页面/对象/路由矩阵、关键旅程、状态与动作清单，构建无 CDN 的桌面隔离原型，覆盖全部主页面和 waiting/failed/empty 等关键状态；发布 Atlas 独立预览，由用户逐页门禁。
+1. **W3A 产品地图与高保真骨架**：按 [`archive/plans/web-product-shell-plan-2026-08-24.md`](archive/plans/web-product-shell-plan-2026-08-24.md) 的页面/对象/路由矩阵、关键旅程、状态与动作清单，构建无 CDN 的桌面隔离原型，覆盖全部主页面和 waiting/failed/empty 等关键状态；发布 Atlas 独立预览，由用户逐页门禁。
 2. **W3B 生产 Shell 与核心旅程**：通过门禁后才改生产 `base.html` 与本地静态资源；新增 Task Detail 和 Report Library projection；打通新建任务→计划→补充/审批→结果→分析→报告→列表的真实桌面路径；使用单一 feature flag 和回滚点。
 3. **W3C 数据资产与管理收口**：重组二级导航和入口，保留现有领域真相源；不顺带建设 M1B、M2、M3 或通用 Memory。
 
@@ -630,7 +630,7 @@ M1A 不取消，但顺延为 W3 核心 Product Shell 稳定后的首个后端工
 - 所有页面显示“交互原型/演示数据”；源码无生产网络请求。审批 dialog 绑定任务、数据源、范围、限制、完整 SQL 和检查结果；演示确认不会写生产 Store。
 - prototype tests `5 passed`、build/audit 通过；Python 全量 `564 passed / 24 skipped`（Web 定向 `19 passed`）；Pi typecheck/`103 passed`。Playwright 在 1440×900、1600×1000 本地与 Atlas 走通关键 route、dialog、fixture state、search、back/forward/reload，0 console error、0 横向溢出。
 - 固定 commit `821065f` 发布到 Atlas `/srv/forge/previews/web-shell-821065f/`，`forge-web-shell-preview.service` 仅绑定 `preview.internal.invalid:18006`。生产 Jinja、Forge/Pi、Store 和 `d2b0fd9` checkout 未修改。
-- 用户门禁已给出 `CHANGE`：连续 Chat 不应被一次性创建表单替代；同时“分析工作台”不足以概括产品。当前先复核 2026-08-21 至 2026-08-24 的产品对话，重新确认 Conversation、Task、Artifact、Decision、Governance 与 Agent-facing Runtime 的产品投影。新的 IA 未确认前不修改生产 route/API，不进入 W3B。原型自动证据见 [`web-product-shell-w3a-evidence-2026-08-24.md`](web-product-shell-w3a-evidence-2026-08-24.md)。
+- 用户门禁已给出 `CHANGE`：连续 Chat 不应被一次性创建表单替代；同时“分析工作台”不足以概括产品。当前先复核 2026-08-21 至 2026-08-24 的产品对话，重新确认 Conversation、Task、Artifact、Decision、Governance 与 Agent-facing Runtime 的产品投影。新的 IA 未确认前不修改生产 route/API，不进入 W3B。原型自动证据见 [`archive/engineering/web-product-shell-w3a-evidence-2026-08-24.md`](archive/engineering/web-product-shell-w3a-evidence-2026-08-24.md)。
 
 ## H1：Analysis Stage 延迟与真实进度修复（P0 独立切片）
 
@@ -777,7 +777,7 @@ Playwright 驱动并在每一步建立 checkpoint：
 - 9 个 ExecutionPlan revision、QueryResult/Chart/Analysis/RenderedOutput/TechnicalReport/ReportBundle/Publication lineage 连续；HTML/PDF/PPTX ready；测试 datasource 无 WAL/SHM。
 - Playwright 保存桌面逐阶段 screenshot，DOM/ARIA/focus/overflow/console/page-error 自动断言通过；视觉模型逐图评审。用户后续明确当前不考虑移动端，移动证据不参与 Verdict。
 - 正式 verdict：**Physical chain PASS / Trusted product outcome FAIL**。P0 为：①真实 PDF footer 泄漏内部 `file:///home/...` 路径；②长 Analysis 底部 action 后 same-page Report/Publication 主区空白，刷新后才可见；③ Chart builder 未验证 grain/重复 label，报告可生成误导性品类图。
-- P1 包括 decision-readiness、SQL review 修改需求路径、结果单位/异常、主进度可读、长卡片 action、报告风险前置和 PPTX 封面截断。完整证据见 [`golden-journey-acceptance-2026-08-24.md`](golden-journey-acceptance-2026-08-24.md)。
+- P1 包括 decision-readiness、SQL review 修改需求路径、结果单位/异常、主进度可读、长卡片 action、报告风险前置和 PPTX 封面截断。完整证据见 [`archive/engineering/golden-journey-acceptance-2026-08-24.md`](archive/engineering/golden-journey-acceptance-2026-08-24.md)。
 - 隔离服务已停止，临时 service/channel keys 删除；生产 Forge/Pi health/readiness 正常。P0 修复已登记 `REQ-2026-08-24-008`。
 
 ### H4：Golden Journey P0 Closure（已完成）
@@ -807,7 +807,7 @@ H4 门禁：
 - 自动验证：Python `553 passed / 24 skipped`；Pi `96 passed`；TypeScript、npm audit、targeted report/Web tests 和桌面 Playwright 通过。桌面 80 条 Flow event 下 body 高度保持 1000px，Report/Publication 同页可见，0 console/page error。
 - NAS Chrome 146 实际 PDF 内容扫描不含 `file://`、`/home/`、`forge-m4.1`、`index.html` 或默认日期 header；不是只检查 command/file size。
 - 同一真实 Golden Journey 在独立 Store 和 mode-0400 datasource 重跑完成：Task 262.399s，Query 107 rows/31ms，4/4 Attempt succeeded，1 approval/1 execution，重复 Web message HTTP 200 且 QueryRun count=1；PDF/PPTX ready，0 ChartArtifact，same-page completion 可见。
-- NAS 已部署并保留回滚点 `~/services/forge-m4.1/backups/h4-p0-20260824T110913Z/`；隔离服务、override 和 tunnel 已清理，生产 health/readiness `ok`。完整证据见 [`golden-journey-p0-closure-2026-08-24.md`](golden-journey-p0-closure-2026-08-24.md)。
+- NAS 已部署并保留回滚点 `~/services/forge-m4.1/backups/h4-p0-20260824T110913Z/`；隔离服务、override 和 tunnel 已清理，生产 health/readiness `ok`。完整证据见 [`archive/engineering/golden-journey-p0-closure-2026-08-24.md`](archive/engineering/golden-journey-p0-closure-2026-08-24.md)。
 - 剩余风险显式转入 P1/H5：当前 0 Chart 是正确的安全降级，不是理想专业报告体验。
 
 ### H5：Evidence-bound Chart Storytelling（R0 自动化通过、用户视觉门禁失败，修订中）
@@ -842,20 +842,20 @@ R0 实际结果：
 - 完成品类横截面与月度多系列两个 fixture：4 张图分别回答排名、集中度、拐点和增长来源，非重复视图。
 - 完成自包含 HTML、5 页 PDF、5 页 16:9 PPTX 候选；HTML DOM/ARIA/交互/console/print PASS，PDF 无本地路径/header/footer 泄漏，PDF/PPTX 静态保留单位、Annotation、quality 和 Evidence。
 - 完成 Analysis/Report Skills、Structured Tool、`skill-executor`、Skills package、Contract、Renderer、Exporter 的 R1 同版本兼容矩阵。
-- 正式证据：[`chart-storytelling-r0-evidence-2026-08-24.md`](chart-storytelling-r0-evidence-2026-08-24.md)。R1 未自动批准，NAS 与生产 Skills/Prompt 未修改。
+- 正式证据：[`archive/engineering/chart-storytelling-r0-evidence-2026-08-24.md`](archive/engineering/chart-storytelling-r0-evidence-2026-08-24.md)。R1 未自动批准，NAS 与生产 Skills/Prompt 未修改。
 - 用户视觉门禁反馈为 FAIL：首屏深绿色候选宣传 Hero 不承载报告决策内容，却占据接近整屏；交互位于首屏以下且缺少可发现反馈，元信息标签外观又误导为按钮。修订要求是删除宣传壳，首屏直接显示数据范围/质量/执行摘要/第一决策图，并把 tooltip、series 控制、table fallback 和 Evidence feedback 做成无需猜测的可见操作。
 - 用户明确要求“产品不要重复造轮子”。生产 Renderer 不继续扩展手写 SVG/JavaScript；图表 tooltip、legend、zoom/selection、annotation geometry、layout 与 SVG/canvas rendering 必须复用成熟 chart engine。Forge 自有代码只负责 ChartArtifact v2 的受控适配、Evidence/quality binding、设计 token 和跨媒介 Gate。正式实现前用同一双 fixture 比较 ECharts、Vega/Vega-Lite、AntV G2；Highcharts/AG Charts 只有在商业授权成本被明确接受后才进入候选。生产最终只选一个默认 engine，不建设多引擎插件平台。
 - 用户已批准继续开源 engine bake-off。实现必须位于隔离开发工具包，不修改生产 Pi `package.json`、Skills/Prompt 或 Renderer；每个 engine 必须消费相同 normalized fixture、使用本地固定依赖而非 CDN，并生成可比较的桌面 HTML/截图/交互与构建体积证据。
-- Bake-off 已完成，正式证据见 [`chart-engine-bakeoff-2026-08-24.md`](chart-engine-bakeoff-2026-08-24.md)。初步选择 ECharts：按需 SVG bundle 约 193 kB gzip、warm median 58.5 ms；Vega-Lite 约 276 kB/85.3 ms 且需 CSP interpreter；G2 约 398 kB/368.5 ms。数字仅为同机相对证据。
+- Bake-off 已完成，正式证据见 [`archive/engineering/chart-engine-bakeoff-2026-08-24.md`](archive/engineering/chart-engine-bakeoff-2026-08-24.md)。初步选择 ECharts：按需 SVG bundle 约 193 kB gzip、warm median 58.5 ms；Vega-Lite 约 276 kB/85.3 ms 且需 CSP interpreter；G2 约 398 kB/368.5 ms。数字仅为同机相对证据。
 - 用户已确认继续 ECharts focused candidate。该门仍只修改隔离工具包：报告首屏直接进入摘要和第一决策图；渠道视图必须从存量堆叠图改为可复算的 4→6 月增量贡献拆解，标出总增量 174K、直营 87K/50% 和 Evidence；排名视图表达前两名差距，避免赢家错觉；ECharts Option 只能由 allowlisted semantic adapter 生成。完成 HTML tooltip/legend/Evidence/table、strict CSP、print/PDF/PPTX 静态一致性和桌面视觉审查后回写证据。生产 package、Skills/Prompt/Tool/Renderer 和 NAS 仍不得修改。
-- Focused candidate 已完成，正式证据见 [`chart-storytelling-echarts-focused-evidence-2026-08-24.md`](chart-storytelling-echarts-focused-evidence-2026-08-24.md)。4 SVG/0 Canvas、tooltip、series toggle、Evidence、table、no-JS 核心结论、5 页 PDF/PPTX、strict CSP 和零浏览器错误通过；首图在 1600×1000 的 y=585.8px 开始可见。候选同时遵守 W2，只呈现报告主体内容。
+- Focused candidate 已完成，正式证据见 [`archive/engineering/chart-storytelling-echarts-focused-evidence-2026-08-24.md`](archive/engineering/chart-storytelling-echarts-focused-evidence-2026-08-24.md)。4 SVG/0 Canvas、tooltip、series toggle、Evidence、table、no-JS 核心结论、5 页 PDF/PPTX、strict CSP 和零浏览器错误通过；首图在 1600×1000 的 y=585.8px 开始可见。候选同时遵守 W2，只呈现报告主体内容。
 - R1 新增阻断：ChartArtifact v2 当前无法完整声明 period-delta/output-grain。正式进入生产前必须扩展确定性 transform 和 semantic gate，并与 Skills/Tool/Compatibility/Renderer 同版本发布；不允许 focused adapter 的固定计算静默变成 Renderer 猜测。
 - 用户再次判定视觉门禁 FAIL：虽然宣传文案已删除，但大标题双栏、深色摘要块、导航卡片、大圆角章节和彩色侧栏仍是 Landing Page composition，不是专业报告。新增 `REQ-2026-08-24-012` 并进入 Editorial Report revision：文档画布、紧凑报告头、连续章节、figure caption、观察/判断/限制结构；保留现代 ECharts 交互。
 - Inline 强调固定为版本化语义 token：strong=证据化结论/数字，emphasis=术语/假设，superseded=有 revision lineage 的旧标准，underline=仅链接/Evidence，code=标识符，mark=少量待审定义；Callout 仅 `info/decision/warning/limitation`，不得由模型提供 HTML/CSS/class/color。
 - 用户补充“内容专业不等于术语密度”：正文必须优先用准确普通中文，按观察→有限判断→限制→待补证据组织；内部 `Evidence/Revision/Ready/baseline/comparison` 不占据业务正文，不能用语气、粗体或 Callout 制造确定性。
 - 用户决定当前 Editorial revision 先暂定保留、后续迭代。该决定不是完整视觉 PASS，也不批准生产 R1。当前按 `REQ-2026-08-24-013` 只将固定构建物部署为 Atlas 独立预览，然后重评估总体目标差距。
 - Atlas 隔离预览已完成：`/srv/forge/previews/editorial-929e8d4/` 为不可写固定构建物，`forge-report-preview.service` 仅绑定 LAN `preview.internal.invalid:18005`；远端 browser gate 通过，生产 Forge/Pi active、源码仍为干净 `d2b0fd9`。生产 readiness 保留已知的内网 HTTP `secure_cookie` fail，本次未改认证或 HTTPS。
-- 阶段重评估见 [`forge-goal-gap-assessment-2026-08-24.md`](forge-goal-gap-assessment-2026-08-24.md)：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%。当前首要差距不是图表视觉，而是 Runtime Governance Coverage=0；下一建议工作包仍是单独批准 M1A。
+- 阶段重评估见 [`archive/engineering/forge-goal-gap-assessment-2026-08-24.md`](archive/engineering/forge-goal-gap-assessment-2026-08-24.md)：近期可信数据任务产品约完成 65%–70%，长期企业目标约完成 30%–35%。当前首要差距不是图表视觉，而是 Runtime Governance Coverage=0；下一建议工作包仍是单独批准 M1A。
 
 ## 3. M1A：服务身份、Delegation 与默认拒绝（近期，详细）
 
@@ -1089,7 +1089,7 @@ R0.6 Structured Forge Compiler 兼容性维护关闭：`REQ-2026-09-04-030` 统�
 
 R0.6 Accuracy Lab DeepSeek 复验阻塞证据：`REQ-2026-09-04-032` 先后按用户选择尝试火山 Coding Plan 与官方 DeepSeek。Benchmark Runtime 的扩展注册时序已修复并通过 Pi 118 个测试与 TypeScript typecheck；火山 canary 仍由 `429 AccountQuotaExceeded` 阻断。官方入口降低到并发 1 后，nominal full Run `pbr_9d5e4263afdb46cd8636d4b6599f0708` 写入 500 个 case，但每臂只有 78 个候选、422 个候选缺失，独立探针返回 `402 Insufficient Balance`。该 Run 失败关闭，不形成新分数、不改写三轮有效完整基线，也不替代 R0.6 External Adoption Evidence 门禁；额度恢复且双臂 canary 通过后才允许从隔离状态库重跑。
 
-R0.6 Accuracy Lab 离线归因关闭：`REQ-2026-09-05-034` 固定 Sol Run `pbr_6778bf9d34ae42fba0b070a5f9c154ba`，完成209题/373个EA失败arm的Agent辅助初步审查及500题候选/SQL哈希证据。清单见 `benchmark-sol-error-triage-2026-09-05.json`；86个候选错误、150个参考冲突、133个意图/输出歧义、4个未定是初筛标签，不是人审裁决或可扣除的错误数。Official EA 62.6% vs62.8%不变；未发新基准调用、未改Prompt/Compiler/Gold/评分器。下一实验建议以值/实体绑定为先，结合范围、粒度及输出契约；须另行明确实施范围，不扩展平台或替代外部采用证据。
+R0.6 Accuracy Lab 离线归因关闭：`REQ-2026-09-05-034` 固定 Sol Run `pbr_6778bf9d34ae42fba0b070a5f9c154ba`，完成209题/373个EA失败arm的Agent辅助初步审查及500题候选/SQL哈希证据。清单见 `archive/benchmarks/benchmark-sol-error-triage-2026-09-05.json`；86个候选错误、150个参考冲突、133个意图/输出歧义、4个未定是初筛标签，不是人审裁决或可扣除的错误数。Official EA 62.6% vs62.8%不变；未发新基准调用、未改Prompt/Compiler/Gold/评分器。下一实验建议以值/实体绑定为先，结合范围、粒度及输出契约；须另行明确实施范围，不扩展平台或替代外部采用证据。
 
 R0 未通过前，不恢复 M1A、G1、Q1、H6 或更广企业平台实现。Atlas candidate 可在不扩张产品范围的前提下单独复验；不得因产品切割删除已有 Contract、测试、审计或失败关闭边界。
 
@@ -1209,16 +1209,16 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 #### 15.1.12 ACC-1A关闭证据与剩余门禁（REQ-2026-09-05-036）
 
 - **已完成**：比较器修复与 `semantic-result-compare-v2`；公开Evaluate结果版本入hash，保留可靠列身份并区分false与inconclusive；Pi新Run冻结版本并在context/evaluate漂移时失败关闭，历史未知版本不伪造、不重写、不按新版恢复。Official EA和已有审批/只读/ACL边界不变。
-- **同候选重评**：`benchmark-sol-metric-replay-2026-09-05.json` 记录全部500题/1000个候选，996个可执行结果哈希一致且逐项复现旧判定；Forge Contract 280→284，Direct 291→294，零回退、此集零inconclusive。Official EA仍313/500与314/500；新增7个通过仅为评价器纠错，另181个真错诊断由映射歧义改为值错误。未发起模型调用，未重跑Assurance或生成新时延结论。
-- **D/R/S冻结**：`accuracy-evaluation-cohorts-2026-09-05.json` 以修复前归因证据冻结R500、D50（16错题+34旧基线对照，11库/33难度分层）及S27项。父执行器独立复算清单/hash/配额，S20比较器边界、7个既有安全引用/14参数化用例通过。完整验证为Python722 passed/26 skipped、Pi124 passed、TypeScript typecheck通过。
+- **同候选重评**：`archive/benchmarks/benchmark-sol-metric-replay-2026-09-05.json` 记录全部500题/1000个候选，996个可执行结果哈希一致且逐项复现旧判定；Forge Contract 280→284，Direct 291→294，零回退、此集零inconclusive。Official EA仍313/500与314/500；新增7个通过仅为评价器纠错，另181个真错诊断由映射歧义改为值错误。未发起模型调用，未重跑Assurance或生成新时延结论。
+- **D/R/S冻结**：`archive/benchmarks/accuracy-evaluation-cohorts-2026-09-05.json` 以修复前归因证据冻结R500、D50（16错题+34旧基线对照，11库/33难度分层）及S27项。父执行器独立复算清单/hash/配额，S20比较器边界、7个既有安全引用/14参数化用例通过。完整验证为Python722 passed/26 skipped、Pi124 passed、TypeScript typecheck通过。
 - **未完成的外部前置条件**：H只有冻结协议、无已证明独立且审定标签的case；现有500/旧hard已参与调参，Spider2剩余公开材料也未满足完整独立性与题意/模板隔离证明。P无业务数据授权及Owner确认。不将这些缺口包装成ACC-1或ACC-6完成，不把已有Gold文件等同于独立审核。
 - **后续实证**：新增来源、原2A假设的停止依据和下一实验门禁见15.1.13。独立H审核未完成时是否允许D诊断先行，以及调用预算，仍须明确确认。未经预算授权不发canary，不自动推进后续阶段。
 
 #### 15.1.13 元数据机制实证与CSV绑定修复（REQ-2026-09-05-037）
 
-- **实证结论**：`accuracy-metadata-treatment-audit-2026-09-05.json` 覆盖11库/75表/798列；format+PK对D16的25个失败arm新增有效取值证据为0，停止原追加Prompt假设。通用CSV绑定修复已进入 `forge/hard_accuracy_benchmark.py`，按SQLite ASCII大小写规则匹配并对歧义失败关闭，未写题号/Gold特例。
-- **行为证明**：`accuracy-metadata-binding-fix-2026-09-05.json` 记录48列已有元数据恢复；重算全部D50真实context与100份双臂control指令，只有md-034/046/052/065/077输入改变，表/关系范围不变。md-065的approved=true/false证据已进入两臂输入；这不是新答案、不是EA改善。修复前2个回归反例失败，修复后Python全套725 passed/26 skipped、TypeScript typecheck通过。
-- **H来源证据**：`accuracy-holdout-source-audit-2026-09-05.json` 从官方完整dev的1534题机械排除523题，冻结1011候选/964依赖组件；父执行器盲态复核哈希、集合、稳定ID和题面重叠。最终H未抽样，159条曝光SQL解析/qualification失败记录、独立题意/Gold/依赖审核及完整数据快照仍未闭环，不能称为独立H。
+- **实证结论**：`archive/benchmarks/accuracy-metadata-treatment-audit-2026-09-05.json` 覆盖11库/75表/798列；format+PK对D16的25个失败arm新增有效取值证据为0，停止原追加Prompt假设。通用CSV绑定修复已进入 `forge/hard_accuracy_benchmark.py`，按SQLite ASCII大小写规则匹配并对歧义失败关闭，未写题号/Gold特例。
+- **行为证明**：`archive/benchmarks/accuracy-metadata-binding-fix-2026-09-05.json` 记录48列已有元数据恢复；重算全部D50真实context与100份双臂control指令，只有md-034/046/052/065/077输入改变，表/关系范围不变。md-065的approved=true/false证据已进入两臂输入；这不是新答案、不是EA改善。修复前2个回归反例失败，修复后Python全套725 passed/26 skipped、TypeScript typecheck通过。
+- **H来源证据**：`archive/benchmarks/accuracy-holdout-source-audit-2026-09-05.json` 从官方完整dev的1534题机械排除523题，冻结1011候选/964依赖组件；父执行器盲态复核哈希、集合、稳定ID和题面重叠。最终H未抽样，159条曝光SQL解析/qualification失败记录、独立题意/Gold/依赖审核及完整数据快照仍未闭环，不能称为独立H。
 - **准备阶段提案**：5道输入受影响的D题，2条件×2臂，原提案20次生成，包含前2题canary；不等同于完整D50或泛化验证。后续用户授权、参数失败补额和Luna实测结果见15.1.14。
 - **调用前风险**：现有Pi Run的temperature=0/max_output_tokens=8192是记录值，未在session调用显式绑定；离线实际Codex适配器探针即使传maxTokens=8192也不写输出上限，session默认仍允许自动重试。尚无可承诺的8192-token成本硬上限；必须先明确实际参数/请求计数/重试策略，再获得预算授权。模型真实能力与扩展覆写未验证，不追溯伪造历史请求参数。
 - **准备轮边界**：新模型调用0；Official EA仍313/500 vs314/500。未变更Gold/Prompt/Compiler/生产配置，未commit/push/部署。
@@ -1226,7 +1226,7 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 #### 15.1.14 Luna五题机制验证结果
 
 - **实际调用**：Pi现有OAuth入口与 `PiBenchmarkRuntime`，固定Luna。首次显式temperature被接口拒绝，两请求HTTP400、无答案；用户确认“继续，最多22次”后，改用Provider默认采样，两条件一致。最终22次生成HTTP请求：2次参数失败+20个有效候选，无自动重试；不将失败canary包装成准确率结果。
-- **五题实测**：Official EA与Contract v2均为Forge 3/5→2/5，Direct 3/5→3/5；Forge执行5/5→4/5，Direct保持5/5。无新增评价通过，Forge新增1个回退；这是全部5道输入受影响开发题，不是Luna总体准确率。证据：`benchmark-luna-binding-2026-09-05.json`。
+- **五题实测**：Official EA与Contract v2均为Forge 3/5→2/5，Direct 3/5→3/5；Forge执行5/5→4/5，Direct保持5/5。无新增评价通过，Forge新增1个回退；这是全部5道输入受影响开发题，不是Luna总体准确率。证据：`archive/benchmarks/benchmark-luna-binding-2026-09-05.json`。
 - **错误变化**：md-065两臂approved从Yes改为true，空结果变为非空；但费用类型分组与Gold的event.type仍有语义/参考冲突，未改判。md-077 Forge日期恢复ISO格式，查到与Gold相同的两个人及金额，但姓名合并成一列，仍按原输出契约判失败；Direct日期仍错。md-052处理组Forge把SQL式别名写入scan/table，编译器复现“JOIN 条件引用了未声明的表：b, e。”，不能归因为稳定的元数据负效应。
 - **代价与决定**：双臂合计tokens 28,611→38,709（+35.29%），超过预设20%晋级阈值；不扩大调用、不宣称准确率改善。保留元数据完整性修复；下一短闭环优先处理已复现的Forge别名表示错误，参考/输出契约争议单独处理，不机械推进阶段表。
 - **复核与边界**：20个候选的评分/编译结果只读复现，5个Gold缓存与真实SQL执行一致；实际payload、session、请求记录和Pi run_id已封存。Raw Pi中的temperature=0/max_output_tokens=8192仍是旧声明字段，实际请求不传二者；不伪造历史参数。未改Gold/比较器/运行器生产源码，未commit/push/部署；独立H与外部采用门禁仍未通过。
@@ -1235,21 +1235,21 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 
 - **用户确认与实施**：REQ-2026-09-05-038要求实际strict:true而非prefer。沿用Pi Benchmark会话与onPayload钩子，从完整Forge Schema派生严格传输Schema；递归、CTE、子查询与集合运算保留。可选占位null在进入现有编译评估链路前移除，SQL NULL保留；Direct仍为文本SQL。
 - **失败关闭**：不支持的API或显式supportsStrictMode:false拒绝；禁止第二次Forge生成请求，Provider与Session自动重试关闭；历史prefer及Schema/Prompt漂移不得续跑混分。
-- **实证**：用户批准最多2次Luna请求；实际md-034双臂各1次、均HTTP200、零自动重试。Forge真实payload含strict:true、指定函数tool_choice及parallel_tool_calls:false；原始参数独立通过严格Schema校验，规范化后完成编译执行。证据：`benchmark-luna-strict-output-2026-09-05.json`。
+- **实证**：用户批准最多2次Luna请求；实际md-034双臂各1次、均HTTP200、零自动重试。Forge真实payload含strict:true、指定函数tool_choice及parallel_tool_calls:false；原始参数独立通过严格Schema校验，规范化后完成编译执行。证据：`archive/benchmarks/benchmark-luna-strict-output-2026-09-05.json`。
 - **边界与决定**：TypeScript typecheck和129项Pi测试通过；仅Luna/Codex服务端完成实证。结构合法不等于别名或业务语义正确，不将1题成功称为准确率提升，不改写历史500题/独立H/外部采用门禁，不扩大量测。
 
 #### 15.1.16 隐式别名确定性修复
 
 - **范围与根因**：用户确认继续处理md-052；REQ-039修复Compiler渲染接受event e、引用校验却只识别event AS e的不一致。共用解析器支持省略AS的表/限定表/括号子查询别名，不改变Prompt、Schema或模型输出；不放宽未知引用与重复绑定检查。
 - **验证**：修复前3个行为反例失败；修复后Compiler/Benchmark聚焦141项、5方言解析通过。20个原Luna候选与冻结HTTP上下文离线复算，仅处理组md-052 Forge的SQL改变；编译/Assurance/执行/EA/Contract通过，结果September Speaker。
-- **结果与边界**：处理组Forge 2/5→3/5，其余三组仍3/5；零回退、零模型调用。证据：`benchmark-luna-alias-fix-2026-09-05.json`。不覆盖历史运行、不重评历史500题；修复Compiler不代表元数据有准确率增量，也不解除H与外部采用门禁。
+- **结果与边界**：处理组Forge 2/5→3/5，其余三组仍3/5；零回退、零模型调用。证据：`archive/benchmarks/benchmark-luna-alias-fix-2026-09-05.json`。不覆盖历史运行、不重评历史500题；修复Compiler不代表元数据有准确率增量，也不解除H与外部采用门禁。
 
 #### 15.1.17 严格输出二十次新生成配对
 
 - **授权与输入**：REQ-040，用户明确选择完整配对20次；同5题、两元数据条件、双臂一次生成，当前strict Schema与Compiler一致。10份上下文和20份用户指令冻结。
 - **实际执行**：总20次HTTP200、零Provider自动重试、零替换调用。第10次发生Pi递归子Schema强制转换栈溢出，本地第二轮尝试被拦截；用户确认仅继续剩余10次。原失败记录不覆盖，所有原始响应经同一最终本地链路复核。
 - **运行器修复**：strict原始参数在prepareArguments中校验并归一化，再交Pi canonical Schema校验；Provider Schema不变、未修改依赖。缺失候选不发布completed，失败token不再清零或从合计排除；132项Pi测试/typecheck通过。原故障臂3819 tokens从session恢复，候选仍因CTE未投影total被Assurance拒绝。
-- **结果与代价**：旧元数据Forge EA/Contract 2/5、Direct3/5；修复后元数据两臂3/5。tokens 24021→33883（+41.06%），总57904。当前配置Forge与前轮固定候选复算同为3/5；md-052四臂均通过，md-065分组参考争议和md-077姓名列契约未解决。证据：`benchmark-luna-strict-paired-2026-09-05.json`。
+- **结果与代价**：旧元数据Forge EA/Contract 2/5、Direct3/5；修复后元数据两臂3/5。tokens 24021→33883（+41.06%），总57904。当前配置Forge与前轮固定候选复算同为3/5；md-052四臂均通过，md-065分组参考争议和md-077姓名列契约未解决。证据：`archive/benchmarks/benchmark-luna-strict-paired-2026-09-05.json`。
 - **决定**：不以5题或跨生成差异宣称总体/严格输出单因素优势，不更新历史500题成绩，不扩大调用；下一步先明确业务分组和结果列契约，H与外部采用门禁不变。
 
 
@@ -1259,7 +1259,7 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - **用户确认**：REQ-041，选择10题/20次请求；不是自动扩大REQ-040，也不解除H审核门禁。
 - **冻结与目的**：从R500按固定哈希跨10库各取1题，排除最近5题；只依赖库/题号，不依据答案。当前配置单条件双臂，新生成后不修改代码、Prompt、元数据或评分。
 - **门禁**：最多20次，零自动重试、零替换，异常停止；只读公开数据、Pi SDK认证。独立复核原始候选、EA/Contract、执行和真实消耗；不将无旧配置对照的小样本结果宣称优化增益或泛化。
-- **完成证据**：20次HTTP200、零Provider重试/替换，10个Forge参数严格/真实Pi校验、20个原候选独立复算通过，源码与10库hash不变。Forge EA6/10、Contract5/10、Compile/Execution10/10；Direct EA/Contract7/10、Execution10/10。tokens 51077 vs29953（+70.52%），总81030。证据：`benchmark-luna-expanded-regression-2026-09-05.json`。
+- **完成证据**：20次HTTP200、零Provider重试/替换，10个Forge参数严格/真实Pi校验、20个原候选独立复算通过，源码与10库hash不变。Forge EA6/10、Contract5/10、Compile/Execution10/10；Direct EA/Contract7/10、Execution10/10。tokens 51077 vs29953（+70.52%），总81030。证据：`archive/benchmarks/benchmark-luna-expanded-regression-2026-09-05.json`。
 - **暴露问题与决定**：目标聚合未投影、JOIN改变分母、日期格式/粒度和姓名列契约仍有失败；md-454漏Top-5但当前数据EA通过，隔离六校反例证明逻辑不等价。原评分不改、无新代码调优或扩大调用；将样本当故障证据，不当业务规则来源，不宣称泛化或优化单因素增益。
 
 #### 15.1.19 BIRD查询准确性基础建设（REQ-044）
@@ -1270,16 +1270,16 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - **阶段验收规则**：固定模型/数据/评分/预算与对照，逐项证明改善和回退；EX、Contract、覆盖、静默错误和成本分别报告。暂不设无依据的百分比门槛；不自动扩大模型调用、切换输入路径或实施新Agent循环。
 - **首个诊断完成**：3份原始生成的select已漏掉目标表达式，Compiler忠实复现；6种合成行为通过，机械补齐所有agg别名导致4个合法结果契约被破坏。确认生成表达问题，不把原因泛化为Compiler计算缺陷；Prompt是否是原因未获因果证明。
 - **单变量实验完成**：用户另批20次新生成；5题×两指令条件×Forge/Direct，全部HTTP200、零Provider重试/替换。Forge EX/Contract4/5→4/5，3个正确对照保持通过；Direct指令完全相同却4/5→5/5，保留生成波动事实。20个原始候选经运行链路与BIRD官方EX核心分别复算零差异，10份strict/Pi参数校验通过。
-- **决定与代价**：候选Prompt不采纳，源码/Schema/Gold/评分不改；不以旧失败题本轮恢复宣称收益，不追加拒绝、补列或付费抽样。双臂tokens36284→36262，总72546，Forge自身+0.25%。证据：`benchmark-luna-projection-instructions-2026-09-05.json`。首个表达说明假设闭环为未获收益，后续须另选有证据的通用机制并单独冻结实验。
+- **决定与代价**：候选Prompt不采纳，源码/Schema/Gold/评分不改；不以旧失败题本轮恢复宣称收益，不追加拒绝、补列或付费抽样。双臂tokens36284→36262，总72546，Forge自身+0.25%。证据：`archive/benchmarks/benchmark-luna-projection-instructions-2026-09-05.json`。首个表达说明假设闭环为未获收益，后续须另选有证据的通用机制并单独冻结实验。
 
 #### 15.1.20 评测标准与工程化协议（REQ-045）
 
 - **用户确认实施**：将BIRD基础能力基准、高覆盖/低错误/低交互负担和实验规则固化为可执行工程；本次不发起新模型调用或部署。
 - **实施切片**：复用CLI/Benchmark链路提供不可变协议清单、分层选题、离线重放和严格对比；Pi原生绑定清单、明确预算、隔离上下文、保存真实候选/使用量并禁额外回合。增加质量指标与字段日期证据审计，不新建Orchestrator。
 - **门禁已落地**：固定88个公开数据资产；Gold-only评分，SHM/空WAL不当数据漂移，非空WAL/journal拒绝。已评分失败保留EX=0与分母且可比较，未评分/漂移/旧诊断失败关闭；固定候选跨Compiler/Schema对比绑定原始output hash，生成源码/SDK/model/预算保留。缺usage显式未知，不从成本消失。
-- **验收完成**：实际D5/R500冻结及验证、10个历史候选重放、合成失败分母/可比与诊断不可比命令、质量指标与日期审计、HTTP协议门禁、实际Web预算及未知成本展示均通过。Python786 passed/26 skipped，Pi143 passed，typecheck通过，Pi门禁接入CI；零外部模型调用、无部署。证据：`benchmark-standards-engineering-2026-09-05.json`。
+- **验收完成**：实际D5/R500冻结及验证、10个历史候选重放、合成失败分母/可比与诊断不可比命令、质量指标与日期审计、HTTP协议门禁、实际Web预算及未知成本展示均通过。Python786 passed/26 skipped，Pi143 passed，typecheck通过，Pi门禁接入CI；零外部模型调用、无部署。证据：`archive/benchmarks/benchmark-standards-engineering-2026-09-05.json`。
 - **后续边界**：这是可复用测试工程，不是新准确率收益；现行Prompt和官方EX不变，H审核与R0.6外部采用仍未关闭。任何新生成实验按标准单独声明假设/变量与预算。
-- **首次标准真实运行（另批40次）**：Luna D20/seed42覆盖11库，Pi派发40次、返回39候选；md-472 Forge 120秒超时使Run failed，md-340 Gold在原30秒限制内不可评分。离线重放与compare按不完整记录拒绝晋级，20题中Forge确认正确10/失败9/未评分1，Direct9/10/1；已观测149300 tokens加一次未知消耗，不发布正式准确率或收益。40份raw hash与37份已评分候选判定核对一致。证据：`benchmark-luna-standard-d20-2026-09-05.json`。先处理Gold预检及未评分状态贯通；不自动重试、放宽Gold/评分、扩大R500或改变H/外部采用门禁。
+- **首次标准真实运行（另批40次）**：Luna D20/seed42覆盖11库，Pi派发40次、返回39候选；md-472 Forge 120秒超时使Run failed，md-340 Gold在原30秒限制内不可评分。离线重放与compare按不完整记录拒绝晋级，20题中Forge确认正确10/失败9/未评分1，Direct9/10/1；已观测149300 tokens加一次未知消耗，不发布正式准确率或收益。40份raw hash与37份已评分候选判定核对一致。证据：`archive/benchmarks/benchmark-luna-standard-d20-2026-09-05.json`。先处理Gold预检及未评分状态贯通；不自动重试、放宽Gold/评分、扩大R500或改变H/外部采用门禁。
 
 #### 15.1.21 评分就绪与混合回归（REQ-046）
 
@@ -1287,8 +1287,8 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - **本轮冻结口径**：已有Luna留存生成覆盖33题；上轮11题必须延续，余9位为6新/3旧，seed43。历史其他模型完整500题曝光仍保留，不称独立holdout。复用CLI freeze、Pi原生protocol和原候选replay，不新增调度或任务状态。
 - **门禁**：默认require_all在Gold预检失败时拒绝整轮；用户追加批准skip_unscorable，将Gold阻塞留分母、零生成，并固定缩减预算和阻塞报告，预检漂移需重新冻结。失败题超规模或池不足仍拒绝，不换题/比例/预算。SQL/Gold/数据与30s/120s限制不默改。
 - **验证与本轮闭环**：Python803 passed/26 skipped，Pi149 passed/typecheck与实际界面通过。20题中Gold跳过1题，实际38次派发/38候选，无生成超时与补跑，tokens139490。EX确认正确8/9、Contract5/8，各1题未知；新题6/6 EX但Contract4/6与5/6，不能仅看EX或跨混合样本宣称提升。38响应hash与40臂重放一致，compare拒绝正式基线。
-- **每轮交付与下一步**：用户要求每轮测试后出简报；本轮见`benchmark-luna-mixed-d20-2026-09-05.md`和同名JSON。Gold规划器问题仍阻塞，md-046/md-249 Forge再生成回退、md-259 Direct恢复。下轮按规则15延续＋4新＋1旧，未自动追加模型调用；H与R0.6门禁不变。
-- **同配置续测seed44/45**：分别获用户“好的，那就继续”“继续，”授权，各38派发全部返回，tokens分别134585/137028；Gold阻塞均留20题分母。最新seed45为16延续/3新/1旧，EX确认正确6/6、Contract3/4，各1未知；相同15道可评分延续题EX2→4/4→4，Contract0→1/2→2。Forge md-289完整恢复，md-429仅EX恢复，未形成代码优化因果证据。两轮均38响应hash与40臂重放一致，源码/模型/运行版本/数据指纹不变。最新简报：`benchmark-luna-mixed-d20-seed45-2026-09-05.md`，同名JSON及seed44历史报告保留。下一轮17延续＋2新＋1旧，未自动追加调用，优先离线归因持续错题。
+- **每轮交付与下一步**：用户要求每轮测试后出简报；本轮见`archive/benchmarks/benchmark-luna-mixed-d20-2026-09-05.md`和同名JSON。Gold规划器问题仍阻塞，md-046/md-249 Forge再生成回退、md-259 Direct恢复。下轮按规则15延续＋4新＋1旧，未自动追加模型调用；H与R0.6门禁不变。
+- **同配置续测seed44/45**：分别获用户“好的，那就继续”“继续，”授权，各38派发全部返回，tokens分别134585/137028；Gold阻塞均留20题分母。最新seed45为16延续/3新/1旧，EX确认正确6/6、Contract3/4，各1未知；相同15道可评分延续题EX2→4/4→4，Contract0→1/2→2。Forge md-289完整恢复，md-429仅EX恢复，未形成代码优化因果证据。两轮均38响应hash与40臂重放一致，源码/模型/运行版本/数据指纹不变。最新简报：`archive/benchmarks/benchmark-luna-mixed-d20-seed45-2026-09-05.md`，同名JSON及seed44历史报告保留。下一轮17延续＋2新＋1旧，未自动追加调用，优先离线归因持续错题。
 - **离线归因闭环（用户另批继续，零新生成）**：17延续题主因6道生成/作用域错误、6道参考冲突、4道输出契约歧义、1道Gold阻塞；不改官方判分、不发布纠正后准确率。独立重执行91条分片SQL与原38候选全链路重评一致，源码/数据不变。md-447实际为QUALIFY外层缺少源列作用域而非虚构字段；搬条件和换Gold编码的手工反事实不作为收益。未满足狭窄确定性修复门槛，未改Compiler/Prompt/Schema/Gold/评分；下一候选聚焦带来源的实际日期格式上下文，机制/预算另行冻结，不自动新增模型调用。见`benchmark-luna-offline-triage-2026-09-05.md/.json`。
 
 - **恢复滚动seed46（2026-09-06，用户另批“继续吧”）**：20题为17延续/2新/1旧，日期off，md-340留分母零调用；38派发/38候选、136237 tokens且用量完整。EX确认正确6/4、Contract3/2，各1未知；同一16道可评分延续题EX3→4/3→2、Contract0→1/1→0。Forge md-249恢复；Direct md-082 Contract、md-429 EX回退；新md-044与旧md-034双臂通过，md-222双臂失败。38响应hash、40臂评分与SQL一致；md-340 Forge编译状态投影not_applicable/pending差异保留，不影响未知评分。共享输入/生成契约/模型/数据未变，但日期机制已使协议升v2及三处源码指纹不同，不宣称正式跨轮可比或优化收益。简报：`benchmark-luna-mixed-d20-seed46-2026-09-06.md/.json`。累计Luna曝光48题；下轮18延续＋1新＋1旧，未自动启动，未在本轮移除expected_grain。
@@ -1304,7 +1304,7 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - **离线验收完成**：实际CLI冻结/预检/历史诊断重放通过，过期源码清单拒绝；两臂日期后缀相同，原snapshot/schema未变，无日期对照后缀为空。10个历史候选判分不变，原seed45的38个可评分候选重评不变；Python810 passed/26 skipped、Pi149 passed/typecheck通过。此处只有工程与评分保真证据，没有新生成收益。
 - **调用已闭环**：用户在预算选项中明确选择“执行完整20次”；两条件各10派发、共20候选，零补跑/替换，重试策略0，用量全部已知。基线Run `pbr_716a9e146af7424a858e735647680aec`，处理Run `pbr_f90aeca4d5544fd59aa74f6809db7886`；本轮临时本地服务已停止。
 - **实跑结果与决定**：Forge EX/Contract2/5→3/5、Direct3/5→3/5；唯一新增通过是未获得日期补充且输入相同的md-289，不能计为日期收益。md-483两臂从YYMMDD改为ISO、md-077 Forge日期绑定恢复，仍因结果粒度/姓名表示与参考不同未通过；预声明目标题门槛未满足，默认off、不推广、不补样。两条件tokens34621→38944（+12.49%），总73565。
-- **最终证据**：20臂原始hash及离线重放一致；19个可执行候选和5个Gold经只读SQLite与官方EX集合核心独立复算一致，1个Assurance拒绝保留。源码/数据/模型/生成Contract及冻结上下文一致，比较门禁通过但不构成稳定因果。简报：`benchmark-luna-date-context-2026-09-05.md`，同名JSON保存逐题候选及证据hash。下一步仅建议离线复核输出契约，不改Gold追分；日常17+2+1、H与R0.6门禁不变。
+- **最终证据**：20臂原始hash及离线重放一致；19个可执行候选和5个Gold经只读SQLite与官方EX集合核心独立复算一致，1个Assurance拒绝保留。源码/数据/模型/生成Contract及冻结上下文一致，比较门禁通过但不构成稳定因果。简报：`archive/benchmarks/benchmark-luna-date-context-2026-09-05.md`，同名JSON保存逐题候选及证据hash。下一步仅建议离线复核输出契约，不改Gold追分；日常17+2+1、H与R0.6门禁不变。
 - **输出契约复核闭环（2026-09-06，用户继续，零新调用）**：26条结果查询、5个完整DDL且外键有效的隔离反例、8份冻结Prompt来源核对完成。md-483的expected_grain=grouped来自each/per正则并进入两臂输入；每月单位也触发grouped，不能当业务确认。当前一账户一贷款不是DDL保证，合成数据区分总计3与账户2/1。md-077的CSV明确支持拼接全名；Gold活动关联把14/12个参与记录扩为26行再去重为2，隔离反例揭示范围、重复、不可逆姓名和NULL边界。原候选日期错误、官方评分和原20次结论保留。见`benchmark-luna-output-contract-review-2026-09-06.md/.json`。
 - **Gold诊断与下一候选**：允许主动分析Gold定位错因并总结通用改进；禁止泄漏本题答案进入被测生成、篡改原始分数及把调参集冒充独立H。对照Gold不是作弊，也不意味着每个参考JOIN都是业务规则。优先考虑将未经确认的expected_grain移出生成契约，保留问题与事实；不添加更多per特判或按题号硬编码。此次仅完成诊断、未修改实现，新的生成消融仍须单独冻结与授权；日期观察默认off及H/R0.6门禁不变。
 
@@ -1317,21 +1317,21 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - **生成终态**：对照Run `pbr_fb550c000ff34a559d1f79e7738107ec`仅14派发/10候选，md-153、md-199两臂均空响应，24臂未派发且不可resume；off Run `pbr_cb5bcb3341a24f619b7e8a75bbd83236`完成38派发/38候选，仅因Gold未知不构成完整Run。合计52派发/48候选，观测172108 tokens，另4次用量未知；无补跑。
 - **结果与门禁**：共同有效5题的两臂EX均3/5、Contract均1/5，零恢复、零回退，不能以此幸存子集满足完整配对验收。off的EX正确均4、Contract Forge1/Direct2，各1道Gold未评分；Forge91339 tokens、Direct50198，未显示准确率或成本优势。保留工程切换，不宣布生成收益，不晋级正式基线或H/R0.6。
 - **后续维护已验证**：用户“好的”接受先修复两项维护问题，不新增模型调用。replay只对无候选且显式scored=false的记录保留未评分/原执行状态，真实生成失败仍计失败；新Pi raw_output.assistant保存content、stopReason、errorMessage，失败日志带Provider原因。两个修复前反例均失败，修复后Python814 passed/26 skipped、Pi150 passed/typecheck通过；本地合成Provider失败经真实Pi工作器、SQLite与日志读取验证，未调用真实Provider。历史丢失的4次错误原因不追补。
-- **证据与后续边界**：准备及付费证据保持原样；后续维护证据为`benchmark-luna-grain-maintenance-2026-09-06.json`。用当前源码新冻结的diagnostic上下文重放原80臂：24个未派发臂恢复未评分，80臂SQL/EX/Contract/scored/execution与原Pi一致，原output/raw_output不变；Gold及生成失败的compile投影差异另列。源码指纹已改变，旧付费冻结不得续跑或强行比较，diagnostic/未评分仍不晋级。下一轮19延续＋1新＋0复核，Luna已见49/未见451；未启动下一轮，剩余24次授权未补跑。
+- **证据与后续边界**：准备及付费证据保持原样；后续维护证据为`archive/benchmarks/benchmark-luna-grain-maintenance-2026-09-06.json`。用当前源码新冻结的diagnostic上下文重放原80臂：24个未派发臂恢复未评分，80臂SQL/EX/Contract/scored/execution与原Pi一致，原output/raw_output不变；Gold及生成失败的compile投影差异另列。源码指纹已改变，旧付费冻结不得续跑或强行比较，diagnostic/未评分仍不晋级。下一轮19延续＋1新＋0复核，Luna已见49/未见451；未启动下一轮，剩余24次授权未补跑。
 
 #### 15.1.24 SQLite 标量极值 CTE 执行瓶颈（REQ-049）
 
 - **范围已接受并闭环**：用户明确选择“修复执行瓶颈”，接受零模型调用与该优化SQL的SQLite≥3.35边界。只对参与INNER/CROSS JOIN的简单非递归列MIN/MAX标量CTE使用窄物化策略，不改原候选、Prompt、Schema、Gold或评分。
 - **回归与边界**：修复前MIN/MAX两个固定VM预算反例失败，修复后通过，保留并列极值、NULL、空输入和标识符引用；未投影聚合保留下推。13类不应优化的结构与原源码输出一致，24个旧Forge候选的120项五方言编译结果只改变md-199的SQLite SQL。
 - **实际收益**：原80臂完整离线重放，原output/raw_output均不变；只有off/md-199/Forge从30秒execution_timeout恢复为Assurance/执行/EX/Contract通过，独立本机只读烟测79.26ms。off Forge EX正确4→5、Contract1→2，各仍1未知；其他79臂核心状态/评分/SQL不变，Direct及对照不变。
-- **验证与证据**：Python818 passed/26 skipped，Pi150 passed/typecheck通过；新diagnostic协议有效，旧源码协议与diagnostic晋级仍失败关闭。完整简报及证据索引为`benchmark-luna-scalar-cte-fix-2026-09-06.json`；旧Run、旧冻结与付费结果不改写，未启动新模型调用。
+- **验证与证据**：Python818 passed/26 skipped，Pi150 passed/typecheck通过；新diagnostic协议有效，旧源码协议与diagnostic晋级仍失败关闭。完整简报及证据索引为`archive/benchmarks/benchmark-luna-scalar-cte-fix-2026-09-06.json`；旧Run、旧冻结与付费结果不改写，未启动新模型调用。
 - **后续门禁**：收益限定于同候选Compiler修复，不能宣称新模型准确率、独立泛化或完整粒度配对收益。预定off父Run的续测已按新冻结与独立38次授权执行seed48，结果见15.1.21；本节固定候选修复与后续新生成分开记录，旧24次未派发预算不自动沿用。H与R0.6外部采用门禁不变。
 
 #### 15.1.25 生成终止后的证据封存（REQ-050）
 
 - **已接受的维护与闭环**：用户要求继续优化；只修复已确认的生命周期竞态，不增加模型调用或改变停止策略。原catch封存早于finally等待abort，可能遗漏最终assistant及usage；现共享同一abort Promise，在取消完成后封存，随后退订与dispose。
 - **行为门禁**：120秒deadline、单次派发、零重试、失败即停、迟到输出拒绝与未知用量不变；不改Prompt/Schema/Compiler/Gold，不自动补列或按题号修分。原finally已经等待abort，本次不扩大生成窗口；不增加逐片全量复制或第二套响应状态。
-- **验证证据**：deadline回归修复前失败、修复后Run重开仍保留最终响应/usage/hash且不执行迟到SQL。真实Pi SDK合成流显示最终化先后0→1条assistant、0→93个合成tokens，网络0；不是实际Luna用量恢复。Pi151 passed/typecheck、Python819 passed/26 skipped，原40臂diagnostic重放与旧工件hash不变，compare拒绝晋级。报告：`benchmark-luna-cancellation-evidence-fix-2026-09-06.json`。
+- **验证证据**：deadline回归修复前失败、修复后Run重开仍保留最终响应/usage/hash且不执行迟到SQL。真实Pi SDK合成流显示最终化先后0→1条assistant、0→93个合成tokens，网络0；不是实际Luna用量恢复。Pi151 passed/typecheck、Python819 passed/26 skipped，原40臂diagnostic重放与旧工件hash不变，compare拒绝晋级。报告：`archive/benchmarks/benchmark-luna-cancellation-evidence-fix-2026-09-06.json`。
 - **后续边界**：这项修复改善归因可靠性，不提升已有候选成绩，也不能补回旧md-234缺失内容或两次未知usage。Pi runtime指纹变化，旧Run不跨版本续跑；下一轮仍需独立冻结授权，H/R0.6门禁不变。
 
 #### 15.1.26 生成流阶段定向诊断（REQ-051）
@@ -1339,14 +1339,14 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - **已接受并完成**：用户另批4次；md-234/md-447两个独立单题双臂Run按题串行，保持Luna、Prompt、Schema、120秒、零重试及日期/粒度off。观察器仅聚合SDK可见事件；先做正常/取消合成流零网络烟测，不新增生产遥测或状态源。
 - **真实结果**：4次生成与执行均成功，EX/Contract均0/4；19831 tokens、未知用量0。Forge生成11.18/23.60秒，工具参数可见包络3.27/7.46秒；未复现超时，不能把可见thinking包络解释为全部推理或证明REQ-050有延迟收益。
 - **归因边界**：md-234的Gold不含题目所求次数，Direct另有按circuitId分组差异；md-447的候选DOCType与Gold DOC仅输出表示不同，离线换列得到相同Gold行多重集。反事实不采纳、不改原评分，不因追分删列或硬换编码。
-- **证据与门禁**：4份Prompt与seed48对应臂hash一致；4份响应hash、4臂原候选重放及独立EX核验通过，57条日志与Pi完整快照封存，服务已停。未修改生产源码/生成策略、未追加请求；不是seed49，滚动父Run及H/R0.6门禁不变。简报：`benchmark-luna-generation-stages-2026-09-06.md`及同名JSON。
+- **证据与门禁**：4份Prompt与seed48对应臂hash一致；4份响应hash、4臂原候选重放及独立EX核验通过，57条日志与Pi完整快照封存，服务已停。未修改生产源码/生成策略、未追加请求；不是seed49，滚动父Run及H/R0.6门禁不变。简报：`archive/benchmarks/benchmark-luna-generation-stages-2026-09-06.md`及同名JSON。
 
 #### 15.1.27 保留CTE字段绑定与统一SQL保障（REQ-052）
 
 - **已完成维护**：用户要求继续优化，零模型调用。删除Compiler的CTE限定名剥离与主CTE裸列猜测，不自动补聚合/投影或按Gold换字段。5个真实SQLite结果反例修复前失败、修复后通过；窗口测试从前缀断言改为结果行/Top-N验证。
 - **公共边界闭环**：烟测发现CTE未输出字段在SELECT/WHERE中可被旧Forge JSON字段门禁放过。`assure_query`复用已有`assure_compiled_sql`，使用同一已限定Registry并保留先前门禁证据；Assurance升v8，两个漏拒反例已关闭，歧义拒绝对照保持。既有关系/业务Policy不放宽，Evaluate不授予执行权。
 - **验证与收益边界**：40个历史Forge候选200项五方言结果不变、5份原Run hash不变；新v8诊断中md-032/md-199四臂SQL/EX/Contract不变，缺列继续拒绝。真实CLI/HTTP与返回SQL的隔离执行通过；Python825 passed/26 skipped、Pi151 passed/typecheck，服务已停止。不是新生成收益或完整R500复评，不解除旧协议漂移、H或R0.6门禁；滚动父Run仍seed48。
-- **交付**：`benchmark-luna-cte-binding-fix-2026-09-06.md`及同名JSON。公共CTE→物理表关系和右CTE裸列的既有前置限制如实保留，不将Compiler合法等同全部业务Policy通过。
+- **交付**：`archive/benchmarks/benchmark-luna-cte-binding-fix-2026-09-06.md`及同名JSON。公共CTE→物理表关系和右CTE裸列的既有前置限制如实保留，不将Compiler合法等同全部业务Policy通过。
 
 #### 15.1.28 当前栈回归收口与枚举绑定增量审计（REQ-053）
 
@@ -1377,7 +1377,7 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 复用现有prompt变量与forge_prompt_revision作为有限内置范例的选择/绑定，不另造Prompt平台或新Task状态；默认Prompt逐字不变，Direct指令/Schema/Context/Compiler/Assurance/Gold/评分不变。
 - 零调用准备已完成：一条范例、8组隔离SQLite夹具/16次正反执行；默认500题输入hash不变，仅候选Forge指令增加2209 UTF-8 bytes。四题md-259/079/000/312双条件冻结与Gold预检通过，CLI/鉴权HTTP及Pi生产类合成消费/持久化/漂移失败关闭通过；Python889 passed/26 skipped、Pi155 passed/typecheck。合成会话不是模型效果。
 - 用户后续明确批准16次，实际16派发/16候选完成：Forge EX/Contract2/4→3/4，Direct2/4不变；md-259完整恢复、md-000恢复，但md-079别名/投影错误回退。总53058 tokens、未知0，处理组+6.03%，成本/P95护栏通过；预声明零回退门槛失败，不启用默认，不补跑/扩样/自动返修或启动seed49。
-- 16原响应hash/重放/独立SQLite与218日志、原生Pi状态快照一致，25准备工件及源码/数据/输入hash不变，服务已停。准备证据保留，正式结果见`benchmark-luna-denominator-scope-2026-09-07.json`；后续仅记录CTE别名/中间投影一致性为独立候选，尚无新实现/调用授权。
+- 16原响应hash/重放/独立SQLite与218日志、原生Pi状态快照一致，25准备工件及源码/数据/输入hash不变，服务已停。准备证据保留，正式结果见`archive/benchmarks/benchmark-luna-denominator-scope-2026-09-07.json`；后续仅记录CTE别名/中间投影一致性为独立候选，尚无新实现/调用授权。
 
 #### 15.1.32 CTE接口诊断与别名绑定维护（REQ-057）
 
@@ -1385,7 +1385,7 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 复用SQLGlot解析、本层Column引用和原文跨度，仅展开真实本地别名；显式限定、字符串/注释、函数/类型名、子查询内部及插入SQL均不猜测改写。统一HAVING/QUALIFY与已有窗口/排序接口的相关漏展开。
 - 已验证：12项回归先红后绿，42组独立边界全通过；SQLGlot下限27通过相同矩阵。548份历史候选2740次五方言编译不变；另3份合成探针仅限定列反例改变。上一轮16份原候选诊断输出/评分/失败分类不变，md-079仍拒绝。
 - 实际CLI/API正负例及返回SQL通过；Python901 passed/26 skipped、Pi155 passed/typecheck，文档同步后相关107 passed。旧协议拒绝、新诊断独立冻结，默认Prompt/控制输入和数据hash不变；服务已停，不重试Gold阻塞或启动seed49。
-- 结论：修复的是Compiler静默改写，不是模型CTE接口不一致；不宣称准确率收益，不启用自动补列/返修。报告：`benchmark-cte-expression-binding-fix-2026-09-07.json`。
+- 结论：修复的是Compiler静默改写，不是模型CTE接口不一致；不宣称准确率收益，不启用自动补列/返修。报告：`archive/benchmarks/benchmark-cte-expression-binding-fix-2026-09-07.json`。
 
 #### 15.1.33 生成端CTE接口范例准备及开发对照（REQ-058）
 
@@ -1403,3 +1403,32 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 维护既有全局CTE名称过滤造成的表权限漏检：按SQLGlot Scope来源和MappingSchema方言归一化校验物理表；合法CTE/derived保留，扁平Registry未授权的schema/catalog限定来源拒绝。Assurance v10使旧v9 QueryRun审批漂移失败关闭，必须重新prepare/审核；不迁移旧证据。
 - 合成回归与实际API/SQLite维护零被测模型调用；旧报告、未知用量、失败/未完成实验及H/R0.6门禁不变，不把本次维护记为模型准确率增益。版本验证结果集中于release-verification-2026-09-07.json。
 - 首次push的CI暴露外部DATA旁仓依赖，随后加强隔离又暴露六项HTTP测试默认状态目录依赖；只修复测试夹具与独立配置，不跳过用例、不改生产失败关闭语义。首轮失败和隔离更正保留于同一发布验证报告。
+
+## 16. 整体工程质量优化（REQ-060，已实施并本地验收）
+
+- 整体评估已完成，基线018317d；16项发现与6个优化包的证据见[architecture-quality-review-2026-09-07.json](archive/engineering/architecture-quality-review-2026-09-07.json)。该文件保留评估时点，不改写为实施证据。
+- 用户后续明确“好的，那就按照你的调研结果执行吧”，授权OP-1至OP-6；先推进默认入口/分发、Stage生命周期/State一致性、通用规则适用域和执行结果契约，再推进诊断/投递、核心依赖与扩展/派生状态。
+- 实施门禁已完成：双State适配器/跨Python-Pi契约回归、无模型调用的隔离反例、Python3.11非editable wheel/sdist Quickstart、真实Web→Pi→SQLite丢响应恢复、Benchmark独立进程owner与挂起HTTP烟测。逐项结论及未测边界见[实施报告](archive/engineering/architecture-quality-implementation-2026-09-07.json)；不以编译或内部测试替代外部采用。
+- Pi/Forge/Skills职责、权限/审批/失败关闭、历史成绩与R0.6/H门禁保持不变。本轮不commit/push、发布、部署或访问真实配置/运行库；不借结构优化扩张产品。
+
+## 17. 文件结构专项治理（REQ-061，已完成）
+
+- 用户明确继续：盘点全仓公开受控文件，按保留／迁移／归档／待确认执行有收益的归位。保持稳定核心包与公开入口，处理tests内独立基准工具、docs内历史材料、包外PoC模板和演示脚本。
+- 历史JSON与本地运行资产不改写；Markdown只调整必要引用。迁移映射与前后hash留存，验证导入、CLI、CI、分发资源和文档链接。
+- 不删除未知工作、不访问真实配置/运行库、不调用模型、不commit/push/部署；不改变R0.6/H。
+
+- 2026-09-07已完成：204文件归位，44份历史JSON字节不变；稳定核心包与入口保留，无旧公开路径包装层。目录职责与完整映射见[CONTRIBUTING](../CONTRIBUTING.md#repository-layout)及[治理记录](file-structure-governance-2026-09-07.json)。
+- 非editable PoC缺模板故障已先复现后修复，wheel/sdist资源与Quickstart、独立工具无模型合成烟测、Python/Pi回归、文档引用及站点构建／浏览器导航均通过。跳过项与环境限制在治理记录中逐项披露，不替代外部采用。
+- 旧本地results/data、已跟踪原始运行结果、数据库与缓存保留原位并列人工确认边界；未读取真实配置／运行库，不新增模型调用或自动重放，不commit/push/部署。
+
+## 18. 长期知识资产保全（REQ-062，维护约定）
+
+- 用户明确要求后续推进时优先保存测试结论、报告和沟通沉淀；以[知识资产索引及维护规则](README.md#长期知识资产)为统一入口，不另建知识库或第二套决策真相源。
+- 保留原始问题、负结果、未采纳方案、决策理由与适用边界。纠错与新证据追加并链接原记录；目录归档、代码替换与当前测试通过不触发历史清理。
+- 本轮只核验已有公开材料、补齐索引与保存规则；真实配置／运行库不访问，模型不调用，不commit/push或部署。异地备份与原始数据迁移需单独授权，R0.6/H不晋级。
+
+## 19. 候选分支与 PR（REQ-063，已授权）
+
+- 已明确授权审查后在独立候选分支commit、push并创建PR，验证远端CI；不合并main、不tag、不Release、不部署，不新增被测模型调用。
+- 本轮交付REQ-060/061/062已验收成果，并维护现行公共API接入说明，不新增#8外部Agent适配器。分支为`review/forge-engineering-evidence-2026-09-08`，阶段证据见[候选交付记录](candidate-delivery-2026-09-08.json)。
+- 公开范围审查未发现本次新增凭证／私有运行资产；历史84份归档hash匹配。63项相关契约／文档检查和隔离Quickstart通过，远端CI待完成。CI与维护者回执不是外部采用证据，R0.6/H不晋级。

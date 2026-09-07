@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent / "accuracy"))
-
-from triage_failures import build_triage, render_markdown
+from tools.benchmarks.accuracy.triage_failures import build_triage, render_markdown
 
 
 def test_triage_classifies_missing_topn_qualify():

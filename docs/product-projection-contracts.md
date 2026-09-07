@@ -210,7 +210,7 @@ npm --prefix services/pi-orchestrator test
 .venv/bin/pytest -q tests/test_product_projection_contracts.py tests/test_artifact_contracts.py
 ```
 
-TypeScript 测试会检查生成 JSON Schema 与 TypeBox 完全同步；Python 使用同一生成 Schema，并通过 `agent/contracts/product_projection_semantics.py` 对全部正向 fixtures 和全部结构/语义负向 mutation 做 reason-code parity。
+Python 使用生成 Schema，并通过 `agent/contracts/product_projection_semantics.py`；TypeScript 使用 TypeBox 与对应 semantic gate。双侧消费全部正向 fixtures 和结构/语义负向 mutation，验证接受/拒绝及 reason-code parity；不以源码对象相等代替语义一致。
 
 ## 11. SP1 结果与 SP2 入口
 
@@ -222,6 +222,26 @@ SP1 已完成：
 - authenticated read-only Pi API；
 - 2 MB 响应边界、去敏、损坏引用、pagination、10K Task 性能与 restart recovery 测试。
 
-证据见 [`product-spine-sp1-evidence-2026-08-25.md`](product-spine-sp1-evidence-2026-08-25.md)。
+证据见 [`archive/engineering/product-spine-sp1-evidence-2026-08-25.md`](archive/engineering/product-spine-sp1-evidence-2026-08-25.md)。
 
 SP2 只能增加 scope-aware `ReportStore.list`、authenticated `/api/product/*` BFF、Workspace partial/offline 聚合和对应 Python 测试。不得在 SP2 新增第二状态源、开始 Product Shell 或开放 Agent Runtime。
+
+## 12. 契约族 owner 与 Stage 扩展（2026-09-07）
+
+本节记录后续契约收敛；上节保留 SP1 当时的阶段边界，不充当当前主动计划。
+
+| 契约族 | 唯一结构编辑源 | 跨语言语义验证 |
+|---|---|---|
+| Product Projection | `services/pi-orchestrator/src/product-projections.ts` TypeBox | `product-projection-fixtures.v1.json`，TS/Python 双侧 semantic gate |
+| Clarification / MetricDefinition / QueryResult / Analysis / Advisory / RenderedOutput | `structured-artifact-tools.ts` payload + `contracts.ts` envelope/registry | `structured-artifact-fixtures.v1.json`，TS validator 与 Python `artifact_semantics.py` |
+| Governance / Benchmark / Reporting 既有 schema 族 | `agent/contracts/*.schema.json` Python 侧契约源 | 保持已有契约族测试；本轮不从 TS 手写镜像反向覆盖 |
+
+Structured Artifact 结构统一通过 `npm --prefix services/pi-orchestrator run export:structured-contracts` 导出。Python 调用 `validate_contract` 同时执行 schema 与语义，不只调用裸 JSON Schema。42 个共享正反例覆盖持久化 `row_count == len(rows)`（包括 truncated）、每行宽度、重复列、producer、版本、额外字段、日期时区/闰日/闰秒、不完整输出的补查或问题要求，以及分析内容边界。该契约族日期校验不依赖 jsonschema 可选 RFC3339 extras 是否安装。
+
+调用时的 evidence allowlist、QueryRun 归属、报告源 Artifact 身份与逐字 finding 保留，仍由显式 Stage submission 边界验证；静态 artifact 本身不能证明这些上下文事实。QueryResult-required Advisory 不允许用 `ctx_*` 代替查询行证据。
+
+`stage-descriptors.ts` 集中授权 Skill 身份、output/tool、model stage 和 evidence policy。Advisory 的名单、类型与 policy 列表从该表派生；`skill:*` attempt 按授权 Skill 的确切 descriptor 取 scope，历史核心 attempt 使用精确映射。未知身份失败关闭，不再用 report/query 子串猜 scope。所有专业业务方法仍是明确类型的 `clarify/reviewMetric/analyze/advise/writeReport`，不存在 `execute(any)`。
+
+本地隔离源副本演练已实际执行：新增 Advisory 只加 descriptor 行并复用既有 advise/tool/schema；新增一等 Stage 增加 descriptor/output、scope、明确类型 executor 方法、TypeBox registry 及 Python contract 注册，随后 TS/Python 接受其结果并拒绝未知版本/额外字段。Application 生命周期、HTTP 暴露、planning 和产品展示仍需按业务显式接入，不宣称由 descriptor 自动生成。演练未调用模型或外部渠道，临时源副本与脚本已移除。
+
+Product Attempt 的 `request_id`、`usage_status`、`model_revision`、`skill_policy_version` 是可选诊断字段；`usage_status` 仅允许 `not_started/known/unknown`。缺失与未知不能推断为零成本；契约新增不意味着已有历史 Attempt 可恢复真实成本。

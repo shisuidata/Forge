@@ -13,7 +13,8 @@ from typing import Any
 import httpx
 
 from config import cfg
-
+from diagnostics import current_request_id, record
+from web.diagnostics import upstream_error
 
 class PiChannelError(RuntimeError):
     pass
@@ -127,15 +128,19 @@ class PiChannelClient:
             response = httpx.request(
                 method,
                 f"{self.base_url}{path}",
-                headers={"X-Channel-Service-Key": self.service_key},
+                headers={"X-Channel-Service-Key": self.service_key, "X-Request-ID": current_request_id()},
                 json=payload,
                 timeout=self.timeout_seconds,
             )
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise PiChannelError("Pi Orchestrator is unavailable") from exc
+        if not isinstance(data, dict):
+            raise PiChannelError("upstream_contract_invalid")
         if response.status_code >= 400:
-            raise PiChannelError(data.get("error") or f"Pi returned HTTP {response.status_code}")
+            _, failure = upstream_error(response.status_code, data)
+            record("channel_upstream", error_code=failure["code"], status_code=response.status_code)
+            raise PiChannelError(failure["code"])
         return data
 
 

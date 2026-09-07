@@ -352,7 +352,8 @@ svg { display: block; }
 .notice[data-state="blocked"] { border-color: #dfcbc3; border-left-color: #a66b5a; background: #f4ece8; }
 .notice[data-state="planned"] { border-color: #d7dcd9; border-left-color: #87938d; background: #f0f2f0; }
 .notice-title { margin: 0; font-size: .75rem; font-weight: 750; }
-.notice-copy { margin: .2rem 0 0; color: var(--muted); font-size: .7rem; }
+.notice-copy { margin: .2rem 0 0; color: var(--muted); font-size: .7rem; overflow-wrap: anywhere; }
+.notice > .button { flex-shrink: 0; white-space: nowrap; }
 
 .skeleton { position: relative; overflow: hidden; border-radius: .25rem; background: #e7e4dc; color: transparent !important; }
 .skeleton::after { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); content: ""; transform: translateX(-100%); animation: shimmer 1.5s infinite; }

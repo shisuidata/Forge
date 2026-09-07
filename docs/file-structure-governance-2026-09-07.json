@@ -1,0 +1,1890 @@
+{
+  "schema_version": "file-structure-governance-v1",
+  "date": "2026-09-07",
+  "requirement": "REQ-2026-09-07-061",
+  "status": "implemented_and_locally_verified",
+  "scope": "公开受控源码、契约、文档、演示与分发资源；不含私有配置/真实运行数据",
+  "decisions": [
+    {
+      "action": "keep",
+      "paths": [
+        "main.py",
+        "config.py",
+        "diagnostics.py",
+        "pyproject.toml",
+        "Dockerfile",
+        "docker-compose*.yml",
+        ".env*.example",
+        "forge.yaml.example"
+      ],
+      "reason": "公开启动/配置/分发入口，移动会破坏既有契约且没有足够组织收益。"
+    },
+    {
+      "action": "keep",
+      "paths": [
+        "forge/",
+        "agent/",
+        "registry/",
+        "web/",
+        "services/pi-orchestrator/"
+      ],
+      "reason": "已存在且已验证的职责边界；不再机械增加src层或拆子包。"
+    },
+    {
+      "action": "keep",
+      "paths": [
+        "tests/test_*.py",
+        "tests/datasets/",
+        "agent/contracts/",
+        "registry/contracts/"
+      ],
+      "reason": "自动回归、公共合成夹具及生成契约；保留演示Registry的生产拒绝门禁。"
+    },
+    {
+      "action": "keep",
+      "paths": [
+        "tools/chart-engine-bakeoff/",
+        "tools/chart-storytelling-echarts-candidate/",
+        "tools/web-product-shell-prototype/",
+        "tools/chart_storytelling_candidate.py",
+        "scripts/"
+      ],
+      "reason": "可复现实验已独立隔离；其余运维脚本规模适中，不为命名制造更深目录。"
+    },
+    {
+      "action": "keep",
+      "paths": [
+        "website/",
+        "examples/",
+        "constraints/",
+        ".github/",
+        "docs/architecture-course/",
+        "docs/architecture-diagrams/",
+        "docs/devlog/"
+      ],
+      "reason": "已有独立构建、示例、依赖/CI与文档职责。"
+    },
+    {
+      "action": "move",
+      "from": "tests/accuracy/",
+      "to": "tools/benchmarks/accuracy/",
+      "reason": "独立手工/模型实验，不是pytest回归。"
+    },
+    {
+      "action": "move",
+      "from": "tests/benchmark/",
+      "to": "tools/benchmarks/synthetic/",
+      "reason": "独立合成问数基准，与自动回归分离。"
+    },
+    {
+      "action": "move",
+      "from": "tests/spider2/",
+      "to": "tools/benchmarks/spider2/",
+      "reason": "外部数据集下载/评测工具，不进入普通测试或核心发行。"
+    },
+    {
+      "action": "move",
+      "from": "tests/text-to-sql-failures/",
+      "to": "tools/benchmarks/text_to_sql_failures/",
+      "reason": "人工失败样例研究工具；公开报告另归历史证据。"
+    },
+    {
+      "action": "move",
+      "from": "customer-poc-template/",
+      "to": "forge/templates/poc/",
+      "reason": "由forge.poc运行时消费，必须归属包内并纳入wheel/sdist。"
+    },
+    {
+      "action": "move",
+      "from": "scripts/seed_mock_data.py",
+      "to": "demo/seed_mock_data.py",
+      "reason": "与现有demo造数脚本集中；不运行真实存储填充。"
+    },
+    {
+      "action": "archive",
+      "from": "docs/中已完成的报告及过时实施计划",
+      "to": "docs/archive/{benchmarks,engineering,plans}/",
+      "reason": "与当前状态、稳定指南、主动计划分离；JSON证据原字节保留，Markdown只改必要引用。"
+    },
+    {
+      "action": "requires_owner_review",
+      "paths": [
+        ".forge/",
+        "services/pi-orchestrator/.runtime/",
+        "旧tests下ignored results/data",
+        "*.db",
+        "私有配置与凭证",
+        "本地缓存及生成包元数据"
+      ],
+      "reason": "不读取、不移动、不清理；治理仅处理公开受控文件，历史本地资产由所有者另行决定。"
+    }
+  ],
+  "moves": [
+    {
+      "from": "customer-poc-template/README.md",
+      "to": "forge/templates/poc/README.md",
+      "sha256_before": "04ecb261ce525c941503d9de9c0f7380edb4ccb6cd429a5b8645d4bc253a49b8",
+      "sha256_after": "04ecb261ce525c941503d9de9c0f7380edb4ccb6cd429a5b8645d4bc253a49b8",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/cases.example.json",
+      "to": "forge/templates/poc/cases.example.json",
+      "sha256_before": "dfc02275c420760e9291611bebe839b3fb6ae3655a50e065ed57b1587449cfb2",
+      "sha256_after": "dfc02275c420760e9291611bebe839b3fb6ae3655a50e065ed57b1587449cfb2",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/delivery_report.template.md",
+      "to": "forge/templates/poc/delivery_report.template.md",
+      "sha256_before": "3be698eb5ac027b893ce149af13210df43373582645dcf84cc060b586479a739",
+      "sha256_after": "3be698eb5ac027b893ce149af13210df43373582645dcf84cc060b586479a739",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/failure_triage.template.md",
+      "to": "forge/templates/poc/failure_triage.template.md",
+      "sha256_before": "cf322af262f34515a67f1ea6d9f0203f2a50f11045d0afdd5c7801568979ed22",
+      "sha256_after": "cf322af262f34515a67f1ea6d9f0203f2a50f11045d0afdd5c7801568979ed22",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/provider-smoke.example.json",
+      "to": "forge/templates/poc/provider-smoke.example.json",
+      "sha256_before": "e350033f02dad123cef63df7614ae5145dc60db5136b02197815921c5fbda6b8",
+      "sha256_after": "e350033f02dad123cef63df7614ae5145dc60db5136b02197815921c5fbda6b8",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/registry/disambiguations.registry.yaml",
+      "to": "forge/templates/poc/registry/disambiguations.registry.yaml",
+      "sha256_before": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "sha256_after": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/registry/field_conventions.registry.yaml",
+      "to": "forge/templates/poc/registry/field_conventions.registry.yaml",
+      "sha256_before": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "sha256_after": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/registry/metrics.registry.yaml",
+      "to": "forge/templates/poc/registry/metrics.registry.yaml",
+      "sha256_before": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "sha256_after": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "customer-poc-template/registry/schema.registry.json",
+      "to": "forge/templates/poc/registry/schema.registry.json",
+      "sha256_before": "deb9cae237c61fcac650e2bcb1b907a493c66f1984b7e7896c70c8fadf2580c6",
+      "sha256_after": "deb9cae237c61fcac650e2bcb1b907a493c66f1984b7e7896c70c8fadf2580c6",
+      "change_reason": "relocation_only"
+    },
+    {
+      "from": "docs/accuracy-csv-binding-experiment-card-2026-09-05.json",
+      "to": "docs/archive/benchmarks/accuracy-csv-binding-experiment-card-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "c6e561599dadc969cad7b548e14fc16703c3332a593dc866377a5e0a8a73602b",
+      "sha256_after": "c6e561599dadc969cad7b548e14fc16703c3332a593dc866377a5e0a8a73602b"
+    },
+    {
+      "from": "docs/accuracy-evaluation-cohorts-2026-09-05.json",
+      "to": "docs/archive/benchmarks/accuracy-evaluation-cohorts-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "393c627927eca6075ff4b567c0a2e61f74579f4c290e4885660b9583c99eb314",
+      "sha256_after": "393c627927eca6075ff4b567c0a2e61f74579f4c290e4885660b9583c99eb314"
+    },
+    {
+      "from": "docs/accuracy-holdout-source-audit-2026-09-05.json",
+      "to": "docs/archive/benchmarks/accuracy-holdout-source-audit-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "281f97b8f56098dcd75e70f9e4dba9fbafe808847381f6fcdf7ed7ac0bbd7e2f",
+      "sha256_after": "281f97b8f56098dcd75e70f9e4dba9fbafe808847381f6fcdf7ed7ac0bbd7e2f"
+    },
+    {
+      "from": "docs/accuracy-metadata-binding-fix-2026-09-05.json",
+      "to": "docs/archive/benchmarks/accuracy-metadata-binding-fix-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "f2f848448f49b6663b0c1f3a6bddde42fe4ff0063bb4982a9b36b9eac552110a",
+      "sha256_after": "f2f848448f49b6663b0c1f3a6bddde42fe4ff0063bb4982a9b36b9eac552110a"
+    },
+    {
+      "from": "docs/accuracy-metadata-treatment-audit-2026-09-05.json",
+      "to": "docs/archive/benchmarks/accuracy-metadata-treatment-audit-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "3758e4820ca0fe0a106b7905e94b5ff9dd82a5ab27df402b0d1c39a4c1a4e8ec",
+      "sha256_after": "3758e4820ca0fe0a106b7905e94b5ff9dd82a5ab27df402b0d1c39a4c1a4e8ec"
+    },
+    {
+      "from": "docs/architecture-quality-implementation-2026-09-07.json",
+      "to": "docs/archive/engineering/architecture-quality-implementation-2026-09-07.json",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "92ab945c031bc0ec4ca5372d9cd55c4f195da155d4164b2605152f31c0fb988c",
+      "sha256_after": "92ab945c031bc0ec4ca5372d9cd55c4f195da155d4164b2605152f31c0fb988c"
+    },
+    {
+      "from": "docs/architecture-quality-review-2026-09-07.json",
+      "to": "docs/archive/engineering/architecture-quality-review-2026-09-07.json",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "225ba9ebb20f4ea11ade2e7124efb6c34dfe3200bef259077900b5f977fab4aa",
+      "sha256_after": "225ba9ebb20f4ea11ade2e7124efb6c34dfe3200bef259077900b5f977fab4aa"
+    },
+    {
+      "from": "docs/benchmark-cte-expression-binding-fix-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-cte-expression-binding-fix-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "3675d1d464da0b4c9e91ef23c2e8a689d7013d0ba5098d2fc833d194d8193087",
+      "sha256_after": "3675d1d464da0b4c9e91ef23c2e8a689d7013d0ba5098d2fc833d194d8193087"
+    },
+    {
+      "from": "docs/benchmark-cte-interface-ready-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-cte-interface-ready-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "9a9319fe4d829f22468489c40bf436b628583d92a195a275e5facf56cdb890f4",
+      "sha256_after": "9a9319fe4d829f22468489c40bf436b628583d92a195a275e5facf56cdb890f4"
+    },
+    {
+      "from": "docs/benchmark-denominator-scope-ready-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-denominator-scope-ready-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "d92287418384517a9bfffc9c785c770fb4492497a876890c6a386fd4aebe20e9",
+      "sha256_after": "d92287418384517a9bfffc9c785c770fb4492497a876890c6a386fd4aebe20e9"
+    },
+    {
+      "from": "docs/benchmark-historical-runs-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-historical-runs-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "56d3c2fe77adfe674a4fc2e557fa352b181285c07bcdef4f55a940253cc33396",
+      "sha256_after": "56d3c2fe77adfe674a4fc2e557fa352b181285c07bcdef4f55a940253cc33396"
+    },
+    {
+      "from": "docs/benchmark-luna-alias-fix-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-alias-fix-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "9e56a4d6c9fd0d9a0d84107fda2b292fd1c1cac068764c6342a2fd2c231e9e76",
+      "sha256_after": "9e56a4d6c9fd0d9a0d84107fda2b292fd1c1cac068764c6342a2fd2c231e9e76"
+    },
+    {
+      "from": "docs/benchmark-luna-binding-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-binding-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "a1dd1fddf3d2cb5140e9d452f3f81b80000c4fba93228e06581b29bb736900bf",
+      "sha256_after": "a1dd1fddf3d2cb5140e9d452f3f81b80000c4fba93228e06581b29bb736900bf"
+    },
+    {
+      "from": "docs/benchmark-luna-cancellation-evidence-fix-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-cancellation-evidence-fix-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "68f3354dd3a4631555564312574b195de42c3bad44b617492dd8e1f55bcf4c90",
+      "sha256_after": "68f3354dd3a4631555564312574b195de42c3bad44b617492dd8e1f55bcf4c90"
+    },
+    {
+      "from": "docs/benchmark-luna-cte-binding-fix-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-cte-binding-fix-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "9d20eeaea9fca60f664aa98f10513c1a09d42586e2b6fe1d3cfe2f6333a14b67",
+      "sha256_after": "9d20eeaea9fca60f664aa98f10513c1a09d42586e2b6fe1d3cfe2f6333a14b67"
+    },
+    {
+      "from": "docs/benchmark-luna-cte-binding-fix-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-cte-binding-fix-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "15ff645036c8e069f7bd083103e42bf064e630ab955d99dd4d3e31f451c05568",
+      "sha256_after": "15ff645036c8e069f7bd083103e42bf064e630ab955d99dd4d3e31f451c05568"
+    },
+    {
+      "from": "docs/benchmark-luna-cte-interface-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-cte-interface-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "dfcb5e6a3faba7d3c2dedb4cf76fedc23696a370cb39b1b0613fdda9e4bf98d2",
+      "sha256_after": "dfcb5e6a3faba7d3c2dedb4cf76fedc23696a370cb39b1b0613fdda9e4bf98d2"
+    },
+    {
+      "from": "docs/benchmark-luna-date-context-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-date-context-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "97e7842a38a7bd3f3b0f27d9a63d9875ebf81da8e7cfd5c07a9bac21c11acd46",
+      "sha256_after": "97e7842a38a7bd3f3b0f27d9a63d9875ebf81da8e7cfd5c07a9bac21c11acd46"
+    },
+    {
+      "from": "docs/benchmark-luna-date-context-2026-09-05.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-date-context-2026-09-05.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "6e9ed6bed6bc76a3c40f0a69c0f03a5cfa6331368841d1f0f5ab783611e4b2e3",
+      "sha256_after": "6e9ed6bed6bc76a3c40f0a69c0f03a5cfa6331368841d1f0f5ab783611e4b2e3"
+    },
+    {
+      "from": "docs/benchmark-luna-denominator-scope-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-denominator-scope-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "69546731b83a6d0e25aa13c38084d56d45f9d6360e3ae0d17cd0f54aa7458506",
+      "sha256_after": "69546731b83a6d0e25aa13c38084d56d45f9d6360e3ae0d17cd0f54aa7458506"
+    },
+    {
+      "from": "docs/benchmark-luna-expanded-regression-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-expanded-regression-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "a6a59cf5eb520ccfb7bb27ecb1faf3ef0e8931e562dd5e84b4fdd890173b4b84",
+      "sha256_after": "a6a59cf5eb520ccfb7bb27ecb1faf3ef0e8931e562dd5e84b4fdd890173b4b84"
+    },
+    {
+      "from": "docs/benchmark-luna-from-scope-fix-2026-09-07.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-from-scope-fix-2026-09-07.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "9fc45cc81ebb7a25c67a73c98be4b43c3a86ee63e049bd0aa58518fe27cac87a",
+      "sha256_after": "9fc45cc81ebb7a25c67a73c98be4b43c3a86ee63e049bd0aa58518fe27cac87a"
+    },
+    {
+      "from": "docs/benchmark-luna-from-scope-fix-2026-09-07.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-from-scope-fix-2026-09-07.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "a1fe8cbc2664646bd8e465f5e2f9644697ba6acbc357b344db72c2bea977855b",
+      "sha256_after": "a1fe8cbc2664646bd8e465f5e2f9644697ba6acbc357b344db72c2bea977855b"
+    },
+    {
+      "from": "docs/benchmark-luna-generation-stages-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-generation-stages-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "4623e9c993ab9dd0d8d12260c2e91e3436c42e2ae980033847755485bbc5da09",
+      "sha256_after": "4623e9c993ab9dd0d8d12260c2e91e3436c42e2ae980033847755485bbc5da09"
+    },
+    {
+      "from": "docs/benchmark-luna-generation-stages-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-generation-stages-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "ac75c0b8b095d24e567bee0e5be7504e0678f3ec90d6f1d71587f828a1f2478c",
+      "sha256_after": "ac75c0b8b095d24e567bee0e5be7504e0678f3ec90d6f1d71587f828a1f2478c"
+    },
+    {
+      "from": "docs/benchmark-luna-grain-context-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-grain-context-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "084f875c25afaac747deecad2eb43d126bbe1ab55c86725024469306f3aab398",
+      "sha256_after": "084f875c25afaac747deecad2eb43d126bbe1ab55c86725024469306f3aab398"
+    },
+    {
+      "from": "docs/benchmark-luna-grain-context-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-grain-context-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "8810c9dd3f430ef0cb0f2a6035631c209e02e2c784fded89e4efa7f5e9f0c2b9",
+      "sha256_after": "8810c9dd3f430ef0cb0f2a6035631c209e02e2c784fded89e4efa7f5e9f0c2b9"
+    },
+    {
+      "from": "docs/benchmark-luna-grain-context-preparation-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-grain-context-preparation-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "3ee49e50add4f82fa58db9744107d56e4a04df1621f9fac92dab4583c4d4b34a",
+      "sha256_after": "3ee49e50add4f82fa58db9744107d56e4a04df1621f9fac92dab4583c4d4b34a"
+    },
+    {
+      "from": "docs/benchmark-luna-grain-maintenance-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-grain-maintenance-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "6d62d65acdb2dc48299e12a7559eea6b9dab1c0ff62ea72009ca036ca568c7a2",
+      "sha256_after": "6d62d65acdb2dc48299e12a7559eea6b9dab1c0ff62ea72009ca036ca568c7a2"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "9bdafa66ede6b32ccaa7da344d4cd980caf9b6705449321dcea9938fe535fa94",
+      "sha256_after": "9bdafa66ede6b32ccaa7da344d4cd980caf9b6705449321dcea9938fe535fa94"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-2026-09-05.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-2026-09-05.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "844858561328cecb7daf8023a9a74d60a52bc325a923bb26f7ddd5c78b7b858f",
+      "sha256_after": "844858561328cecb7daf8023a9a74d60a52bc325a923bb26f7ddd5c78b7b858f"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed44-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed44-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "1a09a98b738844df7120edb58926137e8eafe60a8e230f7bff6e7e04ecec3bd2",
+      "sha256_after": "1a09a98b738844df7120edb58926137e8eafe60a8e230f7bff6e7e04ecec3bd2"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed44-2026-09-05.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed44-2026-09-05.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "19894edcdec5efc6c2de3fe1d671e2e04f857dcd3bfb6fa85a0d09726272f796",
+      "sha256_after": "19894edcdec5efc6c2de3fe1d671e2e04f857dcd3bfb6fa85a0d09726272f796"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed45-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed45-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "0fbc01fa64039f6c5106b07c778f0bce76f97236ba32258d7d0b464df8fa9b03",
+      "sha256_after": "0fbc01fa64039f6c5106b07c778f0bce76f97236ba32258d7d0b464df8fa9b03"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed45-2026-09-05.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed45-2026-09-05.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "5569655dbbe9f0e16c52ce48e2cb979ed1801f8f4b5e041ed80e59184f7851fc",
+      "sha256_after": "5569655dbbe9f0e16c52ce48e2cb979ed1801f8f4b5e041ed80e59184f7851fc"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed46-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed46-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "e3d37fe513220923135d3fb0dfcbc0f7205ac5bc1ba41b0a45effbde2aa27225",
+      "sha256_after": "e3d37fe513220923135d3fb0dfcbc0f7205ac5bc1ba41b0a45effbde2aa27225"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed46-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed46-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "81e40d0667d3711cfda75955b36af003ee3d9b826008e9386fd3be1b095bc02d",
+      "sha256_after": "81e40d0667d3711cfda75955b36af003ee3d9b826008e9386fd3be1b095bc02d"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed48-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed48-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "5ccd523bc00603cd2a464498c6f10631162f8ae0c7c6c924dd83a0e2a2fbd7f0",
+      "sha256_after": "5ccd523bc00603cd2a464498c6f10631162f8ae0c7c6c924dd83a0e2a2fbd7f0"
+    },
+    {
+      "from": "docs/benchmark-luna-mixed-d20-seed48-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-mixed-d20-seed48-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "2ab3977b150508e789136be5963d794e0b8787407bb7de612abc2ab0cb7313ea",
+      "sha256_after": "2ab3977b150508e789136be5963d794e0b8787407bb7de612abc2ab0cb7313ea"
+    },
+    {
+      "from": "docs/benchmark-luna-offline-triage-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-offline-triage-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "253e682ed846369a3cb7e6c7d02c2c3c71ad45a22329aba9a85376ce6e5dc913",
+      "sha256_after": "253e682ed846369a3cb7e6c7d02c2c3c71ad45a22329aba9a85376ce6e5dc913"
+    },
+    {
+      "from": "docs/benchmark-luna-offline-triage-2026-09-05.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-offline-triage-2026-09-05.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "0b750f79a986bc0909e3c0a7b0d3f3f0736d58c68b9238762f631f619ef25ef7",
+      "sha256_after": "0b750f79a986bc0909e3c0a7b0d3f3f0736d58c68b9238762f631f619ef25ef7"
+    },
+    {
+      "from": "docs/benchmark-luna-output-contract-review-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-output-contract-review-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "0a0eab910f00ba3913e9200990fdf439e6e6024829e795ddcf81c317337e73a6",
+      "sha256_after": "0a0eab910f00ba3913e9200990fdf439e6e6024829e795ddcf81c317337e73a6"
+    },
+    {
+      "from": "docs/benchmark-luna-output-contract-review-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-output-contract-review-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "40948a5dad37d1584f093f29db74b6f16dde67f8d1a03cb4175f4e12c43e779e",
+      "sha256_after": "40948a5dad37d1584f093f29db74b6f16dde67f8d1a03cb4175f4e12c43e779e"
+    },
+    {
+      "from": "docs/benchmark-luna-projection-instructions-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-projection-instructions-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "b59dac931ff210af8ec4a38f75e6b92587758a2f1cadcbdfb951a0a8d604a602",
+      "sha256_after": "b59dac931ff210af8ec4a38f75e6b92587758a2f1cadcbdfb951a0a8d604a602"
+    },
+    {
+      "from": "docs/benchmark-luna-scalar-cte-fix-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-scalar-cte-fix-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "2360ad7431c6691b79152e3d0d1e60d4dc0df8504e1260d4f33119cc6e19b4b2",
+      "sha256_after": "2360ad7431c6691b79152e3d0d1e60d4dc0df8504e1260d4f33119cc6e19b4b2"
+    },
+    {
+      "from": "docs/benchmark-luna-standard-d20-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-standard-d20-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "eca6b674670f97aaeac58e848d287bab09b9e646bda75ee58cf0810e6ae93a7b",
+      "sha256_after": "eca6b674670f97aaeac58e848d287bab09b9e646bda75ee58cf0810e6ae93a7b"
+    },
+    {
+      "from": "docs/benchmark-luna-strict-output-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-strict-output-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "ebf40971bf892a7f1522be380f34aecdf59d727471479bbe598b95c1081920bf",
+      "sha256_after": "ebf40971bf892a7f1522be380f34aecdf59d727471479bbe598b95c1081920bf"
+    },
+    {
+      "from": "docs/benchmark-luna-strict-paired-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-strict-paired-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "d9a7c8f84eef88f28450f5842a5116ba591df712ada3aa0480fef26d02141186",
+      "sha256_after": "d9a7c8f84eef88f28450f5842a5116ba591df712ada3aa0480fef26d02141186"
+    },
+    {
+      "from": "docs/benchmark-luna-value-context-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-value-context-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "6077229f0efb9ef678eed4e14a37aa50c23575f89abb197b81c4592d16e739be",
+      "sha256_after": "6077229f0efb9ef678eed4e14a37aa50c23575f89abb197b81c4592d16e739be"
+    },
+    {
+      "from": "docs/benchmark-luna-value-context-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-value-context-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "e36635ae1c4a4e54466fd0ee404d21f323105026e41f9c472a2418d7e8867303",
+      "sha256_after": "e36635ae1c4a4e54466fd0ee404d21f323105026e41f9c472a2418d7e8867303"
+    },
+    {
+      "from": "docs/benchmark-luna-value-context-ready-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-luna-value-context-ready-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "28d269aac945ce49ffc5d97e5611ba655448674fb8006564308119f0cec1644e",
+      "sha256_after": "28d269aac945ce49ffc5d97e5611ba655448674fb8006564308119f0cec1644e"
+    },
+    {
+      "from": "docs/benchmark-luna-value-context-ready-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-luna-value-context-ready-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "bc08bc3e37efc3fe2a27cd3ed3fc1977d75689356c157a0fcf7cf189503c74f8",
+      "sha256_after": "bc08bc3e37efc3fe2a27cd3ed3fc1977d75689356c157a0fcf7cf189503c74f8"
+    },
+    {
+      "from": "docs/benchmark-r500-v8-binding-audit-2026-09-06.json",
+      "to": "docs/archive/benchmarks/benchmark-r500-v8-binding-audit-2026-09-06.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "e6fd6e2f267997ee134539bcfbfd8117f83fcae6ff62a7255862ea88e380eb18",
+      "sha256_after": "e6fd6e2f267997ee134539bcfbfd8117f83fcae6ff62a7255862ea88e380eb18"
+    },
+    {
+      "from": "docs/benchmark-r500-v8-binding-audit-2026-09-06.md",
+      "to": "docs/archive/benchmarks/benchmark-r500-v8-binding-audit-2026-09-06.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "63f55b1c754acedf17efbf7cd60f29775aa60604c7722037cdc97f4c393dd909",
+      "sha256_after": "63f55b1c754acedf17efbf7cd60f29775aa60604c7722037cdc97f4c393dd909"
+    },
+    {
+      "from": "docs/benchmark-sol-error-triage-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-sol-error-triage-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "39cdfcf83d51d2f4dbb2618d54021f326598b668bca08f25565473fde1335573",
+      "sha256_after": "39cdfcf83d51d2f4dbb2618d54021f326598b668bca08f25565473fde1335573"
+    },
+    {
+      "from": "docs/benchmark-sol-metric-replay-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-sol-metric-replay-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796",
+      "sha256_after": "2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796"
+    },
+    {
+      "from": "docs/benchmark-standards-engineering-2026-09-05.json",
+      "to": "docs/archive/benchmarks/benchmark-standards-engineering-2026-09-05.json",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "07181975c230e5cd80499cec17ad9f9d2c0e9428d2f91c2441d491a10f193e46",
+      "sha256_after": "07181975c230e5cd80499cec17ad9f9d2c0e9428d2f91c2441d491a10f193e46"
+    },
+    {
+      "from": "docs/benchmark_failure_analysis_2026-03-18.md",
+      "to": "docs/archive/benchmarks/benchmark_failure_analysis_2026-03-18.md",
+      "change_reason": "Archive completed dated benchmark/accuracy evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "3504120a9d8e012d79b7be0dc9a52b7729f5bda91bf8633fa9f4d0356c5a0815",
+      "sha256_after": "3504120a9d8e012d79b7be0dc9a52b7729f5bda91bf8633fa9f4d0356c5a0815"
+    },
+    {
+      "from": "docs/chart-engine-bakeoff-2026-08-24.md",
+      "to": "docs/archive/engineering/chart-engine-bakeoff-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "e6dcefe27acf36b073942750a53422ce6ab58fb97935478df886a554e693c82b",
+      "sha256_after": "e6dcefe27acf36b073942750a53422ce6ab58fb97935478df886a554e693c82b"
+    },
+    {
+      "from": "docs/chart-storytelling-echarts-focused-evidence-2026-08-24.md",
+      "to": "docs/archive/engineering/chart-storytelling-echarts-focused-evidence-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "3d64fdfb11e9ee9a83ad1c88c980be47eb7a63a95d521273ae16cf68ad593d61",
+      "sha256_after": "3d64fdfb11e9ee9a83ad1c88c980be47eb7a63a95d521273ae16cf68ad593d61"
+    },
+    {
+      "from": "docs/chart-storytelling-r0-evidence-2026-08-24.md",
+      "to": "docs/archive/engineering/chart-storytelling-r0-evidence-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "5acf0a8b7446b4c45de85d353f5781f5abc7f2da3f3bc6a4ce530e80594f4705",
+      "sha256_after": "5acf0a8b7446b4c45de85d353f5781f5abc7f2da3f3bc6a4ce530e80594f4705"
+    },
+    {
+      "from": "docs/delivery-assessment-2026-05-07.md",
+      "to": "docs/archive/engineering/delivery-assessment-2026-05-07.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "e946bd83ce853b38981b23e166fd0ad503c940b9f01e9869dddbf2c63b5fff50",
+      "sha256_after": "e946bd83ce853b38981b23e166fd0ad503c940b9f01e9869dddbf2c63b5fff50"
+    },
+    {
+      "from": "docs/forge-goal-gap-assessment-2026-08-24.md",
+      "to": "docs/archive/engineering/forge-goal-gap-assessment-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "f868876346eb0a865673d5ab9dc698c7652a0aed5a823521a8e5b27203fcfac5",
+      "sha256_after": "58d684cb5718896d97519639038236e1006dec3fa20424ff7de17dae1af44cda"
+    },
+    {
+      "from": "docs/golden-journey-acceptance-2026-08-24.md",
+      "to": "docs/archive/engineering/golden-journey-acceptance-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "af171d39d751a4f7d3c4116b099a1aaf016601159d0b62a4b4ac98ee28755657",
+      "sha256_after": "d5d2aaf9442ea2c48721ed3d40b9e025b08f02dc259e5c83f88675b8d9295455"
+    },
+    {
+      "from": "docs/golden-journey-p0-closure-2026-08-24.md",
+      "to": "docs/archive/engineering/golden-journey-p0-closure-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "87dc5c6aaf37eede217de17d9158f599031e4acb80163680e49d949fbbc19144",
+      "sha256_after": "b561a475b6b44b39a816681d28235a28e45f72a79719a00ee9a32b093f060281"
+    },
+    {
+      "from": "docs/governance-contract-review-2026-08-24.md",
+      "to": "docs/archive/engineering/governance-contract-review-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "ce190dcd25674b8bc6a467d3ba3df22fb0cb3c0af803612af71818ede6ec1d60",
+      "sha256_after": "ce190dcd25674b8bc6a467d3ba3df22fb0cb3c0af803612af71818ede6ec1d60"
+    },
+    {
+      "from": "docs/optimization_plan_2026-03-19.md",
+      "to": "docs/archive/plans/optimization_plan_2026-03-19.md",
+      "change_reason": "Archive superseded implementation plan; retain active plan authority and historical claims.",
+      "sha256_before": "c54fe0e44c1db604911e886664dd9b67717b53d94bd1be2faa7760d6a27388bf",
+      "sha256_after": "c54fe0e44c1db604911e886664dd9b67717b53d94bd1be2faa7760d6a27388bf"
+    },
+    {
+      "from": "docs/pi-forge-integration-plan.md",
+      "to": "docs/archive/plans/pi-forge-integration-plan.md",
+      "change_reason": "Archive superseded implementation plan; retain active plan authority and historical claims. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "495336486b490aca0f66e52844a510f38ac19926cb560b54bde619031dd38294",
+      "sha256_after": "851b7bd510031a5c9f9d39bd18f94c8d5c890ff7e35c2f50f00d6bc8a9247d78"
+    },
+    {
+      "from": "docs/product-direction-architecture-review-2026-08-24.md",
+      "to": "docs/archive/engineering/product-direction-architecture-review-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "a0d64852635be818d050570aec04ca1b9cdec1998f5af3c3bb0e520019b9e985",
+      "sha256_after": "8cdef2d5fa3e2d2d9b19c5c542aa49d64b29da4bc2209b2bdfbb24d30fe27a09"
+    },
+    {
+      "from": "docs/product-spine-sp1-evidence-2026-08-25.md",
+      "to": "docs/archive/engineering/product-spine-sp1-evidence-2026-08-25.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "a3e746001c887a62b94d8d3c231a3dad70409289381aca7b6f357017b072756c",
+      "sha256_after": "a3e746001c887a62b94d8d3c231a3dad70409289381aca7b6f357017b072756c"
+    },
+    {
+      "from": "docs/product-spine-sp2-evidence-2026-08-25.md",
+      "to": "docs/archive/engineering/product-spine-sp2-evidence-2026-08-25.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "f1902264b518022fe9005ce1ff51ecbd3156fc7196d16fa7c33a64fec6f04777",
+      "sha256_after": "f1902264b518022fe9005ce1ff51ecbd3156fc7196d16fa7c33a64fec6f04777"
+    },
+    {
+      "from": "docs/product-spine-sp3-evidence-2026-08-25.md",
+      "to": "docs/archive/engineering/product-spine-sp3-evidence-2026-08-25.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "eea43f188d8ec01e52dfcd4892031e4d2273f1d82ad963b3ca948b58450fbd6f",
+      "sha256_after": "eea43f188d8ec01e52dfcd4892031e4d2273f1d82ad963b3ca948b58450fbd6f"
+    },
+    {
+      "from": "docs/product-spine-sp4-evidence-2026-08-25.md",
+      "to": "docs/archive/engineering/product-spine-sp4-evidence-2026-08-25.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "d4fda79e44d6d207e86675f1454d1f769c71a692d4c218bb2371287a6c1ef984",
+      "sha256_after": "d4fda79e44d6d207e86675f1454d1f769c71a692d4c218bb2371287a6c1ef984"
+    },
+    {
+      "from": "docs/product-spine-sp5-evidence-2026-08-25.md",
+      "to": "docs/archive/engineering/product-spine-sp5-evidence-2026-08-25.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "c14a0b2387752d5d6036d48df95338783bf74080f3bce1dc612086034f77f4ca",
+      "sha256_after": "65f9f82a3401fed149b52a647e6217f9b2444063ececa63f0b1d3d515300d88d"
+    },
+    {
+      "from": "docs/release-verification-2026-09-07.json",
+      "to": "docs/archive/engineering/release-verification-2026-09-07.json",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "a895922a914828cf722f47e29bbf463d618745ed433f363b48c487696ffff099",
+      "sha256_after": "a895922a914828cf722f47e29bbf463d618745ed433f363b48c487696ffff099"
+    },
+    {
+      "from": "docs/report-publication-2026-09-07.json",
+      "to": "docs/archive/engineering/report-publication-2026-09-07.json",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "03a24cb184002d800567914bb8023d228ca255a4001bcba3379adf98830e552c",
+      "sha256_after": "03a24cb184002d800567914bb8023d228ca255a4001bcba3379adf98830e552c"
+    },
+    {
+      "from": "docs/short-term-product-spine-plan-2026-08-25.md",
+      "to": "docs/archive/plans/short-term-product-spine-plan-2026-08-25.md",
+      "change_reason": "Archive superseded implementation plan; retain active plan authority and historical claims. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "1252dcce7856206fc35e71b2cd1801704a0e7ddcebab013c849a399dfaa4655f",
+      "sha256_after": "9c7680501dc601ecdb6102e066722ae34ac426b98ff18a348444bd1e06805bc1"
+    },
+    {
+      "from": "docs/test-report-2026-05-05.md",
+      "to": "docs/archive/engineering/test-report-2026-05-05.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "ca25b6c3ab2b156cfab1c558ece122538599d992db07705254c81abce7471c93",
+      "sha256_after": "ca25b6c3ab2b156cfab1c558ece122538599d992db07705254c81abce7471c93"
+    },
+    {
+      "from": "docs/test-report-2026-05-06.md",
+      "to": "docs/archive/engineering/test-report-2026-05-06.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "8a1968a6fbb79e23d165a4e5cba6fb09dee5d07917b8ab8fd8b7a6db9fbc8c78",
+      "sha256_after": "8a1968a6fbb79e23d165a4e5cba6fb09dee5d07917b8ab8fd8b7a6db9fbc8c78"
+    },
+    {
+      "from": "docs/test-report-2026-07-13.md",
+      "to": "docs/archive/engineering/test-report-2026-07-13.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "58ce841590d348a15ea63b19e8013696377500989006a041aa3c61d51748fcd1",
+      "sha256_after": "58ce841590d348a15ea63b19e8013696377500989006a041aa3c61d51748fcd1"
+    },
+    {
+      "from": "docs/web-product-content-audit-2026-08-24.md",
+      "to": "docs/archive/engineering/web-product-content-audit-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "96941d15998bee9bedc4f4431b7343838e2d18fefd7debe8e40e43ed2aa6d6ea",
+      "sha256_after": "96941d15998bee9bedc4f4431b7343838e2d18fefd7debe8e40e43ed2aa6d6ea"
+    },
+    {
+      "from": "docs/web-product-shell-plan-2026-08-24.md",
+      "to": "docs/archive/plans/web-product-shell-plan-2026-08-24.md",
+      "change_reason": "Archive superseded implementation plan; retain active plan authority and historical claims. Markdown differs only by rebasing relative navigation links from the archive destination; no historical commands, report strings, claims, results or scores rewritten.",
+      "sha256_before": "7a94df7948ce17596c5e2b6c65e99100c2a256b42fcf9907740d52877d400781",
+      "sha256_after": "b803774ff21fd173d00c3054c031ff0c78baa00c0e3b3ba80771a56b9f86199e"
+    },
+    {
+      "from": "docs/web-product-shell-w3a-evidence-2026-08-24.md",
+      "to": "docs/archive/engineering/web-product-shell-w3a-evidence-2026-08-24.md",
+      "change_reason": "Archive completed engineering, test, release or assessment evidence; preserve historical claims and JSON bytes.",
+      "sha256_before": "80f21671c9cfcc024cb71b1a3101be8b16a476f191ce543b8ac25f867e127ad9",
+      "sha256_after": "80f21671c9cfcc024cb71b1a3101be8b16a476f191ce543b8ac25f867e127ad9"
+    },
+    {
+      "from": "scripts/seed_mock_data.py",
+      "to": "demo/seed_mock_data.py",
+      "sha256_before": "65103dfbf436fbf6a731721e711842358a900c93bb3f2505ed228433c783ce39",
+      "sha256_after": "5f157990e2071f3c0bd64d705f41a6d13fdf29b5309ee0ca86fb37020f97989d",
+      "change_reason": "Relocate demo data seeder; update two usage examples only."
+    },
+    {
+      "from": "tests/accuracy/build_context.py",
+      "to": "tools/benchmarks/accuracy/build_context.py",
+      "sha256_before": "ec257664ec04aaf207b0da9698b91d855787c871a6243f5d56d58b9ea7159d3e",
+      "sha256_after": "ec257664ec04aaf207b0da9698b91d855787c871a6243f5d56d58b9ea7159d3e",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/compare.py",
+      "to": "tools/benchmarks/accuracy/compare.py",
+      "sha256_before": "8c770874a600d390b4c4b5c7755e4a324ac77f3898f2aa57f199698f71f5e6f2",
+      "sha256_after": "0a160a2e57436df2b6ae2bc9925bd4927bbee97fd80f1412d8668136aaad4fbd",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/evaluate_ea.py",
+      "to": "tools/benchmarks/accuracy/evaluate_ea.py",
+      "sha256_before": "51351388e591222efd14c921a344ba28e59504a959170e463382af55c33dcca6",
+      "sha256_after": "fb7eb0bdcf3bfc1e19b6fcfa47e23eddb9651f2ee36590d1e0286a78c0705fc0",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/generate_cases.py",
+      "to": "tools/benchmarks/accuracy/generate_cases.py",
+      "sha256_before": "9e7cc999131fe07be7c2822457925f7f1ab8cc6fddfd087812d7b89092736556",
+      "sha256_after": "db92d301517baf9566eb7222cd9e40f4fae060220b02810215fce1c1525d203d",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/generate_cases_large.py",
+      "to": "tools/benchmarks/accuracy/generate_cases_large.py",
+      "sha256_before": "b3853348c3cdfbfa67fb2afacc7c42eb17a55857e8c3c893290d3cf7163294b1",
+      "sha256_after": "b311fabd7e03cd20ad475c5eff2216aacfb3e5f52735a9a860d5b972037c49a1",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/grade.py",
+      "to": "tools/benchmarks/accuracy/grade.py",
+      "sha256_before": "1bf0be0f72311a7ff2fdc3d102c694630cbe272b97891898b25bbf03a0ac6913",
+      "sha256_after": "80d38efba33a63127952463440dc6a1ef337a45f614d33b7258bdcb2e49ad207",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/__init__.py",
+      "to": "tools/benchmarks/accuracy/methods/__init__.py",
+      "sha256_before": "58cca2dedc66414dbd4dc7460ff159b2f55a38af621a230a8c095ed458e70b61",
+      "sha256_after": "58cca2dedc66414dbd4dc7460ff159b2f55a38af621a230a8c095ed458e70b61",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/legacy/method_a.py",
+      "to": "tools/benchmarks/accuracy/methods/legacy/method_a.py",
+      "sha256_before": "c5ca7b215ec6fed8af55c4924db11d9f15904bfec56e00914d191a738b71442b",
+      "sha256_after": "c5ca7b215ec6fed8af55c4924db11d9f15904bfec56e00914d191a738b71442b",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/legacy/method_d.py",
+      "to": "tools/benchmarks/accuracy/methods/legacy/method_d.py",
+      "sha256_before": "76ca61f46619980adbfc631833ea6ea33409eefd8ea952bfda7819e9b6e65504",
+      "sha256_after": "76ca61f46619980adbfc631833ea6ea33409eefd8ea952bfda7819e9b6e65504",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/legacy/method_e.py",
+      "to": "tools/benchmarks/accuracy/methods/legacy/method_e.py",
+      "sha256_before": "309e1b5c50f47158a2b5da30c73c3970cba3084ad9da9c94e31f691c46e66eef",
+      "sha256_after": "309e1b5c50f47158a2b5da30c73c3970cba3084ad9da9c94e31f691c46e66eef",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/legacy/method_f.py",
+      "to": "tools/benchmarks/accuracy/methods/legacy/method_f.py",
+      "sha256_before": "96745e4508b3ce540c78643a3635afcbbf1d168afae33e43b660ace8f146cf40",
+      "sha256_after": "96745e4508b3ce540c78643a3635afcbbf1d168afae33e43b660ace8f146cf40",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/legacy/method_h.py",
+      "to": "tools/benchmarks/accuracy/methods/legacy/method_h.py",
+      "sha256_before": "529a48ec6f7c5b97fcb362009c556251c451efdfe1d82f6a43e5636819e62353",
+      "sha256_after": "529a48ec6f7c5b97fcb362009c556251c451efdfe1d82f6a43e5636819e62353",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/legacy/method_i.py",
+      "to": "tools/benchmarks/accuracy/methods/legacy/method_i.py",
+      "sha256_before": "a87a1d4df78bcdde62806402e3f45ec10997a87b81092fa9372f23f44d8a1c7c",
+      "sha256_after": "a87a1d4df78bcdde62806402e3f45ec10997a87b81092fa9372f23f44d8a1c7c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_aa.py",
+      "to": "tools/benchmarks/accuracy/methods/method_aa.py",
+      "sha256_before": "38db7cf50513faaeb7a2e7864d65407e935c0d697ff9e5c6cb9af61b9ac59972",
+      "sha256_after": "c7455423469948ea7a541007c8e7a3591375f381f351be36369902d4a24d8860",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ab.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ab.py",
+      "sha256_before": "c2e2c4ce56a45c0a18bb903b841b0df9ca9fd00ff790cefb59adda26d705ad41",
+      "sha256_after": "b45cc8740348fa3f5a6a6e0be603677cfb7195466fd9faab0863098b7652dcae",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ac.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ac.py",
+      "sha256_before": "c91cfc002db2c001fd777629d0bb3cd6c9720b6ef1814374abbfd745ba47bceb",
+      "sha256_after": "ffebd5067fbbe8b7412a387299dffddc3c69948094240f5a89e4a929ac59a2c7",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ad.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ad.py",
+      "sha256_before": "f234f1757f18106c35eace9932b6ddd9b3d0bd2a97c2d3d0b2c6ac9b807beec5",
+      "sha256_after": "737ccc69493a0ba7779dc599d3715d5263f6c62b5c4edee66a8de270a5f6d892",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ae.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ae.py",
+      "sha256_before": "04f4d2814fc1b5bed801365c47d92f153521b2a53341efa3a5722645d5d31799",
+      "sha256_after": "0871c7a882aa2c5299a77c682349cb85959e50c0ffa962cffd33cfaf84f7e8ae",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_af.py",
+      "to": "tools/benchmarks/accuracy/methods/method_af.py",
+      "sha256_before": "2035f4f974131ea1efd389bcd6b4c940473f66ee1be77cdce0bff12c67c6eabc",
+      "sha256_after": "62d5cd48067dc362b3669faf5ef326b450a7e6d9d34fdbe96b90eeb984be8f75",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ag.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ag.py",
+      "sha256_before": "ca50f2c632bcc5afad7b42b5ed269b8c14926c4d91cbfdca8e15de721fcc77d8",
+      "sha256_after": "b12e331038843c5e2093148ec5d73fc7b0511c421bd130c9a17494bcaeb38ed0",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ah.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ah.py",
+      "sha256_before": "c40a45e575ba5792f287e9256acdd397110f416536e05de271a95c89cdd98495",
+      "sha256_after": "f85282e2ec744f1f7f573dbc2a20037d49e10dbc5bd36bc75175b93fc1fda133",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_ai.py",
+      "to": "tools/benchmarks/accuracy/methods/method_ai.py",
+      "sha256_before": "2c5bcf2dbfdea407d5296d962237ad88a184820e3907bd834fd1fcfbb56ea8e1",
+      "sha256_after": "99151034d3a18da4c0d4e349ac0849e68f6abf544f64de16031583ff8620da23",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_b.py",
+      "to": "tools/benchmarks/accuracy/methods/method_b.py",
+      "sha256_before": "1bfbb8ff4fc9dab985b09b42c062560be5f4b7a705a54ac5aef25a27ae03640d",
+      "sha256_after": "1bfbb8ff4fc9dab985b09b42c062560be5f4b7a705a54ac5aef25a27ae03640d",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_b_large.py",
+      "to": "tools/benchmarks/accuracy/methods/method_b_large.py",
+      "sha256_before": "c156a356b1f6bc565333261d962ddf656c3bafdd5f2929cb37c29bbe902d9b74",
+      "sha256_after": "c156a356b1f6bc565333261d962ddf656c3bafdd5f2929cb37c29bbe902d9b74",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_b_large_sem.py",
+      "to": "tools/benchmarks/accuracy/methods/method_b_large_sem.py",
+      "sha256_before": "ebd11df6482377455569b62a8f0c4bb6a9aab34d4a80b62847605f73f96ddb4a",
+      "sha256_after": "ebd11df6482377455569b62a8f0c4bb6a9aab34d4a80b62847605f73f96ddb4a",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_b_qwen.py",
+      "to": "tools/benchmarks/accuracy/methods/method_b_qwen.py",
+      "sha256_before": "b231cecbf215de24249e9985e246fcac2e9386b1a0f9d0f86455b2c69787d17b",
+      "sha256_after": "1725b366e4128a04561e312b7f85d915e1a6fe88d1d58c3c90e5f30f6ea6a66c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_b_sem.py",
+      "to": "tools/benchmarks/accuracy/methods/method_b_sem.py",
+      "sha256_before": "5cb16b3c3ae3e48d9b1b3a90c5497a181460cfa015fb2122b613977f3b529639",
+      "sha256_after": "5cb16b3c3ae3e48d9b1b3a90c5497a181460cfa015fb2122b613977f3b529639",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_g.py",
+      "to": "tools/benchmarks/accuracy/methods/method_g.py",
+      "sha256_before": "fedbf8d688c22aea6ea8024759795a4bce012ebcb5ba52879585c9d9b14f08ea",
+      "sha256_after": "fedbf8d688c22aea6ea8024759795a4bce012ebcb5ba52879585c9d9b14f08ea",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_j.py",
+      "to": "tools/benchmarks/accuracy/methods/method_j.py",
+      "sha256_before": "d199c923b4af79d66843b896fdffc563e1a5c3423ebb14e970870ff2662b04ad",
+      "sha256_after": "d199c923b4af79d66843b896fdffc563e1a5c3423ebb14e970870ff2662b04ad",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_j_sem.py",
+      "to": "tools/benchmarks/accuracy/methods/method_j_sem.py",
+      "sha256_before": "90d0f7c42e2d159ce912261781dfee742cf7dad042295ef534e4f91376046c21",
+      "sha256_after": "90d0f7c42e2d159ce912261781dfee742cf7dad042295ef534e4f91376046c21",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_k.py",
+      "to": "tools/benchmarks/accuracy/methods/method_k.py",
+      "sha256_before": "ea7b3cc8c1f3c1f1602afc342e63ff1def0a18cf683b1780f46d26f43aadc90e",
+      "sha256_after": "ea7b3cc8c1f3c1f1602afc342e63ff1def0a18cf683b1780f46d26f43aadc90e",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/methods/method_l.py",
+      "to": "tools/benchmarks/accuracy/methods/method_l.py",
+      "sha256_before": "3462bc3a5f1ae34341fbb70305d2ec2a6733cb3debab0ea459fb030f9cde6cdd",
+      "sha256_after": "12b714f076e573f95bf6c92a64b16b54a69e6a82fe441fb59b58e836fed825f0",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_m.py",
+      "to": "tools/benchmarks/accuracy/methods/method_m.py",
+      "sha256_before": "32c759a2293c08a8460ce6661eac97a66a6c42f472e11508523ac2648d7ee506",
+      "sha256_after": "88c28a41a16da5a0e3d058ee65b0718d2efddc8e847ebd1d2ca726255fb588c6",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_n.py",
+      "to": "tools/benchmarks/accuracy/methods/method_n.py",
+      "sha256_before": "0817a243ae1ef67334e44dedcc3150954bc2b24a06a5096eef8ba739081d20ba",
+      "sha256_after": "518fe90cda61329d6a9a369f44427329b4b1f0b24ffe75aba4b4496d1ec75ef9",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_o.py",
+      "to": "tools/benchmarks/accuracy/methods/method_o.py",
+      "sha256_before": "b4b82e4a12cf147b934f93b15ba6ef54c6264d7ba1d56427d5d56ece140a49af",
+      "sha256_after": "c17fb5f41df6256f81e42dd67aeef6a5d11e65e569371bde1d2e13cd62a6c1a2",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_p.py",
+      "to": "tools/benchmarks/accuracy/methods/method_p.py",
+      "sha256_before": "5aac50f7ac21ad3ed4bb92bf4150aa739251cd9d8cc0259ea5b116575fd4680a",
+      "sha256_after": "2769d133e1a06696e7f5e529a355f58c984b4598f3561678e8bb010d33ef146c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_q.py",
+      "to": "tools/benchmarks/accuracy/methods/method_q.py",
+      "sha256_before": "a28738337ecde0245a4da51c199054ae15bcf7f2030ac966b3a5b6a662033ae8",
+      "sha256_after": "a36a58df5665d81e2d67851a1d7a19e4cec87c55695c521cd3c1856bdbe44d4f",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_r.py",
+      "to": "tools/benchmarks/accuracy/methods/method_r.py",
+      "sha256_before": "a5fdde3a019042a9a6ba8d09c0c8507685c934e7e6b4878c28ccfc25cf5fad93",
+      "sha256_after": "fc0fe9f38c7011cadbd251cbda7730f2d145eb44fa4b18028342495bd0d3eab0",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_s.py",
+      "to": "tools/benchmarks/accuracy/methods/method_s.py",
+      "sha256_before": "c4c4c07c69f228567b4845f365f844fb4d8291dbcc99064d364ced3904834dfb",
+      "sha256_after": "38cafa13cfdb6c302c6ac6346c985e93cc4c24a75e36d4991d217b96ffc03e44",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_t.py",
+      "to": "tools/benchmarks/accuracy/methods/method_t.py",
+      "sha256_before": "85fec0213992826db2c233747436c5f5b7a9d162663c198d983cf006da208b6c",
+      "sha256_after": "2ed666bbdffa2f0ca0b010cdbb0010c4bb8001e7f4881d4b2cca38ff6825d3ed",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_u.py",
+      "to": "tools/benchmarks/accuracy/methods/method_u.py",
+      "sha256_before": "ed5cc7561c0999d2a519a889c732d9886527a6fbc2f34213832081f1adac7240",
+      "sha256_after": "5d957b41bcd3afb7ec9e366d24d8975833a1e929d3592044427fcf8cffc109a4",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_v.py",
+      "to": "tools/benchmarks/accuracy/methods/method_v.py",
+      "sha256_before": "d4bd6927092ed1a3a4514df4f99a8bb50ee2e742255486dd219ee875ceca07dc",
+      "sha256_after": "c75ea7bd2088e73a0466f2b4b044ee17bf45e1c787feaf5edd92d3e0650c721d",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_w.py",
+      "to": "tools/benchmarks/accuracy/methods/method_w.py",
+      "sha256_before": "279e56b40c8cf95c1d16150ae6f63f14aab62abc9708ea91ceb78a785537bc88",
+      "sha256_after": "d0fb155e8407d9dbe2e273a40d4566acb94329c2d99c77de570c3dd7075dfee8",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_x.py",
+      "to": "tools/benchmarks/accuracy/methods/method_x.py",
+      "sha256_before": "613e08fcd290df941b007a61e8a6bc6ae4087b753cf7ae91fd4064da8d50eaa9",
+      "sha256_after": "fde53a64f12e6791f2ad018cbe733880cf7818379d8a25dbe8702dba7466b8a5",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_y.py",
+      "to": "tools/benchmarks/accuracy/methods/method_y.py",
+      "sha256_before": "c25b9cd7d631f6aafbb86cd12a2fdb985b339fb30f990bb6b847711e018d9eb1",
+      "sha256_after": "f92caeabc869d258a56335ac2fccabe0d3b2262fd19ce05d0ed8a05396f5efda",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/methods/method_z.py",
+      "to": "tools/benchmarks/accuracy/methods/method_z.py",
+      "sha256_before": "9429423ab6c5a40ed6168b408b443563381e692729f6f71f3f78368cf8aadb10",
+      "sha256_after": "a5241057adc2e6fa6ca421984fc75597d29a9f1c3bfb40f89ebf2372eff03e92",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/results/cases_large.json",
+      "to": "tools/benchmarks/accuracy/cases_large.json",
+      "sha256_before": "c2744dcb590c666aa678cbafd04cca753e6c3979391a7d8c0e2dd2045043dbe7",
+      "sha256_after": "c2744dcb590c666aa678cbafd04cca753e6c3979391a7d8c0e2dd2045043dbe7",
+      "change_reason": "Relocate versioned public synthetic case definitions beside their generator, separating evaluator input from private generated method results; preserve fixture bytes."
+    },
+    {
+      "from": "tests/accuracy/results/method_k/report_2026-03-15_185406.md",
+      "to": "docs/archive/benchmarks/report_2026-03-15_185406.md",
+      "sha256_before": "4ccee05cb0acbd646b38163ec6b1fee029a527f1d7b68388daaf33002f38dabd",
+      "change_reason": "Archive the tracked public Method K historical benchmark report; ignored/private result data remain in place.",
+      "sha256_after": "4ccee05cb0acbd646b38163ec6b1fee029a527f1d7b68388daaf33002f38dabd"
+    },
+    {
+      "from": "tests/accuracy/run_claude_direct.py",
+      "to": "tools/benchmarks/accuracy/run_claude_direct.py",
+      "sha256_before": "568997d3ad620c4625a0c74c4b84348452ed0cc16f479b5baccc1199b412eb19",
+      "sha256_after": "e7650ea4a9a9d26f9f3eef67eddf93ee1d19bb63d54b77f647e6d208ee81bd45",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/runner.py",
+      "to": "tools/benchmarks/accuracy/runner.py",
+      "sha256_before": "b228ab6da9ff9e62734840a3cc8057098ba5432958753203a39be7ff47305823",
+      "sha256_after": "4afbcec78b4c772e1c2169ed336b9142a12f2e588d4d2bd7a7601eb2bdfb74fe",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/accuracy/semantic_lib.py",
+      "to": "tools/benchmarks/accuracy/semantic_lib.py",
+      "sha256_before": "866a9a237b689ea3aa79f06b50eb702722d058694244727c07e8d2a8a9ea3d37",
+      "sha256_after": "866a9a237b689ea3aa79f06b50eb702722d058694244727c07e8d2a8a9ea3d37",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/accuracy/triage_failures.py",
+      "to": "tools/benchmarks/accuracy/triage_failures.py",
+      "sha256_before": "283ee8a0522dbcc80f685fb9bcba148255e93d241a432cdaec5093cf93d1f50f",
+      "sha256_after": "9e0dab578bd5ff7bc520de8afeb01b778f3b3a3cd5c173b2c27c6bee6c208fa2",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/benchmark/cases.json",
+      "to": "tools/benchmarks/synthetic/cases.json",
+      "sha256_before": "5c9542fac5f0a8444a37a2fcb83d7ab77eabd837a64a2baadb254fdd6a587c21",
+      "sha256_after": "5c9542fac5f0a8444a37a2fcb83d7ab77eabd837a64a2baadb254fdd6a587c21",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/create_db.py",
+      "to": "tools/benchmarks/synthetic/create_db.py",
+      "sha256_before": "b723ef1090fe5d4ac5944e292b3f889ff8f740ee4941667c12d027c60e48799f",
+      "sha256_after": "801a4ce3bd0e4c80b33cf67c272e18646e95147fcf94d31891248d8835f6f569",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/benchmark/demo_retrieval.py",
+      "to": "tools/benchmarks/synthetic/demo_retrieval.py",
+      "sha256_before": "271020cf16f875edcda0da9d422d1e96da937b383bfb0a8532b69f4b405dcd67",
+      "sha256_after": "d68d38265878651f50c912f579c3eac06cae31d922e208aa16e52e142cfe5a83",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/benchmark/gold/C01.csv",
+      "to": "tools/benchmarks/synthetic/gold/C01.csv",
+      "sha256_before": "b0f497b7da52311233352a3297578754db2094b19b0f7ad58e08714fa6362b0b",
+      "sha256_after": "b0f497b7da52311233352a3297578754db2094b19b0f7ad58e08714fa6362b0b",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C02.csv",
+      "to": "tools/benchmarks/synthetic/gold/C02.csv",
+      "sha256_before": "d0370fe5e0b54e4f412f5d56c71984f898cca97b2ac4e0b3a63e2e366d35fbbb",
+      "sha256_after": "d0370fe5e0b54e4f412f5d56c71984f898cca97b2ac4e0b3a63e2e366d35fbbb",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C03.csv",
+      "to": "tools/benchmarks/synthetic/gold/C03.csv",
+      "sha256_before": "00cca6a2a47a4d662b343e8fed44b00132949f467b57c42568c1347188c76e78",
+      "sha256_after": "00cca6a2a47a4d662b343e8fed44b00132949f467b57c42568c1347188c76e78",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C04.csv",
+      "to": "tools/benchmarks/synthetic/gold/C04.csv",
+      "sha256_before": "68dcded91d903b9d49d86a529a5455da6216d8aa8ec1f99173544501dbd95af8",
+      "sha256_after": "68dcded91d903b9d49d86a529a5455da6216d8aa8ec1f99173544501dbd95af8",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C05.csv",
+      "to": "tools/benchmarks/synthetic/gold/C05.csv",
+      "sha256_before": "ab11e122d0e521bb0058a2ad34000b5d854f35fdc79e5aecd1460e3e45e64a42",
+      "sha256_after": "ab11e122d0e521bb0058a2ad34000b5d854f35fdc79e5aecd1460e3e45e64a42",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C06.csv",
+      "to": "tools/benchmarks/synthetic/gold/C06.csv",
+      "sha256_before": "315ce20827c3be5e353a95fa53b4bf135a5640ee1fed92f8bc764537aa75563f",
+      "sha256_after": "315ce20827c3be5e353a95fa53b4bf135a5640ee1fed92f8bc764537aa75563f",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C07.csv",
+      "to": "tools/benchmarks/synthetic/gold/C07.csv",
+      "sha256_before": "08e1b6c8db993a1fad0673cb4dee1fa61bd8e9229aecf68e92f00f6efe3140e2",
+      "sha256_after": "08e1b6c8db993a1fad0673cb4dee1fa61bd8e9229aecf68e92f00f6efe3140e2",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C08.csv",
+      "to": "tools/benchmarks/synthetic/gold/C08.csv",
+      "sha256_before": "c347fb4407f1cc6d311ca38f67878e4586c7e3be87887a353661b12f3b3701a3",
+      "sha256_after": "c347fb4407f1cc6d311ca38f67878e4586c7e3be87887a353661b12f3b3701a3",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C09.csv",
+      "to": "tools/benchmarks/synthetic/gold/C09.csv",
+      "sha256_before": "b340b5713520cee16b5f19b79a146f544884437f9935c101d613b99c1af5a203",
+      "sha256_after": "b340b5713520cee16b5f19b79a146f544884437f9935c101d613b99c1af5a203",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C10.csv",
+      "to": "tools/benchmarks/synthetic/gold/C10.csv",
+      "sha256_before": "fc372a902ad80cd6088700fd20f297b8ff171e06fec0fbdff2674019afea2a39",
+      "sha256_after": "fc372a902ad80cd6088700fd20f297b8ff171e06fec0fbdff2674019afea2a39",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C11.csv",
+      "to": "tools/benchmarks/synthetic/gold/C11.csv",
+      "sha256_before": "9dd91542920356e09b457d6067d845fd2142f41b6a9b732b39c911bc1c7d3cb9",
+      "sha256_after": "9dd91542920356e09b457d6067d845fd2142f41b6a9b732b39c911bc1c7d3cb9",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C12.csv",
+      "to": "tools/benchmarks/synthetic/gold/C12.csv",
+      "sha256_before": "bda5e844646c548d13a31c701ee7521ec3e0022fb7fe0f4817773310eb7d3ed5",
+      "sha256_after": "bda5e844646c548d13a31c701ee7521ec3e0022fb7fe0f4817773310eb7d3ed5",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C13.csv",
+      "to": "tools/benchmarks/synthetic/gold/C13.csv",
+      "sha256_before": "5d8aa1c0b03d4a16506ba53a0493715782fbd2b37b4fffc051acc5c2db9674b3",
+      "sha256_after": "5d8aa1c0b03d4a16506ba53a0493715782fbd2b37b4fffc051acc5c2db9674b3",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C14.csv",
+      "to": "tools/benchmarks/synthetic/gold/C14.csv",
+      "sha256_before": "4bcaf565c6475cb34b095c782f81f9f96718bcb6aac610fe7a62360c9fd7f29c",
+      "sha256_after": "4bcaf565c6475cb34b095c782f81f9f96718bcb6aac610fe7a62360c9fd7f29c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C15.csv",
+      "to": "tools/benchmarks/synthetic/gold/C15.csv",
+      "sha256_before": "540ec2da222d5b8899e9d678be7ccbececc201f1b41967e39d4ecec02938316c",
+      "sha256_after": "540ec2da222d5b8899e9d678be7ccbececc201f1b41967e39d4ecec02938316c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C16.csv",
+      "to": "tools/benchmarks/synthetic/gold/C16.csv",
+      "sha256_before": "06db4d7c06068c20d88fa37282efde2f422f7b74f5d0120a536d927c39a3c4e4",
+      "sha256_after": "06db4d7c06068c20d88fa37282efde2f422f7b74f5d0120a536d927c39a3c4e4",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C17.csv",
+      "to": "tools/benchmarks/synthetic/gold/C17.csv",
+      "sha256_before": "52a5bfca9d4c99162faab41143e72933264ed76df8d658711c3f9dcdfc48a131",
+      "sha256_after": "52a5bfca9d4c99162faab41143e72933264ed76df8d658711c3f9dcdfc48a131",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C18.csv",
+      "to": "tools/benchmarks/synthetic/gold/C18.csv",
+      "sha256_before": "a62540eca58bbb3534b99a70cbd14493e51109df262c731cced5ecfc575c8768",
+      "sha256_after": "a62540eca58bbb3534b99a70cbd14493e51109df262c731cced5ecfc575c8768",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C19.csv",
+      "to": "tools/benchmarks/synthetic/gold/C19.csv",
+      "sha256_before": "0dd9da1aa1074c755a012d500deae63475f4e3f185cf147d02d232ec600e7817",
+      "sha256_after": "0dd9da1aa1074c755a012d500deae63475f4e3f185cf147d02d232ec600e7817",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C20.csv",
+      "to": "tools/benchmarks/synthetic/gold/C20.csv",
+      "sha256_before": "7f660bd4946c0e06a49e7a2c913e99ebe8540ed650b157d8b15945d28e4bb417",
+      "sha256_after": "7f660bd4946c0e06a49e7a2c913e99ebe8540ed650b157d8b15945d28e4bb417",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C21.csv",
+      "to": "tools/benchmarks/synthetic/gold/C21.csv",
+      "sha256_before": "be0d20bd83a407609ea7622ee6a3af8c224d05c79b90e5315a30fa9f71b8e696",
+      "sha256_after": "be0d20bd83a407609ea7622ee6a3af8c224d05c79b90e5315a30fa9f71b8e696",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C22.csv",
+      "to": "tools/benchmarks/synthetic/gold/C22.csv",
+      "sha256_before": "bfa5f8d94027ec4b6a4c5515dbb8c3827b44f77f6e10f27b6786f1c98bcd24c7",
+      "sha256_after": "bfa5f8d94027ec4b6a4c5515dbb8c3827b44f77f6e10f27b6786f1c98bcd24c7",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C23.csv",
+      "to": "tools/benchmarks/synthetic/gold/C23.csv",
+      "sha256_before": "62f1c32aef55d8453bc9afb1c69866e7a9955bbf03c57a7e6840c03ba995bf2c",
+      "sha256_after": "62f1c32aef55d8453bc9afb1c69866e7a9955bbf03c57a7e6840c03ba995bf2c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C24.csv",
+      "to": "tools/benchmarks/synthetic/gold/C24.csv",
+      "sha256_before": "d6fa5560fb97ec7455dd96eeac5336a2907fe9ef0e5d80fb48b014668b918791",
+      "sha256_after": "d6fa5560fb97ec7455dd96eeac5336a2907fe9ef0e5d80fb48b014668b918791",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C25.csv",
+      "to": "tools/benchmarks/synthetic/gold/C25.csv",
+      "sha256_before": "e42fc1c66ebde31b59df8afbe65a9cdb3344aa3acb96417ba311f94341f501e2",
+      "sha256_after": "e42fc1c66ebde31b59df8afbe65a9cdb3344aa3acb96417ba311f94341f501e2",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C26.csv",
+      "to": "tools/benchmarks/synthetic/gold/C26.csv",
+      "sha256_before": "6de5c44652763994dc248ccf1555cc07e1f32f30f5428eb2fb46b69727c6277c",
+      "sha256_after": "6de5c44652763994dc248ccf1555cc07e1f32f30f5428eb2fb46b69727c6277c",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C27.csv",
+      "to": "tools/benchmarks/synthetic/gold/C27.csv",
+      "sha256_before": "d69fe16cb654b8efb3d862906a8d58266088e0edcab20892da49d802317482dd",
+      "sha256_after": "d69fe16cb654b8efb3d862906a8d58266088e0edcab20892da49d802317482dd",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C28.csv",
+      "to": "tools/benchmarks/synthetic/gold/C28.csv",
+      "sha256_before": "d4f1784995658796544a89b12b943a5f4a261ebd4286ba2120d444ce089bd432",
+      "sha256_after": "d4f1784995658796544a89b12b943a5f4a261ebd4286ba2120d444ce089bd432",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C29.csv",
+      "to": "tools/benchmarks/synthetic/gold/C29.csv",
+      "sha256_before": "be37be3b205d125fcb82e7b76192e96e01e55405b73e93c5a3cff6e6a1c59611",
+      "sha256_after": "be37be3b205d125fcb82e7b76192e96e01e55405b73e93c5a3cff6e6a1c59611",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C30.csv",
+      "to": "tools/benchmarks/synthetic/gold/C30.csv",
+      "sha256_before": "8872ff16498caa90371b4dcddb98e03ff9b493db1b4e65c5fcada44e8855fdd8",
+      "sha256_after": "8872ff16498caa90371b4dcddb98e03ff9b493db1b4e65c5fcada44e8855fdd8",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C31.csv",
+      "to": "tools/benchmarks/synthetic/gold/C31.csv",
+      "sha256_before": "549328b87fff3a9e1c7845f2b6a36f1061932cdad0e46b580a04bccd70aa7c95",
+      "sha256_after": "549328b87fff3a9e1c7845f2b6a36f1061932cdad0e46b580a04bccd70aa7c95",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C32.csv",
+      "to": "tools/benchmarks/synthetic/gold/C32.csv",
+      "sha256_before": "ac88809d22b0979eb9ca66a994a8a0adfe47b2dc40ef2ce32b45a7ee75868ecb",
+      "sha256_after": "ac88809d22b0979eb9ca66a994a8a0adfe47b2dc40ef2ce32b45a7ee75868ecb",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C33.csv",
+      "to": "tools/benchmarks/synthetic/gold/C33.csv",
+      "sha256_before": "87a3d75b03048749e630783bd21f71d2f526e9bb31093f97b57f04bb1054f0dc",
+      "sha256_after": "87a3d75b03048749e630783bd21f71d2f526e9bb31093f97b57f04bb1054f0dc",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C34.csv",
+      "to": "tools/benchmarks/synthetic/gold/C34.csv",
+      "sha256_before": "71f7e41520d9e433f5450a336ccc9d56ddd02ede5fca294dde5044c701e8aaf7",
+      "sha256_after": "71f7e41520d9e433f5450a336ccc9d56ddd02ede5fca294dde5044c701e8aaf7",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C35.csv",
+      "to": "tools/benchmarks/synthetic/gold/C35.csv",
+      "sha256_before": "b866b919f8bfb7a88f69879bd973a6a604c668d427a1f0dbd873e848131c49db",
+      "sha256_after": "b866b919f8bfb7a88f69879bd973a6a604c668d427a1f0dbd873e848131c49db",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C36.csv",
+      "to": "tools/benchmarks/synthetic/gold/C36.csv",
+      "sha256_before": "17caa4bce87474fab60050661eb71dc9fe8d3ac85f69fc980cb31553ec1dc7d6",
+      "sha256_after": "17caa4bce87474fab60050661eb71dc9fe8d3ac85f69fc980cb31553ec1dc7d6",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C37.csv",
+      "to": "tools/benchmarks/synthetic/gold/C37.csv",
+      "sha256_before": "6c2aa6f3fd98c0298c68549b280bee11fdfee13405f9b5f4dc7f8a80471eaf8d",
+      "sha256_after": "6c2aa6f3fd98c0298c68549b280bee11fdfee13405f9b5f4dc7f8a80471eaf8d",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C38.csv",
+      "to": "tools/benchmarks/synthetic/gold/C38.csv",
+      "sha256_before": "53862fe8dabcd8e7266521ec6b4e20d6e6f2bfbca130d46f7839970c8ad66fde",
+      "sha256_after": "53862fe8dabcd8e7266521ec6b4e20d6e6f2bfbca130d46f7839970c8ad66fde",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C39.csv",
+      "to": "tools/benchmarks/synthetic/gold/C39.csv",
+      "sha256_before": "2e5a25030994b404e6a5dbb6a5fc4103bd9cdbba55a5dbf1e646eb7c80f990a5",
+      "sha256_after": "2e5a25030994b404e6a5dbb6a5fc4103bd9cdbba55a5dbf1e646eb7c80f990a5",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/gold/C40.csv",
+      "to": "tools/benchmarks/synthetic/gold/C40.csv",
+      "sha256_before": "510befe7e2da070eb0744f472a5f467e59411acda27760b0ae1adc3ab6b7fa7d",
+      "sha256_after": "510befe7e2da070eb0744f472a5f467e59411acda27760b0ae1adc3ab6b7fa7d",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/benchmark/report.py",
+      "to": "tools/benchmarks/synthetic/report.py",
+      "sha256_before": "eb8c7e726ff120af43037093ae731735b2d3655f81d472e7d5fabd9bc99b7685",
+      "sha256_after": "2b6c001f9354c094029c06e463fdf59885df5c215abaab3335f672ae52ca4c14",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/benchmark/runner.py",
+      "to": "tools/benchmarks/synthetic/runner.py",
+      "sha256_before": "85f50be74a1bfc6cf6979144bf3d3d88c1ee684f9a58bd5a6a972615116f973e",
+      "sha256_after": "b65aa0d2904ce1a7736f27e315574888e6c6125ddc8d50575ea77583427ad588",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/spider2/__init__.py",
+      "to": "tools/benchmarks/spider2/__init__.py",
+      "sha256_before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/spider2/evaluate.py",
+      "to": "tools/benchmarks/spider2/evaluate.py",
+      "sha256_before": "d5d05f786e296ce505627c21ed95fee5561450fd356417edb4ec5242bb328a26",
+      "sha256_after": "30a0b1f31534b4bbbe2cb11589a9af6438db6830780a16fe145371c7419f962f",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/spider2/prompts.py",
+      "to": "tools/benchmarks/spider2/prompts.py",
+      "sha256_before": "b3ebdd9657b428ebf79b561d589f3912a94718ffa95a39f7ac6eec57d95e5887",
+      "sha256_after": "b3ebdd9657b428ebf79b561d589f3912a94718ffa95a39f7ac6eec57d95e5887",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/spider2/run_siliconflow.sh",
+      "to": "tools/benchmarks/spider2/run_siliconflow.sh",
+      "sha256_before": "b374b5d603317928c26e281bd2c794318bb0d20d546db7b3fe4f856bbe435fa4",
+      "sha256_after": "71794a77b9ffb87db11766ba3885502afced3322d5f1ceef7ecda6a8d9e9b247",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/spider2/runner.py",
+      "to": "tools/benchmarks/spider2/runner.py",
+      "sha256_before": "865bb99ce5cacd75435bc60e81dfcac91e0ef2ea959a6d09b7c230997e2d8188",
+      "sha256_after": "1a05e83f011fa9622c7a973e735989f1d3de41ecb7114fcf6762446c8f624aa5",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/spider2/setup.py",
+      "to": "tools/benchmarks/spider2/setup.py",
+      "sha256_before": "63c949af58a1e0bffac0dfda775d048483e58cf7de80d67e053dfc5f3748cec1",
+      "sha256_after": "ff89534ccfcac025753401133f7be2027d882e486851c6825d85f554cc0a19c9",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    },
+    {
+      "from": "tests/text-to-sql-failures/A-join-traps.md",
+      "to": "tools/benchmarks/text_to_sql_failures/A-join-traps.md",
+      "change_reason": "Co-locate tracked failure corpus documentation with benchmark tooling; no local datasets or results moved.",
+      "sha256_before": "8714dba63c21203a424bae3edb6f6c374f42c8d08e2eb4e64eb104e4346a9676",
+      "sha256_after": "8714dba63c21203a424bae3edb6f6c374f42c8d08e2eb4e64eb104e4346a9676"
+    },
+    {
+      "from": "tests/text-to-sql-failures/B-aggregation-traps.md",
+      "to": "tools/benchmarks/text_to_sql_failures/B-aggregation-traps.md",
+      "change_reason": "Co-locate tracked failure corpus documentation with benchmark tooling; no local datasets or results moved.",
+      "sha256_before": "22553838d9b4e4a32f49aeb7b4c4fbc23dc0c418d7186bed8d50a924bd83cdc7",
+      "sha256_after": "22553838d9b4e4a32f49aeb7b4c4fbc23dc0c418d7186bed8d50a924bd83cdc7"
+    },
+    {
+      "from": "tests/text-to-sql-failures/C-time-traps.md",
+      "to": "tools/benchmarks/text_to_sql_failures/C-time-traps.md",
+      "change_reason": "Co-locate tracked failure corpus documentation with benchmark tooling; no local datasets or results moved.",
+      "sha256_before": "9dfd5b4ef755a3de0338cc364c3de7ac22b690d4212d77fbadc770d927ebf11f",
+      "sha256_after": "9dfd5b4ef755a3de0338cc364c3de7ac22b690d4212d77fbadc770d927ebf11f"
+    },
+    {
+      "from": "tests/text-to-sql-failures/D-semantic-traps.md",
+      "to": "tools/benchmarks/text_to_sql_failures/D-semantic-traps.md",
+      "change_reason": "Co-locate tracked failure corpus documentation with benchmark tooling; no local datasets or results moved.",
+      "sha256_before": "f6f63c1973f69b620c6692d11bdca3164c49b48ec1a2cee0ccc9b6ebb61b63b6",
+      "sha256_after": "f6f63c1973f69b620c6692d11bdca3164c49b48ec1a2cee0ccc9b6ebb61b63b6"
+    },
+    {
+      "from": "tests/text-to-sql-failures/E-dialect-traps.md",
+      "to": "tools/benchmarks/text_to_sql_failures/E-dialect-traps.md",
+      "change_reason": "Co-locate tracked failure corpus documentation with benchmark tooling; no local datasets or results moved.",
+      "sha256_before": "029366402290b0f6354bedecfa5e0cf37648f414a6381774504f4e9dd31e5c22",
+      "sha256_after": "029366402290b0f6354bedecfa5e0cf37648f414a6381774504f4e9dd31e5c22"
+    },
+    {
+      "from": "tests/text-to-sql-failures/README.md",
+      "to": "tools/benchmarks/text_to_sql_failures/README.md",
+      "change_reason": "Co-locate tracked failure corpus documentation with benchmark tooling; no local datasets or results moved.",
+      "sha256_before": "56a85096c850c6f73b94e2e8cd7a8dadc3f58d063ee3782a93a414b81259f385",
+      "sha256_after": "56a85096c850c6f73b94e2e8cd7a8dadc3f58d063ee3782a93a414b81259f385"
+    },
+    {
+      "from": "tests/text-to-sql-failures/create_db.py",
+      "to": "tools/benchmarks/text_to_sql_failures/create_db.py",
+      "sha256_before": "ba9cf0f578fd5645713d1a2fc792533f627a2b05bbb4c481aff3758ae11a1822",
+      "sha256_after": "ba9cf0f578fd5645713d1a2fc792533f627a2b05bbb4c481aff3758ae11a1822",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration."
+    },
+    {
+      "from": "tests/text-to-sql-failures/run_ea.py",
+      "to": "tools/benchmarks/text_to_sql_failures/run_ea.py",
+      "sha256_before": "463b3cfeacbc257f87f8a70379eee4d6dc889ab1432d6b9bbf72c97b26c3bbb8",
+      "sha256_after": "379662e92f068965a8160c3ade102dd3402a3cf81dbb5b3c2e1405653be34537",
+      "change_reason": "Relocate standalone benchmark source/public synthetic fixture outside pytest regression tree; no local data migration. Rebase launcher/import/fixture-root references only; experiment prompts and scoring unchanged."
+    }
+  ],
+  "verification": {
+    "migration": {
+      "moved_files": 204,
+      "byte_identical_files": 153,
+      "rebased_files": 51,
+      "historical_json_byte_identical": 44,
+      "old_public_paths_remaining": 0,
+      "duplicate_paths": 0,
+      "destination_hash_mismatches": 0,
+      "destination_groups": {
+        "tools/benchmarks/": 110,
+        "docs/archive/benchmarks/": 57,
+        "docs/archive/engineering/": 23,
+        "docs/archive/plans/": 4,
+        "forge/templates/poc/": 9,
+        "demo/": 1
+      },
+      "pi_governance_link_target_exists": true
+    },
+    "python": {
+      "version": "3.14",
+      "command": "python -m pytest tests -q -rs",
+      "environment": "isolated public source snapshot; dotenv disabled; original private assets and external network denied",
+      "passed": 983,
+      "skipped": 28,
+      "skip_reasons": {
+        "browser_e2e": 26,
+        "uninstalled_full_minidev_assets": 2
+      },
+      "warnings": [
+        "Third-party lark_oapi protobuf uses deprecated datetime.utcfromtimestamp."
+      ]
+    },
+    "pi": {
+      "tests_passed": 215,
+      "typecheck": "passed"
+    },
+    "distribution": {
+      "python_version": "3.11.14",
+      "build": "sdist then wheel from sdist",
+      "baseline_reproduction": "Non-editable wheel forge poc init failed with FileNotFoundError for site-packages/customer-poc-template.",
+      "wheel": "passed",
+      "sdist": "passed",
+      "commands": [
+        "forge --help",
+        "forge compile",
+        "forge poc init",
+        "forge poc validate",
+        "forge quickstart"
+      ],
+      "observed": {
+        "poc": "ok",
+        "enforce_status": "completed",
+        "result_truncated": true,
+        "evidence_integrity": "verified"
+      },
+      "boundaries": "Import caused no database connection/private runtime read; core evaluation did not import Web; all execution data was newly synthesized."
+    },
+    "benchmark_tools": {
+      "cli": [
+        {
+          "path": "tools/benchmarks/accuracy/runner.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/evaluate_ea.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/triage_failures.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/grade.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/compare.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/run_claude_direct.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/generate_cases_large.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/synthetic/runner.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/synthetic/report.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/synthetic/demo_retrieval.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/spider2/runner.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/spider2/evaluate.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/text_to_sql_failures/run_ea.py",
+          "args": [
+            "--help"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/runner.py",
+          "args": [
+            "--list"
+          ],
+          "exit_code": 0
+        },
+        {
+          "path": "tools/benchmarks/accuracy/generate_cases_large.py",
+          "args": [],
+          "exit_code": 0
+        }
+      ],
+      "dotenv": "disabled before benchmark imports",
+      "network": "audit blocked",
+      "database": "new temporary synthetic databases only",
+      "listed_methods": 33,
+      "shared_fixture_methods": 25,
+      "synthetic_csv_roundtrips": 40,
+      "failure_corpus_reference_queries": 7,
+      "spider_synthetic_loader_and_execution": true,
+      "existing_triage_regressions": 3,
+      "shell": {
+        "path": "tools/benchmarks/spider2/run_siliconflow.sh",
+        "syntax": "bash -n passed",
+        "missing_key_gate": {
+          "exit_code": 1,
+          "observed": "SF_API_KEY required before any Python/model call"
+        }
+      }
+    },
+    "seed_demo": {
+      "command": "python demo/seed_mock_data.py --help",
+      "status": "passed",
+      "database_execution": false
+    },
+    "docs": {
+      "public_local_links": "passed",
+      "extended_navigation": {
+        "status": "PASS",
+        "public_markdown_files": 146,
+        "checked_links": 512,
+        "repository_url_links": 105,
+        "missing": [],
+        "coverage": "Tracked public root Markdown, docs including architecture course and archives, website README/content, tools Markdown, relocated PoC templates",
+        "excluded_targets": [
+          {
+            "source": "docs/governance-contracts.md",
+            "target": "../services/pi-orchestrator/src/governance-contracts.ts",
+            "reason": "Pi service tree outside authorized access scope; target not read/stat-checked by extended audit"
+          }
+        ]
+      },
+      "pi_governance_excluded_target_resolved_by_parent": true,
+      "current_state_inline_paths_rebased": 11
+    },
+    "website": {
+      "build": "passed",
+      "pages": 28,
+      "browser": "Chromium course/11-evidence page rendered; navigation to reference/benchmarks rendered and was visually confirmed.",
+      "archive_link": "Course test report href points to docs/archive/engineering/test-report-2026-07-13.md.",
+      "setup_issue": "Initial copied-site node_modules symlink crossed project roots and failed Astro compile metadata lookup; copying dependencies into isolated site resolved it without source changes.",
+      "warning": "Astro sitemap skipped because site option is unset.",
+      "remote_github_links": "Local repository targets checked; unpushed remote URLs not fetched."
+    }
+  },
+  "limits": [
+    "不commit/push/部署",
+    "零模型调用、零真实数据库或外部渠道验证",
+    "不改历史评分、产品职责或R0.6/H门禁"
+  ],
+  "summary": {
+    "moved_files": 204,
+    "byte_identical_files": 153,
+    "rebased_files": 51,
+    "historical_json_byte_identical": 44,
+    "old_public_paths_remaining": 0,
+    "duplicate_paths": 0,
+    "destination_hash_mismatches": 0,
+    "destination_groups": {
+      "tools/benchmarks/": 110,
+      "docs/archive/benchmarks/": 57,
+      "docs/archive/engineering/": 23,
+      "docs/archive/plans/": 4,
+      "forge/templates/poc/": 9,
+      "demo/": 1
+    },
+    "pi_governance_link_target_exists": true
+  },
+  "code_changes": [
+    {
+      "path": "forge/poc.py",
+      "change": "Use importlib.resources files/as_file for packaged PoC templates; remove checkout-relative ROOT/TEMPLATE_DIR."
+    },
+    {
+      "path": "pyproject.toml",
+      "change": "Include templates/poc and registry resource files in forge package data."
+    },
+    {
+      "path": "scripts/package_smoke.py",
+      "change": "Keep regression smoke for installed PoC initialization/validation, alongside existing import/CLI/Quickstart checks."
+    },
+    {
+      "path": "demo/seed_mock_data.py",
+      "change": "Relocate existing seeder; update usage examples only; no real database seeding performed."
+    },
+    {
+      "path": "tests/test_accuracy_triage.py",
+      "change": "Rebase benchmark tool/fixture references or ignore rules; remove unused accuracy path constant, without adding a runtime dependency on tools."
+    },
+    {
+      "path": "tests/test_compiler.py",
+      "change": "Rebase benchmark tool/fixture references or ignore rules; remove unused accuracy path constant, without adding a runtime dependency on tools."
+    },
+    {
+      "path": "demo/seed.py",
+      "change": "Rebase benchmark tool/fixture references or ignore rules; remove unused accuracy path constant, without adding a runtime dependency on tools."
+    },
+    {
+      "path": "forge/accuracy_benchmark.py",
+      "change": "Rebase benchmark tool/fixture references or ignore rules; remove unused accuracy path constant, without adding a runtime dependency on tools."
+    },
+    {
+      "path": ".gitignore",
+      "change": "Rebase benchmark tool/fixture references or ignore rules; remove unused accuracy path constant, without adding a runtime dependency on tools."
+    },
+    {
+      "path": ".dockerignore",
+      "change": "Rebase benchmark tool/fixture references or ignore rules; remove unused accuracy path constant, without adding a runtime dependency on tools."
+    },
+    {
+      "path": "tests/test_commercial_readiness.py",
+      "change": "Remove report-wording assertion; retain observable readiness status and CLI workspace validation."
+    }
+  ],
+  "documentation": {
+    "layout_contract": "CONTRIBUTING.md#repository-layout",
+    "navigation": "docs/README.md",
+    "reference_updates": [
+      "README.md",
+      "README.zh-CN.md",
+      "docs/README.md",
+      "docs/architecture-course/11-evidence.md",
+      "docs/architecture-course/12-labs.md",
+      "docs/archive/engineering/forge-goal-gap-assessment-2026-08-24.md",
+      "docs/archive/engineering/golden-journey-acceptance-2026-08-24.md",
+      "docs/archive/engineering/golden-journey-p0-closure-2026-08-24.md",
+      "docs/archive/engineering/product-direction-architecture-review-2026-08-24.md",
+      "docs/archive/engineering/product-spine-sp5-evidence-2026-08-25.md",
+      "docs/archive/plans/pi-forge-integration-plan.md",
+      "docs/archive/plans/short-term-product-spine-plan-2026-08-25.md",
+      "docs/archive/plans/web-product-shell-plan-2026-08-24.md",
+      "docs/benchmarks.md",
+      "docs/commercial-readiness.md",
+      "docs/current-project-state.md",
+      "docs/forge-enterprise-evolution-plan.md",
+      "docs/governance-contracts.md",
+      "docs/poc-playbook.md",
+      "docs/product-design-roadmap-2026-08-25.md",
+      "docs/product-north-star.md",
+      "docs/product-projection-contracts.md",
+      "docs/requirements-pool.md",
+      "website/README.md",
+      "website/src/content/docs/course/11-evidence.md",
+      "website/src/content/docs/course/12-labs.md"
+    ],
+    "current_state_inline_path_rebases": 11,
+    "historical_paths": "Historical JSON remains byte-identical. Resolve historical paths through moves; do not rewrite evidence or recreate legacy runtime data."
+  },
+  "protected_legacy_assets": [
+    {
+      "path": "tests/accuracy/results/method_k/grading_prompt.txt",
+      "action": "keep_unread_pending_owner_review"
+    },
+    {
+      "path": "tests/accuracy/results/method_k/runs.json",
+      "action": "keep_unread_pending_owner_review"
+    },
+    {
+      "path": "tests/accuracy/results/method_k/scores.json",
+      "action": "keep_unread_pending_owner_review"
+    },
+    {
+      "path": "tests/text-to-sql-failures/test.db",
+      "action": "keep_unread_pending_owner_review"
+    }
+  ]
+}

@@ -21,7 +21,7 @@ Forge DSL → SQL 编译器。
 
 from __future__ import annotations
 import json
-import pathlib
+from importlib.resources import files
 import re
 from typing import Any
 
@@ -30,8 +30,7 @@ from sqlglot import exp, parse_one
 from sqlglot.errors import SqlglotError
 
 # 在模块加载时一次性读取并解析 JSON Schema，避免重复 I/O
-_SCHEMA_PATH = pathlib.Path(__file__).parent / "schema.json"
-_SCHEMA = json.loads(_SCHEMA_PATH.read_text())
+_SCHEMA = json.loads(files("forge").joinpath("schema.json").read_text(encoding="utf-8"))
 
 # 标准 JOIN 类型到 SQL 关键字的映射；anti/semi/cross 由 _join() 单独处理
 _JOIN_KEYWORDS = {

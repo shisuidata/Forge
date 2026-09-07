@@ -537,7 +537,17 @@ export class ProductProjectionService {
     const planArtifact = this.ports.artifacts.latest(task.task_run_id, "execution_plan");
     const plan = planProjection(planArtifact);
     if (planArtifact !== undefined && plan === null) reasons.push("execution_plan_projection_invalid");
-    const actions = presentation.actions.slice(0, 16).map(actionCapability);
+    const actions = presentation.actions.slice(0, 16).map((action) => {
+      const projected = actionCapability(action);
+      if (task.channel !== "web" || task.channel_conversation_id === null) {
+        projected.availability = "disabled";
+        projected.reason_code = "channel_unavailable";
+      } else if (action.type === "request_supplement") {
+        projected.availability = "disabled";
+        projected.reason_code = "action_payload_unavailable";
+      }
+      return projected;
+    });
     if (
       task.status === "waiting_for_query_approval" &&
       !actions.some((action) => action.action_type === "approve_query")
@@ -584,6 +594,10 @@ export class ProductProjectionService {
           attempt_id: attempt.attempt_id,
           stage: attempt.stage.slice(0, 256),
           status: attempt.status,
+          ...(attempt.request_id ? { request_id: attempt.request_id } : {}),
+          model_revision: attempt.model_revision,
+          skill_policy_version: attempt.skill_policy_version,
+          usage_status: attempt.usage_status ?? "unknown",
           started_at: attempt.started_at,
           finished_at: attempt.finished_at,
           elapsed_ms: Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0,

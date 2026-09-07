@@ -342,6 +342,7 @@ class TestApproveExecutionFailure:
         import web.router as router_mod
         from agent.agent import AgentResponse
         from agent.memory import memory
+        from forge.executor import ExecutionResult
 
         pipeline_state = {"status": "pending_approval", "stages": []}
         monkeypatch.setattr(
@@ -353,8 +354,10 @@ class TestApproveExecutionFailure:
         )
         monkeypatch.setattr(
             router_mod,
-            "execute_with_data",
-            lambda sql: ("⚠ 执行失败：SQL 引用了不存在的字段。", [], []),
+            "execute",
+            lambda sql: ExecutionResult(
+                False, "SQL 引用了不存在的字段。", [], [], error_code="execution_reference_invalid"
+            ),
         )
         monkeypatch.setattr(
             memory,
@@ -375,7 +378,7 @@ class TestApproveExecutionFailure:
         data = resp.json()
         assert data["action"] == "execution_failed"
         assert pipeline_state["status"] == "failed"
-        assert "Pipeline 已终止" in pipeline_state["error"]
+        assert data["error_code"] == "execution_reference_invalid"
 
 
 class TestExecuteRaw:
@@ -960,7 +963,6 @@ class TestAdminPages:
         assert 'data-conversation-list' in resp.text
         assert 'data-conversation-feed' in resp.text
         assert 'data-conversation-form' in resp.text
-        assert '/static/product/product-pages.js?v=6' in resp.text
         assert "<script>" not in resp.text
         assert "/api/chat" not in resp.text
 

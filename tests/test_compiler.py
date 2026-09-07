@@ -2,7 +2,7 @@
 Forge compiler tests.
 
 Cases marked with the source failure doc (A1, B1, …) are derived from
-tests/text-to-sql-failures/ and represent real AI-generated SQL mistakes
+tools/benchmarks/text_to_sql_failures/ and represent real AI-generated SQL mistakes
 that Forge is designed to make structurally impossible.
 """
 

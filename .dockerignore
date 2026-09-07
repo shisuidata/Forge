@@ -13,5 +13,12 @@ forge_audit.db
 .forge
 web/static/charts/*.html
 tests/accuracy/results
+tools/benchmarks/accuracy/results
+tools/benchmarks/spider2/data
+tools/benchmarks/spider2/results
+tools/benchmarks/synthetic/benchmark.db
+tools/benchmarks/synthetic/benchmark.registry.json
+tools/benchmarks/synthetic/results
+tools/benchmarks/text_to_sql_failures/*.db
 website/node_modules
 website/dist

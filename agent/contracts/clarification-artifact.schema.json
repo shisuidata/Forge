@@ -1,10 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://forge.local/contracts/clarification-artifact.schema.json",
-  "title": "ClarificationArtifact",
-  "description": "Structured output of the data requirement clarification stage.",
   "type": "object",
-  "additionalProperties": false,
   "required": [
     "artifact_id",
     "artifact_type",
@@ -15,15 +10,32 @@
     "payload"
   ],
   "properties": {
-    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
-    "artifact_type": {"const": "clarification"},
-    "schema_version": {"const": 1},
-    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
-    "producer": {"type": "string", "minLength": 1},
-    "created_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^ar_[A-Za-z0-9_-]+$"
+    },
+    "artifact_type": {
+      "type": "string",
+      "const": "clarification"
+    },
+    "schema_version": {
+      "type": "number",
+      "const": 1
+    },
+    "task_run_id": {
+      "type": "string",
+      "pattern": "^tr_[A-Za-z0-9_-]+$"
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "payload": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "status",
         "goal",
@@ -36,48 +48,125 @@
       ],
       "properties": {
         "status": {
-          "type": "string",
-          "enum": ["needs_input", "needs_confirmation", "confirmed"]
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "needs_input"
+            },
+            {
+              "type": "string",
+              "const": "needs_confirmation"
+            },
+            {
+              "type": "string",
+              "const": "confirmed"
+            }
+          ]
         },
-        "goal": {"type": "string", "minLength": 1},
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        },
         "known_facts": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
         "assumptions": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
         "open_questions": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
         "dimensions": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
         "time_range": {
           "type": "object",
-          "additionalProperties": false,
-          "required": ["description"],
+          "required": [
+            "description"
+          ],
           "properties": {
-            "description": {"type": "string", "minLength": 1},
-            "start": {"type": ["string", "null"], "format": "date-time"},
-            "end": {"type": ["string", "null"], "format": "date-time"},
-            "timezone": {"type": ["string", "null"]},
-            "granularity": {"type": ["string", "null"]}
-          }
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "start": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "end": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timezone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "granularity": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
         },
         "acceptance_criteria": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         }
-      }
+      },
+      "additionalProperties": false
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/clarification-artifact.schema.json",
+  "additionalProperties": false
 }

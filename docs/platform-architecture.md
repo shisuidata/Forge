@@ -1,6 +1,6 @@
-# Forge AI 数据任务平台架构
+# Forge Trust Runtime 与 Pi 目标架构
 
-> 状态：已确认目标架构，企业演进横向平面已纳入规划 · Last updated: 2026-08-25。本文描述 Pi、Forge、拾穗 DATA Skills 与渠道之间的长期边界，不表示所有模块均已实现。产品存在理由和方向边界见 [`product-north-star.md`](product-north-star.md)，主动实施计划见 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。
+> 状态：长期目标与迁移边界，现状更新于 2026-09-07；不是第二份当前主架构。当前权威入口见 [`architecture.md`](architecture.md)。企业演进横向平面仍属规划，不表示所有模块均已实现。产品边界见 [`product-north-star.md`](product-north-star.md)，主动实施计划见 [`forge-enterprise-evolution-plan.md`](forge-enterprise-evolution-plan.md)。
 >
 > 中文架构全景图：[`architecture-diagrams/forge-platform-architecture.html`](architecture-diagrams/forge-platform-architecture.html)，包含产品、技术、元数据、流程、闭环、部署、模型、安全、状态和接口等 11 个视角。
 
@@ -47,7 +47,7 @@ Pi Agent Platform
 
 当前确认的是上述问题框架和产品公理，不是新的大范围实施承诺：
 
-- Forge 当前对外定位继续是**可信 AI 数据任务平台**；结构化数据任务是高价值、高风险、可复算的第一验证场景。
+- Forge 当前对外定位是 **Trust Runtime：Evaluate → Enforce → Explain**；Pi 数据任务平台是其任务编排消费者，结构化数据任务是第一验证场景。
 - “跨 Agent 长期上下文连续性”是高可信需求；“所有信息进入单一统一记忆系统”仍是待验证假设。集中式 Memory Store、联邦式 Context Plane、Registry/Event Store 组合之间尚未定案。
 - 长期架构研究可讨论 Agent Native、Data-Team Led、Business Accessible、Human Accountable，但不得据此让 Forge 吞并通用 Agent Runtime、全部业务真相源或无边界工具执行。
 - 任何新基础设施必须先由第二个真实消费者、明确责任边界、可证伪指标和相对现有方案的不可替代价值证明，再进入实施计划。
@@ -479,12 +479,12 @@ Web `/chat` 可复用同一观察能力提供当前任务右侧视图，但权�
 
 ## 12. 当前 Forge 职责迁移映射
 
-目标不是在现有 Forge Pipeline 外再套一层 Pi，而是消除重复调度。当前模块应按下表演进：
+目标不是在旧 Forge Pipeline 外再套一层 Pi，而是消除重复调度。下表保留长期迁移职责；其中 Task 主权、QueryRun 审批和 Web 主链切换已完成，不应再向旧 Agent 添加主流程。
 
 | 当前模块/能力 | 目标归属 | 处理方式 |
 |---|---|---|
-| `agent/pipeline.py` Pipeline 路由与 Stage 推进 | Pi | 在 Pi Task Runtime 稳定后迁移并停止作为主编排器 |
-| `agent/agent.py` 通用对话循环、pending state | Pi + Forge QueryRun | 对话和任务状态归 Pi；查询准备、审批状态改为 Forge QueryRun |
+| `agent/pipeline.py` Pipeline 路由与 Stage 推进 | Pi | 已退出当前主编排；仅旧兼容入口保留 |
+| `agent/agent.py` 通用对话循环、pending state | Pi + Forge QueryRun | 当前对话和任务状态归 Pi，审批/执行归 QueryRun；旧 pending state 仅回滚路径 |
 | `agent/llm.py` Registry 注入与 Forge JSON 生成 | Forge Contract + 可插拔 Model Backend | Forge 保留 PlanningEnvelope、Context、Contract 与接受权；API-key backend 可进程内生成，Pi OAuth backend 只提交不可信候选，统一进入 Forge Assurance |
 | `agent/prompts.py` 通用分析/表达 prompt | 拾穗 DATA Skills | 逐步替换为版本化 Skill 和 Artifact Schema |
 | `agent/memory` EMS/WMB 会话状态 | Pi | 当前会话、断点和工作记忆迁移到 Pi Task/Session |
@@ -497,7 +497,7 @@ Web `/chat` 可复用同一观察能力提供当前任务右侧视图，但权�
 | `forge/executor.py` | Forge | 保留，且仍是唯一数据库执行入口 |
 | `agent/audit.py` 查询审计 | Forge | 保留并增加 `task_run_id` 关联 |
 | 图表和报告 Stage 调度 | Pi | Pi 选择 Skill 和顺序；确定性渲染器可以作为受控工具 |
-| Web `/api/chat` 任务入口 | Pi | 渐进切换到 Pi Task API |
+| Web `/api/chat` 任务入口 | Pi | 当前 Web 已走 Pi ChannelEvent/Task；旧 HTTP 默认 410、显式回滚才启用 |
 | Forge `/api/prepare-query` | Forge | 保持查询能力 API，不承担任务编排 |
 
 迁移完成后的硬约束：
@@ -508,23 +508,17 @@ Web `/chat` 可复用同一观察能力提供当前任务右侧视图，但权�
 - Pi 不复制 Registry 检索、Forge JSON 业务契约、Compiler、Lint 或 Executor；OAuth Session 只能消费 Forge 签发的有界 Context，并通过 Forge 定义的 Tool 生成不可信候选。
 - 同一职责在目标架构中只能有一个主实现；旧实现只允许作为有明确下线时间的兼容路径。
 
-## 13. 当前实现基础
+## 13. 当前实现与仍待验收边界
 
-当前已有基础：
+当前已经存在，不再列为“需要新增”：
 
-- Forge `agent/pipeline.py`：Pipeline、Stage、Artifact 和断点状态雏形。
-- Forge `/api/prepare-query`：外部 Agent 生成待审核 SQL的安全边界。
-- Forge Web `/api/chat`、`/api/approve`：内部查询与审批路径。
-- Forge Registry、Compiler、Executor、Audit、Feedback 和 Memory。
-- 拾穗 DATA 的正式 Skills、示例、测试用例和发布门禁。
-- Pi 的 Skills、Extensions、SDK 和 RPC 能力。
+- `services/pi-orchestrator/`：Pi 主 Task/Attempt/Artifact 生命周期、Skill 执行及状态存储。
+- Forge 公共 Evaluate/Enforce/Explain 和 QueryRun 级 Policy、审批 hash、执行 lease、Evidence 完整性链。
+- Web Product BFF 与 Pi ChannelEvent/Task 主入口；飞书受限 runtime 与渠道适配。
+- Registry、Compiler、Assurance、只读 Executor、规范化执行结果；Benchmark 业务服务在 `forge/benchmark_service.py`，HTTP 层只做认证/DTO/异常适配。
+- 纯 `forge/dialects.py` 由 Evaluate/Enforce 统一消费。Evaluate 不探测生产 URL；执行 caller 显式传可信绑定，保留 tenant/scope ACL 交集。
+- wheel/sdist 中的核心 Schema、模板、静态资源及非 editable 合成 Quickstart 门禁。
 
-目标架构需要新增：
+明确保留的兼容路径：`agent/agent.py`、`agent/pipeline.py`、旧 EMS/WMB 和 `/api/prepare-query`。`LEGACY_AGENT_API_ENABLED` 控制旧 Chat/Approve/Cancel HTTP 回滚，不影响当前 Pi/QueryRun 权威。旧 Memory 只在实际使用时初始化存储；关闭旧 HTTP 不意味着删除合法知识管理能力。
 
-- 独立、受限的 Pi Orchestrator Runtime。
-- 稳定的 TaskRun 与 Artifact Contract。
-- Pi 到 Forge 的 QueryRun 级审批协议。
-- 拾穗 DATA Skills 的 Pi Package 发布方式。
-- Web、飞书、钉钉共享的渠道适配接口。
-
-迁移期间不删除 Forge 当前查询主链；新链路先以受控垂直切片并行验证，达到验收标准后再逐步替换硬编码的分析和报告 Stage。
+仍属长期目标或独立验收项：完整企业身份与委托、横向经济/上下文治理、全部渠道与客户生产部署。部署、模型统计准确率和生产数据库兼容性不能由本地结构/Quickstart 验证替代。

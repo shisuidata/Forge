@@ -120,7 +120,7 @@ def test_revision_traversal_and_symlink_escape_rejected(benchmark_api, tmp_path)
 
 
 def test_compiler_fix_compares_scored_failure_without_changing_candidates(benchmark_api, monkeypatch):
-    from web.routes import benchmark_v2 as routes
+    from forge import benchmark_service as routes
     response = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"], variable="compiler")
     candidates = ledger(response)
     real_compile = routes.compile_query
@@ -362,9 +362,6 @@ def date_protocol(date_dataset, monkeypatch, tmp_path):
               "SQL": "SELECT loan_date FROM records"} for i in range(500)]
     (root / "mini_dev_sqlite.json").write_text(json.dumps(cases))
     monkeypatch.setattr(bird.hard, "_BIRD_RUNTIME", root)
-    monkeypatch.setattr(bird.hard, "_DB_ROOT", root / "dev_databases")
-    monkeypatch.setattr(bird.hard, "_OFFICIAL_CASES_PATH", root / "mini_dev_sqlite.json")
-    monkeypatch.setattr(bird.hard, "_OFFICIAL_TABLES_PATH", root / "dev_tables.json")
     monkeypatch.setattr(bird, "PROTOCOL_DIR", tmp_path / "protocols")
     monkeypatch.setattr(cfg, "PI_SERVICE_API_KEYS", ["test-pi-key"])
     paths = [root / "mini_dev_sqlite.json", root / "dev_tables.json", *root.rglob("*.sqlite"), *root.rglob("*.csv")]
@@ -438,7 +435,7 @@ def test_date_sample_limit_and_evaluator_remain_frozen(date_protocol):
     with pytest.raises(ValueError):
         bird.validate(manifest, allow_declared_drift=True)
     manifest = copy.deepcopy(wider["protocol_manifest"])
-    manifest["sources"]["evaluator"]["web/routes/benchmark_v2.py"] = bird.digest("changed scoring")
+    manifest["sources"]["evaluator"]["forge/benchmark_service.py"] = bird.digest("changed scoring")
     with pytest.raises(ValueError):
         bird.validate(manifest, allow_declared_drift=True)
 
@@ -557,7 +554,7 @@ def test_value_invalid_scope_or_bound_rejected_before_dataset_access(monkeypatch
 
 
 def test_value_off_and_invisible_fields_never_collect(value_protocol, monkeypatch):
-    from web.routes.benchmark_v2 import build_context_response
+    from forge.benchmark_service import build_context_response
     suite = bird.hard.load_suite(bird.hard._FULL_SUITE_ID)
     original = build_context_response(suite, suite["cases"][0])
     assert "secrets.category" not in original["context_snapshot"]["fields"]

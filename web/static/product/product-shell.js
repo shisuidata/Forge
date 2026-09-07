@@ -39,6 +39,10 @@ export function announce(message) {
   window.requestAnimationFrame(() => { announcer.textContent = String(message).slice(0, 500); });
 }
 
+export function usageStatusLabel(status) {
+  return { known: "用量已知（不等于已结算费用）", not_started: "尚未调用模型", unknown: "用量未知（不代表零成本）" }[status] || "用量未知（不代表零成本）";
+}
+
 export function productStateLabel(state) {
   const labels = {
     loading: '正在读取',

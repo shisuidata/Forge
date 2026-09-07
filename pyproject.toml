@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -51,10 +51,12 @@ where = ["."]
 include = ["forge*", "registry*", "agent*", "web*"]
 
 [tool.setuptools]
-py-modules = ["config", "main"]
+py-modules = ["config", "main", "diagnostics"]
 
 [tool.setuptools.package-data]
 "agent.contracts" = ["*.json"]
+"forge" = ["schema.json", "templates/poc/*", "templates/poc/registry/*"]
+"web" = ["templates/**/*.html", "templates/*.html", "static/*.js", "static/*.css", "static/product/*.js", "static/product/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

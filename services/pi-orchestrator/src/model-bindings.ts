@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
 import type { OrchestratorConfig } from "./config.js";
+import { ATTEMPT_DESCRIPTORS, skillDescriptor } from "./stage-descriptors.js";
 
 export const STAGE_MODEL_SCOPES = {
   intent_router: "pi.intent_router",
@@ -26,23 +27,21 @@ export interface StageModelBinding {
   gateClass: "sql_critical" | "capability";
 }
 
-const SQL_CRITICAL = new Set<ModelStage>(["metric_definition", "query_generation", "query_repair"]);
+const SQL_CRITICAL: Partial<Record<ModelStage, true>> = {
+  metric_definition: true, query_generation: true, query_repair: true,
+};
 
 export function skillModelStage(skillName: string): ModelStage {
-  if (skillName === "data-requirement-clarifier") return "clarification";
-  if (skillName === "metric-definition-reviewer") return "metric_definition";
-  if (skillName === "data-analysis-report-writer") return "report";
-  if (skillName === "data-doc-writer") return "knowledge_answer";
-  return "analysis";
+  return skillDescriptor(skillName).modelStage;
 }
 
 export function attemptModelStage(stage: string): ModelStage {
-  if (stage.includes("clarif")) return "clarification";
-  if (stage.includes("metric")) return "metric_definition";
-  if (stage.includes("report")) return "report";
-  if (stage.includes("knowledge") || stage.includes("data-doc")) return "knowledge_answer";
-  if (stage.includes("query")) return "query_generation";
-  return "analysis";
+  if (stage.startsWith("skill:")) return skillModelStage(stage.slice("skill:".length));
+  if (!Object.hasOwn(ATTEMPT_DESCRIPTORS, stage)) {
+    throw new Error(`Unknown attempt stage: ${stage}`);
+  }
+  const descriptor = ATTEMPT_DESCRIPTORS[stage as keyof typeof ATTEMPT_DESCRIPTORS];
+  return "skillName" in descriptor ? skillModelStage(descriptor.skillName) : descriptor.modelStage;
 }
 
 export function resolveStageModelBinding(
@@ -63,7 +62,7 @@ export function resolveStageModelBinding(
       config_json: string; validation_report_json: string;
     } | undefined;
     if (row === undefined) {
-      if (SQL_CRITICAL.has(stage)) {
+      if (SQL_CRITICAL[stage]) {
         throw new Error(`SQL-critical stage ${stage} has no validated active model binding`);
       }
       return undefined;
@@ -82,7 +81,7 @@ export function resolveStageModelBinding(
     const capabilities = typeof modelConfig.capabilities === "object" && modelConfig.capabilities !== null
       ? modelConfig.capabilities as Record<string, unknown>
       : {};
-    const gateClass = SQL_CRITICAL.has(stage) ? "sql_critical" : "capability";
+    const gateClass = SQL_CRITICAL[stage] ? "sql_critical" : "capability";
     const gate = gateClass === "sql_critical" && sqlQualityGateEnabled
       ? report.quality_gate
       : report.capability_gate;

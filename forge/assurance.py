@@ -17,15 +17,15 @@ from sqlglot.schema import MappingSchema
 from config import cfg
 from forge.compiler import compile_query, validate_query_contract
 from forge.executor import validate_readonly_sql
-from forge.lint import lint_conventions
+from forge.lint import lint_conventions, validate_profile
 from registry.relationships import (
     RegistryRelationship,
     is_fanout_from_existing,
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v10"
-POLICY_REVISION = "convention-policy-v9"
+ASSURANCE_REVISION = "query-assurance-v11"
+POLICY_REVISION = "scoped-policy-v1"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 QUERY_CANDIDATE_REVISION = "query-candidate-v1"
 
@@ -36,6 +36,7 @@ class GateResult:
     status: str
     revision: str
     diagnostics: tuple[str, ...] = ()
+    applicability: str = "applied"
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class QueryAssuranceReport:
     sql_hash: str | None = None
     input_kind: str = "forge_json"
     candidate_revision: str = QUERY_CANDIDATE_REVISION
+    dialect_resolution: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -114,24 +116,38 @@ def assure_query(
             _failed_report(gates, registry_revision, model_revision)
         ) from exc
 
-    warnings = lint_conventions(normalized, question)
-    if warnings:
-        gates.append(GateResult("convention_policy", "failed", POLICY_REVISION, tuple(warnings)))
-        raise QueryAssuranceError(
-            _failed_report(gates, registry_revision, model_revision)
-        )
-    gates.append(GateResult("convention_policy", "passed", POLICY_REVISION))
-
+    binding = registry.get("assurance_profile")
     try:
-        _validate_intent_fulfillment(normalized, question)
-        gates.append(GateResult("intent_fulfillment", "passed", INTENT_CONTRACT_REVISION))
+        if binding is not None and (
+            not isinstance(binding, dict) or set(binding) != {"id", "revision"}
+        ):
+            raise ValueError("Assurance profile must specify only id and revision.")
+        profile = binding["id"] if binding is not None else None
+        profile_revision = binding["revision"] if binding is not None else None
+        if binding is not None and (not profile or not profile_revision):
+            raise ValueError("Assurance profile id and revision are required.")
+        applies = validate_profile(profile, profile_revision)
     except ValueError as exc:
-        gates.append(GateResult(
-            "intent_fulfillment", "failed", INTENT_CONTRACT_REVISION, (str(exc),)
-        ))
-        raise QueryAssuranceError(
-            _failed_report(gates, registry_revision, model_revision)
-        ) from exc
+        gates.append(GateResult("convention_policy", "failed", POLICY_REVISION, (str(exc),)))
+        raise QueryAssuranceError(_failed_report(gates, registry_revision, model_revision)) from exc
+
+    if applies:
+        warnings = lint_conventions(normalized, question, profile=profile, revision=profile_revision)
+        if warnings:
+            gates.append(GateResult("convention_policy", "failed", profile_revision, tuple(warnings)))
+            raise QueryAssuranceError(_failed_report(gates, registry_revision, model_revision))
+        gates.append(GateResult("convention_policy", "passed", profile_revision))
+        try:
+            _validate_intent_fulfillment(normalized, question)
+            gates.append(GateResult("intent_fulfillment", "passed", INTENT_CONTRACT_REVISION))
+        except ValueError as exc:
+            gates.append(GateResult(
+                "intent_fulfillment", "failed", INTENT_CONTRACT_REVISION, (str(exc),)
+            ))
+            raise QueryAssuranceError(_failed_report(gates, registry_revision, model_revision)) from exc
+    else:
+        for rule_id in ("convention_policy", "intent_fulfillment"):
+            gates.append(GateResult(rule_id, "not_applicable", POLICY_REVISION, applicability="not_applicable"))
 
     try:
         sql = compile_query(normalized, dialect=dialect)

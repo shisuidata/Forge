@@ -24,6 +24,8 @@ import {
   type TaskChannel,
   type TaskStatus,
 } from "./task-store.js";
+import { correlatedHandler, currentRequestId } from "./request-context.js";
+import { ForgeClientError } from "./forge/client.js";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const CHANNELS = new Set<TaskChannel>(["web", "feishu", "dingtalk", "api"]);
@@ -124,7 +126,9 @@ function requireAdminAuthentication(
 
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify(body));
+  const payload = statusCode >= 400 && body && typeof body === "object" && !Array.isArray(body)
+    ? { ...body, request_id: currentRequestId() } : body;
+  response.end(JSON.stringify(payload));
 }
 
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -237,17 +241,11 @@ export function createOrchestratorServer(
     reconciliationTimer.unref();
     application = new OrchestratorApplication({
       config,
-      tasks: state.tasks,
-      events: state.events,
-      artifacts: state.artifacts,
-      attempts: state.attempts,
-      channelEvents: state.channelEvents,
-      skillPolicies: state.skillPolicies,
-      transactions: state.transactions,
+      state,
     });
   }
   const benchmarkRuntime = new PiBenchmarkRuntime(config, application);
-  const server = createServer(async (request, response) => {
+  const server = createServer(correlatedHandler(async (request, response) => {
     try {
       const url = new URL(
         request.url ?? "/",
@@ -877,17 +875,31 @@ export function createOrchestratorServer(
       } else if (error instanceof TaskStateError) {
         const statusCode = error.message.includes("not found") ? 404 : 409;
         sendJson(response, statusCode, { status: "task_error", error: error.message });
+      } else if (error instanceof ForgeClientError) {
+        const statusCode = [400, 403, 404, 409].includes(error.statusCode ?? 0) ? error.statusCode! : 502;
+        sendJson(response, statusCode, { status: "upstream_error", code: error.code, error: "Forge request failed" });
       } else {
         sendJson(response, 500, { status: "error", error: "internal orchestrator error" });
       }
     }
-  });
-  if (state !== undefined) {
-    server.once("close", () => {
-      if (reconciliationTimer !== undefined) clearInterval(reconciliationTimer);
-      state?.close();
+  }));
+  const closeHttp = server.close.bind(server);
+  let stateClosed = false;
+  server.close = (callback) => {
+    if (reconciliationTimer !== undefined) clearInterval(reconciliationTimer);
+    const drained = benchmarkRuntime.close();
+    closeHttp((error) => {
+      void drained.then(() => {
+        if (!stateClosed) { state?.close(); stateClosed = true; }
+        callback?.(error);
+      }, (cause: unknown) => {
+        if (!stateClosed) { state?.close(); stateClosed = true; }
+        const failure = cause instanceof Error ? cause : new Error("Benchmark shutdown failed");
+        if (callback) callback(failure); else server.emit("error", failure);
+      });
     });
-  }
+    return server;
+  };
   return server;
 }
 

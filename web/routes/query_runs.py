@@ -16,7 +16,8 @@ from forge.query_runs import (
     get_query_run,
 )
 from web.auth import require_pi_service_auth
-
+from diagnostics import record
+from web.diagnostics import error_response
 router = APIRouter(
     prefix="/api/internal/query-runs",
     dependencies=[Depends(require_pi_service_auth)],
@@ -47,10 +48,8 @@ class CancelQueryRunRequest(BaseModel):
 
 
 def _error(exc: QueryRunError) -> JSONResponse:
-    return JSONResponse(
-        {"status": "error", "error": str(exc)},
-        status_code=exc.status_code,
-    )
+    record("query_run_error", error_code=exc.code, status_code=exc.status_code)
+    return error_response(exc.status_code, exc.code)
 
 
 def _validate_create_request(req: CreateQueryRunRequest) -> QueryRunError | None:
@@ -61,15 +60,16 @@ def _validate_create_request(req: CreateQueryRunRequest) -> QueryRunError | None
         ("user_id", req.user_id),
     ):
         if _ID_PATTERN.fullmatch(value) is None:
-            return QueryRunError(f"Invalid {name}", status_code=400)
+            return QueryRunError(f"Invalid {name}", status_code=400, code="invalid_query_run_request")
     if not req.question.strip():
-        return QueryRunError("question must not be empty", status_code=400)
+        return QueryRunError("question must not be empty", status_code=400, code="invalid_query_run_request")
     if req.dialect is not None and req.dialect not in _DIALECTS:
-        return QueryRunError("Unsupported dialect", status_code=400)
+        return QueryRunError("Unsupported dialect", status_code=400, code="unsupported_dialect")
     return None
 
 
 def _review_payload(run: dict) -> dict:
+    record("query_run_review", query_run_id=run["query_run_id"], task_run_id=run["task_run_id"], model_revision=run.get("model_revision"))
     return {
         "query_run_id": run["query_run_id"],
         "task_run_id": run["task_run_id"],
@@ -98,6 +98,7 @@ def _review_payload(run: dict) -> dict:
 
 
 def _result_payload(run: dict) -> dict:
+    record("query_run_result", query_run_id=run["query_run_id"], task_run_id=run["task_run_id"], model_revision=run.get("model_revision"))
     return {
         "query_run_id": run["query_run_id"],
         "task_run_id": run["task_run_id"],
@@ -150,7 +151,7 @@ async def create_internal_query_run(
 async def get_internal_query_run(query_run_id: str):
     run = await get_query_run(query_run_id)
     if run is None:
-        return _error(QueryRunError("QueryRun not found", status_code=404))
+        return _error(QueryRunError("QueryRun not found", status_code=404, code="query_run_not_found"))
     return _review_payload(run)
 
 
@@ -189,7 +190,7 @@ async def cancel_internal_query_run(
 async def get_internal_query_result(query_run_id: str):
     run = await get_query_run(query_run_id)
     if run is None:
-        return _error(QueryRunError("QueryRun not found", status_code=404))
+        return _error(QueryRunError("QueryRun not found", status_code=404, code="query_run_not_found"))
     if run["status"] != "completed":
-        return _error(QueryRunError(f"QueryRun result is not ready: {run['status']}"))
+        return _error(QueryRunError("QueryRun result is not ready", code="query_result_not_ready"))
     return _result_payload(run)

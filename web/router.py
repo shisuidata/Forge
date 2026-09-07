@@ -42,7 +42,8 @@ import httpx
 import yaml
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from web.templates import templates
+from web.diagnostics import error_response
 from pydantic import BaseModel, Field
 
 from agent import audit
@@ -51,7 +52,7 @@ from agent.agent import process as agent_process
 from agent.agent import prepare_query as agent_prepare_query
 from agent.agent import approve as agent_approve
 from agent.agent import cancel as agent_cancel
-from forge.executor import execute_with_data
+from forge.executor import execute
 from config import cfg
 from registry.validator import validate_metric
 from registry.staging_sync import promote_staged
@@ -65,6 +66,7 @@ from web.routes.memory import router as memory_router
 from web.routes.settings import router as settings_router
 from web.routes.registry_studio import router as registry_studio_router
 from web.routes.product import router as product_router
+from web.routes.deliveries import router as deliveries_router
 from web.pi_client import pi_request as _pi_request
 from web.routes.accuracy_benchmark import router as accuracy_benchmark_router
 from web.routes.benchmark_v2 import router as benchmark_v2_router
@@ -89,18 +91,13 @@ chat_router.include_router(reports_router)
 chat_router.include_router(memory_router)
 chat_router.include_router(product_router)
 chat_router.include_router(benchmark_v2_router)
+chat_router.include_router(deliveries_router)
 # Admin 路由 — 挂载在 /admin 前缀下（全部路由需要 Web 登录验证）
 router = APIRouter(dependencies=[Depends(require_web_auth)])
 router.include_router(settings_router)
 router.include_router(registry_studio_router)
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-
-# 注册自定义 filter：JSON 输出保留中文（不转义为 \uXXXX）
 router.include_router(accuracy_benchmark_router)
-def _tojson_cn(value):
-    return json.dumps(value, ensure_ascii=False)
-templates.env.filters["tojson_cn"] = _tojson_cn
 
 
 # ── 认证路由（login / logout）─────────────────────────────────────────────────
@@ -294,10 +291,7 @@ def _pi_stage_payload(request: BaseModel) -> dict:
 
 
 def _pi_disabled_response():
-    return JSONResponse(
-        {"status": "disabled", "error": "Pi Orchestrator is not enabled"},
-        status_code=503,
-    )
+    return error_response(503, 'disabled')
 
 
 def _run_sync(fn, *args):
@@ -794,12 +788,15 @@ def _web_admin_can_observe(task: dict) -> bool:
 
 
 async def _pi_scoped_task_get(task_run_id: str, suffix: str = "") -> tuple[int, dict]:
+    from web.diagnostics import error_body, upstream_error
     task_status, task_data = await _pi_request("GET", f"/v1/tasks/{task_run_id}")
-    task = task_data.get("task") if isinstance(task_data, dict) else None
-    if task_status != 200 or not isinstance(task, dict):
-        return task_status, task_data
+    if task_status != 200:
+        return upstream_error(task_status, task_data)
+    task = task_data.get("task")
+    if not isinstance(task, dict):
+        return 502, error_body(502, "upstream_contract_invalid")
     if not _web_admin_can_observe(task):
-        return 404, {"status": "not_found"}
+        return 404, error_body(404)
     if not suffix:
         return task_status, task_data
     return await _pi_request("GET", f"/v1/tasks/{task_run_id}/{suffix}")
@@ -876,6 +873,7 @@ def _bounded_web_task_events(events: object) -> list[dict]:
 
 
 def _bounded_web_stage_attempts(attempts: object) -> list[dict]:
+    from diagnostics import safe_id
     if not isinstance(attempts, list):
         return []
     bounded = []
@@ -911,6 +909,11 @@ def _bounded_web_stage_attempts(attempts: object) -> list[dict]:
                 if isinstance(attempt.get("tool_submitted_at"), str)
                 else None
             ),
+            "model_revision": safe_id(attempt.get("model_revision")),
+            "skill_policy_version": attempt.get("skill_policy_version") if type(attempt.get("skill_policy_version")) is int else None,
+            "request_id": safe_id(attempt.get("request_id")),
+            "usage_status": attempt.get("usage_status") if attempt.get("usage_status") in {"known", "not_started", "unknown"} else "unknown",
+            "safe_error": ({"code": "stage_failed", "message": "阶段未完成，请通过 Attempt ID 查询诊断。"} if attempt.get("error") else None),
         })
     return bounded
 
@@ -925,37 +928,24 @@ async def api_pi_web_chat_message(
         return _pi_disabled_response()
     message = req.message.strip()
     if not message or len(message) > 20_000:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "消息不能为空且不能超过 20000 字符"},
-            status_code=400,
-        )
+        return error_response(400, 'invalid_request')
     if not _valid_web_event_id(req.conversation_id) or not _valid_web_event_id(req.message_id):
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid Web conversation or message ID"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST",
-            "/v1/channel-events",
-            {
-                "event_id": req.message_id,
-                "channel": "web",
-                "event_type": "message",
-                "external_user_id": "web_admin",
-                "conversation_id": req.conversation_id,
-                "message_id": req.message_id,
-                "task_run_id": None,
-                "payload": {"text": message, "chat_type": "web"},
-            },
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi Web chat message failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST",
+        "/v1/channel-events",
+        {
+            "event_id": req.message_id,
+            "channel": "web",
+            "event_type": "message",
+            "external_user_id": "web_admin",
+            "conversation_id": req.conversation_id,
+            "message_id": req.message_id,
+            "task_run_id": None,
+            "payload": {"text": message, "chat_type": "web"},
+        },
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.get(
@@ -969,23 +959,15 @@ async def api_pi_web_chat_presentation(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        task_status, task_data = await _pi_scoped_task_get(task_run_id)
-        task = task_data.get("task") if isinstance(task_data, dict) else None
-        if task_status != 200 or not isinstance(task, dict) or task.get("channel") != "web":
-            return JSONResponse({"status": "not_found"}, status_code=404)
-        status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}/presentation")
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi Web chat presentation failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task = task_data.get("task") if isinstance(task_data, dict) else None
+    if task_status != 200:
+        return error_response(task_status, task_data.get("code"))
+    if task.get("channel") != "web" or task.get("user_id") != "web_admin":
+        return error_response(404)
+    status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}/presentation")
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.get(
@@ -1001,59 +983,40 @@ async def api_pi_web_chat_task_flow(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
+        return error_response(400, 'invalid_request')
     raw_after = request.query_params.get("after", "0")
     if not raw_after.isdigit() or len(raw_after) > 12:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "after must be a non-negative integer"},
-            status_code=400,
-        )
+        return error_response(400, 'invalid_request')
     after = int(raw_after)
-    try:
-        task_status, task_data = await _pi_scoped_task_get(task_run_id)
-        task = task_data.get("task") if isinstance(task_data, dict) else None
-        if (
-            task_status != 200
-            or not isinstance(task, dict)
-            or task.get("channel") != "web"
-            or task.get("user_id") != "web_admin"
-        ):
-            return JSONResponse({"status": "not_found"}, status_code=404)
-        event_result, artifact_result, attempt_result = await asyncio.gather(
-            _pi_request("GET", f"/v1/tasks/{task_run_id}/events?after={after}"),
-            _pi_request("GET", f"/v1/tasks/{task_run_id}/artifacts"),
-            _pi_request("GET", f"/v1/tasks/{task_run_id}/attempts"),
-        )
-        if any(status != 200 for status, _ in (event_result, artifact_result, attempt_result)):
-            return JSONResponse(
-                {"status": "upstream_unavailable", "error": "Task flow is temporarily unavailable"},
-                status_code=502,
-            )
-        events = _bounded_web_task_events(event_result[1].get("events"))
-        plan = _bounded_web_execution_plan(artifact_result[1].get("artifacts"))
-        attempts = _bounded_web_stage_attempts(attempt_result[1].get("attempts"))
-        return JSONResponse({
-            "status": "ok",
-            "task": {
-                "task_run_id": task_run_id,
-                "status": str(task.get("status") or "unknown")[:64],
-                "current_stage": str(task.get("current_stage") or "")[:128],
-                "updated_at": str(task.get("updated_at") or "")[:64],
-            },
-            "plan": plan,
-            "events": events,
-            "attempts": attempts,
-            "last_event_sequence": max((event["sequence"] for event in events), default=after),
-        })
-    except httpx.HTTPError as exc:
-        logger.warning("Pi Web chat task flow failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task = task_data.get("task") if isinstance(task_data, dict) else None
+    if task_status != 200:
+        return error_response(task_status, task_data.get("code"))
+    if task.get("channel") != "web" or task.get("user_id") != "web_admin":
+        return error_response(404)
+    event_result, artifact_result, attempt_result = await asyncio.gather(
+        _pi_request("GET", f"/v1/tasks/{task_run_id}/events?after={after}"),
+        _pi_request("GET", f"/v1/tasks/{task_run_id}/artifacts"),
+        _pi_request("GET", f"/v1/tasks/{task_run_id}/attempts"),
+    )
+    if any(status != 200 for status, _ in (event_result, artifact_result, attempt_result)):
+        return error_response(502, 'upstream_unavailable')
+    events = _bounded_web_task_events(event_result[1].get("events"))
+    plan = _bounded_web_execution_plan(artifact_result[1].get("artifacts"))
+    attempts = _bounded_web_stage_attempts(attempt_result[1].get("attempts"))
+    return JSONResponse({
+        "status": "ok",
+        "task": {
+            "task_run_id": task_run_id,
+            "status": str(task.get("status") or "unknown")[:64],
+            "current_stage": str(task.get("current_stage") or "")[:128],
+            "updated_at": str(task.get("updated_at") or "")[:64],
+        },
+        "plan": plan,
+        "events": events,
+        "attempts": attempts,
+        "last_event_sequence": max((event["sequence"] for event in events), default=after),
+    })
 
 
 @chat_router.post(
@@ -1069,107 +1032,83 @@ async def api_pi_web_chat_action(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
+        return error_response(400, 'invalid_request')
     allowed_actions = {
         "provide_input", "approve_query", "cancel_task", "request_supplement",
         "analyze", "render_report", "confirm_memory",
     }
     if req.action not in allowed_actions:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Unsupported Web chat action"},
-            status_code=400,
-        )
+        return error_response(400, 'invalid_request')
     if not _valid_web_event_id(req.conversation_id) or not _valid_web_event_id(req.message_id):
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid Web conversation or message ID"},
-            status_code=400,
-        )
-    try:
-        task_status, task_data = await _pi_scoped_task_get(task_run_id)
-        task = task_data.get("task") if isinstance(task_data, dict) else None
+        return error_response(400, 'invalid_request')
+    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task = task_data.get("task") if isinstance(task_data, dict) else None
+    if task_status != 200:
+        return error_response(task_status, task_data.get("code"))
+    if task.get("channel") != "web" or task.get("user_id") != "web_admin":
+        return error_response(404)
+    presentation_status, presentation_data = await _pi_request(
+        "GET", f"/v1/tasks/{task_run_id}/presentation"
+    )
+    if presentation_status != 200:
+        return error_response(presentation_status, presentation_data.get("code"))
+    if not isinstance(presentation_data.get("presentation"), dict):
+        return error_response(502, "upstream_contract_invalid")
+    presentation = (
+        presentation_data.get("presentation")
+        if presentation_status == 200 and isinstance(presentation_data, dict)
+        else None
+    )
+    declared_actions = (
+        presentation.get("actions", []) if isinstance(presentation, dict) else []
+    )
+    allowed_extra = {"text"} if req.action == "provide_input" else set()
+    declared = None
+    for item in declared_actions:
         if (
-            task_status != 200
-            or not isinstance(task, dict)
-            or task.get("channel") != "web"
-            or task.get("user_id") != "web_admin"
+            not isinstance(item, dict)
+            or item.get("type") != req.action
+            or item.get("task_run_id") != task_run_id
         ):
-            return JSONResponse({"status": "not_found"}, status_code=404)
-        presentation_status, presentation_data = await _pi_request(
-            "GET", f"/v1/tasks/{task_run_id}/presentation"
-        )
-        presentation = (
-            presentation_data.get("presentation")
-            if presentation_status == 200 and isinstance(presentation_data, dict)
-            else None
-        )
-        declared_actions = (
-            presentation.get("actions", []) if isinstance(presentation, dict) else []
-        )
-        allowed_extra = {"text"} if req.action == "provide_input" else set()
-        declared = None
-        for item in declared_actions:
-            if (
-                not isinstance(item, dict)
-                or item.get("type") != req.action
-                or item.get("task_run_id") != task_run_id
-            ):
-                continue
-            candidate_payload = item.get("payload")
-            if not isinstance(candidate_payload, dict):
-                candidate_payload = {}
-            if (
-                all(req.payload.get(key) == value for key, value in candidate_payload.items())
-                and not (set(req.payload) - set(candidate_payload) - allowed_extra)
-            ):
-                declared = item
-                break
-        if declared is None:
-            return JSONResponse(
-                {"status": "conflict", "error": "操作已失效，请刷新当前对话"},
-                status_code=409,
-            )
-        if req.action == "provide_input" and not str(req.payload.get("text") or "").strip():
-            return JSONResponse(
-                {"status": "invalid_request", "error": "补充信息不能为空"},
-                status_code=400,
-            )
-        task_conversation_id = task.get("channel_conversation_id")
-        if not isinstance(task_conversation_id, str) or not _valid_web_event_id(task_conversation_id):
-            return JSONResponse(
-                {"status": "conflict", "error": "该任务不属于可交互的 Web 对话"},
-                status_code=409,
-            )
-        action_message_id = f"web_card_{task_run_id}"
-        event_id = _web_action_event_id(
-            action_message_id,
-            task_run_id,
-            req.action,
-            req.payload,
-        )
-        status, data = await _pi_request(
-            "POST",
-            "/v1/channel-events",
-            {
-                "event_id": event_id,
-                "channel": "web",
-                "event_type": "action",
-                "external_user_id": "web_admin",
-                "conversation_id": task_conversation_id,
-                "message_id": action_message_id,
-                "task_run_id": task_run_id,
-                "payload": {"action": req.action, **req.payload},
-            },
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi Web chat action failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+            continue
+        candidate_payload = item.get("payload")
+        if not isinstance(candidate_payload, dict):
+            candidate_payload = {}
+        if (
+            all(req.payload.get(key) == value for key, value in candidate_payload.items())
+            and not (set(req.payload) - set(candidate_payload) - allowed_extra)
+        ):
+            declared = item
+            break
+    if declared is None:
+        return error_response(409, 'conflict')
+    if req.action == "provide_input" and not str(req.payload.get("text") or "").strip():
+        return error_response(400, 'invalid_request')
+    task_conversation_id = task.get("channel_conversation_id")
+    if not isinstance(task_conversation_id, str) or not _valid_web_event_id(task_conversation_id):
+        return error_response(409, 'conflict')
+    action_message_id = f"web_card_{task_run_id}"
+    event_id = _web_action_event_id(
+        action_message_id,
+        task_run_id,
+        req.action,
+        req.payload,
+    )
+    status, data = await _pi_request(
+        "POST",
+        "/v1/channel-events",
+        {
+            "event_id": event_id,
+            "channel": "web",
+            "event_type": "action",
+            "external_user_id": "web_admin",
+            "conversation_id": task_conversation_id,
+            "message_id": action_message_id,
+            "task_run_id": task_run_id,
+            "payload": {"action": req.action, **req.payload},
+        },
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.get("/api/pi/tasks", response_class=JSONResponse)
@@ -1190,74 +1129,57 @@ async def api_pi_list_tasks(
         "cancelled", "failed", "expired",
     }
     if channel is not None and channel not in allowed_channels:
-        return JSONResponse({"status": "invalid_request", "error": "Invalid channel"}, status_code=400)
+        return error_response(400, 'invalid_request')
     if status is not None and status not in allowed_statuses:
-        return JSONResponse({"status": "invalid_request", "error": "Invalid status"}, status_code=400)
+        return error_response(400, 'invalid_request')
     if limit < 1 or limit > 100:
-        return JSONResponse({"status": "invalid_request", "error": "Invalid limit"}, status_code=400)
+        return error_response(400, 'invalid_request')
     scopes = _web_admin_task_scopes()
     if not scopes:
-        return JSONResponse(
-            {"status": "misconfigured", "error": "No valid Web admin task scope"},
-            status_code=503,
-        )
-    try:
-        tasks_by_id: dict[str, dict] = {}
-        for org_id, team_id in scopes:
-            query = {
-                "org_id": org_id,
-                "team_id": team_id,
-                "limit": str(limit),
-                **({} if channel is None else {"channel": channel}),
-                **({} if status is None else {"status": status}),
-            }
-            upstream_status, data = await _pi_request("GET", f"/v1/tasks?{urlencode(query)}")
-            if upstream_status != 200:
-                return JSONResponse(data, status_code=upstream_status)
-            for task in data.get("tasks", []):
-                if isinstance(task, dict) and isinstance(task.get("task_run_id"), str):
-                    tasks_by_id[task["task_run_id"]] = task
-        tasks = sorted(
-            tasks_by_id.values(),
-            key=lambda task: (str(task.get("updated_at", "")), str(task.get("task_run_id", ""))),
-            reverse=True,
-        )[:limit]
-        return JSONResponse({"tasks": tasks})
-    except httpx.HTTPError as exc:
-        logger.warning("Pi task list failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(503, 'misconfigured')
+    tasks_by_id: dict[str, dict] = {}
+    for org_id, team_id in scopes:
+        query = {
+            "org_id": org_id,
+            "team_id": team_id,
+            "limit": str(limit),
+            **({} if channel is None else {"channel": channel}),
+            **({} if status is None else {"status": status}),
+        }
+        upstream_status, data = await _pi_request("GET", f"/v1/tasks?{urlencode(query)}")
+        if upstream_status != 200:
+            return JSONResponse(data, status_code=upstream_status)
+        for task in data.get("tasks", []):
+            if isinstance(task, dict) and isinstance(task.get("task_run_id"), str):
+                tasks_by_id[task["task_run_id"]] = task
+    tasks = sorted(
+        tasks_by_id.values(),
+        key=lambda task: (str(task.get("updated_at", "")), str(task.get("task_run_id", ""))),
+        reverse=True,
+    )[:limit]
+    return JSONResponse({"tasks": tasks})
 
 
 @chat_router.post("/api/pi/tasks", response_class=JSONResponse)
 async def api_pi_create_task(req: PiTaskCreateRequest, _auth=Depends(require_api_auth)):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
-    try:
-        status, data = await _pi_request(
-            "POST",
-            "/v1/tasks",
-            {
-                "message": req.message,
-                # Integration Spike 只有管理员 Web 渠道；不信任浏览器提交身份。
-                # 正式 org/team/user 映射在 Phase 2 身份层完成。
-                "user_id": "web_admin",
-                "org_id": "org_default",
-                "team_id": "team_default",
-                "intent": req.intent,
-                "channel": "web",
-                "channel_conversation_id": req.channel_conversation_id,
-            },
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi task creation failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+    status, data = await _pi_request(
+        "POST",
+        "/v1/tasks",
+        {
+            "message": req.message,
+            # Integration Spike 只有管理员 Web 渠道；不信任浏览器提交身份。
+            # 正式 org/team/user 映射在 Phase 2 身份层完成。
+            "user_id": "web_admin",
+            "org_id": "org_default",
+            "team_id": "team_default",
+            "intent": req.intent,
+            "channel": "web",
+            "channel_conversation_id": req.channel_conversation_id,
+        },
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1272,23 +1194,13 @@ async def api_pi_prepare_query(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST",
-            f"/v1/tasks/{task_run_id}/prepare-query",
-            _pi_stage_payload(req),
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi query preparation failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST",
+        f"/v1/tasks/{task_run_id}/prepare-query",
+        _pi_stage_payload(req),
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1303,21 +1215,11 @@ async def api_pi_clarify_task(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/clarify", _pi_stage_payload(req)
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi requirement clarification failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/clarify", _pi_stage_payload(req)
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1332,21 +1234,11 @@ async def api_pi_review_metric(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/review-metric", _pi_stage_payload(req)
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi metric review failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/review-metric", _pi_stage_payload(req)
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.get("/api/pi/tasks/{task_run_id}", response_class=JSONResponse)
@@ -1357,19 +1249,9 @@ async def api_pi_task(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        upstream_status, data = await _pi_scoped_task_get(task_run_id)
-        return JSONResponse(data, status_code=upstream_status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi task fetch failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    upstream_status, data = await _pi_scoped_task_get(task_run_id)
+    return JSONResponse(data, status_code=upstream_status)
 
 
 @chat_router.get(
@@ -1383,19 +1265,9 @@ async def api_pi_task_attempts(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        upstream_status, data = await _pi_scoped_task_get(task_run_id, "attempts")
-        return JSONResponse(data, status_code=upstream_status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi task attempts fetch failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    upstream_status, data = await _pi_scoped_task_get(task_run_id, "attempts")
+    return JSONResponse(data, status_code=upstream_status)
 
 
 @chat_router.get(
@@ -1409,19 +1281,9 @@ async def api_pi_task_artifacts(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        upstream_status, data = await _pi_scoped_task_get(task_run_id, "artifacts")
-        return JSONResponse(data, status_code=upstream_status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi artifact fetch failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    upstream_status, data = await _pi_scoped_task_get(task_run_id, "artifacts")
+    return JSONResponse(data, status_code=upstream_status)
 
 
 @chat_router.post(
@@ -1436,21 +1298,11 @@ async def api_pi_create_supplement(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/supplements", req.model_dump()
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi supplement creation failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/supplements", req.model_dump()
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1465,21 +1317,11 @@ async def api_pi_resume_analysis(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/resume-analysis", _pi_stage_payload(req)
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi supplemental analysis failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/resume-analysis", _pi_stage_payload(req)
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1494,21 +1336,11 @@ async def api_pi_run_skill(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/run-skill", req.model_dump(exclude_none=True)
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi advisory Skill failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/run-skill", req.model_dump(exclude_none=True)
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1523,21 +1355,11 @@ async def api_pi_analyze_task(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/analyze", _pi_stage_payload(req)
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi analysis failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/analyze", _pi_stage_payload(req)
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1552,21 +1374,11 @@ async def api_pi_render_report(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST", f"/v1/tasks/{task_run_id}/render-report", _pi_stage_payload(req)
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi report rendering failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/render-report", _pi_stage_payload(req)
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.post(
@@ -1581,23 +1393,13 @@ async def api_pi_approve_query(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        status, data = await _pi_request(
-            "POST",
-            f"/v1/tasks/{task_run_id}/approve-query",
-            _pi_stage_payload(req),
-        )
-        return JSONResponse(data, status_code=status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi query approval failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    status, data = await _pi_request(
+        "POST",
+        f"/v1/tasks/{task_run_id}/approve-query",
+        _pi_stage_payload(req),
+    )
+    return JSONResponse(data, status_code=status)
 
 
 @chat_router.get("/api/pi/tasks/{task_run_id}/events", response_class=JSONResponse)
@@ -1609,25 +1411,15 @@ async def api_pi_task_events(
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
-        return JSONResponse(
-            {"status": "invalid_request", "error": "Invalid task_run_id"},
-            status_code=400,
-        )
-    try:
-        task_status, task_data = await _pi_scoped_task_get(task_run_id)
-        if task_status != 200:
-            return JSONResponse(task_data, status_code=task_status)
-        upstream_status, data = await _pi_request(
-            "GET",
-            f"/v1/tasks/{task_run_id}/events?after={max(after, 0)}",
-        )
-        return JSONResponse(data, status_code=upstream_status)
-    except httpx.HTTPError as exc:
-        logger.warning("Pi task events failed: %s", exc)
-        return JSONResponse(
-            {"status": "upstream_unavailable", "error": "Pi Orchestrator is unavailable"},
-            status_code=502,
-        )
+        return error_response(400, 'invalid_request')
+    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    if task_status != 200:
+        return JSONResponse(task_data, status_code=task_status)
+    upstream_status, data = await _pi_request(
+        "GET",
+        f"/v1/tasks/{task_run_id}/events?after={max(after, 0)}",
+    )
+    return JSONResponse(data, status_code=upstream_status)
 
 
 @chat_router.post("/api/chat", response_class=JSONResponse)
@@ -1708,26 +1500,28 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
     resp = await _run_sync(agent_approve, req.user_id)
     result = {"text": resp.text, "sql": resp.sql, "action": resp.action,
               "columns": None, "rows": None, "row_count": 0, "exec_error": None,
-              "analysis": None, "chart_html": None}
+              "analysis": None, "chart_html": None, "error_code": None}
 
     if resp.action == "approved" and resp.sql:
         # 1. 执行 SQL
-        cols, rows_raw = [], []
+
         execution_ms = None
         try:
             started = time.perf_counter()
-            text, cols, rows_raw = await _run_sync(execute_with_data, resp.sql)
+            outcome = await _run_sync(execute, resp.sql)
             execution_ms = int((time.perf_counter() - started) * 1000)
-            result["columns"] = cols
-            result["rows"] = [list(r) for r in rows_raw]
-            result["row_count"] = len(rows_raw)
-            if text.startswith("⚠"):
-                result["exec_error"] = text
+            result["columns"] = outcome.columns
+            result["rows"] = [list(r) for r in outcome.rows]
+            result["row_count"] = len(outcome.rows)
+            if not outcome.success:
+                result["exec_error"] = outcome.text
+                result["error_code"] = outcome.error_code or "execution_failed"
         except Exception:
             logger.exception("Approved SQL execution failed")
-            result["exec_error"] = "⚠ 执行失败：数据库查询失败，请检查 SQL 或联系管理员。"
+            result["exec_error"] = "数据库查询失败，请检查 SQL 或联系管理员。"
+            result["error_code"] = "execution_failed"
 
-        if result["exec_error"]:
+        if result["error_code"]:
             result["action"] = "execution_failed"
             result["text"] = "SQL 执行失败，请重新生成或修改查询。"
 
@@ -1736,7 +1530,7 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
             from agent.memory import memory as _mem
             from agent.pipeline import runner as _runner, QueryResult, Artifact
             run_data = _mem.get_state(req.user_id, "pipeline_run")
-            if result["exec_error"] and run_data and run_data.get("status") == "pending_approval":
+            if result["error_code"] and run_data and run_data.get("status") == "pending_approval":
                 run_data["status"] = "failed"
                 run_data["error"] = "SQL 执行失败，Pipeline 已终止。"
                 _mem.set_state(req.user_id, "pipeline_run", run_data)
@@ -1747,7 +1541,7 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
                     if s.get("stage") == "generate" and s.get("artifact"):
                         art = s["artifact"]
                         art["rows"]    = result["rows"] or []
-                        art["columns"] = cols
+                        art["columns"] = result["columns"]
                         art["row_count"] = len(result["rows"] or [])
                         s["artifact"] = art
                 run_data["stages"] = stages
@@ -1782,7 +1576,7 @@ async def api_approve(req: ChatRequest, _auth=Depends(require_api_auth)):
 
         await audit.update_latest_pending(
             req.user_id,
-            "error" if result["exec_error"] else "approved",
+            "error" if result["error_code"] else "approved",
             error_message=result["exec_error"],
             row_count=result["row_count"],
             execution_ms=execution_ms,
@@ -1821,10 +1615,11 @@ async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth
     """直接执行用户编辑后的 SQL（跳过 Agent 编译）。"""
     result = {"text": "", "sql": req.sql, "action": "approved",
               "columns": None, "rows": None, "row_count": 0, "exec_error": None,
-              "analysis": None, "chart_html": None}
+              "analysis": None, "chart_html": None, "error_code": None}
     execution_ms = None
     if not cfg.RAW_SQL_ENABLED:
-        result["exec_error"] = "⚠ 手动 SQL 执行已被配置禁用。"
+        result["exec_error"] = "手动 SQL 执行已被配置禁用。"
+        result["error_code"] = "raw_sql_disabled"
         result["action"] = "execution_failed"
         result["text"] = "SQL 执行失败，请重新生成或修改查询。"
         await audit.log(
@@ -1838,18 +1633,20 @@ async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth
         return result
     try:
         started = time.perf_counter()
-        text, cols, rows_raw = await _run_sync(execute_with_data, req.sql)
+        outcome = await _run_sync(execute, req.sql)
         execution_ms = int((time.perf_counter() - started) * 1000)
-        result["columns"] = cols
-        result["rows"] = [list(r) for r in rows_raw]
-        result["row_count"] = len(rows_raw)
-        if text.startswith("⚠"):
-            result["exec_error"] = text
+        result["columns"] = outcome.columns
+        result["rows"] = [list(r) for r in outcome.rows]
+        result["row_count"] = len(outcome.rows)
+        if not outcome.success:
+            result["exec_error"] = outcome.text
+            result["error_code"] = outcome.error_code or "execution_failed"
     except Exception:
         logger.exception("Raw SQL execution failed")
-        result["exec_error"] = "⚠ 执行失败：数据库查询失败，请检查 SQL 或联系管理员。"
+        result["exec_error"] = "数据库查询失败，请检查 SQL 或联系管理员。"
+        result["error_code"] = "execution_failed"
 
-    if result["exec_error"]:
+    if result["error_code"]:
         result["action"] = "execution_failed"
         result["text"] = "SQL 执行失败，请重新生成或修改查询。"
 
@@ -1858,7 +1655,7 @@ async def api_execute_raw(req: ExecuteRawRequest, _auth=Depends(require_api_auth
         user_message="[手动编辑 SQL]",
         forge_json=None,
         sql=req.sql,
-        status="approved" if not result["exec_error"] else "error",
+        status="approved" if not result["error_code"] else "error",
         error_message=result["exec_error"],
         row_count=result["row_count"],
         execution_ms=execution_ms,
@@ -2091,24 +1888,9 @@ async def dashboard_page(request: Request):
         pass
     health["embedding"] = bool(cfg.EMBED_API_KEY)
 
-    today_count = 0
-    try:
-        from datetime import date as _date
-        import aiosqlite
-
-        today_str = _date.today().isoformat()
-        await audit._ensure_schema()
-        async with aiosqlite.connect(audit._db_path()) as db:
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM audit_log WHERE timestamp >= ?",
-                (today_str,),
-            )
-            row = await cursor.fetchone()
-            today_count = row[0] if row else 0
-    except Exception:
-        pass
-
-    recent_queries = await audit.recent(limit=5)
+    audit_view = await audit.projection(scopes=_web_admin_task_scopes(), limit=5)
+    today_count = audit_view["today"]
+    recent_queries = audit_view["records"]
     governed_runs = []
     governed_runs_available = True
     try:
@@ -2474,22 +2256,12 @@ async def staging_discard(filename: str):
 @router.get("/audit", response_class=HTMLResponse)
 async def audit_page(request: Request, status: str = "", q: str = "", page: int = 1):
     per_page = 50
-    offset = (max(1, page) - 1) * per_page
-    records, total_filtered = await audit.search(
-        status=status, keyword=q, limit=per_page, offset=offset,
-    )
-    counts = await audit.stats()
-    total_pages = max(1, (total_filtered + per_page - 1) // per_page)
-    return templates.TemplateResponse(
-        request,
-        "audit.html",
-        {
-            "records": records, "counts": counts,
-            "filter_status": status, "filter_q": q,
-            "page": page, "total_pages": total_pages,
-            "total_filtered": total_filtered,
-        },
-    )
+    page = max(1, page)
+    view = await audit.projection(scopes=_web_admin_task_scopes(), status=status, keyword=q, limit=per_page, offset=(page - 1) * per_page)
+    return templates.TemplateResponse(request, "audit.html", {
+        **view, "filter_status": status, "filter_q": q, "page": page,
+        "total_pages": max(1, (view["available_total"] + per_page - 1) // per_page),
+    })
 
 
 @router.get("/sessions", response_class=HTMLResponse)

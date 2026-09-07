@@ -13,6 +13,9 @@ from typing import Any
 
 from jsonschema import FormatChecker
 from jsonschema.validators import validator_for
+from .artifact_semantics import (
+    STRUCTURED_ARTIFACT_CONTRACTS, structured_artifact_format_checker, validate_artifact_semantics,
+)
 
 _CONTRACT_FILES = {
     "task_run": "task-run.schema.json",
@@ -74,7 +77,8 @@ def _compiled_validator(name: str) -> Any:
     schema = load_contract(name)
     validator_class = validator_for(schema)
     validator_class.check_schema(schema)
-    return validator_class(schema, format_checker=FormatChecker())
+    checker = structured_artifact_format_checker if name in STRUCTURED_ARTIFACT_CONTRACTS else FormatChecker()
+    return validator_class(schema, format_checker=checker)
 
 
 def validate_contract(name: str, instance: Any) -> None:
@@ -84,3 +88,5 @@ def validate_contract(name: str, instance: Any) -> None:
     and orchestration layers can translate it into their own bounded error type.
     """
     _compiled_validator(name).validate(instance)
+    if name in STRUCTURED_ARTIFACT_CONTRACTS:
+        validate_artifact_semantics(name, instance)

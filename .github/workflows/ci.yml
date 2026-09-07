@@ -17,10 +17,37 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -c constraints/ci-python311.txt -e ".[dev]"
 
       - name: Run tests
         run: pytest -q
+
+  distribution:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        artifact: [wheel, sdist]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build wheel from sdist with verified build dependencies
+        env:
+          PIP_CONSTRAINT: ${{ github.workspace }}/constraints/ci-python311.txt
+        run: |
+          pip install -c constraints/ci-python311.txt build
+          python -m build
+      - name: Install a non-editable distribution
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          PIP_CONSTRAINT: ${{ github.workspace }}/constraints/ci-python311.txt
+        run: |
+          if [ "$ARTIFACT" = wheel ]; then pip install dist/*.whl; else pip install dist/*.tar.gz; fi
+      - name: Exercise installed import, resources, CLI and synthetic Quickstart
+        run: |
+          cd "$(mktemp -d)"
+          python "$GITHUB_WORKSPACE/scripts/package_smoke.py" "$GITHUB_WORKSPACE"/dist/*
 
   pi-contracts:
     runs-on: ubuntu-latest
@@ -76,7 +103,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -c constraints/ci-python311.txt -e ".[dev]"
 
       - name: SQLite compatibility smoke
         run: pytest tests/test_database_compatibility.py -v --tb=short

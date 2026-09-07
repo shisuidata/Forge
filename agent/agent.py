@@ -45,7 +45,6 @@ import yaml
 
 from config import cfg
 from forge.assurance import QueryAssuranceError, assure_query
-from forge.cache import cache
 from forge.normalization import (
     bind_unambiguous_single_cte_scan,
     complete_unambiguous_ratio_alias,
@@ -53,6 +52,7 @@ from forge.normalization import (
 from registry.validator import validate_metric
 from registry.staging_sync import write_staging_record
 from agent.memory import memory
+from forge.dialects import resolve_dialect
 from agent.model_config import LLMConfigurationError, LLMNotConfiguredError
 from agent import llm
 
@@ -61,7 +61,6 @@ logger = logging.getLogger(__name__)
 # 编译失败后最多重试次数（不含首次尝试）
 # 设为 3：首次失败后最多再做 3 次有界修复尝试。
 MAX_RETRIES = 3
-_ALLOWED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 _PREPARE_TIMEOUT_MESSAGE = "查询准备超时，请稍后重试或缩小问题范围。"
 _MODEL_QUOTA_MESSAGE = "模型服务额度已用完，请在额度恢复后重新发起。"
 _MODEL_RATE_LIMIT_MESSAGE = "模型服务当前请求繁忙，请稍后重新发起。"
@@ -79,27 +78,6 @@ def _remaining_call_budget(deadline: float) -> float:
         raise llm.LLMRequestTimeoutError(_PREPARE_TIMEOUT_MESSAGE)
     return remaining
 
-
-def resolve_dialect(dialect_override: str | None = None) -> str:
-    """Resolve cfg.SQL_DIALECT, including auto-detection from DATABASE_URL."""
-    dialect = (dialect_override or getattr(cfg, "SQL_DIALECT", "sqlite") or "sqlite").lower()
-    if dialect not in _ALLOWED_DIALECTS:
-        raise ValueError(
-            "dialect must be one of: auto, sqlite, postgresql, mysql, bigquery, snowflake"
-        )
-    if dialect != "auto":
-        return dialect
-
-    db_url = (getattr(cfg, "DATABASE_URL", "") or "").lower()
-    if db_url.startswith("postgresql") or db_url.startswith("postgres"):
-        return "postgresql"
-    if db_url.startswith("mysql"):
-        return "mysql"
-    if db_url.startswith("bigquery"):
-        return "bigquery"
-    if db_url.startswith("snowflake"):
-        return "snowflake"
-    return "sqlite"
 
 
 def prepare_query(user_id: str, question: str, dialect: str | None = None) -> dict:
@@ -137,8 +115,10 @@ def _prepare_query(
         "retrieval_trace": None,
     }
     try:
-        resolved_dialect = resolve_dialect(dialect)
+        resolution = resolve_dialect(dialect, configured_dialect=cfg.SQL_DIALECT, database_url=cfg.DATABASE_URL)
+        resolved_dialect = resolution.resolved
         payload["dialect"] = resolved_dialect
+        payload["dialect_resolution"] = resolution.to_dict()
     except Exception as exc:
         payload["error"] = str(exc)
         return payload
@@ -442,7 +422,7 @@ def process(user_id: str, user_text: str) -> AgentResponse:
                 assurance = assure_query(
                     forge_json,
                     effective_text,
-                    dialect=resolve_dialect(),
+                    dialect=resolve_dialect(configured_dialect=cfg.SQL_DIALECT, database_url=cfg.DATABASE_URL).resolved,
                     allowed_tables=_allowed_tables,
                     model_revision=result.get("model_revision", model_snapshot.revision),
                 )
@@ -533,6 +513,7 @@ def approve(user_id: str) -> AgentResponse:
     Returns:
         action=approved 并携带 sql；若无 pending SQL 则返回 action=error。
     """
+    from forge.cache import cache
     sql = memory.get_state(user_id, "pending_sql")
     forge_json = memory.get_state(user_id, "pending_forge")
     if not sql:
@@ -589,6 +570,7 @@ def cache_verify(user_id: str) -> AgentResponse:
     verified 条目可在后续问题中通过 embedding 相似度命中，直接复用 SQL。
     高频 verified 条目还可作为语义层指标的候选定义（suggest_metrics）。
     """
+    from forge.cache import cache
     cache_id = memory.get_state(user_id, "pending_cache_id")
     if not cache_id:
         return AgentResponse(text="没有待反馈的查询缓存。", action="error")
@@ -604,6 +586,7 @@ def cache_verify(user_id: str) -> AgentResponse:
 
 def cache_reject(user_id: str) -> AgentResponse:
     """Stage 2 👎：用户标记查询结果不准确。"""
+    from forge.cache import cache
     cache_id = memory.get_state(user_id, "pending_cache_id")
     if not cache_id:
         return AgentResponse(text="没有待反馈的查询缓存。", action="error")

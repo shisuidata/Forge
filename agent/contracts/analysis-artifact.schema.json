@@ -1,10 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://forge.local/contracts/analysis-artifact.schema.json",
-  "title": "AnalysisArtifact",
-  "description": "Evidence-bound output of a professional data analysis skill.",
   "type": "object",
-  "additionalProperties": false,
   "required": [
     "artifact_id",
     "artifact_type",
@@ -15,15 +10,32 @@
     "payload"
   ],
   "properties": {
-    "artifact_id": {"type": "string", "pattern": "^ar_[A-Za-z0-9_-]+$"},
-    "artifact_type": {"const": "analysis"},
-    "schema_version": {"const": 1},
-    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$"},
-    "producer": {"type": "string", "minLength": 1},
-    "created_at": {"type": "string", "format": "date-time"},
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^ar_[A-Za-z0-9_-]+$"
+    },
+    "artifact_type": {
+      "type": "string",
+      "const": "analysis"
+    },
+    "schema_version": {
+      "type": "number",
+      "const": 1
+    },
+    "task_run_id": {
+      "type": "string",
+      "pattern": "^tr_[A-Za-z0-9_-]+$"
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "payload": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "status",
         "method_summary",
@@ -35,103 +47,241 @@
         "suggested_queries"
       ],
       "properties": {
-        "status": {"type": "string", "enum": ["complete", "incomplete"]},
+        "status": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "complete"
+            },
+            {
+              "type": "string",
+              "const": "incomplete"
+            }
+          ]
+        },
         "method_summary": {
           "type": "object",
-          "additionalProperties": false,
-          "required": ["objective", "dimensions", "comparison_baseline", "approach_steps"],
+          "required": [
+            "objective",
+            "dimensions",
+            "comparison_baseline",
+            "approach_steps"
+          ],
           "properties": {
-            "objective": {"type": "string", "minLength": 1},
-            "dimensions": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-            "comparison_baseline": {"type": "string", "minLength": 1},
-            "approach_steps": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "minLength": 1}}
-          }
+            "objective": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "comparison_baseline": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approach_steps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "maxItems": 6
+            }
+          },
+          "additionalProperties": false
         },
-        "summary": {"type": "string", "minLength": 1},
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
         "findings": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
-            "required": ["statement", "evidence_refs", "confidence"],
+            "required": [
+              "statement",
+              "evidence_refs",
+              "confidence"
+            ],
             "properties": {
-              "statement": {"type": "string", "minLength": 1},
+              "statement": {
+                "type": "string",
+                "minLength": 1
+              },
               "evidence_refs": {
                 "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^qr_[A-Za-z0-9_-]+#.+$"
+                },
                 "minItems": 1,
-                "items": {"type": "string", "pattern": "^qr_[A-Za-z0-9_-]+#.+$"},
                 "uniqueItems": true
               },
-              "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
-            }
+              "confidence": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "high"
+                  },
+                  {
+                    "type": "string",
+                    "const": "medium"
+                  },
+                  {
+                    "type": "string",
+                    "const": "low"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
           }
         },
         "hypotheses": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
-            "required": ["statement", "evidence_refs", "status"],
+            "required": [
+              "statement",
+              "evidence_refs",
+              "status"
+            ],
             "properties": {
-              "statement": {"type": "string", "minLength": 1},
+              "statement": {
+                "type": "string",
+                "minLength": 1
+              },
               "evidence_refs": {
                 "type": "array",
-                "items": {"type": "string", "pattern": "^qr_[A-Za-z0-9_-]+#.+$"},
+                "items": {
+                  "type": "string",
+                  "pattern": "^qr_[A-Za-z0-9_-]+#.+$"
+                },
                 "uniqueItems": true
               },
               "status": {
-                "type": "string",
-                "enum": ["supported", "plausible", "unverified", "rejected"]
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "supported"
+                  },
+                  {
+                    "type": "string",
+                    "const": "plausible"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unverified"
+                  },
+                  {
+                    "type": "string",
+                    "const": "rejected"
+                  }
+                ]
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "recommendations": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
-            "required": ["action", "rationale", "priority"],
+            "required": [
+              "action",
+              "rationale",
+              "priority"
+            ],
             "properties": {
-              "action": {"type": "string", "minLength": 1},
-              "rationale": {"type": "string", "minLength": 1},
-              "priority": {
+              "action": {
                 "type": "string",
-                "enum": ["immediate", "high", "medium", "low"]
+                "minLength": 1
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priority": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "immediate"
+                  },
+                  {
+                    "type": "string",
+                    "const": "high"
+                  },
+                  {
+                    "type": "string",
+                    "const": "medium"
+                  },
+                  {
+                    "type": "string",
+                    "const": "low"
+                  }
+                ]
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "limitations": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true
         },
         "suggested_queries": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
-            "required": ["question", "reason", "priority"],
+            "required": [
+              "question",
+              "reason",
+              "priority"
+            ],
             "properties": {
-              "question": {"type": "string", "minLength": 1},
-              "reason": {"type": "string", "minLength": 1},
-              "priority": {"type": "string", "enum": ["high", "medium", "low"]}
-            }
+              "question": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priority": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "high"
+                  },
+                  {
+                    "type": "string",
+                    "const": "medium"
+                  },
+                  {
+                    "type": "string",
+                    "const": "low"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
           }
         }
       },
-      "allOf": [
-        {
-          "if": {
-            "properties": {"status": {"const": "incomplete"}},
-            "required": ["status"]
-          },
-          "then": {
-            "properties": {"suggested_queries": {"minItems": 1}}
-          }
-        }
-      ]
+      "additionalProperties": false
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/analysis-artifact.schema.json",
+  "additionalProperties": false
 }

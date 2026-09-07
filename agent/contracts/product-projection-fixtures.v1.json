@@ -336,7 +336,10 @@
               "started_at": "2026-08-25T08:00:10Z",
               "finished_at": "2026-08-25T08:01:00Z",
               "elapsed_ms": 50000,
-              "safe_error": null
+              "safe_error": null,
+              "request_id": "req_synthetic_prepare",
+              "usage_status": "unknown",
+              "skill_policy_version": 1
             }
           ],
           "artifacts": [
@@ -526,6 +529,27 @@
     ]
   },
   "invalid": [
+    {
+      "case_id": "attempt_usage_status_rejects_unknown_enum",
+      "base_case_id": "task_waiting_query_approval",
+      "contract": "task_detail_projection_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {"op": "set", "path": ["attempts", 0, "usage_status"], "value": "free"}
+    },
+    {
+      "case_id": "attempt_request_identity_is_nonempty",
+      "base_case_id": "task_waiting_query_approval",
+      "contract": "task_detail_projection_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {"op": "set", "path": ["attempts", 0, "request_id"], "value": ""}
+    },
+    {
+      "case_id": "attempt_policy_version_is_nonnegative",
+      "base_case_id": "task_waiting_query_approval",
+      "contract": "task_detail_projection_v1",
+      "expected_code": "contract.invalid",
+      "mutation": {"op": "set", "path": ["attempts", 0, "skill_policy_version"], "value": -1}
+    },
     {
       "case_id": "unknown_display_state",
       "base_case_id": "conversation_needs_input",

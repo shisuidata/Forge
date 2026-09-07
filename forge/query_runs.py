@@ -11,6 +11,7 @@ import hmac
 import json
 import time
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -259,11 +260,17 @@ def _prepare_supplied_candidate(
     candidate: dict[str, Any],
     scope_allowed_tables: list[str] | None = None,
 ) -> dict[str, Any]:
-    from agent.agent import resolve_dialect
+    from forge.dialects import DialectResolutionError, resolve_dialect
     from agent.tenant import tenants
     from forge.assurance import QueryAssuranceError, assure_direct_sql, assure_query
 
-    resolved_dialect = resolve_dialect(dialect)
+    try:
+        resolution = resolve_dialect(
+            dialect, configured_dialect=cfg.SQL_DIALECT, database_url=cfg.DATABASE_URL
+        )
+    except DialectResolutionError as exc:
+        raise QueryRunError(str(exc), status_code=400, code=exc.code) from exc
+    resolved_dialect = resolution.resolved
     tenant_allowed_tables = tenants.get_allowed_tables_for_user(user_id)
     if tenant_allowed_tables is not None and scope_allowed_tables is not None:
         allowed_tables = sorted(set(tenant_allowed_tables) & set(scope_allowed_tables))
@@ -297,7 +304,7 @@ def _prepare_supplied_candidate(
             "forge_json": forge_json,
             "sql": None,
             "dialect": resolved_dialect,
-            "assurance_report": exc.report.to_dict(),
+            "assurance_report": replace(exc.report, dialect_resolution=resolution.to_dict()).to_dict(),
             "error": str(exc),
         }
 
@@ -307,7 +314,7 @@ def _prepare_supplied_candidate(
         "forge_json": forge_json,
         "sql": assurance.sql,
         "dialect": resolved_dialect,
-        "assurance_report": assurance.to_dict(),
+        "assurance_report": replace(assurance, dialect_resolution=resolution.to_dict()).to_dict(),
         "error": "",
     }
 
@@ -853,12 +860,12 @@ async def approve_and_execute_query_run(
     if claim_status == "replay":
         return run
 
-    from forge.executor import execute_with_metadata
+    from forge.executor import execute
 
     started = time.perf_counter()
     try:
         result = await asyncio.to_thread(
-            execute_with_metadata,
+            execute,
             run["sql"],
             cfg.EXECUTION_MAX_ROWS,
         )
@@ -870,12 +877,12 @@ async def approve_and_execute_query_run(
             code="execution_failed",
         ) from exc
     execution_ms = int((time.perf_counter() - started) * 1000)
-    if result.text.startswith("⚠"):
-        await fail_query_run(query_run_id, "execution_failed")
+    if not result.success:
+        await fail_query_run(query_run_id, result.error_code or "execution_failed")
         raise QueryRunError(
-            "Query execution failed",
+            result.text,
             status_code=500,
-            code="execution_failed",
+            code=result.error_code or "execution_failed",
         )
 
     return await complete_query_run(

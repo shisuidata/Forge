@@ -1,97 +1,94 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+import sqlite3
 
 import pytest
+from sqlalchemy import create_engine
 
-from forge.executor import _apply_statement_timeout, validate_readonly_sql
+from forge import executor
+from forge.executor import validate_readonly_sql
 
 
-@pytest.mark.parametrize(
-    "sql",
-    [
-        "SELECT 1",
-        "WITH recent AS (SELECT 1 AS n) SELECT n FROM recent;",
-        "SELECT 'drop table users' AS harmless",
-    ],
-)
-def test_validate_readonly_sql_accepts_read_queries(sql: str):
+@pytest.mark.parametrize("sql", [
+    "SELECT 1", "WITH recent AS (SELECT 1 AS n) SELECT n FROM recent;",
+    "SELECT 'drop table users' AS harmless",
+])
+def test_validate_readonly_sql_accepts_read_queries(sql):
     validate_readonly_sql(sql)
 
 
-@pytest.mark.parametrize(
-    "sql",
-    [
-        "DELETE FROM orders",
-        "UPDATE orders SET status = 'x'",
-        "SELECT 1; DROP TABLE users",
-        "PRAGMA table_info(users)",
-        "WITH doomed AS (SELECT 1) DELETE FROM users",
-    ],
-)
-def test_validate_readonly_sql_rejects_mutating_queries(sql: str):
+@pytest.mark.parametrize("sql", [
+    "DELETE FROM orders", "UPDATE orders SET status = 'x'",
+    "SELECT 1; DROP TABLE users", "PRAGMA table_info(users)",
+    "WITH doomed AS (SELECT 1) DELETE FROM users",
+])
+def test_validate_readonly_sql_rejects_mutating_queries(sql):
     with pytest.raises(ValueError):
         validate_readonly_sql(sql)
 
 
-def test_execute_with_data_respects_configured_row_cap(monkeypatch):
-    import forge.executor as executor
-
+@pytest.fixture
+def sqlite_executor(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+    monkeypatch.setattr(executor, "_engine", engine)
     monkeypatch.setattr(executor.cfg, "DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.setattr(executor.cfg, "EXECUTION_ENABLED", True)
     monkeypatch.setattr(executor.cfg, "EXECUTION_MAX_ROWS", 2)
-    monkeypatch.setattr(executor.cfg, "EXECUTION_DISPLAY_ROWS", 2)
-    monkeypatch.setattr(executor, "_engine", None)
-
-    sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3"
-    text, cols, rows = executor.execute_with_data(sql, max_rows=200)
-
-    assert cols == ["n"]
-    assert len(rows) == 2
-    assert "仅显示" in text or "显示前" in text
+    monkeypatch.setattr(executor.cfg, "EXECUTION_DISPLAY_ROWS", 1)
+    monkeypatch.setattr(executor.cfg, "EXECUTION_TIMEOUT_SECONDS", 1)
+    yield engine
+    engine.dispose()
 
 
-def test_execute_with_data_can_be_disabled(monkeypatch):
-    import forge.executor as executor
+def test_warning_named_column_and_empty_result_are_successful(sqlite_executor):
+    result = executor.execute('SELECT 1 AS "\u26a0合法列名"')
+    assert result.success and result.error_code is None
+    assert result.columns == ["\u26a0合法列名"]
+    assert [tuple(row) for row in result.rows] == [(1,)]
+    empty = executor.execute('SELECT 1 AS "\u26a0合法列名" WHERE 0')
+    assert empty.success and not empty.truncated
+    assert empty.columns == result.columns and empty.rows == []
 
+
+def test_row_cap_and_display_cap_have_distinct_semantics(sqlite_executor):
+    result = executor.execute("SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3")
+    assert result.success and result.truncated
+    assert [tuple(row) for row in result.rows] == [(1,), (2,)]
+    exact = executor.execute("SELECT 1 AS n UNION ALL SELECT 2")
+    assert exact.success and not exact.truncated
+    assert exact.rows == result.rows
+
+
+@pytest.mark.parametrize(("sql", "code"), [
+    ("DELETE FROM orders", "sql_not_readonly"),
+    ("SELECT FROM", "execution_syntax_invalid"),
+    ("SELECT missing FROM missing_table", "execution_reference_invalid"),
+])
+def test_sql_failures_have_stable_codes(sqlite_executor, sql, code):
+    result = executor.execute(sql)
+    assert not result.success and result.error_code == code
+    assert result.rows == []
+
+
+def test_execution_disabled_cannot_reach_database(sqlite_executor, monkeypatch):
     monkeypatch.setattr(executor.cfg, "EXECUTION_ENABLED", False)
-
-    text, cols, rows = executor.execute_with_data("SELECT 1")
-
-    assert "禁用" in text
-    assert cols == []
-    assert rows == []
+    result = executor.execute("SELECT 1")
+    assert not result.success and result.error_code == "execution_disabled"
 
 
-def test_bounded_timeout_seconds(monkeypatch):
-    import forge.executor as executor
+def test_sqlite_authorizer_denial_has_permission_code(sqlite_executor):
+    with sqlite_executor.connect() as conn:
+        conn.connection.driver_connection.set_authorizer(
+            lambda action, *args: sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_SELECT else sqlite3.SQLITE_OK
+        )
+    result = executor.execute("SELECT 1")
+    assert not result.success and result.error_code == "execution_permission_denied"
 
-    monkeypatch.setattr(executor.cfg, "EXECUTION_TIMEOUT_SECONDS", 45)
-    assert executor._bounded_timeout_seconds() == 45
 
-    monkeypatch.setattr(executor.cfg, "EXECUTION_TIMEOUT_SECONDS", -1)
-    assert executor._bounded_timeout_seconds() == 0
-
-
-@pytest.mark.parametrize(
-    ("dialect", "expected_sql", "expected_params"),
-    [
-        ("postgresql", "SET LOCAL statement_timeout = %s", (12000,)),
-        ("mysql", "SET SESSION max_execution_time = 12000", None),
-    ],
-)
-def test_apply_statement_timeout_uses_sqlalchemy_driver_api(
-    dialect, expected_sql, expected_params
-):
-    calls = []
-
-    class Connection:
-        def __init__(self, dialect_name):
-            self.dialect = SimpleNamespace(name=dialect_name)
-
-        def exec_driver_sql(self, sql, params=None):
-            calls.append((sql, params))
-
-    _apply_statement_timeout(Connection(dialect), 12)
-
-    assert calls == [(expected_sql, expected_params)]
+def test_sqlite_timeout_is_failure_not_empty_result(sqlite_executor):
+    result = executor.execute(
+        "WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers) "
+        "SELECT sum(n) FROM numbers"
+    )
+    assert not result.success and result.error_code == "execution_timeout"
+    assert executor.execute("SELECT 1").success

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from config import cfg
+from web.templates import templates
 from registry.studio import (
     RegistryStudioError,
     RegistryStudioStore,
@@ -61,8 +62,6 @@ def _active_projection(view: str) -> dict[str, Any]:
 
 @router.get("/registry-studio", response_class=HTMLResponse)
 async def registry_studio_page(request: Request):
-    from web.router import templates
-
     active = _active_projection("table")
     return templates.TemplateResponse(
         request,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { OrchestratorState } from "./orchestrator-state.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync, type StatementResultingChanges } from "node:sqlite";
@@ -22,6 +23,7 @@ import {
   type TeamSkillPolicy,
 } from "./skill-policy.js";
 import {
+  validateStageAttemptInput,
   type StageAttempt,
   type StageAttemptStatus,
   type StageProgressPhase,
@@ -593,17 +595,7 @@ class SqliteStageAttemptStore implements StageAttemptStore {
   constructor(private readonly database: DatabaseSync) {}
 
   start(input: StartStageAttemptInput): StageAttempt {
-    if (input.stage.trim().length === 0 || input.idempotencyKey.trim().length === 0) {
-      throw new TaskStateError("Stage and idempotency key must not be empty");
-    }
-    if (!Number.isInteger(input.leaseMs) || input.leaseMs < 1) {
-      throw new TaskStateError("Stage attempt lease must be a positive integer");
-    }
-    if (input.timeoutMs !== undefined && (
-      !Number.isInteger(input.timeoutMs) || input.timeoutMs < 1 || input.timeoutMs >= input.leaseMs
-    )) {
-      throw new TaskStateError("Stage timeout must be positive and shorter than its lease");
-    }
+    validateStageAttemptInput(input);
     const ownsTransaction = !this.database.isTransaction;
     if (ownsTransaction) this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -648,6 +640,8 @@ class SqliteStageAttemptStore implements StageAttemptStore {
         tool_submitted_at: null,
         model_revision: input.modelRevision ?? null,
         skill_policy_version: input.skillPolicyVersion ?? 0,
+        request_id: input.requestId ?? null,
+        usage_status: "not_started",
       };
       this.database
         .prepare(
@@ -712,6 +706,18 @@ class SqliteStageAttemptStore implements StageAttemptStore {
     );
   }
 
+  listExpired(now: Date): StageAttempt[] {
+    const rows = this.database.prepare("SELECT data_json FROM stage_attempts WHERE status = 'running' AND lease_expires_at <= ? ORDER BY started_at ASC")
+      .all(now.toISOString()) as Array<{ data_json: string }>;
+    return rows.map((row) => normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, "StageAttempt")));
+  }
+
+  markDispatched(attemptId: string): void {
+    const changedRows = this.database.prepare("UPDATE stage_attempts SET data_json = json_set(data_json, '$.usage_status', 'unknown') WHERE attempt_id = ? AND status = 'running'")
+      .run(attemptId);
+    if (changed(changedRows) !== 1) throw new TaskStateError("Cannot dispatch an absent or terminal StageAttempt");
+  }
+
   markProgress(
     attemptId: string,
     phase: Exclude<StageProgressPhase, "waiting_for_model">,
@@ -746,7 +752,7 @@ class SqliteStageAttemptStore implements StageAttemptStore {
 
   finish(
     attemptId: string,
-    status: Exclude<StageAttemptStatus, "running" | "interrupted">,
+    status: Exclude<StageAttemptStatus, "running">,
     error?: string,
   ): StageAttempt {
     const attempt = this.get(attemptId);
@@ -902,7 +908,7 @@ class SqliteSkillPolicyStore implements SkillPolicyStore {
   }
 }
 
-export class SqliteOrchestratorState {
+export class SqliteOrchestratorState extends OrchestratorState {
   readonly tasks: TaskStore;
   readonly events: TaskEventStore;
   readonly artifacts: ArtifactStore;
@@ -912,7 +918,10 @@ export class SqliteOrchestratorState {
   readonly transactions: { run<T>(operation: () => T): T };
   readonly #database: DatabaseSync;
 
+  get database(): DatabaseSync { return this.#database; }
+
   constructor(databasePath: string) {
+    super();
     if (databasePath !== ":memory:") mkdirSync(dirname(databasePath), { recursive: true });
     this.#database = new DatabaseSync(databasePath);
     this.#database.exec("PRAGMA foreign_keys = ON");
@@ -1016,10 +1025,23 @@ export class SqliteOrchestratorState {
     this.skillPolicies = new SqliteSkillPolicyStore(this.#database, AUTHORIZED_SKILL_NAMES);
     this.transactions = {
       run: <T>(operation: () => T): T => {
-        if (this.#database.isTransaction) return operation();
+        const nested = this.#database.isTransaction;
+        if (nested) {
+          this.#database.exec("SAVEPOINT nested_state");
+          try {
+            const result = operation();
+            if (result instanceof Promise) throw new TypeError("State transactions must be synchronous");
+            this.#database.exec("RELEASE nested_state");
+            return result;
+          } catch (error) {
+            this.#database.exec("ROLLBACK TO nested_state; RELEASE nested_state");
+            throw error;
+          }
+        }
         this.#database.exec("BEGIN IMMEDIATE");
         try {
           const result = operation();
+          if (result instanceof Promise) throw new TypeError("State transactions must be synchronous");
           this.#database.exec("COMMIT");
           return result;
         } catch (error) {
@@ -1028,71 +1050,6 @@ export class SqliteOrchestratorState {
         }
       },
     };
-  }
-
-  reconcileExpiredAttempts(now = new Date()): StageAttempt[] {
-    return this.transactions.run(() => {
-      const rows = this.#database
-        .prepare(
-          `SELECT data_json FROM stage_attempts
-           WHERE status = 'running' AND lease_expires_at <= ?
-           ORDER BY started_at ASC`,
-        )
-        .all(now.toISOString()) as Array<{ data_json: string }>;
-      const interrupted: StageAttempt[] = [];
-      for (const row of rows) {
-        const attempt = normalizeStageAttempt(parseJson<StageAttempt>(row.data_json, "StageAttempt"));
-        const finishedAt = now.toISOString();
-        const updatedAttempt: StageAttempt = {
-          ...attempt,
-          status: "interrupted",
-          updated_at: finishedAt,
-          finished_at: finishedAt,
-          error: "Stage lease expired before completion",
-        };
-        const attemptResult = this.#database
-          .prepare(
-            `UPDATE stage_attempts
-             SET status = 'interrupted', updated_at = ?, finished_at = ?, error = ?, data_json = ?
-             WHERE attempt_id = ? AND status = 'running' AND lease_expires_at <= ?`,
-          )
-          .run(
-            finishedAt,
-            finishedAt,
-            updatedAttempt.error,
-            JSON.stringify(updatedAttempt),
-            attempt.attempt_id,
-            now.toISOString(),
-          );
-        if (changed(attemptResult) !== 1) continue;
-
-        const task = this.tasks.get(attempt.task_run_id);
-        let recovered = false;
-        if (task?.status === attempt.running_status) {
-          this.tasks.transition({
-            taskRunId: task.task_run_id,
-            expectedStatus: attempt.running_status,
-            status: attempt.retry_status,
-            currentStage: `${attempt.stage}_retry`,
-          });
-          this.events.append(task.task_run_id, "task.status_changed", {
-            from: attempt.running_status,
-            to: attempt.retry_status,
-            current_stage: `${attempt.stage}_retry`,
-            recovery: true,
-          });
-          recovered = true;
-        }
-        this.events.append(attempt.task_run_id, "stage.attempt_interrupted", {
-          attempt_id: attempt.attempt_id,
-          stage: attempt.stage,
-          retry_status: attempt.retry_status,
-          task_recovered: recovered,
-        });
-        interrupted.push(structuredClone(updatedAttempt));
-      }
-      return interrupted;
-    });
   }
 
   close(): void {

@@ -20,10 +20,10 @@ from forge.assurance import (
 )
 from forge import benchmark_v2
 from forge.benchmark_v2 import build_result_contract, semantic_result_compare
+from forge.dialects import DialectResolutionError, resolve_dialect
 
 EVALUATE_SCHEMA_VERSION = 1
 EVALUATOR_REVISION = "evaluate-v1"
-SUPPORTED_DIALECTS = {"auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake"}
 
 
 def canonical_hash(value: Any) -> str:
@@ -161,6 +161,7 @@ def _finalize(
     assurance_report: QueryAssuranceReport | None,
     result_comparison: dict[str, Any],
     failure: dict[str, Any] | None,
+    dialect_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     request_hash = canonical_hash(request)
     full_assurance = assurance_report.to_dict() if assurance_report is not None else None
@@ -168,7 +169,9 @@ def _finalize(
     safe_assurance = _safe_assurance(assurance_report) if assurance_report is not None else None
     sql_hash = assurance_report.sql_hash if assurance_report is not None else None
 
+    resolution = dialect_resolution or {"requested": request.get("dialect") or "auto", "resolved": None, "provenance": "unresolved"}
     payload = {
+        "dialect_resolution": resolution,
         "schema_version": EVALUATE_SCHEMA_VERSION,
         "status": status,
         "candidate": {
@@ -255,8 +258,10 @@ def evaluate_query_candidate(request: dict[str, Any]) -> dict[str, Any]:
             ),
         )
 
-    dialect = str(request.get("dialect") or "auto")
-    if dialect not in SUPPORTED_DIALECTS:
+    try:
+        resolution = resolve_dialect(request.get("dialect"), allow_generic=input_kind == "direct_sql")
+        dialect = resolution.resolved
+    except DialectResolutionError as exc:
         return _finalize(
             request=request,
             status="failed",
@@ -266,7 +271,7 @@ def evaluate_query_candidate(request: dict[str, Any]) -> dict[str, Any]:
             compiled_sql=None,
             assurance_report=None,
             result_comparison=not_run,
-            failure=_failure("assurance", "dialect_unsupported", retryable=True),
+            failure=_failure("assurance", exc.code, retryable=True),
         )
 
     try:
@@ -297,6 +302,7 @@ def evaluate_query_candidate(request: dict[str, Any]) -> dict[str, Any]:
             assurance_report=exc.report,
             result_comparison=not_run,
             failure=_failure(stage, code, retryable=retryable),
+            dialect_resolution=resolution.to_dict(),
         )
 
     comparison, comparison_failure = _result_comparison(request)
@@ -310,4 +316,5 @@ def evaluate_query_candidate(request: dict[str, Any]) -> dict[str, Any]:
         assurance_report=report,
         result_comparison=comparison,
         failure=comparison_failure,
+        dialect_resolution=resolution.to_dict(),
     )

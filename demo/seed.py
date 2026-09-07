@@ -4,7 +4,7 @@ Demo data seeder — creates demo/forge_demo.db with realistic sample data.
 Schema:
   users, orders, order_items, products
 
-Covers all test cases in tests/text-to-sql-failures/:
+Covers all test cases in tools/benchmarks/text_to_sql_failures/:
   A1 — users with zero orders (LEFT JOIN demo)
   A2 — orders with no items (ANTI JOIN demo)
   B1 — VIP filter across cities

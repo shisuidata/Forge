@@ -85,7 +85,14 @@ class EvaluationLineageV1(BaseModel):
     result_contract_revision: str | None
 
 
+class DialectResolutionV1(BaseModel):
+    requested: str
+    resolved: str | None
+    provenance: str
+
+
 class EvaluateResponseV1(BaseModel):
+    dialect_resolution: DialectResolutionV1
     evaluation_id: str
     schema_version: Literal[1]
     status: Literal["passed", "failed"]

@@ -16,7 +16,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from web.templates import templates
 from pydantic import BaseModel, Field
 
 from config import cfg
@@ -51,7 +51,6 @@ from agent.llm import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 
 class ModelRevisionCreateRequest(BaseModel):

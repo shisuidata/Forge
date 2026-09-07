@@ -22,4 +22,6 @@ npm run build
 - `src/content/docs/concepts/`: 工作原理、Registry、设计哲学。
 - `src/content/docs/reference/`: benchmark、DSL 和架构说明。
 
-首页指标应与仓库根目录 `README.md` 和 `docs/test-report-2026-07-13.md` 保持一致。
+首页指标应与仓库根目录 [README](../README.md) 和 [历史测试报告](../docs/archive/engineering/test-report-2026-07-13.md) 保持一致。
+
+当前事实、稳定指南与历史报告的统一入口见 [Forge 文档导航](../docs/README.md)。

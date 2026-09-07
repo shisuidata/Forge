@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from functools import cached_property
 
 from agent.memory.ems import EpisodicMemoryStore
 from agent.memory.smp import SemanticMemoryPool
@@ -43,11 +44,21 @@ class MemoryManager:
     不直接操作 EMS / SMP / WMB / Extractor。
     """
 
-    def __init__(self):
-        self.ems = EpisodicMemoryStore()
-        self.smp = SemanticMemoryPool()
-        self.wmb = WorkingMemoryBuffer(self.ems, self.smp)
-        self.extractor = Extractor(self.ems, self.smp)
+    @cached_property
+    def ems(self):
+        return EpisodicMemoryStore()
+
+    @cached_property
+    def smp(self):
+        return SemanticMemoryPool()
+
+    @cached_property
+    def wmb(self):
+        return WorkingMemoryBuffer(self.ems, self.smp)
+
+    @cached_property
+    def extractor(self):
+        return Extractor(self.ems, self.smp)
 
     # ── EMS 代理：记录 ────────────────────────────────────────────────────────
 

@@ -1,10 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://forge.local/contracts/advisory-artifact.schema.json",
-  "title": "AdvisoryArtifact",
-  "description": "Bounded output of an explicitly authorized professional Skill.",
   "type": "object",
-  "additionalProperties": false,
   "required": [
     "artifact_id",
     "artifact_type",
@@ -20,9 +15,11 @@
       "pattern": "^ar_[A-Za-z0-9_-]+$"
     },
     "artifact_type": {
+      "type": "string",
       "const": "advisory"
     },
     "schema_version": {
+      "type": "number",
       "const": 1
     },
     "task_run_id": {
@@ -39,7 +36,6 @@
     },
     "payload": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
         "status",
         "skill_name",
@@ -54,9 +50,15 @@
       ],
       "properties": {
         "status": {
-          "enum": [
-            "complete",
-            "incomplete"
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "complete"
+            },
+            {
+              "type": "string",
+              "const": "incomplete"
+            }
           ]
         },
         "skill_name": {
@@ -75,7 +77,6 @@
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "required": [
               "statement",
               "evidence_refs",
@@ -88,27 +89,36 @@
               },
               "evidence_refs": {
                 "type": "array",
-                "uniqueItems": true,
                 "items": {
                   "type": "string",
                   "pattern": "^(?:qr_[A-Za-z0-9_-]+#.+|ctx_[a-f0-9]{24})$"
-                }
+                },
+                "uniqueItems": true
               },
               "confidence": {
-                "enum": [
-                  "high",
-                  "medium",
-                  "low"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "high"
+                  },
+                  {
+                    "type": "string",
+                    "const": "medium"
+                  },
+                  {
+                    "type": "string",
+                    "const": "low"
+                  }
                 ]
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "recommendations": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "required": [
               "action",
               "rationale",
@@ -124,45 +134,57 @@
                 "minLength": 1
               },
               "priority": {
-                "enum": [
-                  "immediate",
-                  "high",
-                  "medium",
-                  "low"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "immediate"
+                  },
+                  {
+                    "type": "string",
+                    "const": "high"
+                  },
+                  {
+                    "type": "string",
+                    "const": "medium"
+                  },
+                  {
+                    "type": "string",
+                    "const": "low"
+                  }
                 ]
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "assumptions": {
           "type": "array",
-          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
-          }
+          },
+          "uniqueItems": true
         },
         "limitations": {
           "type": "array",
-          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
-          }
+          },
+          "uniqueItems": true
         },
         "open_questions": {
           "type": "array",
-          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1
-          }
+          },
+          "uniqueItems": true
         },
         "deliverables": {
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "required": [
               "name",
               "content"
@@ -176,10 +198,15 @@
                 "type": "string",
                 "minLength": 1
               }
-            }
+            },
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "additionalProperties": false
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.local/contracts/advisory-artifact.schema.json",
+  "additionalProperties": false
 }

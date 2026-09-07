@@ -7,7 +7,10 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import hashlib
 
+from diagnostics import record, request_id
+from web.channel_delivery import DeliveryBusy, get_delivery_store
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
     CreateMessageRequest,
@@ -55,7 +58,7 @@ def _get_pi_client() -> PiChannelClient:
     return _pi_client
 
 
-def _send_card(open_id: str, card: dict) -> None:
+def _send_card(open_id: str, card: dict, *, delivery_uuid: str | None = None) -> str | None:
     request = (
         CreateMessageRequest.builder()
         .receive_id_type("open_id")
@@ -63,6 +66,7 @@ def _send_card(open_id: str, card: dict) -> None:
             CreateMessageRequestBody.builder()
             .receive_id(open_id)
             .msg_type("interactive")
+            .uuid(delivery_uuid)
             .content(json.dumps(card, ensure_ascii=False))
             .build()
         )
@@ -70,7 +74,8 @@ def _send_card(open_id: str, card: dict) -> None:
     )
     response = _get_client().im.v1.message.create(request)
     if not response.success():
-        logger.error("Pi Feishu send card failed: %s %s", response.code, response.msg)
+        raise DeliveryRejected("Feishu rejected the presentation")
+    return getattr(response.data, "message_id", None)
 
 
 def _update_card(message_id: str, card: dict) -> None:
@@ -86,98 +91,80 @@ def _update_card(message_id: str, card: dict) -> None:
     )
     response = _get_client().im.v1.message.patch(request)
     if not response.success():
-        logger.error("Pi Feishu update card failed: %s %s", response.code, response.msg)
+        raise DeliveryRejected("Feishu rejected the presentation")
 
 
-def _error_card(message: str) -> dict:
-    return {
-        "schema": "2.0",
-        "header": {
-            "title": {"tag": "plain_text", "content": "Forge"},
-            "template": "red",
-        },
-        "body": {"elements": [{"tag": "markdown", "content": message}]},
-    }
+
+class DeliveryRejected(RuntimeError):
+    pass
 
 
-def _process_message(
-    open_id: str,
-    conversation_id: str,
-    message_id: str,
-    text: str,
-    chat_type: str,
-) -> None:
+def deliver_receipt(delivery_id: str, *, wait: bool = False, presentation: dict | None = None, progress_action: str | None = None) -> dict:
+    """Fetch/re-send presentation only. Never submit a ChannelEvent or rerun a Task."""
+    store = get_delivery_store()
+    receipt = store.claim(delivery_id)
+    delivery_started = False
     try:
-        accepted = _get_pi_client().submit_message(
-            event_id=message_id,
-            external_user_id=open_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-            text=text,
-            chat_type=chat_type,
-        )
-        task_run_id = task_run_id_from_response(accepted)
-        presentation = _get_pi_client().wait_for_presentation(task_run_id)
-        _send_card(
-            open_id,
-            presentation_to_feishu_card(
-                presentation,
-                external_user_id=open_id,
-                conversation_id=conversation_id,
-            ),
-        )
-    except Exception as exc:
-        logger.exception("Pi Feishu message failed for %s: %s", open_id, exc)
-        _send_card(open_id, _error_card("Forge 任务暂时无法处理，请稍后重试。"))
-
-
-def _process_action(
-    open_id: str,
-    conversation_id: str,
-    message_id: str,
-    callback_event_id: str,
-    action_type: str,
-    task_run_id: str,
-    payload: dict,
-) -> None:
-    try:
-        accepted = _get_pi_client().submit_action(
-            event_id=callback_event_id,
-            external_user_id=open_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-            task_run_id=task_run_id,
-            action=action_type,
-            payload=payload,
-        )
-        resolved_task_run_id = task_run_id_from_response(accepted)
-        accepted_presentation = accepted.get("presentation")
-        if (
-            isinstance(accepted_presentation, dict)
-            and accepted_presentation.get("kind") != "progress"
-        ):
-            presentation = accepted_presentation
+        client = _get_pi_client()
+        if presentation is None and progress_action and receipt["message_id"]:
+            try:
+                _update_card(receipt["message_id"], presentation_to_feishu_card(action_progress_presentation(progress_action), external_user_id=receipt["target_id"], conversation_id=receipt["conversation_id"]))
+            except Exception:
+                record("delivery_progress", delivery_id=delivery_id, task_run_id=receipt["task_run_id"], error_code="progress_delivery_unknown")
+        if presentation is None:
+            presentation = client.wait_for_presentation(receipt["task_run_id"]) if wait else client.get_presentation(receipt["task_run_id"])
+        card = presentation_to_feishu_card(presentation, external_user_id=receipt["target_id"], conversation_id=receipt["conversation_id"])
+        delivery_started = True
+        if receipt["message_id"]:
+            _update_card(receipt["message_id"], card)
+            remote_id = receipt["message_id"]
         else:
-            _update_card(
-                message_id,
-                presentation_to_feishu_card(
-                    action_progress_presentation(action_type),
-                    external_user_id=open_id,
-                    conversation_id=conversation_id,
-                ),
-            )
-            presentation = _get_pi_client().wait_for_presentation(resolved_task_run_id)
-        _update_card(
-            message_id,
-            presentation_to_feishu_card(
-                presentation,
-                external_user_id=open_id,
-                conversation_id=conversation_id,
-            ),
-        )
-    except Exception as exc:
-        logger.exception("Pi Feishu action failed for %s: %s", open_id, exc)
-        _update_card(message_id, _error_card("操作失败，请重新发起或稍后重试。"))
+            remote_id = _send_card(receipt["target_id"], card, delivery_uuid=receipt["delivery_id"])
+        return store.public(store.finish(receipt, "delivered", message_id=remote_id))
+    except DeliveryRejected:
+        return store.public(store.finish(receipt, "failed", error_code="delivery_rejected"))
+    except Exception:
+        return store.public(store.finish(receipt, "unknown" if delivery_started else "failed", error_code="delivery_outcome_unknown" if delivery_started else "presentation_unavailable"))
+
+
+def _process_message(open_id: str, conversation_id: str, message_id: str, text: str, chat_type: str) -> None:
+    token = request_id.set("feishu_" + hashlib.sha256(message_id.encode()).hexdigest()[:40])
+    try:
+        accepted = _get_pi_client().submit_message(event_id=message_id, external_user_id=open_id,
+            conversation_id=conversation_id, message_id=message_id, text=text, chat_type=chat_type)
+        task_run_id = task_run_id_from_response(accepted)
+        receipt = get_delivery_store().create(task_run_id=task_run_id, command_id=message_id,
+            target_id=open_id, conversation_id=conversation_id)
+        if receipt["status"] != "delivered":
+            deliver_receipt(receipt["delivery_id"], wait=True)
+    except DeliveryBusy:
+        pass
+    except Exception:
+        record("channel_ingress", command_id=message_id, error_code="channel_result_unknown")
+    finally:
+        request_id.reset(token)
+
+
+def _process_action(open_id: str, conversation_id: str, message_id: str, callback_event_id: str,
+                    action_type: str, task_run_id: str, payload: dict) -> None:
+    token = request_id.set("feishu_" + hashlib.sha256(callback_event_id.encode()).hexdigest()[:40])
+    try:
+        accepted = _get_pi_client().submit_action(event_id=callback_event_id, external_user_id=open_id,
+            conversation_id=conversation_id, message_id=message_id, task_run_id=task_run_id, action=action_type, payload=payload)
+        resolved_id = task_run_id_from_response(accepted)
+        receipt = get_delivery_store().create(task_run_id=resolved_id, command_id=callback_event_id,
+            target_id=open_id, conversation_id=conversation_id, message_id=message_id)
+        accepted_presentation = accepted.get("presentation")
+        presentation = accepted_presentation if isinstance(accepted_presentation, dict) and accepted_presentation.get("kind") != "progress" else None
+        if receipt["status"] != "delivered":
+            deliver_receipt(receipt["delivery_id"], wait=True, presentation=presentation, progress_action=action_type)
+    except DeliveryBusy:
+        pass
+    except Exception:
+        record("channel_ingress", task_run_id=task_run_id, command_id=callback_event_id, error_code="channel_result_unknown")
+    finally:
+        request_id.reset(token)
+
 
 
 def _on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
@@ -197,8 +184,8 @@ def _on_message(data: lark.im.v1.P2ImMessageReceiveV1) -> None:
             args=(open_id, conversation_id, message.message_id, text, chat_type),
             daemon=True,
         ).start()
-    except Exception as exc:
-        logger.exception("Pi Feishu event parsing failed: %s", exc)
+    except Exception:
+        record("channel_event", error_code="event_invalid")
 
 
 def _on_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
@@ -246,8 +233,8 @@ def _on_card_action(data: P2CardActionTrigger) -> P2CardActionTriggerResponse:
             ),
             daemon=True,
         ).start()
-    except Exception as exc:
-        logger.exception("Pi Feishu card callback failed: %s", exc)
+    except Exception:
+        record("channel_event", error_code="action_invalid")
         response.toast = CallBackToast()
         response.toast.type = "error"
         response.toast.content = "操作失败"
@@ -283,8 +270,8 @@ def start_bot() -> None:
             )
             logger.info("Forge Pi 飞书 Bot 已启动")
             client.start()
-        except Exception as exc:
-            logger.error("Pi Feishu WebSocket exited: %s", exc)
+        except Exception:
+            record("channel_connection", error_code="channel_disconnected")
         time.sleep(3)
 
 

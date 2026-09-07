@@ -10,7 +10,8 @@ import test from "node:test";
 import { setImmediate as nextTurn } from "node:timers/promises";
 
 import type { TestContext } from "node:test";
-import type { OrchestratorApplication } from "../src/application.js";
+import { OrchestratorApplication } from "../src/application.js";
+import { SqliteOrchestratorState } from "../src/sqlite-store.js";
 import { loadConfig } from "../src/config.js";
 
 // Replace only the model/session package; run the real persistence, workers and HTTP handoff.
@@ -479,17 +480,17 @@ async function fixture(t: TestContext) {
     PI_BENCHMARK_CONCURRENCY: "1",
     FORGE_BASE_URL: "http://benchmark.invalid",
   });
-  // The benchmark only uses createTask; its persistence is exercised by the real runtime.
-  const application = {
-    createTask: () => ({ task: { task_run_id: "fixed-task" } }),
-  } as unknown as OrchestratorApplication;
-  return { runtime: new PiBenchmarkRuntime(config, application), config, application };
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  const application = new OrchestratorApplication({ config, state });
+  const runtime = new PiBenchmarkRuntime(config, application);
+  t.after(async () => { await runtime.close(); state.close(); });
+  return { runtime, config, application };
 }
 
 async function settled(runtime: InstanceType<typeof PiBenchmarkRuntime>, runId: string) {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const run = runtime.get(runId)!;
-    if (["completed", "failed"].includes(run.status)) {
+    if (["completed", "failed", "stopped", "interrupted"].includes(run.status)) {
       await nextTurn();
       return runtime.get(runId)!;
     }
@@ -817,4 +818,113 @@ test("historical false-only scores are unknown and absent case rows do not shrin
   assert.equal(direct.official_ea_observed_cases, 1);
   assert.equal(direct.official_ea_missing_cases, 2);
   assert.equal(db.prepare("SELECT data_json FROM benchmark_v2_cases").get()!.data_json, raw);
+});
+
+
+test("concurrent starts admit only one benchmark before dispatch", async (t) => {
+  const { runtime, application } = await fixture(t);
+  t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+    await nextTurn();
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a")], metric_revision: revision });
+    const body = JSON.parse(String(options?.body));
+    if (input.endsWith("/protocol")) return Response.json(protocolData(body.case_ids));
+    if (input.endsWith("/context")) return Response.json(contextData(body.case_id));
+    return Response.json(evaluationData);
+  });
+  const options = { provider: "test", model: "fixed", confirmModelCalls: 2 };
+  const results = await Promise.allSettled([runtime.start(options), runtime.start(options)]);
+  for (const result of results) if (result.status === "fulfilled") await settled(runtime, result.value.run_id);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(runtime.history().length, 1);
+  assert.equal(runtime.history()[0]!.completed_calls, 2);
+  assert.equal(application.getTask(runtime.history()[0]!.task_run_id)!.status, "completed");
+});
+
+test("a second owner cannot interrupt or control a live benchmark", async (t) => {
+  const { runtime, config, application } = await fixture(t);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a")], metric_revision: revision });
+    const body = JSON.parse(String(options?.body));
+    if (input.endsWith("/protocol")) return Response.json(protocolData(body.case_ids));
+    if (input.endsWith("/context")) { await held; return Response.json(contextData(body.case_id)); }
+    return Response.json(evaluationData);
+  });
+  const started = await runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 2 });
+  const reader = new PiBenchmarkRuntime(config, application);
+  try {
+    assert.equal(reader.get(started.run_id)!.status, "running");
+    assert.throws(() => reader.stop(started.run_id));
+    await assert.rejects(reader.start({ provider: "test", model: "fixed", confirmModelCalls: 2 }));
+  } finally { release(); await nextTurn(); }
+  assert.equal((await settled(runtime, started.run_id)).status, "completed");
+});
+
+
+test("failed case admission rolls back its Task and complete run aggregate", async (t) => {
+  const { runtime, application } = await fixture(t);
+  (application.state as SqliteOrchestratorState).database.exec("CREATE TRIGGER reject_case BEFORE INSERT ON benchmark_v2_cases BEGIN SELECT RAISE(ABORT, 'synthetic storage failure'); END");
+  t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a")], metric_revision: revision });
+    return Response.json(protocolData(JSON.parse(String(options?.body)).case_ids));
+  });
+  await assert.rejects(runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 2 }));
+  assert.deepEqual(runtime.history(), []);
+  assert.deepEqual(application.state.tasks.list({ orgId: "org_benchmark", teamId: "team_benchmark", limit: 100 }), []);
+  assert.equal(pi.sessionsCreated, 0);
+});
+
+for (const stage of ["context", "evaluate"] as const) {
+  test("stop aborts a hung " + stage + " request and cancels the linked Task", async (t) => {
+    const { runtime, application } = await fixture(t);
+    let reached!: () => void;
+    const pending = new Promise<void>((resolve) => { reached = resolve; });
+    t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+      if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a"), caseData("b")], metric_revision: revision });
+      const body = JSON.parse(String(options?.body));
+      if (input.endsWith("/protocol")) return Response.json(protocolData(body.case_ids));
+      if (input.endsWith("/" + stage)) return new Promise<Response>((_, reject) => {
+        const abort = () => reject(options!.signal!.reason);
+        if (options?.signal?.aborted) abort();
+        else options?.signal?.addEventListener("abort", abort, { once: true });
+        reached();
+      });
+      return Response.json(contextData(body.case_id));
+    });
+    const started = await runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 4 });
+    await pending;
+    runtime.stop(started.run_id);
+    const result = await settled(runtime, started.run_id);
+    assert.equal(result.status, "stopped");
+    assert.equal(application.getTask(result.task_run_id)!.status, "cancelled");
+    assert.equal(result.completed_calls, stage === "context" ? 0 : 2);
+    assert.equal(result.cases.find((item) => item.case_id === "a")!.status, "cancelled");
+    assert.equal(result.cases.find((item) => item.case_id === "b")!.forge.evidence?.dispatches ?? 0, 0);
+  });
+}
+
+test("shutdown interrupts the linked Task and reopening cannot replay it", async (t) => {
+  const { runtime, config, application } = await fixture(t);
+  let reached!: () => void;
+  const pending = new Promise<void>((resolve) => { reached = resolve; });
+  t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a")], metric_revision: revision });
+    const body = JSON.parse(String(options?.body));
+    if (input.endsWith("/protocol")) return Response.json(protocolData(body.case_ids));
+    return new Promise<Response>((_, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(options.signal!.reason), { once: true });
+      reached();
+    });
+  });
+  const started = await runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 2 });
+  await pending;
+  await runtime.close();
+  const resumed = new PiBenchmarkRuntime(config, application);
+  try {
+    assert.equal(resumed.get(started.run_id)!.status, "interrupted");
+    assert.equal(application.getTask(started.task_run_id)!.status, "failed");
+    assert.throws(() => resumed.resume(started.run_id));
+    assert.equal(pi.sessionsCreated, 0);
+  } finally { await resumed.close(); }
 });

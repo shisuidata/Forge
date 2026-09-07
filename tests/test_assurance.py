@@ -43,6 +43,14 @@ def assurance_registry(tmp_path, monkeypatch):
     return path
 
 
+@pytest.fixture
+def benchmark_assurance_registry(assurance_registry):
+    registry = json.loads(assurance_registry.read_text())
+    registry["assurance_profile"] = {"id": "large-benchmark", "revision": "large-benchmark-v1"}
+    assurance_registry.write_text(json.dumps(registry))
+    return assurance_registry
+
+
 def test_assurance_rejects_unknown_registry_field_without_leaking_enum(assurance_registry):
     with pytest.raises(QueryAssuranceError) as caught:
         assure_query(
@@ -193,7 +201,7 @@ def test_assurance_allows_many_to_one_aggregate_join(assurance_registry):
     ],
 )
 def test_assurance_rejects_omitted_explicit_user_intent(
-    assurance_registry, question, query, message
+    benchmark_assurance_registry, question, query, message
 ):
     with pytest.raises(QueryAssuranceError, match=message) as caught:
         assure_query(query, question, dialect="sqlite")
@@ -201,7 +209,7 @@ def test_assurance_rejects_omitted_explicit_user_intent(
     assert caught.value.report.gates[-1].gate == "intent_fulfillment"
 
 
-def test_assurance_allows_group_rank_used_only_for_filter(assurance_registry):
+def test_assurance_allows_group_rank_used_only_for_filter(benchmark_assurance_registry):
     report = assure_query(
         {
             "scan": "orders",
@@ -223,7 +231,7 @@ def test_assurance_allows_group_rank_used_only_for_filter(assurance_registry):
     assert report.status == "passed"
 
 
-def test_assurance_allows_aggregate_cumulative_spend_without_window(assurance_registry):
+def test_assurance_allows_aggregate_cumulative_spend_without_window(benchmark_assurance_registry):
     report = assure_query(
         {
             "scan": "orders",
@@ -239,7 +247,7 @@ def test_assurance_allows_aggregate_cumulative_spend_without_window(assurance_re
     assert report.status == "passed"
 
 
-def test_assurance_rejects_missing_explicit_display_field(assurance_registry):
+def test_assurance_rejects_missing_explicit_display_field(benchmark_assurance_registry):
     with pytest.raises(QueryAssuranceError, match="用户名") as caught:
         assure_query(
             {
@@ -508,3 +516,39 @@ def test_relation_authorization_uses_dialect_identifier_normalization(assurance_
         assure_direct_sql("WITH users AS (SELECT id FROM orders) SELECT COUNT(*) FROM secret",
                           dialect="snowflake", allowed_tables=["orders"])
     assert caught.value.report.gates[-1].gate == "registry_acl"
+
+
+def test_custom_registry_owns_field_meaning_without_dataset_profile(tmp_path, monkeypatch):
+    from forge.lint import lint_conventions
+
+    path = tmp_path / "custom.registry.json"
+    registry = {"tables": {"dim_user": {"columns": {"id": {}, "user_id": {}}}}}
+    path.write_text(json.dumps(registry))
+    monkeypatch.setattr(cfg, "REGISTRY_PATH", path)
+    query = {"scan": "dim_user", "select": ["dim_user.id"]}
+    # Dataset-specific Chinese field labels cannot override the authoritative schema.
+    generic = assure_query(query, "显示用户ID", dialect="sqlite")
+    assert generic.status == "passed"
+    assert [gate.status for gate in generic.gates if gate.gate in {
+        "convention_policy", "intent_fulfillment"
+    }] == ["not_applicable", "not_applicable"]
+    assert lint_conventions(query, "显示用户ID") == []
+    assert assure_direct_sql("SELECT id FROM dim_user", dialect="sqlite").status == "passed"
+    with pytest.raises(QueryAssuranceError):
+        assure_query(query, "显示用户ID", dialect="sqlite", allowed_tables=[])
+    with pytest.raises(QueryAssuranceError):
+        assure_query({"scan": "dim_user", "select": ["dim_user.missing"]}, "", dialect="sqlite")
+
+    registry["assurance_profile"] = {"id": "large-benchmark", "revision": "large-benchmark-v1"}
+    path.write_text(json.dumps(registry))
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_query(query, "显示用户ID", dialect="sqlite")
+    assert caught.value.report.gates[-1].gate == "convention_policy"
+    assert caught.value.report.gates[-1].revision == "large-benchmark-v1"
+    assert caught.value.report.registry_revision != generic.registry_revision
+    accepted = assure_query({"scan": "dim_user", "select": ["dim_user.user_id"]}, "显示用户ID", dialect="sqlite")
+    assert accepted.status == "passed"
+    registry["assurance_profile"]["revision"] = "unknown-revision"
+    path.write_text(json.dumps(registry))
+    with pytest.raises(QueryAssuranceError):
+        assure_query({"scan": "dim_user", "select": ["dim_user.user_id"]}, "", dialect="sqlite")

@@ -1,21 +1,39 @@
 """
 Forge JSON 约定检查器（Convention Lint）
 
-在编译前对 Forge JSON 做语义级检查，捕获模型"编译能过但业务逻辑错"的情况。
-程序化验证的覆盖率是 100%，模型注意力不是。
+历史large benchmark的语义约定，不是通用Registry或SQL安全校验。
+未显式选择受支持的profile/revision时不运行数据集规则。
 
 用法：
     from forge.lint import lint_conventions
-    warnings = lint_conventions(forge_json, question)
-    # warnings 为空 → 通过；非空 → 反馈给模型修正
+    warnings = lint_conventions(forge_json, question,
+                                profile="large-benchmark", revision="large-benchmark-v1")
+    # warnings 非空 → 按绑定的数据集规则反馈修正
 """
 from __future__ import annotations
 
 import re
 
 
-def lint_conventions(forge_json: dict, question: str) -> list[str]:
-    """检查 Forge JSON 是否违反字段使用约定，返回修复建议列表。"""
+LARGE_BENCHMARK_PROFILE = "large-benchmark"
+LARGE_BENCHMARK_REVISION = "large-benchmark-v1"
+
+
+def validate_profile(profile: str | None, revision: str | None) -> bool:
+    """Profiles are opt-in, pinned policies, never inferred from table names."""
+    if profile is None and revision is None:
+        return False
+    if (profile, revision) != (LARGE_BENCHMARK_PROFILE, LARGE_BENCHMARK_REVISION):
+        raise ValueError("Unknown assurance profile or revision; bind a supported policy explicitly.")
+    return True
+
+
+def lint_conventions(
+    forge_json: dict, question: str, *, profile: str | None = None, revision: str | None = None
+) -> list[str]:
+    """Run historical dataset conventions only under their explicit revision."""
+    if not validate_profile(profile, revision):
+        return []
     warnings: list[str] = []
     q = question
 

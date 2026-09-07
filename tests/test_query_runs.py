@@ -216,7 +216,7 @@ async def test_create_query_run_requires_idempotency_key(client: AsyncClient, qu
     headers = {"X-Pi-Service-Key": "pi-service-secret"}
     response = await _create(client, headers)
     assert response.status_code == 400
-    assert "Idempotency-Key" in response.json()["error"]
+    assert response.json()["code"] == "idempotency_key_required"
 
 
 @pytest.mark.asyncio
@@ -232,7 +232,7 @@ async def test_approval_rejects_changed_sql_hash(client: AsyncClient, query_run_
               "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 409
-    assert "hash" in response.json()["error"].lower()
+    assert response.json()["code"] == "sql_hash_mismatch"
 
 
 @pytest.mark.asyncio
@@ -253,7 +253,7 @@ async def test_approval_rejects_changed_assurance_report_hash(
         },
     )
     assert response.status_code == 409
-    assert "Assurance report hash" in response.json()["error"]
+    assert response.json()["code"] == "assurance_hash_mismatch"
 
 
 @pytest.mark.asyncio
@@ -287,7 +287,7 @@ async def test_approval_rejects_registry_drift(client: AsyncClient, query_run_en
               "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 409
-    assert "Registry changed" in response.json()["error"]
+    assert response.json()["code"] == "registry_drift"
 
 
 @pytest.mark.asyncio
@@ -311,7 +311,7 @@ async def test_approval_rejects_assurance_policy_drift(
         },
     )
     assert response.status_code == 409
-    assert "policy revision changed" in response.json()["error"]
+    assert response.json()["code"] == "policy_revision_drift"
 
 
 @pytest.mark.asyncio
@@ -337,7 +337,7 @@ async def test_approval_rejects_expired_review(client: AsyncClient, query_run_en
               "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 409
-    assert "expired" in response.json()["error"]
+    assert response.json()["code"] == "review_expired"
 
 
 @pytest.mark.asyncio
@@ -358,7 +358,7 @@ async def test_approval_requires_confirmed_database_readonly_account(
               "assurance_report_hash": created["assurance_report_hash"]},
     )
     assert response.status_code == 503
-    assert "read-only" in response.json()["error"]
+    assert response.json()["code"] == "readonly_identity_unconfirmed"
 
 
 @pytest.mark.asyncio
@@ -537,4 +537,113 @@ async def test_invalid_query_candidate_contract_is_rejected(
     )
 
     assert response.status_code == 400
-    assert response.json() == {"status": "error", "error": "Invalid query candidate"}
+    assert response.json()["code"] == "candidate_contract_invalid"
+
+
+@pytest.fixture
+def isolated_approval_store(tmp_path, monkeypatch):
+    import json
+    import sqlite3
+    from config import cfg
+    import forge.executor as executor
+
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"tables": {
+        "numbers": {"columns": {"n": {}}},
+        "missing_table": {"columns": {"n": {}}},
+    }}))
+    for name in ("REGISTRY_PATH", "METRICS_PATH", "DISAMBIGUATIONS_PATH",
+                 "CONVENTIONS_PATH", "BUSINESS_CONTEXT_PATH"):
+        monkeypatch.setattr(cfg, name, registry if name == "REGISTRY_PATH" else tmp_path / name)
+    data = tmp_path / "data.sqlite"
+    with sqlite3.connect(data) as conn:
+        conn.executescript("CREATE TABLE numbers(n INTEGER); INSERT INTO numbers VALUES (1),(2),(3);")
+    monkeypatch.setattr(cfg, "DATABASE_URL", f"sqlite:///{data}")
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "runs.sqlite"))
+    monkeypatch.setattr(cfg, "EXECUTION_ENABLED", True)
+    monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", True)
+    monkeypatch.setattr(cfg, "EXECUTION_MAX_ROWS", 2)
+    monkeypatch.setattr(executor, "_engine", None)
+    yield registry
+    if executor._engine is not None:
+        executor._engine.dispose()
+
+
+async def _review_local_sql(sql, *, revision_override=None):
+    from forge.assurance import assure_direct_sql
+    from forge.query_runs import create_query_run
+
+    def prepare(user_id, question, dialect):
+        report = assure_direct_sql(sql, dialect="sqlite").to_dict()
+        if revision_override:
+            report.update(revision_override)
+        return {"status": "needs_review", "input_kind": "direct_sql", "sql": sql,
+                "dialect": "sqlite", "assurance_report": report}
+
+    return await create_query_run(task_run_id="test", org_id="test", team_id="test",
+                                  user_id="reviewer", question="local", dialect="sqlite",
+                                  idempotency_key="create", prepare_fn=prepare)
+
+
+async def _approve_local_run(run, *, user="reviewer"):
+    from forge.query_runs import approve_and_execute_query_run
+    return await approve_and_execute_query_run(
+        query_run_id=run["query_run_id"], approver_user_id=user,
+        sql_hash=run["sql_hash"], assurance_report_hash=run["assurance_report_hash"],
+        idempotency_key="approve",
+    )
+
+
+@pytest.mark.parametrize(("sql", "rows", "truncated"), [
+    ('SELECT n AS "\u26a0合法列名" FROM numbers WHERE n = 1', [[1]], False),
+    ('SELECT n AS "\u26a0合法列名" FROM numbers WHERE 0', [], False),
+    ('SELECT n AS "\u26a0合法列名" FROM numbers ORDER BY n', [[1], [2]], True),
+])
+async def test_structured_sqlite_approval_success(isolated_approval_store, sql, rows, truncated):
+    run = await _review_local_sql(sql)
+    assert run["status"] == "needs_review"
+    completed = await _approve_local_run(run)
+    assert completed["status"] == "completed"
+    assert completed["result_rows"] == rows
+    assert completed["result_columns"] == ["\u26a0合法列名"]
+    assert bool(completed["truncated"]) is truncated
+    replay = await _approve_local_run(run)
+    assert replay["result_hash"] == completed["result_hash"]
+
+
+async def test_structured_sqlite_approval_failure_and_acl(isolated_approval_store):
+    from forge.query_runs import QueryRunError, get_query_run
+    run = await _review_local_sql("SELECT n FROM missing_table")
+    with pytest.raises(QueryRunError) as denied:
+        await _approve_local_run(run, user="not-reviewer")
+    assert denied.value.code == "approver_not_authorized"
+    assert (await get_query_run(run["query_run_id"]))["status"] == "needs_review"
+    with pytest.raises(QueryRunError) as failed:
+        await _approve_local_run(run)
+    assert failed.value.code == "execution_reference_invalid"
+    persisted = await get_query_run(run["query_run_id"])
+    assert persisted["status"] == "failed" and persisted["error"] == failed.value.code
+
+
+@pytest.mark.parametrize(("field", "revision", "code"), [
+    ("assurance_revision", "query-assurance-v10", "assurance_revision_drift"),
+    ("policy_revision", "convention-policy-v9", "policy_revision_drift"),
+])
+async def test_old_review_revision_fails_closed(isolated_approval_store, field, revision, code):
+    from forge.query_runs import QueryRunError
+    run = await _review_local_sql("SELECT n FROM numbers", revision_override={field: revision})
+    with pytest.raises(QueryRunError) as caught:
+        await _approve_local_run(run)
+    assert caught.value.code == code
+
+
+async def test_profile_change_invalidates_review(isolated_approval_store):
+    import json
+    from forge.query_runs import QueryRunError
+    run = await _review_local_sql("SELECT n FROM numbers")
+    registry = json.loads(isolated_approval_store.read_text())
+    registry["assurance_profile"] = {"id": "large-benchmark", "revision": "large-benchmark-v1"}
+    isolated_approval_store.write_text(json.dumps(registry))
+    with pytest.raises(QueryRunError) as caught:
+        await _approve_local_run(run)
+    assert caught.value.code == "registry_drift"

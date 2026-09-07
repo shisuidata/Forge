@@ -1,0 +1,3140 @@
+{
+  "schema_version": "architecture-quality-review-v1",
+  "date": "2026-09-07",
+  "requirement": "REQ-2026-09-07-060",
+  "baseline_commit": "018317d89edfa0f56c48c865f35c9a45204d9d11",
+  "status": "assessment_complete_implementation_proposals_not_yet_accepted",
+  "scope": {
+    "runtime_source_files": 116,
+    "python_files": 82,
+    "typescript_source_files": 31,
+    "javascript_source_files": 3,
+    "source_lines": 46529,
+    "method": "All selected runtime files structurally parsed; deep review of product boundaries, representative critical paths and high-change modules. Not a line-by-line review of every repository asset.",
+    "excluded": "Third-party dependencies, generated/static vendor assets, full historical reports, private configuration, actual runtime databases/customer data; templates/deployment/contracts reviewed selectively.",
+    "production_source_modified": false,
+    "model_calls": 0,
+    "commit_push_or_deployment": false
+  },
+  "summary": {
+    "product": "定位清晰：Evaluate→Enforce→Explain；工程边界尚未收敛，不建议重写。",
+    "maintainability": "主要风险是生命周期/业务规则的多处实现和适配层承担领域语义，已产生可复现缺陷；大文件只作为导航信号。",
+    "observability": "业务Evidence与hash绑定较强，运维诊断、花费未知性、投递结果及用户可见审计未贯通。",
+    "extensibility": "同类Advisory方法扩展已有复用；新Stage、数据源/方言、policy和多实例运行需要跨多个手工契约演进。",
+    "model_quality": "本次评价领域/状态/Contract建模。LLM统计准确率与确定性正确性独立：既有500题固定候选回评62.6%对62.8%不能证明模型优势，代码重构不承诺提高生成准确率。"
+  },
+  "strengths": [
+    "Pi保持Task权威，Web主链是投影而非另一份持久Task。",
+    "QueryRun审批绑定实际SQL/Assurance/Policy/Registry/hash，CAS/lease恢复不自动重放SQL。",
+    "Evaluate不授予执行权，Explain历史完整性与Enforce当前权限分别验证。",
+    "Pi SDK承担隔离Session/工具/模型交互，应用显式持有业务Task/Attempt，边界本身合理。",
+    "已有immutable domain records、JSON Schema缓存、TypeBox导出与跨语言共享fixture，可逐步复用。"
+  ],
+  "measurements": {
+    "python": {
+      "method": "Python AST static scan; imports include function-local imports. SCC does not imply an import-time crash; line span is a navigation signal, not a quality score. Exact duplicate bodies keep parameter/local names; no semantic clone claim.",
+      "file_count": 82,
+      "lines": 33378,
+      "files": [
+        {
+          "path": "web/router.py",
+          "lines": 3003,
+          "functions": 115
+        },
+        {
+          "path": "forge/compiler.py",
+          "lines": 1764,
+          "functions": 51
+        },
+        {
+          "path": "forge/lint.py",
+          "lines": 1711,
+          "functions": 73
+        },
+        {
+          "path": "forge/hard_accuracy_benchmark.py",
+          "lines": 1468,
+          "functions": 57
+        },
+        {
+          "path": "web/feishu.py",
+          "lines": 1259,
+          "functions": 44
+        },
+        {
+          "path": "forge/query_runs.py",
+          "lines": 940,
+          "functions": 19
+        },
+        {
+          "path": "forge/cli.py",
+          "lines": 878,
+          "functions": 13
+        },
+        {
+          "path": "agent/llm.py",
+          "lines": 849,
+          "functions": 11
+        },
+        {
+          "path": "agent/agent.py",
+          "lines": 834,
+          "functions": 18
+        },
+        {
+          "path": "forge/retriever.py",
+          "lines": 799,
+          "functions": 21
+        },
+        {
+          "path": "forge/accuracy_benchmark.py",
+          "lines": 707,
+          "functions": 33
+        },
+        {
+          "path": "forge/bird_benchmark.py",
+          "lines": 703,
+          "functions": 29
+        },
+        {
+          "path": "forge/reporting.py",
+          "lines": 698,
+          "functions": 36
+        },
+        {
+          "path": "web/routes/settings.py",
+          "lines": 694,
+          "functions": 26
+        },
+        {
+          "path": "forge/assurance.py",
+          "lines": 689,
+          "functions": 21
+        },
+        {
+          "path": "web/routes/product.py",
+          "lines": 653,
+          "functions": 25
+        },
+        {
+          "path": "agent/model_control.py",
+          "lines": 587,
+          "functions": 23
+        },
+        {
+          "path": "agent/pipeline.py",
+          "lines": 569,
+          "functions": 16
+        },
+        {
+          "path": "forge/enforce.py",
+          "lines": 550,
+          "functions": 13
+        },
+        {
+          "path": "forge/explain.py",
+          "lines": 498,
+          "functions": 12
+        },
+        {
+          "path": "forge/quickstart.py",
+          "lines": 478,
+          "functions": 15
+        },
+        {
+          "path": "forge/schema_builder.py",
+          "lines": 462,
+          "functions": 2
+        },
+        {
+          "path": "agent/knowledge.py",
+          "lines": 459,
+          "functions": 17
+        },
+        {
+          "path": "forge/chart.py",
+          "lines": 455,
+          "functions": 13
+        },
+        {
+          "path": "registry/studio.py",
+          "lines": 444,
+          "functions": 25
+        },
+        {
+          "path": "agent/prompts.py",
+          "lines": 430,
+          "functions": 4
+        },
+        {
+          "path": "forge/benchmark_metadata.py",
+          "lines": 423,
+          "functions": 10
+        },
+        {
+          "path": "web/routes/benchmark_v2.py",
+          "lines": 422,
+          "functions": 14
+        },
+        {
+          "path": "agent/memory/ems.py",
+          "lines": 377,
+          "functions": 16
+        },
+        {
+          "path": "forge/evaluation_runs.py",
+          "lines": 363,
+          "functions": 16
+        },
+        {
+          "path": "forge/benchmark_v2.py",
+          "lines": 361,
+          "functions": 13
+        },
+        {
+          "path": "registry/validator.py",
+          "lines": 338,
+          "functions": 6
+        },
+        {
+          "path": "registry/sync.py",
+          "lines": 322,
+          "functions": 7
+        },
+        {
+          "path": "forge/evaluate.py",
+          "lines": 313,
+          "functions": 7
+        },
+        {
+          "path": "web/routes/evaluate.py",
+          "lines": 302,
+          "functions": 9
+        },
+        {
+          "path": "web/routes/accuracy_benchmark.py",
+          "lines": 300,
+          "functions": 29
+        },
+        {
+          "path": "web/feishu_pi.py",
+          "lines": 293,
+          "functions": 11
+        },
+        {
+          "path": "agent/model_quality.py",
+          "lines": 292,
+          "functions": 11
+        },
+        {
+          "path": "forge/executor.py",
+          "lines": 285,
+          "functions": 15
+        },
+        {
+          "path": "agent/audit.py",
+          "lines": 283,
+          "functions": 8
+        },
+        {
+          "path": "forge/benchmark_methods.py",
+          "lines": 277,
+          "functions": 9
+        },
+        {
+          "path": "agent/model_config.py",
+          "lines": 277,
+          "functions": 9
+        },
+        {
+          "path": "agent/memory/extractor.py",
+          "lines": 274,
+          "functions": 9
+        },
+        {
+          "path": "config.py",
+          "lines": 270,
+          "functions": 3
+        },
+        {
+          "path": "web/pi_channel.py",
+          "lines": 267,
+          "functions": 11
+        },
+        {
+          "path": "forge/cache.py",
+          "lines": 248,
+          "functions": 11
+        },
+        {
+          "path": "agent/memory/smp.py",
+          "lines": 239,
+          "functions": 9
+        },
+        {
+          "path": "agent/contracts/governance_semantics.py",
+          "lines": 236,
+          "functions": 6
+        },
+        {
+          "path": "forge/poc.py",
+          "lines": 226,
+          "functions": 12
+        },
+        {
+          "path": "agent/db.py",
+          "lines": 225,
+          "functions": 17
+        },
+        {
+          "path": "web/auth.py",
+          "lines": 220,
+          "functions": 16
+        },
+        {
+          "path": "web/routes/enforce.py",
+          "lines": 211,
+          "functions": 5
+        },
+        {
+          "path": "web/routes/query_runs.py",
+          "lines": 195,
+          "functions": 9
+        },
+        {
+          "path": "agent/memory/wmb.py",
+          "lines": 182,
+          "functions": 4
+        },
+        {
+          "path": "web/routes/registry_studio.py",
+          "lines": 182,
+          "functions": 10
+        },
+        {
+          "path": "main.py",
+          "lines": 181,
+          "functions": 7
+        },
+        {
+          "path": "web/routes/reports.py",
+          "lines": 177,
+          "functions": 14
+        },
+        {
+          "path": "agent/feishu.py",
+          "lines": 174,
+          "functions": 5
+        },
+        {
+          "path": "agent/contracts/product_projection_semantics.py",
+          "lines": 170,
+          "functions": 5
+        },
+        {
+          "path": "forge/context.py",
+          "lines": 168,
+          "functions": 7
+        },
+        {
+          "path": "registry/staging_sync.py",
+          "lines": 168,
+          "functions": 2
+        },
+        {
+          "path": "forge/benchmark_quality.py",
+          "lines": 165,
+          "functions": 4
+        },
+        {
+          "path": "agent/tenant.py",
+          "lines": 165,
+          "functions": 12
+        },
+        {
+          "path": "forge/readiness.py",
+          "lines": 158,
+          "functions": 6
+        },
+        {
+          "path": "agent/memory/__init__.py",
+          "lines": 120,
+          "functions": 8
+        },
+        {
+          "path": "web/feishu_runtime.py",
+          "lines": 119,
+          "functions": 6
+        },
+        {
+          "path": "registry/business_context.py",
+          "lines": 109,
+          "functions": 2
+        },
+        {
+          "path": "forge/normalization.py",
+          "lines": 103,
+          "functions": 2
+        },
+        {
+          "path": "registry/relationships.py",
+          "lines": 98,
+          "functions": 4
+        },
+        {
+          "path": "agent/feedback.py",
+          "lines": 95,
+          "functions": 4
+        },
+        {
+          "path": "agent/contracts/__init__.py",
+          "lines": 86,
+          "functions": 4
+        },
+        {
+          "path": "web/dingtalk_pi.py",
+          "lines": 86,
+          "functions": 5
+        },
+        {
+          "path": "web/routes/memory.py",
+          "lines": 62,
+          "functions": 2
+        },
+        {
+          "path": "forge/adapters.py",
+          "lines": 56,
+          "functions": 5
+        },
+        {
+          "path": "web/routes/explain.py",
+          "lines": 47,
+          "functions": 2
+        },
+        {
+          "path": "web/routes/context.py",
+          "lines": 42,
+          "functions": 1
+        },
+        {
+          "path": "web/pi_client.py",
+          "lines": 38,
+          "functions": 1
+        },
+        {
+          "path": "forge/__init__.py",
+          "lines": 3,
+          "functions": 0
+        },
+        {
+          "path": "registry/__init__.py",
+          "lines": 2,
+          "functions": 0
+        },
+        {
+          "path": "web/routes/__init__.py",
+          "lines": 1,
+          "functions": 0
+        },
+        {
+          "path": "web/__init__.py",
+          "lines": 1,
+          "functions": 0
+        },
+        {
+          "path": "agent/__init__.py",
+          "lines": 0,
+          "functions": 0
+        }
+      ],
+      "largest_functions": [
+        {
+          "path": "forge/schema_builder.py",
+          "symbol": "build_tool_schema",
+          "line": 60,
+          "span": 403,
+          "arguments": 1
+        },
+        {
+          "path": "forge/cli.py",
+          "symbol": "main",
+          "line": 496,
+          "span": 379,
+          "arguments": 0
+        },
+        {
+          "path": "forge/query_runs.py",
+          "symbol": "create_query_run",
+          "line": 315,
+          "span": 281,
+          "arguments": 10
+        },
+        {
+          "path": "forge/compiler.py",
+          "symbol": "_compile",
+          "line": 899,
+          "span": 211,
+          "arguments": 3
+        },
+        {
+          "path": "agent/agent.py",
+          "symbol": "_prepare_query",
+          "line": 110,
+          "span": 202,
+          "arguments": 4
+        },
+        {
+          "path": "forge/enforce.py",
+          "symbol": "prepare_governance_context",
+          "line": 66,
+          "span": 197,
+          "arguments": 7
+        },
+        {
+          "path": "forge/reporting.py",
+          "symbol": "_build_pptx",
+          "line": 395,
+          "span": 190,
+          "arguments": 3
+        },
+        {
+          "path": "forge/query_runs.py",
+          "symbol": "claim_query_run_for_execution",
+          "line": 597,
+          "span": 184,
+          "arguments": 6
+        },
+        {
+          "path": "forge/hard_accuracy_benchmark.py",
+          "symbol": "run_hard_benchmark",
+          "line": 1197,
+          "span": 182,
+          "arguments": 4
+        },
+        {
+          "path": "agent/contracts/governance_semantics.py",
+          "symbol": "validate_governance_review_trace",
+          "line": 57,
+          "span": 180,
+          "arguments": 1
+        },
+        {
+          "path": "agent/agent.py",
+          "symbol": "process",
+          "line": 344,
+          "span": 176,
+          "arguments": 2
+        },
+        {
+          "path": "agent/llm.py",
+          "symbol": "_registry_context",
+          "line": 123,
+          "span": 166,
+          "arguments": 2
+        },
+        {
+          "path": "web/routes/benchmark_v2.py",
+          "symbol": "evaluate_candidate",
+          "line": 261,
+          "span": 162,
+          "arguments": 2
+        },
+        {
+          "path": "forge/benchmark_metadata.py",
+          "symbol": "audit_value_domain",
+          "line": 235,
+          "span": 160,
+          "arguments": 3
+        },
+        {
+          "path": "forge/accuracy_benchmark.py",
+          "symbol": "_project_snapshot",
+          "line": 332,
+          "span": 154,
+          "arguments": 2
+        },
+        {
+          "path": "forge/hard_accuracy_benchmark.py",
+          "symbol": "project_snapshot",
+          "line": 1032,
+          "span": 140,
+          "arguments": 4
+        },
+        {
+          "path": "forge/lint.py",
+          "symbol": "lint_conventions",
+          "line": 17,
+          "span": 138,
+          "arguments": 2
+        },
+        {
+          "path": "agent/llm.py",
+          "symbol": "call",
+          "line": 665,
+          "span": 137,
+          "arguments": 8
+        },
+        {
+          "path": "forge/compiler.py",
+          "symbol": "_join",
+          "line": 1427,
+          "span": 130,
+          "arguments": 3
+        },
+        {
+          "path": "forge/explain.py",
+          "symbol": "project_explain_query_run",
+          "line": 370,
+          "span": 129,
+          "arguments": 1
+        }
+      ],
+      "import_edges": [
+        [
+          "agent.agent",
+          "agent"
+        ],
+        [
+          "agent.agent",
+          "agent.llm"
+        ],
+        [
+          "agent.agent",
+          "agent.memory"
+        ],
+        [
+          "agent.agent",
+          "agent.model_config"
+        ],
+        [
+          "agent.agent",
+          "agent.tenant"
+        ],
+        [
+          "agent.agent",
+          "config"
+        ],
+        [
+          "agent.agent",
+          "forge.assurance"
+        ],
+        [
+          "agent.agent",
+          "forge.cache"
+        ],
+        [
+          "agent.agent",
+          "forge.normalization"
+        ],
+        [
+          "agent.agent",
+          "registry.staging_sync"
+        ],
+        [
+          "agent.agent",
+          "registry.validator"
+        ],
+        [
+          "agent.audit",
+          "config"
+        ],
+        [
+          "agent.contracts.governance_semantics",
+          "agent.contracts"
+        ],
+        [
+          "agent.contracts.product_projection_semantics",
+          "agent.contracts"
+        ],
+        [
+          "agent.db",
+          "config"
+        ],
+        [
+          "agent.feedback",
+          "agent"
+        ],
+        [
+          "agent.feedback",
+          "agent.audit"
+        ],
+        [
+          "agent.feishu",
+          "agent"
+        ],
+        [
+          "agent.feishu",
+          "agent.agent"
+        ],
+        [
+          "agent.feishu",
+          "config"
+        ],
+        [
+          "agent.knowledge",
+          "agent"
+        ],
+        [
+          "agent.knowledge",
+          "agent.db"
+        ],
+        [
+          "agent.knowledge",
+          "agent.llm"
+        ],
+        [
+          "agent.knowledge",
+          "agent.memory"
+        ],
+        [
+          "agent.llm",
+          "agent.model_config"
+        ],
+        [
+          "agent.llm",
+          "agent.prompts"
+        ],
+        [
+          "agent.llm",
+          "config"
+        ],
+        [
+          "agent.llm",
+          "forge.retriever"
+        ],
+        [
+          "agent.llm",
+          "forge.schema_builder"
+        ],
+        [
+          "agent.memory",
+          "agent.memory.ems"
+        ],
+        [
+          "agent.memory",
+          "agent.memory.extractor"
+        ],
+        [
+          "agent.memory",
+          "agent.memory.smp"
+        ],
+        [
+          "agent.memory",
+          "agent.memory.wmb"
+        ],
+        [
+          "agent.memory",
+          "agent.tenant"
+        ],
+        [
+          "agent.memory.ems",
+          "agent.db"
+        ],
+        [
+          "agent.memory.ems",
+          "config"
+        ],
+        [
+          "agent.memory.extractor",
+          "agent"
+        ],
+        [
+          "agent.memory.extractor",
+          "agent.llm"
+        ],
+        [
+          "agent.memory.smp",
+          "agent.db"
+        ],
+        [
+          "agent.memory.wmb",
+          "registry.business_context"
+        ],
+        [
+          "agent.model_config",
+          "agent.model_control"
+        ],
+        [
+          "agent.model_quality",
+          "agent.agent"
+        ],
+        [
+          "agent.model_quality",
+          "agent.llm"
+        ],
+        [
+          "agent.model_quality",
+          "agent.model_config"
+        ],
+        [
+          "agent.model_quality",
+          "agent.model_control"
+        ],
+        [
+          "agent.model_quality",
+          "config"
+        ],
+        [
+          "agent.model_quality",
+          "forge.assurance"
+        ],
+        [
+          "agent.model_quality",
+          "forge.executor"
+        ],
+        [
+          "agent.pipeline",
+          "agent"
+        ],
+        [
+          "agent.pipeline",
+          "agent.agent"
+        ],
+        [
+          "agent.pipeline",
+          "agent.llm"
+        ],
+        [
+          "agent.pipeline",
+          "agent.memory"
+        ],
+        [
+          "agent.pipeline",
+          "agent.tenant"
+        ],
+        [
+          "agent.pipeline",
+          "forge.chart"
+        ],
+        [
+          "agent.tenant",
+          "agent.db"
+        ],
+        [
+          "forge",
+          "forge.compiler"
+        ],
+        [
+          "forge.accuracy_benchmark",
+          "agent.model_config"
+        ],
+        [
+          "forge.accuracy_benchmark",
+          "agent.prompts"
+        ],
+        [
+          "forge.accuracy_benchmark",
+          "forge.benchmark_methods"
+        ],
+        [
+          "forge.assurance",
+          "config"
+        ],
+        [
+          "forge.assurance",
+          "forge.compiler"
+        ],
+        [
+          "forge.assurance",
+          "forge.executor"
+        ],
+        [
+          "forge.assurance",
+          "forge.lint"
+        ],
+        [
+          "forge.assurance",
+          "registry.relationships"
+        ],
+        [
+          "forge.benchmark_metadata",
+          "forge"
+        ],
+        [
+          "forge.benchmark_metadata",
+          "forge.hard_accuracy_benchmark"
+        ],
+        [
+          "forge.benchmark_methods",
+          "forge.compiler"
+        ],
+        [
+          "forge.benchmark_methods",
+          "forge.lint"
+        ],
+        [
+          "forge.bird_benchmark",
+          "agent.prompts"
+        ],
+        [
+          "forge.bird_benchmark",
+          "forge"
+        ],
+        [
+          "forge.bird_benchmark",
+          "forge.benchmark_metadata"
+        ],
+        [
+          "forge.bird_benchmark",
+          "forge.benchmark_v2"
+        ],
+        [
+          "forge.bird_benchmark",
+          "forge.hard_accuracy_benchmark"
+        ],
+        [
+          "forge.bird_benchmark",
+          "web.routes.benchmark_v2"
+        ],
+        [
+          "forge.cache",
+          "config"
+        ],
+        [
+          "forge.cli",
+          "agent.prompts"
+        ],
+        [
+          "forge.cli",
+          "config"
+        ],
+        [
+          "forge.cli",
+          "forge"
+        ],
+        [
+          "forge.cli",
+          "forge.benchmark_metadata"
+        ],
+        [
+          "forge.cli",
+          "forge.benchmark_quality"
+        ],
+        [
+          "forge.cli",
+          "forge.bird_benchmark"
+        ],
+        [
+          "forge.cli",
+          "forge.compiler"
+        ],
+        [
+          "forge.cli",
+          "forge.poc"
+        ],
+        [
+          "forge.cli",
+          "forge.quickstart"
+        ],
+        [
+          "forge.cli",
+          "forge.readiness"
+        ],
+        [
+          "forge.cli",
+          "registry.staging_sync"
+        ],
+        [
+          "forge.cli",
+          "registry.sync"
+        ],
+        [
+          "forge.context",
+          "agent.memory.smp"
+        ],
+        [
+          "forge.context",
+          "config"
+        ],
+        [
+          "forge.enforce",
+          "agent.contracts"
+        ],
+        [
+          "forge.enforce",
+          "config"
+        ],
+        [
+          "forge.enforce",
+          "forge.assurance"
+        ],
+        [
+          "forge.enforce",
+          "forge.evaluate"
+        ],
+        [
+          "forge.evaluate",
+          "agent.contracts"
+        ],
+        [
+          "forge.evaluate",
+          "forge"
+        ],
+        [
+          "forge.evaluate",
+          "forge.assurance"
+        ],
+        [
+          "forge.evaluate",
+          "forge.benchmark_v2"
+        ],
+        [
+          "forge.evaluation_runs",
+          "agent.contracts"
+        ],
+        [
+          "forge.evaluation_runs",
+          "forge"
+        ],
+        [
+          "forge.evaluation_runs",
+          "forge.assurance"
+        ],
+        [
+          "forge.evaluation_runs",
+          "forge.benchmark_v2"
+        ],
+        [
+          "forge.evaluation_runs",
+          "forge.evaluate"
+        ],
+        [
+          "forge.executor",
+          "config"
+        ],
+        [
+          "forge.explain",
+          "agent.contracts"
+        ],
+        [
+          "forge.explain",
+          "config"
+        ],
+        [
+          "forge.explain",
+          "forge.enforce"
+        ],
+        [
+          "forge.hard_accuracy_benchmark",
+          "agent.model_config"
+        ],
+        [
+          "forge.hard_accuracy_benchmark",
+          "agent.prompts"
+        ],
+        [
+          "forge.hard_accuracy_benchmark",
+          "forge.accuracy_benchmark"
+        ],
+        [
+          "forge.hard_accuracy_benchmark",
+          "forge.benchmark_methods"
+        ],
+        [
+          "forge.hard_accuracy_benchmark",
+          "forge.executor"
+        ],
+        [
+          "forge.query_runs",
+          "agent.agent"
+        ],
+        [
+          "forge.query_runs",
+          "agent.contracts"
+        ],
+        [
+          "forge.query_runs",
+          "agent.tenant"
+        ],
+        [
+          "forge.query_runs",
+          "config"
+        ],
+        [
+          "forge.query_runs",
+          "forge.assurance"
+        ],
+        [
+          "forge.query_runs",
+          "forge.enforce"
+        ],
+        [
+          "forge.query_runs",
+          "forge.evaluate"
+        ],
+        [
+          "forge.query_runs",
+          "forge.executor"
+        ],
+        [
+          "forge.query_runs",
+          "forge.explain"
+        ],
+        [
+          "forge.readiness",
+          "config"
+        ],
+        [
+          "forge.retriever",
+          "registry.relationships"
+        ],
+        [
+          "main",
+          "agent.feishu"
+        ],
+        [
+          "main",
+          "agent.model_config"
+        ],
+        [
+          "main",
+          "agent.model_control"
+        ],
+        [
+          "main",
+          "config"
+        ],
+        [
+          "main",
+          "forge.query_runs"
+        ],
+        [
+          "main",
+          "forge.readiness"
+        ],
+        [
+          "main",
+          "web.auth"
+        ],
+        [
+          "main",
+          "web.feishu_pi"
+        ],
+        [
+          "main",
+          "web.feishu_runtime"
+        ],
+        [
+          "main",
+          "web.router"
+        ],
+        [
+          "registry",
+          "registry.sync"
+        ],
+        [
+          "registry",
+          "registry.validator"
+        ],
+        [
+          "registry.business_context",
+          "config"
+        ],
+        [
+          "registry.sync",
+          "registry.studio"
+        ],
+        [
+          "web.auth",
+          "config"
+        ],
+        [
+          "web.dingtalk_pi",
+          "web.pi_channel"
+        ],
+        [
+          "web.feishu",
+          "agent"
+        ],
+        [
+          "web.feishu",
+          "agent.agent"
+        ],
+        [
+          "web.feishu",
+          "agent.memory"
+        ],
+        [
+          "web.feishu",
+          "config"
+        ],
+        [
+          "web.feishu",
+          "forge.chart"
+        ],
+        [
+          "web.feishu",
+          "forge.executor"
+        ],
+        [
+          "web.feishu",
+          "web.feishu_pi"
+        ],
+        [
+          "web.feishu",
+          "web.pi_channel"
+        ],
+        [
+          "web.feishu_pi",
+          "config"
+        ],
+        [
+          "web.feishu_pi",
+          "web.pi_channel"
+        ],
+        [
+          "web.pi_channel",
+          "config"
+        ],
+        [
+          "web.pi_client",
+          "config"
+        ],
+        [
+          "web.router",
+          "agent"
+        ],
+        [
+          "web.router",
+          "agent.agent"
+        ],
+        [
+          "web.router",
+          "agent.audit"
+        ],
+        [
+          "web.router",
+          "agent.db"
+        ],
+        [
+          "web.router",
+          "agent.feedback"
+        ],
+        [
+          "web.router",
+          "agent.knowledge"
+        ],
+        [
+          "web.router",
+          "agent.llm"
+        ],
+        [
+          "web.router",
+          "agent.memory"
+        ],
+        [
+          "web.router",
+          "agent.pipeline"
+        ],
+        [
+          "web.router",
+          "agent.tenant"
+        ],
+        [
+          "web.router",
+          "config"
+        ],
+        [
+          "web.router",
+          "forge.executor"
+        ],
+        [
+          "web.router",
+          "forge.explain"
+        ],
+        [
+          "web.router",
+          "forge.query_runs"
+        ],
+        [
+          "web.router",
+          "registry.staging_sync"
+        ],
+        [
+          "web.router",
+          "registry.validator"
+        ],
+        [
+          "web.router",
+          "web.auth"
+        ],
+        [
+          "web.router",
+          "web.pi_client"
+        ],
+        [
+          "web.router",
+          "web.routes.accuracy_benchmark"
+        ],
+        [
+          "web.router",
+          "web.routes.benchmark_v2"
+        ],
+        [
+          "web.router",
+          "web.routes.context"
+        ],
+        [
+          "web.router",
+          "web.routes.enforce"
+        ],
+        [
+          "web.router",
+          "web.routes.evaluate"
+        ],
+        [
+          "web.router",
+          "web.routes.explain"
+        ],
+        [
+          "web.router",
+          "web.routes.memory"
+        ],
+        [
+          "web.router",
+          "web.routes.product"
+        ],
+        [
+          "web.router",
+          "web.routes.query_runs"
+        ],
+        [
+          "web.router",
+          "web.routes.registry_studio"
+        ],
+        [
+          "web.router",
+          "web.routes.reports"
+        ],
+        [
+          "web.router",
+          "web.routes.settings"
+        ],
+        [
+          "web.routes.accuracy_benchmark",
+          "agent.model_config"
+        ],
+        [
+          "web.routes.accuracy_benchmark",
+          "forge.accuracy_benchmark"
+        ],
+        [
+          "web.routes.accuracy_benchmark",
+          "forge.hard_accuracy_benchmark"
+        ],
+        [
+          "web.routes.accuracy_benchmark",
+          "web.pi_client"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "agent.contracts"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "agent.prompts"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "forge.assurance"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "forge.benchmark_v2"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "forge.bird_benchmark"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "forge.compiler"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "forge.hard_accuracy_benchmark"
+        ],
+        [
+          "web.routes.benchmark_v2",
+          "web.auth"
+        ],
+        [
+          "web.routes.context",
+          "forge.context"
+        ],
+        [
+          "web.routes.context",
+          "web.auth"
+        ],
+        [
+          "web.routes.enforce",
+          "agent.contracts"
+        ],
+        [
+          "web.routes.enforce",
+          "forge.enforce"
+        ],
+        [
+          "web.routes.enforce",
+          "forge.query_runs"
+        ],
+        [
+          "web.routes.enforce",
+          "web.auth"
+        ],
+        [
+          "web.routes.evaluate",
+          "forge.evaluate"
+        ],
+        [
+          "web.routes.evaluate",
+          "forge.evaluation_runs"
+        ],
+        [
+          "web.routes.evaluate",
+          "web.auth"
+        ],
+        [
+          "web.routes.explain",
+          "forge.explain"
+        ],
+        [
+          "web.routes.explain",
+          "forge.query_runs"
+        ],
+        [
+          "web.routes.explain",
+          "web.auth"
+        ],
+        [
+          "web.routes.memory",
+          "agent.memory.smp"
+        ],
+        [
+          "web.routes.memory",
+          "web.auth"
+        ],
+        [
+          "web.routes.product",
+          "agent.contracts.product_projection_semantics"
+        ],
+        [
+          "web.routes.product",
+          "config"
+        ],
+        [
+          "web.routes.product",
+          "web.auth"
+        ],
+        [
+          "web.routes.product",
+          "web.pi_client"
+        ],
+        [
+          "web.routes.product",
+          "web.routes.reports"
+        ],
+        [
+          "web.routes.query_runs",
+          "forge.query_runs"
+        ],
+        [
+          "web.routes.query_runs",
+          "web.auth"
+        ],
+        [
+          "web.routes.registry_studio",
+          "config"
+        ],
+        [
+          "web.routes.registry_studio",
+          "registry.studio"
+        ],
+        [
+          "web.routes.registry_studio",
+          "web.router"
+        ],
+        [
+          "web.routes.reports",
+          "config"
+        ],
+        [
+          "web.routes.reports",
+          "forge.reporting"
+        ],
+        [
+          "web.routes.reports",
+          "web.auth"
+        ],
+        [
+          "web.routes.settings",
+          "agent.llm"
+        ],
+        [
+          "web.routes.settings",
+          "agent.model_config"
+        ],
+        [
+          "web.routes.settings",
+          "agent.model_control"
+        ],
+        [
+          "web.routes.settings",
+          "agent.model_quality"
+        ],
+        [
+          "web.routes.settings",
+          "config"
+        ],
+        [
+          "web.routes.settings",
+          "web.feishu_runtime"
+        ]
+      ],
+      "static_scc": [
+        [
+          "forge.bird_benchmark",
+          "web.routes.benchmark_v2"
+        ],
+        [
+          "web.router",
+          "web.routes.registry_studio"
+        ]
+      ],
+      "layer_edges": [
+        {
+          "from": "agent",
+          "to": "agent",
+          "count": 37
+        },
+        {
+          "from": "agent",
+          "to": "config",
+          "count": 7
+        },
+        {
+          "from": "agent",
+          "to": "forge",
+          "count": 8
+        },
+        {
+          "from": "agent",
+          "to": "registry",
+          "count": 3
+        },
+        {
+          "from": "forge",
+          "to": "agent",
+          "count": 14
+        },
+        {
+          "from": "forge",
+          "to": "config",
+          "count": 9
+        },
+        {
+          "from": "forge",
+          "to": "forge",
+          "count": 39
+        },
+        {
+          "from": "forge",
+          "to": "registry",
+          "count": 4
+        },
+        {
+          "from": "forge",
+          "to": "web",
+          "count": 1
+        },
+        {
+          "from": "main",
+          "to": "agent",
+          "count": 3
+        },
+        {
+          "from": "main",
+          "to": "config",
+          "count": 1
+        },
+        {
+          "from": "main",
+          "to": "forge",
+          "count": 2
+        },
+        {
+          "from": "main",
+          "to": "web",
+          "count": 4
+        },
+        {
+          "from": "registry",
+          "to": "config",
+          "count": 1
+        },
+        {
+          "from": "registry",
+          "to": "registry",
+          "count": 3
+        },
+        {
+          "from": "web",
+          "to": "agent",
+          "count": 23
+        },
+        {
+          "from": "web",
+          "to": "config",
+          "count": 10
+        },
+        {
+          "from": "web",
+          "to": "forge",
+          "count": 21
+        },
+        {
+          "from": "web",
+          "to": "registry",
+          "count": 3
+        },
+        {
+          "from": "web",
+          "to": "web",
+          "count": 32
+        }
+      ],
+      "exact_body_duplicates": [
+        [
+          {
+            "path": "agent/contracts/product_projection_semantics.py",
+            "symbol": "_expected_task_state",
+            "line": 64,
+            "span": 16
+          },
+          {
+            "path": "web/routes/product.py",
+            "symbol": "_task_state",
+            "line": 91,
+            "span": 16
+          }
+        ],
+        [
+          {
+            "path": "agent/memory/smp.py",
+            "symbol": "_ensure_conn",
+            "line": 76,
+            "span": 14
+          },
+          {
+            "path": "agent/knowledge.py",
+            "symbol": "_ensure_conn",
+            "line": 82,
+            "span": 14
+          }
+        ],
+        [
+          {
+            "path": "registry/studio.py",
+            "symbol": "_normalize_type",
+            "line": 410,
+            "span": 11
+          },
+          {
+            "path": "registry/sync.py",
+            "symbol": "_normalize_type",
+            "line": 283,
+            "span": 11
+          }
+        ]
+      ]
+    },
+    "typescript_javascript": {
+      "method": "TypeScript compiler AST parse only; nested callbacks included; spans are navigation signals, not complexity scores.",
+      "file_count": 34,
+      "lines": 13151,
+      "files": [
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "lines": 2113,
+          "functions": 114
+        },
+        {
+          "path": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "lines": 1249,
+          "functions": 79
+        },
+        {
+          "path": "services/pi-orchestrator/src/sqlite-store.ts",
+          "lines": 1101,
+          "functions": 49
+        },
+        {
+          "path": "services/pi-orchestrator/src/server.ts",
+          "lines": 903,
+          "functions": 25
+        },
+        {
+          "path": "web/static/product/product-pages.js",
+          "lines": 746,
+          "functions": 92
+        },
+        {
+          "path": "services/pi-orchestrator/src/product-projections.ts",
+          "lines": 718,
+          "functions": 11
+        },
+        {
+          "path": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "lines": 674,
+          "functions": 55
+        },
+        {
+          "path": "services/pi-orchestrator/src/governance-contracts.ts",
+          "lines": 580,
+          "functions": 16
+        },
+        {
+          "path": "services/pi-orchestrator/src/skill-executor.ts",
+          "lines": 571,
+          "functions": 47
+        },
+        {
+          "path": "services/pi-orchestrator/src/structured-artifact-tools.ts",
+          "lines": 547,
+          "functions": 37
+        },
+        {
+          "path": "services/pi-orchestrator/src/channels/renderer.ts",
+          "lines": 435,
+          "functions": 47
+        },
+        {
+          "path": "services/pi-orchestrator/src/forge/query-run-client.ts",
+          "lines": 395,
+          "functions": 14
+        },
+        {
+          "path": "services/pi-orchestrator/src/chart-artifacts-v2.ts",
+          "lines": 314,
+          "functions": 45
+        },
+        {
+          "path": "services/pi-orchestrator/src/task-store.ts",
+          "lines": 311,
+          "functions": 23
+        },
+        {
+          "path": "services/pi-orchestrator/src/planning.ts",
+          "lines": 211,
+          "functions": 19
+        },
+        {
+          "path": "services/pi-orchestrator/src/config.ts",
+          "lines": 201,
+          "functions": 11
+        },
+        {
+          "path": "services/pi-orchestrator/src/stage-attempts.ts",
+          "lines": 193,
+          "functions": 13
+        },
+        {
+          "path": "services/pi-orchestrator/src/benchmark-contracts.ts",
+          "lines": 183,
+          "functions": 0
+        },
+        {
+          "path": "services/pi-orchestrator/src/report-artifacts.ts",
+          "lines": 181,
+          "functions": 24
+        },
+        {
+          "path": "services/pi-orchestrator/src/skills.ts",
+          "lines": 172,
+          "functions": 15
+        },
+        {
+          "path": "services/pi-orchestrator/src/strict-forge-output.ts",
+          "lines": 162,
+          "functions": 21
+        },
+        {
+          "path": "services/pi-orchestrator/src/channels/identity.ts",
+          "lines": 149,
+          "functions": 6
+        },
+        {
+          "path": "services/pi-orchestrator/src/forge/client.ts",
+          "lines": 136,
+          "functions": 5
+        },
+        {
+          "path": "services/pi-orchestrator/src/artifacts.ts",
+          "lines": 116,
+          "functions": 6
+        },
+        {
+          "path": "services/pi-orchestrator/src/runtime.ts",
+          "lines": 112,
+          "functions": 4
+        },
+        {
+          "path": "services/pi-orchestrator/src/channels/intent.ts",
+          "lines": 109,
+          "functions": 2
+        },
+        {
+          "path": "services/pi-orchestrator/src/channels/contracts.ts",
+          "lines": 108,
+          "functions": 2
+        },
+        {
+          "path": "services/pi-orchestrator/src/model-bindings.ts",
+          "lines": 104,
+          "functions": 3
+        },
+        {
+          "path": "services/pi-orchestrator/src/tools/forge-prepare-query.ts",
+          "lines": 87,
+          "functions": 3
+        },
+        {
+          "path": "services/pi-orchestrator/src/task-events.ts",
+          "lines": 80,
+          "functions": 4
+        },
+        {
+          "path": "services/pi-orchestrator/src/skill-policy.ts",
+          "lines": 67,
+          "functions": 4
+        },
+        {
+          "path": "web/static/product/product-shell.js",
+          "lines": 64,
+          "functions": 8
+        },
+        {
+          "path": "web/static/accuracy-benchmark.js",
+          "lines": 37,
+          "functions": 73
+        },
+        {
+          "path": "services/pi-orchestrator/src/channels/event-store.ts",
+          "lines": 22,
+          "functions": 0
+        }
+      ],
+      "largest_functions": [
+        {
+          "path": "services/pi-orchestrator/src/server.ts",
+          "symbol": "createOrchestratorServer",
+          "line": 223,
+          "span": 670
+        },
+        {
+          "path": "services/pi-orchestrator/src/server.ts",
+          "symbol": "<callback>",
+          "line": 250,
+          "span": 635
+        },
+        {
+          "path": "services/pi-orchestrator/src/channels/renderer.ts",
+          "symbol": "renderChannelPresentation",
+          "line": 96,
+          "span": 340
+        },
+        {
+          "path": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "symbol": "#runArm",
+          "line": 733,
+          "span": 334
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "renderReport",
+          "line": 1684,
+          "span": 250
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "ingestChannelAction",
+          "line": 624,
+          "span": 209
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "ingestChannelMessage",
+          "line": 416,
+          "span": 207
+        },
+        {
+          "path": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "symbol": "start",
+          "line": 278,
+          "span": 177
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "approveQuery",
+          "line": 1159,
+          "span": 173
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "resumeAnalysisWithSupplement",
+          "line": 1421,
+          "span": 155
+        },
+        {
+          "path": "services/pi-orchestrator/src/governance-contracts.ts",
+          "symbol": "validateGovernanceReviewTrace",
+          "line": 448,
+          "span": 133
+        },
+        {
+          "path": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "symbol": "#processCase",
+          "line": 605,
+          "span": 127
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "prepareQuery",
+          "line": 1032,
+          "span": 126
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "runAdvisory",
+          "line": 277,
+          "span": 117
+        },
+        {
+          "path": "services/pi-orchestrator/src/sqlite-store.ts",
+          "symbol": "SqliteOrchestratorState",
+          "line": 915,
+          "span": 117
+        },
+        {
+          "path": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "symbol": "getTaskDetail",
+          "line": 510,
+          "span": 113
+        },
+        {
+          "path": "services/pi-orchestrator/src/strict-forge-output.ts",
+          "symbol": "createStrictForgeOutput",
+          "line": 26,
+          "span": 106
+        },
+        {
+          "path": "services/pi-orchestrator/src/application.ts",
+          "symbol": "analyzeTask",
+          "line": 1577,
+          "span": 106
+        },
+        {
+          "path": "services/pi-orchestrator/src/product-projections.ts",
+          "symbol": "validateProductProjection",
+          "line": 622,
+          "span": 97
+        },
+        {
+          "path": "services/pi-orchestrator/src/config.ts",
+          "symbol": "loadConfig",
+          "line": 109,
+          "span": 93
+        }
+      ],
+      "imports": [
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "node:fs",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "node:sqlite",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "node:path",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "node:url",
+          "line": 5
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "@earendil-works/pi-coding-agent",
+          "line": 6
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "typebox",
+          "line": 14
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "./application.js",
+          "line": 16
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "./config.js",
+          "line": 17
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "./benchmark-contracts.js",
+          "line": 18
+        },
+        {
+          "from": "services/pi-orchestrator/src/benchmark-runtime.ts",
+          "to": "./strict-forge-output.js",
+          "line": 29
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "node:http",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "node:url",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./application.js",
+          "line": 5
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./benchmark-runtime.js",
+          "line": 6
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./channels/contracts.js",
+          "line": 7
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./channels/identity.js",
+          "line": 8
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./config.js",
+          "line": 9
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./forge/client.js",
+          "line": 10
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./forge/query-run-client.js",
+          "line": 11
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./runtime.js",
+          "line": 12
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./skills.js",
+          "line": 13
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./skill-policy.js",
+          "line": 19
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./sqlite-store.js",
+          "line": 20
+        },
+        {
+          "from": "services/pi-orchestrator/src/server.ts",
+          "to": "./task-store.js",
+          "line": 21
+        },
+        {
+          "from": "services/pi-orchestrator/src/strict-forge-output.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/strict-forge-output.ts",
+          "to": "typebox/compile",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/strict-forge-output.ts",
+          "to": "typebox",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./channels/event-store.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./channels/contracts.js",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./channels/renderer.js",
+          "line": 5
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./channels/intent.js",
+          "line": 6
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./planning.js",
+          "line": 7
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./report-artifacts.js",
+          "line": 13
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./model-bindings.js",
+          "line": 14
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./artifacts.js",
+          "line": 15
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./config.js",
+          "line": 20
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./forge/client.js",
+          "line": 21
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./product-projection-builder.js",
+          "line": 22
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./product-projections.js",
+          "line": 27
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./forge/query-run-client.js",
+          "line": 28
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./skill-executor.js",
+          "line": 36
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./stage-attempts.js",
+          "line": 40
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./structured-artifact-tools.js",
+          "line": 41
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./skills.js",
+          "line": 46
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./skill-policy.js",
+          "line": 51
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./task-store.js",
+          "line": 52
+        },
+        {
+          "from": "services/pi-orchestrator/src/application.ts",
+          "to": "./task-events.js",
+          "line": 61
+        },
+        {
+          "from": "services/pi-orchestrator/src/forge/query-run-client.ts",
+          "to": "./client.js",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/forge/query-run-client.ts",
+          "to": "./client.js",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/config.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/config.ts",
+          "to": "node:fs",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/config.ts",
+          "to": "node:path",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/config.ts",
+          "to": "node:url",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./artifacts.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./channels/contracts.js",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./channels/renderer.js",
+          "line": 5
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./product-projections.js",
+          "line": 6
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./stage-attempts.js",
+          "line": 14
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./task-store.js",
+          "line": 15
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projection-builder.ts",
+          "to": "./task-events.js",
+          "line": 24
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "node:fs",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "node:path",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "node:sqlite",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./channels/event-store.js",
+          "line": 6
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./channels/contracts.js",
+          "line": 10
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./artifacts.js",
+          "line": 11
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./skills.js",
+          "line": 18
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./skill-policy.js",
+          "line": 19
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./stage-attempts.js",
+          "line": 24
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./task-store.js",
+          "line": 31
+        },
+        {
+          "from": "services/pi-orchestrator/src/sqlite-store.ts",
+          "to": "./task-events.js",
+          "line": 43
+        },
+        {
+          "from": "services/pi-orchestrator/src/stage-attempts.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/stage-attempts.ts",
+          "to": "./task-store.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projections.ts",
+          "to": "typebox",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/product-projections.ts",
+          "to": "typebox/value",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/task-store.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/report-artifacts.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/report-artifacts.ts",
+          "to": "./artifacts.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/report-artifacts.ts",
+          "to": "./structured-artifact-tools.js",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/renderer.ts",
+          "to": "../artifacts.js",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/renderer.ts",
+          "to": "../task-events.js",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/renderer.ts",
+          "to": "./contracts.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "node:path",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "@earendil-works/pi-coding-agent",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "./artifacts.js",
+          "line": 11
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "./config.js",
+          "line": 12
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "./model-bindings.js",
+          "line": 13
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "./skills.js",
+          "line": 14
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "./structured-artifact-tools.js",
+          "line": 20
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-executor.ts",
+          "to": "./task-store.js",
+          "line": 33
+        },
+        {
+          "from": "services/pi-orchestrator/src/governance-contracts.ts",
+          "to": "typebox",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/governance-contracts.ts",
+          "to": "typebox/value",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/identity.ts",
+          "to": "node:fs",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/identity.ts",
+          "to": "node:path",
+          "line": 10
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/identity.ts",
+          "to": "../task-store.js",
+          "line": 12
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/identity.ts",
+          "to": "./contracts.js",
+          "line": 13
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/contracts.ts",
+          "to": "../artifacts.js",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/contracts.ts",
+          "to": "../task-events.js",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/contracts.ts",
+          "to": "../task-store.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/model-bindings.ts",
+          "to": "node:fs",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/model-bindings.ts",
+          "to": "node:sqlite",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/model-bindings.ts",
+          "to": "./config.js",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/task-events.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/artifacts.ts",
+          "to": "node:crypto",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/artifacts.ts",
+          "to": "./structured-artifact-tools.js",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/artifacts.ts",
+          "to": "./planning.js",
+          "line": 11
+        },
+        {
+          "from": "services/pi-orchestrator/src/artifacts.ts",
+          "to": "./report-artifacts.js",
+          "line": 12
+        },
+        {
+          "from": "services/pi-orchestrator/src/structured-artifact-tools.ts",
+          "to": "@earendil-works/pi-coding-agent",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/structured-artifact-tools.ts",
+          "to": "typebox",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/structured-artifact-tools.ts",
+          "to": "typebox/format",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/structured-artifact-tools.ts",
+          "to": "typebox/value",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/planning.ts",
+          "to": "./artifacts.js",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/planning.ts",
+          "to": "./channels/intent.js",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/skills.ts",
+          "to": "node:fs/promises",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/skills.ts",
+          "to": "node:path",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/skills.ts",
+          "to": "@earendil-works/pi-coding-agent",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/skill-policy.ts",
+          "to": "./skills.js",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/runtime.ts",
+          "to": "node:path",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/runtime.ts",
+          "to": "@earendil-works/pi-coding-agent",
+          "line": 3
+        },
+        {
+          "from": "services/pi-orchestrator/src/runtime.ts",
+          "to": "./config.js",
+          "line": 10
+        },
+        {
+          "from": "services/pi-orchestrator/src/runtime.ts",
+          "to": "./forge/query-run-client.js",
+          "line": 11
+        },
+        {
+          "from": "services/pi-orchestrator/src/runtime.ts",
+          "to": "./skills.js",
+          "line": 12
+        },
+        {
+          "from": "services/pi-orchestrator/src/runtime.ts",
+          "to": "./tools/forge-prepare-query.js",
+          "line": 13
+        },
+        {
+          "from": "services/pi-orchestrator/src/channels/event-store.ts",
+          "to": "./contracts.js",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/tools/forge-prepare-query.ts",
+          "to": "@earendil-works/pi-coding-agent",
+          "line": 1
+        },
+        {
+          "from": "services/pi-orchestrator/src/tools/forge-prepare-query.ts",
+          "to": "typebox",
+          "line": 2
+        },
+        {
+          "from": "services/pi-orchestrator/src/tools/forge-prepare-query.ts",
+          "to": "../forge/client.js",
+          "line": 4
+        },
+        {
+          "from": "services/pi-orchestrator/src/tools/forge-prepare-query.ts",
+          "to": "../forge/query-run-client.js",
+          "line": 5
+        },
+        {
+          "from": "web/static/product/product-pages.js",
+          "to": "./product-shell.js?v=2",
+          "line": 1
+        }
+      ],
+      "parse_diagnostics": []
+    }
+  },
+  "findings": [
+    {
+      "id": "AQ-01",
+      "priority": "P1",
+      "confidence": "isolated_reproduction",
+      "title": "阶段重试先改变Task，再复用已终止Attempt，产生无法正常回收的状态",
+      "refs": [
+        "services/pi-orchestrator/src/application.ts:889-946",
+        "services/pi-orchestrator/src/application.ts:1949-1984",
+        "services/pi-orchestrator/src/stage-attempts.ts:78-84",
+        "services/pi-orchestrator/src/sqlite-store.ts:610-614",
+        "services/pi-orchestrator/src/sqlite-store.ts:1033-1039"
+      ],
+      "observed": "clarify首轮timeout后默认重试，第二次Skill返回合法payload仍报旧attempt已timed_out；SQLite留下task=clarifying/attempt=timed_out/artifact=0，内存却留下needs_input/artifact=1。",
+      "impact": "可重试错误变成重复工作后卡死；仅扫描running attempt的reconcile无法回收该组合。",
+      "counter": "新key可绕开具体反例；runAdvisory已有成功key回放、失败key拒绝的局部正确模式，不是所有重试都坏。",
+      "change": "复用runAdvisory的幂等判定规则，区分同command回放与新attempt；在Task迁移和外部调用之前完成判定。",
+      "acceptance": "timeout/interrupted后新attempt可成功；同成功key不再调用Skill；同失败key处理一致；不得留下running Task+terminal Attempt。"
+    },
+    {
+      "id": "AQ-02",
+      "priority": "P1",
+      "confidence": "isolated_reproduction",
+      "title": "用户取消与真实阶段执行、Attempt收口没有形成同一协议",
+      "refs": [
+        "services/pi-orchestrator/src/application.ts:834-875",
+        "services/pi-orchestrator/src/application.ts:2016-2021",
+        "services/pi-orchestrator/src/skill-executor.ts:423-441",
+        "services/pi-orchestrator/src/sqlite-store.ts:1069-1090"
+      ],
+      "observed": "挂起clarify时cancelTask后Skill收到的signal.aborted仍false；迟到返回后SQLite task=cancelled、attempt仍running、artifact=0；内存则attempt=failed且残留artifact。",
+      "impact": "界面取消不代表底层停止；迟到结果与CAS/事务回滚竞争，掩盖原始错误并让状态解释矛盾。",
+      "counter": "Task终态保护有效；等待查询审批时已有远端取消分支；SQL/发布实际副作用仍持续仅是静态风险，未执行这些外部动作。",
+      "change": "active attempt持有取消句柄；以attempt身份和终态所有权收口late result；明确远端取消与仅停止等待的边界，不宣称所有操作可撤销。",
+      "acceptance": "取消触发真实abort；迟到成功/错误不落Artifact、不改变cancelled、不留下running Attempt；覆盖timeout/cancel竞争。"
+    },
+    {
+      "id": "AQ-03",
+      "priority": "P1",
+      "confidence": "isolated_reproduction",
+      "title": "内存Store和SQLite没有同等事务语义，测试模型可能掩盖生产失败",
+      "refs": [
+        "services/pi-orchestrator/src/application.ts:133-149",
+        "services/pi-orchestrator/src/task-store.ts:281-310",
+        "services/pi-orchestrator/src/sqlite-store.ts:377-432",
+        "services/pi-orchestrator/src/sqlite-store.ts:1017-1030"
+      ],
+      "observed": "AQ-01/AQ-02在相同Application调用下得到不同Task/Attempt/Artifact结果；默认transactions仅调用operation，没有回滚。",
+      "impact": "独立可选tasks/events/artifacts/attempts/transactions可被混搭；新增状态规则要复制到多个存储实现。",
+      "counter": "SQLite的事务、CAS和唯一索引是正确的防线，不能削弱生产语义来让内存测试通过。",
+      "change": "引入不可混搭的State port组合或让核心场景默认临时SQLite；共用纯领域规则，存储仅负责读写。",
+      "acceptance": "相同失败、取消、重试、错误Artifact语料在两个适配器观察一致；不允许持久Store配no-op事务。"
+    },
+    {
+      "id": "AQ-04",
+      "priority": "P1",
+      "confidence": "isolated_reproduction",
+      "title": "数据集专用字段规则进入通用Assurance，污染Registry接入边界",
+      "refs": [
+        "forge/assurance.py:117-123",
+        "forge/lint.py:1033-1050",
+        "forge/assurance.py:305-389"
+      ],
+      "observed": "合成Registry合法声明dim_user.id；等价Direct SQL通过，Forge JSON被large benchmark字段纠错规则拒绝，返回candidate_contract_invalid。",
+      "impact": "客户的权威Registry可能输给硬编码样例表名；改benchmark规则会改变通用产品接受条件。",
+      "counter": "两输入语义可见性本来不同，Direct不执行DSL lint不构成审批绕过；Evaluate仍不授予执行权限。",
+      "change": "分开通用结构规则与绑定dataset/Registry revision的业务policy；显式规则适用域、rule_id/revision及applied/not_applicable，不建立万能规则平台。",
+      "acceptance": "自定义合法Registry通过；原large profile仍拒绝自己的错误字段；未选择profile不运行数据集规则；保留历史基线与policy/approval drift。"
+    },
+    {
+      "id": "AQ-05",
+      "priority": "P1",
+      "confidence": "isolated_reproduction",
+      "title": "公开Evaluate默认auto与Compiler契约冲突",
+      "refs": [
+        "web/routes/evaluate.py:37",
+        "forge/evaluate.py:258-287",
+        "forge/compiler.py:57-90",
+        "forge/query_runs.py:262-266",
+        "agent/agent.py:83-102"
+      ],
+      "observed": "同一orders.id：默认Direct通过，默认Forge JSON为compile_failed；显式sqlite的Forge JSON通过。",
+      "impact": "合法默认请求因输入形态而失败；Evaluate与Enforce方言解析的归属和来源不一致。",
+      "counter": "具体支持方言可用；Direct auto解析与Forge目标方言选择语义不同，不能简单默认sqlite。",
+      "change": "纯方言解析脱离旧Agent；区分requested/resolved dialect并记录来源，依据显式请求或受信绑定选择。",
+      "acceptance": "两输入覆盖省略/auto/具体方言/不支持方言；默认不能落内部compile_failed；评估不能偷偷依赖生产数据库URL。"
+    },
+    {
+      "id": "AQ-06",
+      "priority": "P1",
+      "confidence": "real_executor_with_extracted_finalizer",
+      "title": "执行领域状态依赖展示文本前缀，而非结构化结果",
+      "refs": [
+        "forge/executor.py:185-243",
+        "forge/query_runs.py:856-888"
+      ],
+      "observed": "真实内存SQLite普通SELECT返回[[1]]并完成；仅将合法列别名改为警告标记开头，同样返回[[1]]却被实际收口函数判execution_failed；空结果仍完成。claim和持久化使用合成端口，未验证整条审批链。",
+      "impact": "本地化、格式化或列名可改变执行状态；错误类别和retryability被压成文案。",
+      "counter": "当前前缀确实拦住现有多数错误；不是所有异常都被误当成功。",
+      "change": "明确ExecutionSuccess/ExecutionFailure或领域异常，保留empty/truncated独立语义；展示层只渲染，不参与领域判定。",
+      "acceptance": "警告列名、空结果、截断成功；权限、超时、语法失败具有稳定code；更换展示语言不改变QueryRun状态；统一迁移所有caller。"
+    },
+    {
+      "id": "AQ-07",
+      "priority": "P1",
+      "confidence": "clean_source_wheel_build_and_import",
+      "title": "非editable分发缺少必需资源，构建成功不等于可使用",
+      "refs": [
+        "pyproject.toml:49-57",
+        "forge/compiler.py:32-34",
+        "forge/__init__.py:1",
+        "main.py:148-154"
+      ],
+      "observed": "从018317d已跟踪源码的干净副本构建wheel成功；包内forge/schema.json不存在、templates/static文件数均0；从wheel解包目录import forge即FileNotFoundError。agent/contracts的33个JSON存在。",
+      "impact": "作为可独立采用的开源Runtime，标准包分发首先不能导入；当前editable安装CI掩盖资源打包缺口。",
+      "counter": "已验证的fresh clone/editable Quickstart不因此失效；未执行正式PyPI发布，也未声称当前发布包已被用户使用。",
+      "change": "明确包资源与importlib.resources访问；CI增加构建后离开源码目录的安装/CLI smoke。保留库的依赖范围，增加可复现实测约束或范围端点门禁。",
+      "acceptance": "wheel/sdist包含核心Schema及所声明Web资源；非源码cwd中import、compile与公开Quickstart可用；不靠editable路径补资源。"
+    },
+    {
+      "id": "AQ-08",
+      "priority": "P2",
+      "confidence": "isolated_function_reproduction",
+      "title": "上游故障被映射成资源不存在，已有领域code在HTTP边界丢失",
+      "refs": [
+        "web/router.py:976-980",
+        "web/router.py:1016-1024",
+        "web/pi_client.py:28-37",
+        "web/routes/query_runs.py:49-53"
+      ],
+      "observed": "合成task GET状态200→Web200、404→404、500/503→404 not_found；QueryRun异常已有code，但旧适配只返回error文案。",
+      "impact": "用户和监控采取错误的恢复动作，无法区分Task不存在、服务失联与协议错误。",
+      "counter": "跨scope不可见保持404是正确的；新Product BFF已有更合理错误适配可复用。",
+      "change": "窄的统一错误适配，保留安全code与request_id；真实not-found/不可见和upstream unavailable分开。",
+      "acceptance": "200/404/不可见403/500/503/invalid JSON矩阵正确；不泄露scope或raw异常。"
+    },
+    {
+      "id": "AQ-09",
+      "priority": "P2",
+      "confidence": "traced_paths_and_projection_probe",
+      "title": "业务证据强，运维诊断和用户可见审计未串联当前主链",
+      "refs": [
+        "main.py:38-42",
+        "web/pi_client.py:17-25",
+        "web/router.py:878-915",
+        "web/router.py:2474-2485",
+        "web/router.py:2094-2148",
+        "agent/audit.py:35-48",
+        "services/pi-orchestrator/src/stage-attempts.ts:22-42",
+        "web/static/product/product-pages.js:566-629"
+      ],
+      "observed": "Attempt旧flow投影丢error/model_revision/skill_policy_version；主Product详情未渲染已有attempts.safe_error。Audit页/今日legacy查询指标只读旧audit，不是Pi QueryRun的完整视图。",
+      "impact": "失败在哪层、哪个build、是否已花费和可否重放不能沿一条可检索链回答；日志与审计易被误解为同一种证据。",
+      "counter": "已有Task correlation_id、QueryRun hashes/lineage和Attempt版本；Dashboard另有governed QueryRun块，不是完全无关联或无审计。",
+      "change": "复用现有task/query/attempt IDs传播request/trace；结构化安全error/build/stage/usage_status；Audit做标明来源的只读联合投影，UI展示已授权safe_error。",
+      "acceptance": "按任一业务ID关联Web→Pi→Forge；失败区分not_started/known/unknown花费；存储失联显示partial而非0；默认不记录SQL rows/凭证。"
+    },
+    {
+      "id": "AQ-10",
+      "priority": "P2",
+      "confidence": "static_call_chain",
+      "title": "浏览器把未知投递结果当未发送，重试生成新命令身份",
+      "refs": [
+        "web/static/product/product-pages.js:225-235",
+        "web/static/product/product-pages.js:512-524",
+        "web/static/product/product-pages.js:668-675",
+        "web/router.py:938-950",
+        "services/pi-orchestrator/src/application.ts:433-481"
+      ],
+      "observed": "每次submit生成新message_id，Pi以该ID去重；catch保留输入但显示未发送。未真实断网复现。",
+      "impact": "已被Pi接受但响应丢失时重发可能新建Task和重复模型工作；不能由此断言同一SQL一定重复执行。",
+      "counter": "Pi已实现同event去重，QueryRun审批另有hash和幂等保护。",
+      "change": "浏览器保留待确认command ID，transport failure表示结果未知；重试同命令沿用同ID，不复制Task真相源。",
+      "acceptance": "接受后丢响应再重试只产生一个ChannelEvent/Task；更改内容才新建ID；可以回查原命令结果。"
+    },
+    {
+      "id": "AQ-11",
+      "priority": "P2",
+      "confidence": "static_call_chain",
+      "title": "Benchmark拥有专用运行引擎，但关联Task生命周期及多owner边界未收口",
+      "refs": [
+        "services/pi-orchestrator/src/benchmark-runtime.ts:233-261",
+        "services/pi-orchestrator/src/benchmark-runtime.ts:360-442",
+        "services/pi-orchestrator/src/benchmark-runtime.ts:590-602",
+        "services/pi-orchestrator/src/benchmark-runtime.ts:1082-1097",
+        "services/pi-orchestrator/src/benchmark-runtime.ts:1159-1169"
+      ],
+      "observed": "application调用仅createTask，run完成/失败更新Benchmark表而不推进父Task；启动即中断所有活动run，无owner判别；context/evaluate fetch缺deadline/abort。并发后果未实测。",
+      "impact": "Task与Benchmark展示可能矛盾；不能直接靠增加worker横向扩容；停止模型arm不等于停止挂起的下游评分请求。",
+      "counter": "固定预算、单派发、禁止重放模型等专用语义必须保留；不是Python争夺Pi主状态。",
+      "change": "保留case/evaluation算法，收口aggregate生命周期、Task关联和单owner/lease；Forge端口统一deadline/abort，不套普通Skill自动重试。",
+      "acceptance": "零模型运行的Task/run终态一致；并发create只有一个admitted；第二owner不干扰活动run；挂起端口能停止。"
+    },
+    {
+      "id": "AQ-12",
+      "priority": "P2",
+      "confidence": "static_call_chain",
+      "title": "ExecutionPlan是手工同步的影子进度，失败和取消可能留下running步骤",
+      "refs": [
+        "services/pi-orchestrator/src/planning.ts:136-208",
+        "services/pi-orchestrator/src/application.ts:1601-1677",
+        "services/pi-orchestrator/src/application.ts:1913-1928",
+        "services/pi-orchestrator/src/product-projection-builder.ts:196-225"
+      ],
+      "observed": "实际执行由Application方法和TaskStatus驱动，不消费depends_on调度；开始/成功更新计划，但部分失败/取消/reconcile没有计划收口。",
+      "impact": "新增阶段需要多处补同步，否则Task/Attempt/Plan互相矛盾。",
+      "counter": "当前固定模板无需通用DAG调度器；未找到外部任意图执行入口，不把多节点环检查缺少夸大成漏洞。",
+      "change": "明确Plan为投影，从权威Task/Attempt事件派生，或在同一Stage完成事务更新全部状态。",
+      "acceptance": "失败、取消、超时、恢复后计划不保留与Task终态冲突的running步骤。"
+    },
+    {
+      "id": "AQ-13",
+      "priority": "P2",
+      "confidence": "AST_and_traced_imports",
+      "title": "依赖方向与导入生命周期混杂，单纯拆大文件不能降低耦合",
+      "refs": [
+        "forge/bird_benchmark.py:253",
+        "forge/bird_benchmark.py:366",
+        "forge/bird_benchmark.py:537",
+        "web/routes/benchmark_v2.py:64-70",
+        "web/routes/registry_studio.py:62-65",
+        "web/router.py:48-70",
+        "forge/query_runs.py:262-266",
+        "agent/memory/__init__.py:120"
+      ],
+      "observed": "存在bird_benchmark↔Web benchmark路由、web.router↔registry_studio两组静态强连通导入；含函数内导入，不代表import-time崩溃。仅解析dialect也导入旧Agent/Memory生命周期。",
+      "impact": "CLI/核心复用被HTTP DTO和旧Agent存储牵制；关闭legacy HTTP不等于不初始化legacy依赖。",
+      "counter": "纯agent.contracts包名不构成坏依赖；旧EMS功能可能仍被合法管理入口使用，不应整体删除。",
+      "change": "业务Benchmark服务下沉、HTTP路由变薄；纯方言解析与授权上下文明确；logging/依赖装配/迁移放composition root或lifespan。沿已有web/routes模式渐进切分。",
+      "acceptance": "核心不依赖Web适配；禁用legacy的纯校验不初始化旧Memory；不丢tenant ACL交集；临时阻断非必需模块仍能跑核心。"
+    },
+    {
+      "id": "AQ-14",
+      "priority": "P2",
+      "confidence": "static_contract_comparison",
+      "title": "新增一等Stage的契约和模型scope仍依赖多处手工同步",
+      "refs": [
+        "services/pi-orchestrator/src/skills.ts:10-50",
+        "services/pi-orchestrator/src/skill-executor.ts:137-165",
+        "services/pi-orchestrator/src/model-bindings.ts:31-45",
+        "services/pi-orchestrator/src/artifacts.ts:19-78",
+        "agent/contracts/__init__.py:17-46",
+        "services/pi-orchestrator/src/structured-artifact-tools.ts:303-306",
+        "services/pi-orchestrator/scripts/export-product-projection-schema.ts:1-6"
+      ],
+      "observed": "同Advisory输出的Skill可轻量复用；新Stage需改输出工具、Artifact、Application、HTTP、planning、model scope及Python Contract。结构schema与额外领域语义并非完全等同。",
+      "impact": "扩展代价集中在跨契约语义一致性，不是缺少一个万能Adapter接口；已有DatabaseAdapter/LLMProviderAdapter声明不证明运行主链可插拔。",
+      "counter": "已有Product Projection的TypeBox导出和Governance共享反例fixture，应复用；不要取消allowlist或退化为execute(any)。",
+      "change": "按契约族确定现有owner；可导出的结构继续生成，跨语言业务约束用共享正反例；小型Skill/Stage描述统一身份/输出/model scope/证据要求，业务步骤保持显式。",
+      "acceptance": "新增Advisory与新Stage各做一次变更面演练；Python/TS消费同语料并一致接受/拒绝；model scope不靠字符串猜测。"
+    },
+    {
+      "id": "AQ-15",
+      "priority": "P2",
+      "confidence": "document_and_entrypoint_comparison",
+      "title": "稳定架构入口仍描述旧产品主链，误导未来维护者的边界判断",
+      "refs": [
+        "docs/architecture.md:5-43",
+        "docs/current-project-state.md:9-34",
+        "docs/product-north-star.md:68-76",
+        "main.py:128-146",
+        "web/router.py:1635-1644"
+      ],
+      "observed": "当前北极星是Trust Runtime，architecture.md仍把NL→Forge JSON及agent.agent描述为主调度。旧HTTP主流程实际受回滚开关约束。",
+      "impact": "新功能容易继续堆到旧Agent/巨型router；文档上的稳定入口与真实权威顺序冲突。",
+      "counter": "保留Chat作为渠道不等于产品定位错误；不能仅因有legacy代码就删除仍受支持的回滚能力。",
+      "change": "校正现状图和路径地图，明确current/legacy/experimental；退休旧能力必须按真实调用者做完整cutover。",
+      "acceptance": "文档能准确指出Evaluate/Enforce/Explain、Pi主Task及legacy开关；不存在第二份自称当前主架构的矛盾说明。"
+    },
+    {
+      "id": "AQ-16",
+      "priority": "P2",
+      "confidence": "static_call_chain",
+      "title": "渠道投递与Conversation视图缺少独立的恢复边界",
+      "refs": [
+        "web/feishu_pi.py:58-131",
+        "web/feishu_runtime.py:31-79",
+        "web/static/product/product-pages.js:440-475",
+        "web/static/product/product-pages.js:262-267"
+      ],
+      "observed": "飞书送达失败主要为无receipt的日志；进程alive不等于channel connected。Conversation缺少Task面板已有的epoch防乱序；前端自行禁用服务端enabled action。未做真实外部投递/浏览器乱序测试。",
+      "impact": "任务执行、消息送达、页面呈现三种状态容易混淆；恢复操作可能误发新任务。",
+      "counter": "Task不应因渠道断开而自动取消；已存在重连日志、BFF安全投影和局部epoch模式。",
+      "change": "将投递receipt与业务Task分离，仅重送presentation；复用现有epoch/当前ID检查；渠道能力availability由投影明确给出。",
+      "acceptance": "任务完成而投递失败可定位原Task并仅重送；乱序A/B响应只呈现当前对话；进程存活与渠道连接状态可区分。"
+    }
+  ],
+  "experiments": {
+    "evaluate": {
+      "method": "Temporary synthetic Registry; config dependency isolated; no SQL/model/network execution.",
+      "cases": [
+        {
+          "name": "default_direct",
+          "status": "passed"
+        },
+        {
+          "name": "default_forge_json",
+          "status": "compile_failed"
+        },
+        {
+          "name": "explicit_sqlite_forge_json",
+          "status": "passed"
+        },
+        {
+          "name": "custom_dim_user_id_direct",
+          "status": "passed"
+        },
+        {
+          "name": "custom_dim_user_id_forge_json",
+          "status": "candidate_contract_invalid"
+        }
+      ]
+    },
+    "stage_lifecycle": {
+      "method": "Actual OrchestratorApplication; injected non-network Skill/Forge ports; temporary SQLite and in-memory stores; sandbox denied real config/runtime/network.",
+      "timeout_retry": {
+        "memory": {
+          "task": "needs_input",
+          "attempt": "timed_out",
+          "artifact_count": 1,
+          "skill_calls": 2
+        },
+        "sqlite": {
+          "task": "clarifying",
+          "attempt": "timed_out",
+          "artifact_count": 0,
+          "skill_calls": 2
+        }
+      },
+      "cancel_late_result": {
+        "signal_aborted": false,
+        "memory": {
+          "task": "cancelled",
+          "attempt": "failed",
+          "artifact_count": 1
+        },
+        "sqlite": {
+          "task": "cancelled",
+          "attempt": "running",
+          "artifact_count": 0
+        }
+      }
+    },
+    "http_projection": {
+      "method": "Extracted unmodified route/projection functions with synthetic upstream responses; not a live HTTP/UI experiment.",
+      "status_pairs": [
+        [
+          200,
+          200
+        ],
+        [
+          404,
+          404
+        ],
+        [
+          500,
+          404
+        ],
+        [
+          503,
+          404
+        ]
+      ],
+      "dropped_attempt_fields": [
+        "error",
+        "model_revision",
+        "skill_policy_version"
+      ]
+    },
+    "wheel": {
+      "wheel": "forge-0.1.0-py3-none-any.whl",
+      "forge_schema_present": false,
+      "template_files": 0,
+      "static_files": 0,
+      "agent_contract_json_files": 33,
+      "cli_import": {
+        "status": "failed",
+        "exception": "FileNotFoundError",
+        "message": "[Errno 2] No such file or directory: '<installed-wheel>/forge/schema.json'"
+      }
+    },
+    "execution_result": {
+      "method": "Real execute_with_metadata against in-memory SQLite plus extracted unmodified approval finalizer. Claim/persistence are synthetic ports; full approval/ACL protocol not exercised.",
+      "cases": [
+        {
+          "case": "ordinary",
+          "actual_rows": [
+            [
+              1
+            ]
+          ],
+          "finalizer": {
+            "status": "completed"
+          }
+        },
+        {
+          "case": "warning_column_alias",
+          "actual_rows": [
+            [
+              1
+            ]
+          ],
+          "finalizer": {
+            "status": "failed",
+            "code": "execution_failed",
+            "error_type": "QueryRunError"
+          }
+        },
+        {
+          "case": "empty_success",
+          "actual_rows": [],
+          "finalizer": {
+            "status": "completed"
+          }
+        }
+      ],
+      "model_calls": 0
+    },
+    "investigation_notes": [
+      "Initial source archive included uv.lock, but uv.lock is intentionally gitignored and not in HEAD; retried using tracked paths only. No repository lock drift finding is asserted.",
+      "Initial wheel probe failed at import forge before its error capture; corrected capture and obtained the same missing-schema result.",
+      "Execution probe first disposed its in-memory SQLite engine on the wrong thread; fixed probe cleanup and repeated identical business results without the cleanup warning.",
+      "Wheel build used uv 0.10.7 and a fresh isolated backend environment; this may fetch public build dependencies. No model/provider or production-service calls were made."
+    ]
+  },
+  "target_dependency_direction": [
+    "HTTP/CLI/channel adapters -> application use cases -> pure domain contracts/rules.",
+    "Storage/SQL engine/Pi SDK implementations satisfy explicit ports; core must not import HTTP routers.",
+    "Pi Task/Attempt remains business execution authority; Plan/UI/Audit are typed projections, not extra task stores.",
+    "Benchmark keeps dedicated datasets/scoring/budget semantics but shares explicit lifecycle/transport guarantees, not generic automatic retries."
+  ],
+  "optimization_packages": [
+    {
+      "id": "OP-1",
+      "name": "外部入口与分发闭环",
+      "findings": [
+        "AQ-05",
+        "AQ-07"
+      ],
+      "depends_on": [],
+      "gate": "默认请求契约明确；非editable包在非源码目录完成CLI/Quickstart；不依赖生产配置解析。"
+    },
+    {
+      "id": "OP-2",
+      "name": "阶段生命周期与State一致性",
+      "findings": [
+        "AQ-01",
+        "AQ-02",
+        "AQ-03"
+      ],
+      "depends_on": [],
+      "gate": "内存/SQLite同场景一致，重试不重复终止attempt，取消真实传播且late result无副作用。"
+    },
+    {
+      "id": "OP-3",
+      "name": "通用规则边界与结构化执行结果",
+      "findings": [
+        "AQ-04",
+        "AQ-06"
+      ],
+      "depends_on": [],
+      "gate": "自定义Registry不被样例规则否决；错误不靠文案；保留旧profile和版本漂移保护。"
+    },
+    {
+      "id": "OP-4",
+      "name": "错误传播、诊断与投递恢复",
+      "findings": [
+        "AQ-08",
+        "AQ-09",
+        "AQ-10",
+        "AQ-16"
+      ],
+      "depends_on": [],
+      "gate": "安全error code、业务ID和request关联贯通；未知投递/未知成本不冒充未开始；重送不重跑Task。"
+    },
+    {
+      "id": "OP-5",
+      "name": "核心边界与文档收敛",
+      "findings": [
+        "AQ-13",
+        "AQ-15"
+      ],
+      "depends_on": [],
+      "gate": "分离纯规则与导入副作用，移除核心对Web依赖，保留授权交集；文档准确标记current/legacy。"
+    },
+    {
+      "id": "OP-6",
+      "name": "扩展与派生状态一致性",
+      "findings": [
+        "AQ-11",
+        "AQ-12",
+        "AQ-14"
+      ],
+      "depends_on": [
+        "OP-2"
+      ],
+      "gate": "Task/Benchmark/Plan终态一致；按契约族单一owner+共享语料；单实例边界或owner保证可验证。"
+    }
+  ],
+  "recommended_first_batch": [
+    "OP-1",
+    "OP-2",
+    "OP-3"
+  ],
+  "not_recommended": [
+    "全量重写或现在拆更多微服务。",
+    "为减少行数把Evaluate、Enforce、Explain折叠为万能处理器。",
+    "把所有Store改成万能Repository，或用no-op事务迁就测试。",
+    "取消Skill allowlist/审批/失败关闭，或将全部lint降为warning。",
+    "为了统一模块而重写既有历史成绩、偷偷继续付费实验或把旧协议改成新运行。"
+  ],
+  "verification_limits": [
+    "No full suite was rerun for an assessment-only task. The previous green release CI does not refute the newly exercised edge cases.",
+    "No production load, multi-process ownership, real customer database, live provider/Feishu/Dingtalk or browser visual testing. Static concurrency/delivery/UI risks remain hypotheses, clearly separated from reproduced failures.",
+    "Every recommendation requires a scoped implementation decision; no architecture migration is authorized by this report alone."
+  ]
+}

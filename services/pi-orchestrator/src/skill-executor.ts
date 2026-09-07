@@ -12,7 +12,6 @@ import type { Artifact } from "./artifacts.js";
 import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
 import { resolveStageModelBinding, skillModelStage } from "./model-bindings.js";
 import {
-  EVIDENCE_REQUIRED_SKILL_NAMES,
   loadStageSkillResources,
   type AdvisorySkillName,
   type MvpSkillName,
@@ -31,6 +30,7 @@ import {
   type RenderedOutputPayload,
 } from "./structured-artifact-tools.js";
 import type { TaskRun } from "./task-store.js";
+import { skillDescriptor, STAGE_OUTPUTS } from "./stage-descriptors.js";
 
 export class SkillExecutionError extends Error {}
 
@@ -314,9 +314,7 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     const submission = createAdvisorySubmissionTool({
       skillName,
       allowedEvidenceRefs,
-      requiresQueryEvidence: EVIDENCE_REQUIRED_SKILL_NAMES.includes(
-        skillName as (typeof EVIDENCE_REQUIRED_SKILL_NAMES)[number],
-      ),
+      requiresQueryEvidence: skillDescriptor(skillName).evidence === "query_result",
     });
     await this.#runStage({
       task,
@@ -404,6 +402,10 @@ export class PiStructuredSkillExecutor implements StructuredSkillExecutionPort {
     expectedModelRevision?: string | null;
     onProgress?: (progress: StageExecutionProgress) => void;
   }): Promise<void> {
+    const descriptor = skillDescriptor(options.skillName);
+    if (options.tool.name !== STAGE_OUTPUTS[descriptor.output].toolName) {
+      throw new SkillExecutionError("Skill submission tool does not match its authorized output");
+    }
     if (options.message.trim().length === 0) {
       throw new SkillExecutionError("Skill input must not be empty");
     }

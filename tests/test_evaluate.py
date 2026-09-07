@@ -407,3 +407,36 @@ def test_evaluate_cli_rejects_non_object_response(tmp_path: Path, monkeypatch, c
 
     assert caught.value.code == 2
     assert "Evaluate response must be a JSON object" in capsys.readouterr().err
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["direct_sql", "forge_json"])
+@pytest.mark.parametrize("dialect", [None, "auto", "sqlite", "postgresql", "mysql", "bigquery", "snowflake", "unsupported"])
+async def test_dialect_resolution_is_explicit_and_never_uses_production_binding(
+    client, evaluate_registry, monkeypatch, kind, dialect
+):
+    from config import cfg
+    monkeypatch.setattr(cfg, "DATABASE_URL", "postgresql://never-contact.invalid/private")
+    candidate = {"kind": kind, **({"sql": "SELECT orders.id FROM orders"} if kind == "direct_sql"
+                                    else {"forge_json": {"scan": "orders", "select": ["orders.id"]}})}
+    request = _request(candidate)
+    if dialect is None:
+        request.pop("dialect")
+    else:
+        request["dialect"] = dialect
+    response = await client.post("/api/v1/evaluate", json=request)
+    assert response.status_code == 200
+    result = response.json()
+    resolution = result["dialect_resolution"]
+    assert resolution["requested"] == (dialect or "auto")
+    if dialect == "unsupported":
+        assert result["failure"]["code"] == "dialect_unsupported"
+    elif kind == "forge_json" and dialect in {None, "auto"}:
+        assert result["failure"]["code"] == "dialect_required"
+        assert result["compiled_sql"] is None
+        assert resolution["resolved"] is None
+    else:
+        assert result["status"] == "passed", result
+        assert resolution["resolved"] == (dialect or "auto")
+        assert resolution["provenance"] == ("generic_sql_parser" if dialect in {None, "auto"} else "explicit_request")
+    assert result["policy"]["execution_authorized"] is False

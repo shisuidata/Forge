@@ -1,13 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import {
-  validateAdvisoryPayload,
-  validateAnalysisPayload,
-  validateClarificationPayload,
-  validateMetricDefinitionPayload,
-  validateQueryResultPayload,
-  validateRenderedOutputPayload,
-} from "./structured-artifact-tools.js";
+import { structuredArtifactContracts, type StructuredArtifactType } from "./contracts.js";
 import { validateExecutionPlanPayload } from "./planning.js";
 import {
   validateChartPayload,
@@ -17,17 +10,12 @@ import {
 } from "./report-artifacts.js";
 
 export type ArtifactType =
-  | "clarification"
+  | StructuredArtifactType
   | "execution_plan"
   | "chart"
   | "technical_report"
   | "report_bundle"
-  | "publication"
-  | "metric_definition"
-  | "query_result"
-  | "analysis"
-  | "advisory"
-  | "rendered_output";
+  | "publication";
 
 export interface Artifact<TPayload extends Record<string, unknown> = Record<string, unknown>> {
   artifact_id: string;
@@ -54,23 +42,20 @@ export interface ArtifactStore {
   latest(taskRunId: string, artifactType: ArtifactType): Artifact | undefined;
 }
 
+const artifactValidators: Record<ArtifactType, { validate: (value: unknown) => string | undefined }> = {
+  ...structuredArtifactContracts,
+  execution_plan: { validate: validateExecutionPlanPayload },
+  chart: { validate: validateChartPayload },
+  technical_report: { validate: validateTechnicalReportPayload },
+  report_bundle: { validate: validateReportBundlePayload },
+  publication: { validate: validatePublicationPayload },
+};
+
 export function validateArtifactInput<TPayload extends Record<string, unknown>>(
   input: CreateArtifactInput<TPayload>,
 ): void {
-  const validators: Record<ArtifactType, (value: unknown) => string | undefined> = {
-    clarification: validateClarificationPayload,
-    execution_plan: validateExecutionPlanPayload,
-    chart: validateChartPayload,
-    technical_report: validateTechnicalReportPayload,
-    report_bundle: validateReportBundlePayload,
-    publication: validatePublicationPayload,
-    metric_definition: validateMetricDefinitionPayload,
-    query_result: validateQueryResultPayload,
-    analysis: validateAnalysisPayload,
-    advisory: validateAdvisoryPayload,
-    rendered_output: validateRenderedOutputPayload,
-  };
-  const validationError = validators[input.artifactType](input.payload);
+  if (!Object.hasOwn(artifactValidators, input.artifactType)) throw new Error("Unknown Artifact type");
+  const validationError = artifactValidators[input.artifactType].validate(input.payload);
   if (validationError !== undefined) {
     throw new Error(`Invalid ${input.artifactType} Artifact: ${validationError}`);
   }
@@ -82,10 +67,21 @@ export function validateArtifactInput<TPayload extends Record<string, unknown>>(
 export class InMemoryArtifactStore implements ArtifactStore {
   readonly #artifacts = new Map<string, Artifact[]>();
 
+  constructor(private readonly assertTask?: (taskRunId: string) => void) {}
+
+  checkpoint(): () => void {
+    const snapshot = structuredClone(this.#artifacts);
+    return () => {
+      this.#artifacts.clear();
+      for (const [key, value] of snapshot) this.#artifacts.set(key, value);
+    };
+  }
+
   create<TPayload extends Record<string, unknown>>(
     input: CreateArtifactInput<TPayload>,
   ): Artifact<TPayload> {
     validateArtifactInput(input);
+    this.assertTask?.(input.taskRunId);
     const artifact: Artifact<TPayload> = {
       artifact_id: `ar_${randomUUID().replaceAll("-", "")}`,
       artifact_type: input.artifactType,

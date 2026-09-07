@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import type { DatabaseSync } from "node:sqlite";
+import { hostname } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -27,6 +28,8 @@ import type {
   ContextSnapshotV2,
 } from "./benchmark-contracts.js";
 import { createStrictForgeOutput, requireStrictForgeApi, requireStrictForgePayload, StrictForgeOutputError } from "./strict-forge-output.js";
+import { SqliteOrchestratorState } from "./sqlite-store.js";
+import { currentRequestId } from "./request-context.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const forgeSchemaJson = readFileSync(resolve(moduleDir, "../../../forge/schema.json"), "utf8");
@@ -119,6 +122,9 @@ interface PersistedRun {
   completed_at: string | null;
   error: string | null;
 }
+
+interface RuntimeOwner { owner_id: string; host: string; pid: number }
+const TERMINAL_RUN_STATUSES = new Set<BenchmarkRunStatus>(["completed", "failed", "stopped", "interrupted"]);
 
 const emptyArm = (): ArmMetricsV2 => ({
   generation_ms: null,
@@ -225,14 +231,21 @@ export class PiBenchmarkRuntime {
   readonly #controllers = new Map<string, Set<AbortController>>();
   readonly #forgeHeaders: Record<string, string>;
   #modelRuntime: ModelRuntime | undefined;
+  readonly #ownerId = randomUUID();
+  readonly #executions = new Map<string, Promise<void>>();
+  readonly #forgeRequests = new Set<AbortController>();
+  #starting: Promise<BenchmarkRunProjectionV2> | undefined;
+  #closing = false;
+  #closePromise: Promise<void> | undefined;
 
   constructor(
     private readonly config: OrchestratorConfig,
     private readonly application: OrchestratorApplication,
   ) {
-    mkdirSync(dirname(config.stateDbPath), { recursive: true });
-    this.#db = new DatabaseSync(config.stateDbPath);
-    this.#db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;");
+    if (!(application.state instanceof SqliteOrchestratorState)) {
+      throw new Error("Benchmark requires the application SQLite state transaction boundary");
+    }
+    this.#db = application.state.database;
     this.#db.exec(`
       CREATE TABLE IF NOT EXISTS benchmark_v2_runs (
         run_id TEXT PRIMARY KEY, status TEXT NOT NULL, created_at TEXT NOT NULL, data_json TEXT NOT NULL
@@ -245,21 +258,36 @@ export class PiBenchmarkRuntime {
         log_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, case_id TEXT, arm TEXT,
         stage TEXT NOT NULL, level TEXT NOT NULL, message TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS benchmark_runtime_owner (
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1), owner_id TEXT NOT NULL, host TEXT NOT NULL, pid INTEGER NOT NULL
+      ) STRICT;
     `);
     this.#forgeHeaders = { "content-type": "application/json" };
     if (config.forgePiServiceKey) this.#forgeHeaders["x-pi-service-key"] = config.forgePiServiceKey;
-    const active = this.#db.prepare(
-      "SELECT data_json FROM benchmark_v2_runs WHERE status IN ('queued','running','pausing','stopping')",
-    ).all() as Array<{ data_json: string }>;
-    for (const row of active) {
-      const run = parse<PersistedRun>(row.data_json);
-      if (!run.protocol_revision) continue;
-      run.status = "interrupted";
-      run.completed_at = now();
-      run.sequence += 1;
-      this.#saveRun(run);
-      this.#log(run.run_id, null, "shared", "runtime", "warning", "Pi 服务重启：运行已中断，未自动重放模型调用。", {});
-    }
+    application.state.transactions.run(() => {
+      const owner = this.#db.prepare("SELECT owner_id,host,pid FROM benchmark_runtime_owner WHERE singleton=1").get() as RuntimeOwner | undefined;
+      if (owner) {
+        // This SQLite runtime is single-host. Unknown/living owners fail closed; no lease can replay paid work.
+        if (owner.host !== hostname()) return;
+        try { process.kill(owner.pid, 0); return; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") return; }
+      }
+      this.#db.prepare("INSERT OR REPLACE INTO benchmark_runtime_owner VALUES(1,?,?,?)").run(this.#ownerId, hostname(), process.pid);
+      const active = this.#db.prepare(
+        "SELECT data_json FROM benchmark_v2_runs WHERE status IN ('queued','running','pausing','paused','stopping')",
+      ).all() as Array<{ data_json: string }>;
+      for (const row of active) {
+        const run = parse<PersistedRun>(row.data_json);
+        if (!run.protocol_revision) continue;
+        run.status = "interrupted";
+        run.completed_at = now();
+        run.current_case = null;
+        run.sequence += 1;
+        this.#saveRun(run);
+        this.#log(run.run_id, null, "shared", "runtime", "warning", "Previous owner exited: interrupted without replaying model calls.", {});
+      }
+      this.#db.exec("CREATE UNIQUE INDEX IF NOT EXISTS benchmark_one_active_run ON benchmark_v2_runs((1)) WHERE status IN ('queued','running','pausing','paused','stopping') AND json_extract(data_json, '$.protocol_revision') IS NOT NULL");
+    });
   }
 
   async modelOptions(): Promise<Array<{ provider: string; model: string; ready: boolean }>> {
@@ -283,6 +311,14 @@ export class PiBenchmarkRuntime {
     confirmModelCalls?: number;
     protocolManifest?: Record<string, unknown>;
   }): Promise<BenchmarkRunProjectionV2> {
+    this.#assertOwner();
+    if (this.#starting) throw new BenchmarkInputError("A benchmark admission is already in progress");
+    this.#starting = this.#start(options);
+    try { return await this.#starting; }
+    finally { this.#starting = undefined; }
+  }
+
+  async #start(options: Parameters<PiBenchmarkRuntime["start"]>[0]): Promise<BenchmarkRunProjectionV2> {
     if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit <= 0)) throw new BenchmarkInputError("limit must be a positive integer");
     if (options.caseIds !== undefined && (!Array.isArray(options.caseIds) || !options.caseIds.length
       || options.caseIds.some((id) => typeof id !== "string" || !id.trim())
@@ -357,99 +393,105 @@ export class PiBenchmarkRuntime {
     const generationContract: BenchmarkGenerationContractV2 = {
       ...structuredGenerationContract, forge_prompt_revision: protocol.forge_prompt_revision,
     };
-    const created = this.application.createTask({
-      org_id: "org_benchmark",
-      team_id: "team_benchmark",
-      user_id: "benchmark_operator",
-      channel: "api",
-      intent: "pi-native rag dual-subagent benchmark",
-      message: `Benchmark ${cases.length} BIRD cases`,
-      metadata: {
-        benchmark: true,
+    this.#assertOwner();
+    const run = this.application.state.transactions.run(() => {
+      const runId = `pbr_${randomUUID().replaceAll("-", "")}`;
+      const created = this.application.createTask({
+        org_id: "org_benchmark",
+        team_id: "team_benchmark",
+        user_id: "benchmark_operator",
+        channel: "api",
+        intent: "pi-native rag dual-subagent benchmark",
+        message: `Benchmark ${cases.length} BIRD cases`,
+        metadata: {
+          benchmark: true,
+          benchmark_run_id: runId,
+          suite_id: String(suite.suite.suite),
+          provider: options.provider,
+          model: options.model,
+          forge_output_mode: generationContract.forge_output_mode,
+          forge_prompt_revision: generationContract.forge_prompt_revision,
+          forge_schema_revision: generationContract.forge_schema_revision,
+        },
+      });
+      const revision = computePiModelRevision({
+        agentDir: this.config.agentDir,
+        provider: options.provider,
+        modelId: options.model,
+      }) ?? `unresolved:${options.provider}/${options.model}`;
+      const run: PersistedRun = {
+        run_id: runId,
+        task_run_id: created.task.task_run_id,
+        status: "queued",
         suite_id: String(suite.suite.suite),
-        provider: options.provider,
-        model: options.model,
-        forge_output_mode: generationContract.forge_output_mode,
-        forge_prompt_revision: generationContract.forge_prompt_revision,
-        forge_schema_revision: generationContract.forge_schema_revision,
-      },
-    });
-    const revision = computePiModelRevision({
-      agentDir: this.config.agentDir,
-      provider: options.provider,
-      modelId: options.model,
-    }) ?? `unresolved:${options.provider}/${options.model}`;
-    const run: PersistedRun = {
-      run_id: `pbr_${randomUUID().replaceAll("-", "")}`,
-      task_run_id: created.task.task_run_id,
-      status: "queued",
-      suite_id: String(suite.suite.suite),
-      metric_revision: suite.metric_revision,
-      model: {
-        provider: options.provider,
-        model: options.model,
-        revision,
-        temperature: null,
-        max_output_tokens: null,
-      },
-      generation_contract: generationContract,
-      protocol_manifest: protocol.manifest,
-      gold_readiness: goldReadiness,
-      protocol_revision: protocol.protocol_revision,
-      contexts: protocol.contexts,
-      dispatched_calls: 0,
-      total_cases: cases.length,
-      total_calls: modelCalls,
-      sequence: 1,
-      current_case: null,
-      created_at: now(),
-      started_at: null,
-      completed_at: null,
-      error: null,
-    };
-    this.#db.prepare("INSERT INTO benchmark_v2_runs VALUES(?,?,?,?)").run(
-      run.run_id,
-      run.status,
-      run.created_at,
-      JSON.stringify(run),
-    );
-    const insert = this.#db.prepare("INSERT INTO benchmark_v2_cases VALUES(?,?,?,?)");
-    for (const item of cases) {
-      const projection: BenchmarkCaseProjectionV2 = {
-        ...item,
-        status: "pending",
-        current_stage: "queued",
-        context_snapshot: null,
-        failure: null,
-        forge: emptyArm(),
-        direct: emptyArm(),
-        winner: null,
+        metric_revision: suite.metric_revision,
+        model: {
+          provider: options.provider,
+          model: options.model,
+          revision,
+          temperature: null,
+          max_output_tokens: null,
+        },
+        generation_contract: generationContract,
+        protocol_manifest: protocol.manifest,
+        gold_readiness: goldReadiness,
+        protocol_revision: protocol.protocol_revision,
+        contexts: protocol.contexts,
+        dispatched_calls: 0,
+        total_cases: cases.length,
+        total_calls: modelCalls,
+        sequence: 1,
+        current_case: null,
+        created_at: now(),
         started_at: null,
         completed_at: null,
+        error: null,
       };
-      if (blockedIds.has(item.case_id)) {
-        projection.status = "failed";
-        projection.current_stage = "gold_preflight";
-        projection.completed_at = run.created_at;
-        projection.failure = { stage: "gold", code: "gold_execution_failed", retryable: false };
-        for (const arm of ["forge", "direct"] as const) {
-          projection[arm] = { ...emptyArm(), compile_status: "not_applicable", execution_status: "skipped",
-            failure: projection.failure, error_code: "gold_execution_failed",
-            evidence: { dispatches: 0, payload_hash: null, response_output_hash: null } };
+      this.#db.prepare("INSERT INTO benchmark_v2_runs VALUES(?,?,?,?)").run(
+        run.run_id,
+        run.status,
+        run.created_at,
+        JSON.stringify(run),
+      );
+      const insert = this.#db.prepare("INSERT INTO benchmark_v2_cases VALUES(?,?,?,?)");
+      for (const item of cases) {
+        const projection: BenchmarkCaseProjectionV2 = {
+          ...item,
+          status: "pending",
+          current_stage: "queued",
+          context_snapshot: null,
+          failure: null,
+          forge: emptyArm(),
+          direct: emptyArm(),
+          winner: null,
+          started_at: null,
+          completed_at: null,
+        };
+        if (blockedIds.has(item.case_id)) {
+          projection.status = "failed";
+          projection.current_stage = "gold_preflight";
+          projection.completed_at = run.created_at;
+          projection.failure = { stage: "gold", code: "gold_execution_failed", retryable: false };
+          for (const arm of ["forge", "direct"] as const) {
+            projection[arm] = { ...emptyArm(), compile_status: "not_applicable", execution_status: "skipped",
+              failure: projection.failure, error_code: "gold_execution_failed",
+              evidence: { dispatches: 0, payload_hash: null, response_output_hash: null } };
+          }
         }
+        insert.run(run.run_id, item.case_id, projection.status, JSON.stringify(projection));
       }
-      insert.run(run.run_id, item.case_id, projection.status, JSON.stringify(projection));
-    }
-    this.#log(
-      run.run_id,
-      null,
-      "shared",
-      "run",
-      "info",
-      `已创建 Pi Benchmark：${cases.length} cases / ${modelCalls} Sub-Agent calls，模型 ${options.provider}/${options.model}。`,
-      { generation_contract: generationContract },
-    );
-    void this.#execute(run.run_id).catch((error: unknown) => this.#failRun(run.run_id, error));
+      this.#log(
+        run.run_id,
+        null,
+        "shared",
+        "run",
+        "info",
+        `已创建 Pi Benchmark：${cases.length} cases / ${modelCalls} Sub-Agent calls，模型 ${options.provider}/${options.model}。`,
+        { generation_contract: generationContract },
+      );
+      return run;
+    });
+    this.#launch(run.run_id);
     return this.get(run.run_id)!;
   }
 
@@ -479,6 +521,7 @@ export class PiBenchmarkRuntime {
       (sum, item) => sum + (item.forge.generation_ms == null ? 0 : 1) + (item.direct.generation_ms == null ? 0 : 1),
       0,
     );
+    const writable = this.#writable;
     return {
       schema_version: 2,
       projection_type: "pi_benchmark_run_v2",
@@ -488,9 +531,9 @@ export class PiBenchmarkRuntime {
       completed_cases: completed,
       completed_calls: run.dispatched_calls ?? calls,
       controls: {
-        can_pause: Boolean(run.protocol_revision) && run.status === "running",
-        can_resume: run.status === "paused" && Boolean(run.protocol_revision) && hasCurrentGenerationContract(run),
-        can_stop: Boolean(run.protocol_revision) && ["queued", "running", "pausing", "paused"].includes(run.status),
+        can_pause: writable && Boolean(run.protocol_revision) && run.status === "running",
+        can_resume: writable && run.status === "paused" && Boolean(run.protocol_revision) && hasCurrentGenerationContract(run),
+        can_stop: writable && Boolean(run.protocol_revision) && ["queued", "running", "pausing", "paused"].includes(run.status),
       },
       dag: this.#dag(run, cases),
       metrics: this.#metrics(cases, run.total_cases),
@@ -567,7 +610,7 @@ export class PiBenchmarkRuntime {
     const workers = Array.from({ length: this.config.benchmarkConcurrency }, async () => {
       while (true) {
         let current = this.#run(runId);
-        if (["stopping", "failed"].includes(current.status)) return;
+        if (current.status === "stopping" || TERMINAL_RUN_STATUSES.has(current.status)) return;
         if (current.status === "pausing") {
           current.status = "paused";
           current.sequence += 1;
@@ -617,6 +660,7 @@ export class PiBenchmarkRuntime {
       const checkedContext = await this.#forgePost<ContextResponse>(
         "/api/internal/benchmark-v2/context",
         { case_id: caseId, protocol_revision: run.protocol_revision },
+        runId,
       );
       const context = run.contexts?.[caseId];
       if (!context || checkedContext.protocol_revision !== run.protocol_revision ||
@@ -627,7 +671,7 @@ export class PiBenchmarkRuntime {
       }
       requireMetricRevision(run.metric_revision, checkedContext.metric_revision);
       requireMetricRevision(run.metric_revision, context.metric_revision);
-      if (this.#run(runId).status === "failed") {
+      if (["failed", "stopping", "stopped", "interrupted"].includes(this.#run(runId).status)) {
         item.status = "cancelled";
         item.completed_at = now();
         this.#saveCase(runId, item);
@@ -707,9 +751,10 @@ export class PiBenchmarkRuntime {
       item.completed_at = now();
     } catch (error) {
       const message = error instanceof Error ? error.message : "case failed";
-      if (error instanceof MetricRevisionMismatch || error instanceof StrictForgeOutputError) this.#failRun(runId, error);
-      item.status = "failed";
-      item.current_stage = "failed";
+      const cancelled = ["stopping", "stopped", "interrupted"].includes(this.#run(runId).status);
+      if (!cancelled) this.#failRun(runId, error);
+      item.status = cancelled ? "cancelled" : "failed";
+      item.current_stage = item.status;
       item.failure ??= message === "retrieval_insufficient"
         ? { stage: "context", code: "retrieval_insufficient", retryable: true }
         : { stage: "context", code: "context_failed", retryable: true };
@@ -975,6 +1020,7 @@ export class PiBenchmarkRuntime {
       const evaluation = await this.#forgePost<ArmEvaluation>(
         "/api/internal/benchmark-v2/evaluate",
         { case_id: item.case_id, arm, output, context_snapshot: context.context_snapshot, metric_revision: run.metric_revision, protocol_revision: run.protocol_revision },
+        runId,
       );
       requireMetricRevision(run.metric_revision, evaluation.metric_revision);
       if (evaluation.protocol_revision !== run.protocol_revision) throw new MetricRevisionMismatch("Evaluation protocol revision mismatch");
@@ -1080,21 +1126,36 @@ export class PiBenchmarkRuntime {
   }
 
   async #forgeGet<T>(path: string): Promise<T> {
-    const response = await fetch(this.config.forgeBaseUrl + path, { headers: this.#forgeHeaders });
-    if (!response.ok) throw new Error(`Forge ${path} returned ${response.status}`);
-    return await response.json() as T;
+    return this.#forgeRequest<T>(path, { headers: this.#forgeHeaders });
   }
-  async #forgePost<T>(path: string, body: unknown): Promise<T> {
-    const response = await fetch(this.config.forgeBaseUrl + path, {
-      method: "POST",
-      headers: this.#forgeHeaders,
-      body: JSON.stringify(body),
-    });
-    if (response.status === 409) {
-      throw new MetricRevisionMismatch("Benchmark evaluation revision or context mismatch (409)");
+  async #forgePost<T>(path: string, body: unknown, runId?: string): Promise<T> {
+    return this.#forgeRequest<T>(path, { method: "POST", headers: this.#forgeHeaders, body: JSON.stringify(body) }, runId);
+  }
+  async #forgeRequest<T>(path: string, init: RequestInit, runId?: string): Promise<T> {
+    const controller = new AbortController();
+    if (this.#closing) throw new BenchmarkInputError("Benchmark runtime is closing");
+    this.#forgeRequests.add(controller);
+    const controllers = runId ? this.#controllers.get(runId) ?? new Set<AbortController>() : undefined;
+    if (runId && controllers) {
+      controllers.add(controller);
+      this.#controllers.set(runId, controllers);
+      const run = this.#run(runId);
+      if (run.status === "stopping" || TERMINAL_RUN_STATUSES.has(run.status)) controller.abort();
     }
-    if (!response.ok) throw new Error(`Forge ${path} returned ${response.status}`);
-    return await response.json() as T;
+    const timeout = setTimeout(() => controller.abort(new Error("Forge benchmark request timed out")), this.config.forgeTimeoutMs);
+    const headers = new Headers(init.headers);
+    const requestId = currentRequestId();
+    if (requestId) headers.set("x-request-id", requestId);
+    try {
+      const response = await fetch(this.config.forgeBaseUrl + path, { ...init, headers, signal: controller.signal });
+      if (response.status === 409) throw new MetricRevisionMismatch("Benchmark evaluation revision or context mismatch (409)");
+      if (!response.ok) throw new Error(`Forge ${path} returned ${response.status}`);
+      return await response.json() as T;
+    } finally {
+      clearTimeout(timeout);
+      controllers?.delete(controller);
+      this.#forgeRequests.delete(controller);
+    }
   }
   #run(id: string): PersistedRun {
     const row = this.#db.prepare("SELECT data_json FROM benchmark_v2_runs WHERE run_id=?").get(id) as
@@ -1111,11 +1172,13 @@ export class PiBenchmarkRuntime {
     return parse(row.data_json);
   }
   #saveRun(run: PersistedRun): void {
-    this.#db.prepare("UPDATE benchmark_v2_runs SET status=?,data_json=? WHERE run_id=?").run(
-      run.status,
-      JSON.stringify(run),
-      run.run_id,
-    );
+    this.application.state.transactions.run(() => {
+      this.#db.prepare("UPDATE benchmark_v2_runs SET status=?,data_json=? WHERE run_id=?").run(run.status, JSON.stringify(run), run.run_id);
+      // Historical benchmark records may predate the linked Task contract; never fabricate a parent.
+      if (this.application.getTask(run.task_run_id)?.metadata.benchmark_run_id === run.run_id) {
+        this.application.transitionBenchmarkTask({ taskRunId: run.task_run_id, runId: run.run_id, status: run.status, currentStage: `benchmark_${run.status}` });
+      }
+    });
   }
   #saveCase(runId: string, item: BenchmarkCaseProjectionV2): void {
     this.#db.prepare(
@@ -1136,6 +1199,7 @@ export class PiBenchmarkRuntime {
     ).run(runId, caseId, arm, stage, level, message, JSON.stringify(payload), now());
   }
   #control(runId: string, status: BenchmarkRunStatus): BenchmarkRunProjectionV2 {
+    this.#assertOwner();
     const run = this.#run(runId);
     if (!run.protocol_revision || !run.protocol_manifest) throw new Error("Historical runs without a frozen protocol are read-only");
     const allowed: Record<string, string[]> = {
@@ -1158,7 +1222,7 @@ export class PiBenchmarkRuntime {
   }
   #failRun(runId: string, error: unknown): void {
     const run = this.#run(runId);
-    if (["completed", "stopped"].includes(run.status)) return;
+    if (TERMINAL_RUN_STATUSES.has(run.status) || run.status === "stopping") return;
     run.status = "failed";
     run.error = error instanceof Error ? error.message : "runtime failed";
     run.current_case = null;
@@ -1167,6 +1231,43 @@ export class PiBenchmarkRuntime {
     run.sequence += 1;
     this.#saveRun(run);
     this.#log(runId, null, "shared", "run", "error", run.error, {});
+  }
+
+  get #writable(): boolean {
+    const owner = this.#db.prepare("SELECT owner_id FROM benchmark_runtime_owner WHERE singleton=1").get() as { owner_id: string } | undefined;
+    return !this.#closing && owner?.owner_id === this.#ownerId;
+  }
+
+  #assertOwner(): void {
+    if (!this.#writable) throw new BenchmarkInputError("Benchmark runtime is read-only: another owner holds this SQLite database");
+  }
+
+  #launch(runId: string): void {
+    const execution = this.#execute(runId).catch((error: unknown) => this.#failRun(runId, error));
+    this.#executions.set(runId, execution);
+    void execution.then(() => this.#executions.delete(runId), () => this.#executions.delete(runId));
+  }
+
+  close(): Promise<void> {
+    return this.#closePromise ??= this.#shutdown();
+  }
+
+  async #shutdown(): Promise<void> {
+    this.#closing = true;
+    for (const controller of this.#forgeRequests) controller.abort();
+    for (const [runId] of this.#executions) {
+      const run = this.#run(runId);
+      if (!TERMINAL_RUN_STATUSES.has(run.status)) {
+        run.status = "interrupted";
+        run.completed_at = now();
+        run.current_case = null;
+        run.sequence += 1;
+        this.#saveRun(run);
+      }
+      for (const controller of this.#controllers.get(runId) ?? []) controller.abort();
+    }
+    await Promise.allSettled([...this.#executions.values(), ...(this.#starting ? [this.#starting] : [])]);
+    this.#db.prepare("DELETE FROM benchmark_runtime_owner WHERE singleton=1 AND owner_id=?").run(this.#ownerId);
   }
   #metrics(cases: BenchmarkCaseProjectionV2[], totalCases: number): Record<string, unknown> {
     const arm = (name: BenchmarkArm) => {

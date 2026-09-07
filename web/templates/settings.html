@@ -341,7 +341,7 @@
           <p class="text-xs text-gray-500 mt-0.5">保存时验证凭证并热启动 Pi WebSocket 长连接，无需手工重启。</p>
         </div>
         <span class="rounded-full px-2.5 py-1 text-[11px] font-medium {% if feishu_status.process_running %}bg-green-100 text-green-700{% else %}bg-amber-100 text-amber-700{% endif %}">
-          {% if feishu_status.process_running %}长连接运行中{% else %}尚未运行{% endif %}
+          {% if feishu_status.process_running %}进程运行中{% else %}进程未运行{% endif %}
         </span>
       </div>
     </div>
@@ -351,6 +351,7 @@
       <div><p class="text-gray-400">已授权身份</p><p class="mt-1 font-medium text-gray-700">{{ pi_channel_status.identity_count if pi_channel_status.available else '—' }}</p></div>
       <div><p class="text-gray-400">首次绑定</p><p class="mt-1 font-medium {% if pi_channel_status.auto_binding_pending %}text-blue-700{% else %}text-gray-700{% endif %}">{% if pi_channel_status.auto_binding_pending %}等待首位用户消息{% elif pi_channel_status.available %}已关闭{% else %}—{% endif %}</p></div>
     </div>
+    <p class="px-6 pt-4 text-xs text-gray-500">渠道连接：{{ "已断开" if feishu_status.connection_status == "disconnected" else "未知（进程存活不代表渠道已连接）" }}。任务执行与消息投递独立，可在任务详情查看投递回执并仅重送展示。</p>
     {% if feishu_status.last_error %}<div class="mx-6 mt-4 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ feishu_status.last_error }}</div>{% endif %}
     <form method="post" action="/admin/settings/feishu" class="px-6 py-5 space-y-4">
       <div class="grid grid-cols-2 gap-4">

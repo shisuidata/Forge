@@ -14,6 +14,7 @@ def benchmark_api(tmp_path, monkeypatch):
     from config import cfg
     from forge import bird_benchmark as bird
     from web.routes import benchmark_v2 as routes
+    from forge import benchmark_service as service
 
     root = tmp_path / "dataset"
     root.mkdir()
@@ -43,8 +44,8 @@ def benchmark_api(tmp_path, monkeypatch):
     monkeypatch.setattr(bird.hard, "_database_path", lambda _: database)
     monkeypatch.setattr(bird.hard, "_description_dir", lambda _: root)
     monkeypatch.setattr(bird, "PROTOCOL_DIR", tmp_path / "protocols")
-    monkeypatch.setattr(routes, "structure_projection", lambda value: value)
-    monkeypatch.setattr(routes, "_database_path", lambda _: database)
+    monkeypatch.setattr(service, "structure_projection", lambda value: value)
+    monkeypatch.setattr(service, "_database_path", lambda _: database)
     return {"headers": {"X-Pi-Service-Key": "test-pi-key"}, "suite": suite, "database": database, "standard": standard}
 
 
@@ -151,7 +152,7 @@ async def test_tampered_result_contract_cannot_reuse_snapshot_hash(client, bench
 
 
 def test_gold_readiness_checks_only_selection_without_exposing_or_mutating_answers(benchmark_api):
-    from web.routes import benchmark_v2 as routes
+    from forge import benchmark_service as routes
 
     suite = benchmark_api["suite"]
     suite["cases"][1]["SQL"] = "SELECT missing_secret FROM orders"
@@ -166,7 +167,7 @@ def test_gold_readiness_checks_only_selection_without_exposing_or_mutating_answe
 
 
 def test_gold_readiness_reports_every_failed_selection_without_sql_or_errors(benchmark_api):
-    from web.routes import benchmark_v2 as routes
+    from forge import benchmark_service as routes
 
     suite = benchmark_api["suite"]
     suite["cases"][0]["SQL"] = "SELECT missing_secret FROM orders"

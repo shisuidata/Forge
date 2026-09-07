@@ -63,6 +63,31 @@ Use the [Quickstart adoption report](https://github.com/shisuidata/Forge/issues/
 
 Forge sends no telemetry. The receipt excludes hostnames, usernames, paths, SQL rows, credentials, and private schemas. Its checksum detects drift and supports deduplication; it does not attest identity. The GitHub-authored report supplies public provenance. Maintainer-authored runs, stars, and forks do not satisfy the external-adoption gate.
 
+## Repository layout
+
+| Location | Ownership and placement rule |
+|---|---|
+| `forge/` | Trusted data runtime; runtime resources live with their owning package, including `forge/templates/poc/`. |
+| `agent/`, `registry/`, `web/` | Existing Agent adapters, Registry capabilities and Web/channel adapters; do not add a second orchestrator. |
+| `services/pi-orchestrator/` | Pi Task authority and its TypeScript tests; generated cross-language schemas remain in `agent/contracts/`. |
+| `tests/` | Automated regressions and shared versioned fixtures in `tests/datasets/`; not standalone model experiments. |
+| `tools/benchmarks/` | Manual accuracy, synthetic, Spider2 and failure-case research tools. Running these can call models; they are not part of ordinary pytest or the Forge package. |
+| Other `tools/` projects | Isolated, reproducible UI/chart experiments with their own dependencies. |
+| `scripts/`, `demo/` | Development/operations/verification entry points versus synthetic data generators. Run generators only against explicitly isolated stores. |
+| `docs/`, `docs/archive/` | Current state, stable guides and the active plan versus completed evidence and superseded plans. Existing course, diagrams and devlog keep their own directories. |
+| `website/`, `examples/`, `constraints/`, `.github/` | Documentation site, public API examples, verified dependency constraints and repository automation. |
+
+Keep public startup/configuration entry points at the repository root. Do not add nesting solely to reduce a file count. Runtime code must not depend on benchmark tooling or pytest fixtures for general execution. Update imports, resource declarations, command examples and local links together when relocating a file.
+
+The [file-governance manifest](docs/file-structure-governance-2026-09-07.json) records old/new paths and content hashes. Historical JSON paths describe the original run and are not rewritten; use the manifest to locate relocated evidence. Ignored local databases, credentials, caches and previous run outputs were deliberately not migrated. Inspect and authorize any private-data migration separately; never replay model runs to recreate history.
+
+## Evidence and decision records
+
+Treat test reports, negative results, rejected approaches and recorded design decisions as durable project assets. Refactoring, superseded plans and a passing current suite do not make historical evidence disposable. Preserve the original context, limits and decision rationale; append dated corrections or new evidence instead of rewriting historical results.
+
+Use the [knowledge-asset index and maintenance rules](docs/README.md#长期知识资产) and append user decisions to [requirements history](docs/requirements-pool.md). Keep sanitized public records separate from private originals. Local files are not proof of a Git checkpoint or off-machine backup; obtain explicit authorization before committing, publishing or copying private evidence.
+
+
 ## Tests
 
 Run the Python suite before opening a pull request:

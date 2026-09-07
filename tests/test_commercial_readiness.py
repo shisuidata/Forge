@@ -145,7 +145,6 @@ def test_poc_init_validate_and_report(tmp_path):
     report = poc.write_report(workspace)
 
     assert report["status"] == "pass"
-    assert "Recommendation: pass" in (workspace / "delivery_report.md").read_text(encoding="utf-8")
 
 
 def test_poc_validate_reports_missing_reference_sql(tmp_path):

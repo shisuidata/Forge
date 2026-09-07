@@ -1,5 +1,6 @@
 import type { ForgeDialect } from "./client.js";
 import { ForgeClientError } from "./client.js";
+import { currentRequestId } from "../request-context.js";
 
 export type QueryCandidateInput =
   | { kind: "direct_sql"; sql: string; producer_revision?: string }
@@ -245,6 +246,8 @@ export class ForgeQueryRunClient {
       "x-pi-service-key": this.#serviceKey,
     };
     if (idempotencyKey !== undefined) headers["idempotency-key"] = idempotencyKey;
+    const requestId = currentRequestId();
+    if (requestId) headers["x-request-id"] = requestId;
 
     let response: Response;
     try {
@@ -255,8 +258,7 @@ export class ForgeQueryRunClient {
         signal: AbortSignal.any(signals),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown transport error";
-      throw new ForgeClientError(`Forge QueryRun request failed: ${message}`);
+      throw new ForgeClientError("Forge QueryRun transport failed", undefined, "upstream_unavailable");
     }
 
     let body: unknown;
@@ -267,9 +269,9 @@ export class ForgeQueryRunClient {
     }
     if (!response.ok) {
       const record = asRecord(body);
+      const code = typeof record.code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(record.code) ? record.code : "forge_request_failed";
       throw new ForgeClientError(
-        `Forge QueryRun API returned HTTP ${response.status}: ${String(record.error ?? "error")}`,
-        response.status,
+        `Forge QueryRun API returned HTTP ${response.status}`, response.status, code,
       );
     }
     return body;

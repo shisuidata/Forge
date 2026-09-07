@@ -228,9 +228,9 @@ large 40 题已经证明技术路线成立，但客户交付还需要：
 - `forge/lint.py`：补充 large schema 字段契约、输出契约、排序契约、过滤口径、窗口和反连接稳定性检查。
 - `tests/test_lint.py`：lint 回归测试扩展到 `53 passed`。
 - `tests/datasets/large/field_conventions.registry.yaml`：补充 Method AF 所需的字段和结果契约。
-- `tests/accuracy/methods/method_ae.py`：稳定性实验方法。
-- `tests/accuracy/methods/method_af.py`：当前推荐 DeepSeek V4 Pro 基线。
-- `docs/test-report-2026-05-06.md`：更新本轮测试报告。
+- `tools/benchmarks/accuracy/methods/method_ae.py`：稳定性实验方法。
+- `tools/benchmarks/accuracy/methods/method_af.py`：当前推荐 DeepSeek V4 Pro 基线。
+- `docs/archive/engineering/test-report-2026-05-06.md`：更新本轮测试报告。
 - `config.py`：生产认证开关支持 `AUTH_ENABLED` 环境变量，补充查询超时和数据库只读确认配置。
 - `forge/executor.py`：执行器增加查询超时兜底。
 - `main.py`：readiness 增加数据库只读确认、查询超时、Secure Cookie 检查。

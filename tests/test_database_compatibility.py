@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 import forge.executor as executor
 from config import cfg
 from forge.compiler import compile_query
-from forge.executor import execute_with_data, validate_readonly_sql
+from forge.executor import execute, validate_readonly_sql
 from registry.sync import run_sync
 
 
@@ -57,10 +57,10 @@ def test_database_compatibility_smoke(tmp_path, monkeypatch):
         monkeypatch.setattr(cfg, "EXECUTION_TIMEOUT_SECONDS", 10)
         executor._engine = None
 
-        rendered, result_columns, rows = execute_with_data(sql, max_rows=50)
-        assert not rendered.startswith("⚠")
-        assert result_columns == ["id", "status"]
-        assert [tuple(row) for row in rows] == [(1, "paid"), (2, "pending")]
+        result = execute(sql, max_rows=50)
+        assert result.success
+        assert result.columns == ["id", "status"]
+        assert [tuple(row) for row in result.rows] == [(1, "paid"), (2, "pending")]
 
         with pytest.raises(ValueError, match="只允许执行只读"):
             validate_readonly_sql(f"DELETE FROM {table_name}")

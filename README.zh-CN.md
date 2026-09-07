@@ -32,7 +32,7 @@ Forge 位于上游 Agent 与数据库之间。它接收 Direct SQL 或受约束�
 
 > **项目状态：early-stage，持续维护。** 当前适合评估、贡献和带人工审核/只读账号的受控部署，不代表功能完备或高可用。最新完整 Structured GPT-5.6 BIRD 运行封存成绩为 **Forge EA 57.4% / Direct SQL 62.8%**；随后对**同一批候选**修复编译器并离线重评为 **62.6% / 62.8%**，不是新生成成绩，也不证明 Forge JSON 的准确率优势。详见 [当前状态](docs/current-project-state.md)、[基准规范](docs/benchmarks.md) 与 [每轮报告索引](docs/README.md)。
 
-**升级注意（2026-09-07）：** 共享Assurance已升为`query-assurance-v10`，按SQL作用域校验真实物理来源，不能借嵌套同名CTE绕过表权限。当前扁平Registry未建模的schema/catalog限定来源失败关闭。旧v9 QueryRun审批返回`assurance_revision_drift`，需重新prepare和人工审核，不原地升级旧证据。见[版本验证报告](docs/release-verification-2026-09-07.json)。
+**升级注意（2026-09-07）：** 共享Assurance已升为`query-assurance-v10`，按SQL作用域校验真实物理来源，不能借嵌套同名CTE绕过表权限。当前扁平Registry未建模的schema/catalog限定来源失败关闭。旧v9 QueryRun审批返回`assurance_revision_drift`，需重新prepare和人工审核，不原地升级旧证据。见[版本验证报告](docs/archive/engineering/release-verification-2026-09-07.json)。
 
 ---
 
@@ -288,7 +288,7 @@ flowchart LR
 - CTE接口范例16次对照：Forge两指标3/4→3/4，md-199新增正确、md-079回退；Direct两指标3/4→2/4，其输入未变，波动不能归因于Forge范例。总67367 tokens；Forge每正确答案成本+13.11%、四次采样生成P95+41.53%，门槛失败，不启用。
 - 日期、粒度、取值上下文仍默认off。已曝光BIRD为R回归集，小样本D与隔离S不代表独立H；外部采用门禁仍未通过。
 
-[逐轮报告索引](docs/README.md)保留准备、生成、离线修复、负结果和未完成实验；[早期运行汇总](docs/benchmark-historical-runs-2026-09-07.json)与[最新CTE报告](docs/benchmark-luna-cte-interface-2026-09-07.json)分别标明来源和限制。[公开处理清单](docs/report-publication-2026-09-07.json)记录原件/公开副本hash；本机路径和个人联系样本脱敏，分数、成本与失败状态不改。原始运行数据库、Provider会话与第三方数据集不随仓库分发，本地工件路径不等于公开下载地址。
+[逐轮报告索引](docs/README.md)保留准备、生成、离线修复、负结果和未完成实验；[早期运行汇总](docs/archive/benchmarks/benchmark-historical-runs-2026-09-07.json)与[最新CTE报告](docs/archive/benchmarks/benchmark-luna-cte-interface-2026-09-07.json)分别标明来源和限制。[公开处理清单](docs/archive/engineering/report-publication-2026-09-07.json)记录原件/公开副本hash；本机路径和个人联系样本脱敏，分数、成本与失败状态不改。原始运行数据库、Provider会话与第三方数据集不随仓库分发，本地工件路径不等于公开下载地址。
 
 ### 已落地功能
 
@@ -372,15 +372,15 @@ tests/
 | [架构设计](docs/architecture.md) | 系统整体架构与模块职责的精简入口 |
 | [产品北极星](docs/product-north-star.md) | Forge 为什么存在、服务谁，以及正确性、共识、数据事实与产品边界的长期指导 |
 | [产品设计与阶段路线重建提案](docs/product-design-roadmap-2026-08-25.md) | Human Control Plane、Agent Data Runtime、产品对象、信息架构与长期阶段方向 |
-| [短期 Product Spine 历史计划](docs/short-term-product-spine-plan-2026-08-25.md) | SP0–SP5 已完成实施与验证记录；仅作历史溯源，不是当前待办 |
-| [Product Spine SP5 集成门禁证据](docs/product-spine-sp5-evidence-2026-08-25.md) | 真实 Pi/Forge/Report 三连 Golden Journey、restart/idempotency/offline、Atlas candidate 与失败关闭反证 |
+| [短期 Product Spine 历史计划](docs/archive/plans/short-term-product-spine-plan-2026-08-25.md) | SP0–SP5 已完成实施与验证记录；仅作历史溯源，不是当前待办 |
+| [Product Spine SP5 集成门禁证据](docs/archive/engineering/product-spine-sp5-evidence-2026-08-25.md) | 真实 Pi/Forge/Report 三连 Golden Journey、restart/idempotency/offline、Atlas candidate 与失败关闭反证 |
 | [Product Projection v1 Contract](docs/product-projection-contracts.md) | Conversation、Task、Action、Workspace、Report 的版本化只读边界、状态、bounds、redaction 与 SP1 入口 |
 | [产品公理](docs/product-axioms.md) | 以第一性原理约束身份、证据、协同、记忆、成本与可信行动 |
 | [AI Native 企业长期论证](docs/ai-native-enterprise-thesis.md) | Data Agent、组织协同、统一记忆、企业 AI Infra 的论证、反证与待验证假设 |
-| [产品方向与架构复审](docs/product-direction-architecture-review-2026-08-24.md) | 按产品公理审核当前实现、四平面缺口、目标架构与分阶段建议 |
+| [产品方向与架构复审](docs/archive/engineering/product-direction-architecture-review-2026-08-24.md) | 按产品公理审核当前实现、四平面缺口、目标架构与分阶段建议 |
 | [企业演进主动计划](docs/forge-enterprise-evolution-plan.md) | 唯一主动计划；当前阶段为 S0 Design Partner / Problem Baseline |
 | [需求池](docs/requirements-pool.md) | 新需求的澄清、评估、接受、延期、拒绝、计划与验证记录 |
-| [M0 Governance Contract 评审](docs/governance-contract-review-2026-08-24.md) | 跨 Contract 语义、Threat Model、迁移/回滚与 M1A 前置结论 |
+| [M0 Governance Contract 评审](docs/archive/engineering/governance-contract-review-2026-08-24.md) | 跨 Contract 语义、Threat Model、迁移/回滚与 M1A 前置结论 |
 | [工作原理与 DSL 能力](docs/how-it-works.md) | 执行流程详解、DSL 特性表、Schema RAG |
 | [基准测试详情](docs/benchmarks.md) | 版本演化、跨模型 EA 对比、Spider2 结果 |
 | [设计哲学与工程洞察](docs/philosophy.md) | 核心哲学、工程经验、开放问题 |
@@ -389,7 +389,7 @@ tests/
 | [兼容性矩阵](docs/compatibility-matrix.md) | 数据库、数据仓库、Agent 入口、LLM 服务的支持边界 |
 | [客户 PoC 执行手册](docs/poc-playbook.md) | 客户域 golden questions、failure triage 和交付物 |
 | [外部 Agent 集成边界](docs/agent-integration.md) | MCP / OpenAI Agents / Claude Desktop 等外部入口的 prepare-query 只读边界 |
-| [交付前综合评估](docs/delivery-assessment-2026-05-07.md) | 业务板块、文档、目录、工作流、三轮测试和交付优化方案 |
+| [交付前综合评估](docs/archive/engineering/delivery-assessment-2026-05-07.md) | 业务板块、文档、目录、工作流、三轮测试和交付优化方案 |
 | [生产交付部署说明](docs/production-deployment.md) | 生产 compose、env、只读数据库账号、readiness、运维建议 |
 | [DSL 形式化语义](docs/dsl-semantics.md) | DSL 的形式化定义 |
 | [构建你的语义库](docs/registry.md) | Registry 结构层 + 语义层三文件详解，从零构建指南 |

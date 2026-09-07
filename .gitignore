@@ -28,6 +28,17 @@ local_sqlite.zip
 
 tests/benchmark/benchmark.db
 tests/benchmark/results/
+# Benchmark source moved to tools; existing local data stays at old paths.
+# No database, private result, or downloaded dataset migration is performed.
+tests/text-to-sql-failures/*.db
+tests/benchmark/benchmark.registry.json
+tools/benchmarks/accuracy/results/
+tools/benchmarks/spider2/data/
+tools/benchmarks/spider2/results/
+tools/benchmarks/synthetic/benchmark.db
+tools/benchmarks/synthetic/benchmark.registry.json
+tools/benchmarks/synthetic/results/
+tools/benchmarks/text_to_sql_failures/*.db
 *.pkl
 .mcp.json
 web/static/charts/*.html

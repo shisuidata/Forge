@@ -7,47 +7,20 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 
-export const AUTHORIZED_SKILL_NAMES = [
-  "data-requirement-clarifier",
-  "metric-definition-reviewer",
-  "business-root-cause-analysis",
-  "data-analysis-report-writer",
-  "exploratory-data-analysis",
-  "funnel-analysis",
-  "retention-cohort-analysis",
-  "ab-test-analysis",
-  "sql-reviewer",
-  "data-quality-rule-generator",
-  "table-design-advisor",
-  "data-lineage-impact-analyzer",
-  "dashboard-reviewer",
-  "data-presentation-architect",
-  "daily-report-writer",
-  "weekly-monthly-report-writer",
-  "data-doc-writer",
-  "data-incident-postmortem-writer",
-  "data-tool-integration-planner",
-  "market-research-analyst",
-] as const;
+import { SKILL_DESCRIPTORS } from "./stage-descriptors.js";
+import type { AuthorizedSkillName, AdvisorySkillName } from "./stage-descriptors.js";
+export type { AuthorizedSkillName, AdvisorySkillName } from "./stage-descriptors.js";
 
-export type AuthorizedSkillName = (typeof AUTHORIZED_SKILL_NAMES)[number];
-
-export type AdvisorySkillName = Exclude<
-  AuthorizedSkillName,
-  | "data-requirement-clarifier"
-  | "metric-definition-reviewer"
-  | "business-root-cause-analysis"
-  | "data-analysis-report-writer"
->;
-export const CORE_WORKFLOW_SKILL_NAMES = AUTHORIZED_SKILL_NAMES.slice(0, 4) as readonly AuthorizedSkillName[];
-export const ADVISORY_SKILL_NAMES = AUTHORIZED_SKILL_NAMES.slice(4) as readonly AdvisorySkillName[];
-
-export const EVIDENCE_REQUIRED_SKILL_NAMES = [
-  "exploratory-data-analysis",
-  "funnel-analysis",
-  "retention-cohort-analysis",
-  "ab-test-analysis",
-] as const satisfies readonly AuthorizedSkillName[];
+export const AUTHORIZED_SKILL_NAMES = Object.keys(SKILL_DESCRIPTORS) as AuthorizedSkillName[];
+export const CORE_WORKFLOW_SKILL_NAMES = AUTHORIZED_SKILL_NAMES.filter(
+  (name) => SKILL_DESCRIPTORS[name].output !== "advisory",
+);
+export const ADVISORY_SKILL_NAMES = AUTHORIZED_SKILL_NAMES.filter(
+  (name): name is AdvisorySkillName => SKILL_DESCRIPTORS[name].output === "advisory",
+);
+export const EVIDENCE_REQUIRED_SKILL_NAMES = ADVISORY_SKILL_NAMES.filter(
+  (name) => SKILL_DESCRIPTORS[name].evidence === "query_result",
+);
 
 export const MVP_SKILL_NAMES = AUTHORIZED_SKILL_NAMES;
 export type MvpSkillName = AuthorizedSkillName;

@@ -19,6 +19,7 @@ class FeishuRuntimeStatus:
     channel_key_configured: bool
     process_running: bool
     last_error: str | None = None
+    connection_status: str = "unknown"
 
 
 class FeishuRuntimeSupervisor:
@@ -38,6 +39,7 @@ class FeishuRuntimeSupervisor:
                 channel_key_configured=settings["channel_key_configured"],
                 process_running=running,
                 last_error=self._last_error,
+                connection_status="unknown" if running else "disconnected",
             )
 
     def reload(self) -> FeishuRuntimeStatus:

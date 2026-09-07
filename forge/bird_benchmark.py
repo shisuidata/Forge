@@ -82,7 +82,7 @@ def standard_files() -> dict[str, str]:
 def dataset_fingerprints() -> dict[str, str]:
     # Never use a path supplied by a client manifest. Include every official DB,
     # metadata file and dataset file, not just the sampled databases.
-    root = hard._BIRD_RUNTIME.resolve(strict=True)
+    root = hard.bird_runtime_root().resolve(strict=True)
     entries = list(root.rglob("*"))
     if any(path.is_symlink() for path in entries):
         raise ValueError("Official dataset must not contain symlinks")
@@ -107,7 +107,7 @@ def source_fingerprints() -> dict[str, dict[str, str]]:
         "safety": [ROOT / "forge/executor.py", ROOT / "forge/lint.py", ROOT / "registry/relationships.py"],
         "official_snapshot": [STANDARD_CATALOG],
         "evaluator": [ROOT / "forge/hard_accuracy_benchmark.py", ROOT / "forge/benchmark_methods.py",
-                      ROOT / "forge/assurance.py", ROOT / "web/routes/benchmark_v2.py",
+                      ROOT / "forge/assurance.py", ROOT / "forge/benchmark_service.py",
                       ROOT / "forge/bird_benchmark.py", ROOT / "agent/contracts/__init__.py",
                       ROOT / "agent/contracts/benchmark-failure-v1.schema.json", ROOT / "pyproject.toml"],
     }
@@ -250,12 +250,12 @@ def _value_audit(root: str, dataset_revision: str, audit_revision: str,
 
 def _contexts(suite: dict, case_ids: list[str], date_context: dict, grain_context: dict,
               value_config: dict, forge_prompt_revision: str = STRUCTURED_BENCHMARK_PROMPT_REVISION) -> dict[str, dict]:
-    from web.routes.benchmark_v2 import build_context_response
+    from forge.benchmark_service import build_context_response
     from forge.benchmark_metadata import date_context_evidence, render_date_context
     index = {c["case_id"]: c for c in suite["cases"]}
     audit = None
     if date_context["mode"] == "observed":
-        audit = _date_audit(str(hard._BIRD_RUNTIME.resolve()), digest(dataset_fingerprints()),
+        audit = _date_audit(str(hard.bird_runtime_root().resolve()), digest(dataset_fingerprints()),
                             digest(source_fingerprints()), date_context["max_rows"])
     contexts = {}
     value_audit = None
@@ -289,7 +289,7 @@ def _contexts(suite: dict, case_ids: list[str], date_context: dict, grain_contex
             # Visibility is a collection boundary, not merely a projection filter.
             if value_audit is None:
                 value_audit = _value_audit(
-                    str(hard._BIRD_RUNTIME.resolve()), digest(dataset_fingerprints()),
+                    str(hard.bird_runtime_root().resolve()), digest(dataset_fingerprints()),
                     digest(source_fingerprints()), tuple(field), value_config["max_values"])
             evidence = value_context_evidence(value_audit, index[cid]["db_id"], context["context_snapshot"]["fields"])
             context["value_evidence"] = evidence
@@ -347,7 +347,7 @@ def freeze(*, cohort: str, provider: str, model: str, case_ids: list[str] | None
     suite = hard.load_suite(hard._FULL_SUITE_ID)
     if len(suite["cases"]) != 500:
         raise ValueError("Freezing requires the complete official 500-case input, including for D")
-    root = hard._BIRD_RUNTIME.resolve(strict=True)
+    root = hard.bird_runtime_root().resolve(strict=True)
     for db_id in {c["db_id"] for c in suite["cases"]}:
         if not isinstance(db_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", db_id):
             raise ValueError("Invalid official database identifier")
@@ -363,7 +363,7 @@ def freeze(*, cohort: str, provider: str, model: str, case_ids: list[str] | None
     if gold_policy not in ("require_all", "skip_unscorable"):
         raise ValueError("Unknown Gold readiness policy")
     if _gold_readiness is None:
-        from web.routes.benchmark_v2 import check_gold_readiness
+        from forge.benchmark_service import check_gold_readiness
         blocked = check_gold_readiness(suite, ids) if gold_policy == "skip_unscorable" else []
         gold_readiness = {"policy": gold_policy, "blocked_cases": blocked}
     else:
@@ -500,7 +500,7 @@ def preflight(*, provider: str, model: str, case_ids: list[str], confirm_model_c
         raise ValueError("Request does not match frozen cases/provider/model")
     if type(confirm_model_calls) is not int or confirm_model_calls != manifest["generation"]["max_model_calls"]:
         raise ValueError("Confirm exactly the frozen model-call budget after explicit Gold skips")
-    from web.routes.benchmark_v2 import check_gold_readiness
+    from forge.benchmark_service import check_gold_readiness
     failures = check_gold_readiness(hard.load_suite(hard._FULL_SUITE_ID), case_ids)
     readiness = manifest["gold_readiness"]
     if readiness["policy"] == "require_all" and failures:
@@ -534,7 +534,7 @@ def candidate_records(value: dict) -> list[dict]:
 
 
 def replay(value: dict, protocol: dict | None = None, *, diagnostic: bool = False) -> dict:
-    from web.routes.benchmark_v2 import EvaluateRequest, evaluate_candidate, _failed_evaluation
+    from forge.benchmark_service import CandidateEvaluation, evaluate_candidate, _failed_evaluation
     records = candidate_records(value)
     versioned = isinstance(value.get("protocol_revision"), str)
     if not versioned and not diagnostic:
@@ -568,7 +568,7 @@ def replay(value: dict, protocol: dict | None = None, *, diagnostic: bool = Fals
         try:
             if manifest["dataset_files"] != dataset_fingerprints() or manifest["sources"] != source_fingerprints():
                 raise ValueError("Inputs drifted during replay")
-            req = EvaluateRequest(case_id=record["case_id"], arm=record["arm"], output=record["output"],
+            req = CandidateEvaluation(case_id=record["case_id"], arm=record["arm"], output=record["output"],
                                   protocol_revision=revision, metric_revision=manifest["metric_revision"],
                                   context_snapshot=response["contexts"][record["case_id"]]["context_snapshot"])
             if record["output"] is None and record["case_id"] in blocked_ids:

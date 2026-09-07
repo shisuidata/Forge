@@ -26,7 +26,7 @@ class _FakeProcess:
         self.running = False
 
 
-def test_feishu_action_replaces_buttons_with_progress_before_final_card(monkeypatch):
+def test_feishu_action_clears_actions_before_delivering_terminal_presentation(tmp_path, monkeypatch):
     import web.feishu_pi as feishu_pi
 
     class _FakePiClient:
@@ -40,6 +40,9 @@ def test_feishu_action_replaces_buttons_with_progress_before_final_card(monkeypa
                 "fields": [], "table": None, "actions": [],
             }
 
+    from web.channel_delivery import DeliveryReceiptStore
+    store = DeliveryReceiptStore(tmp_path / "delivery.db")
+    monkeypatch.setattr(feishu_pi, "get_delivery_store", lambda: store)
     cards: list[dict] = []
     monkeypatch.setattr(feishu_pi, "_get_pi_client", lambda: _FakePiClient())
     monkeypatch.setattr(feishu_pi, "_update_card", lambda _message_id, card: cards.append(card))
@@ -49,10 +52,9 @@ def test_feishu_action_replaces_buttons_with_progress_before_final_card(monkeypa
     )
 
     assert len(cards) == 2
-    assert cards[0]["header"]["title"]["content"] == "正在分析结果"
-    assert "自动更新" in cards[0]["body"]["elements"][0]["content"]
     assert all(item.get("tag") != "button" for item in cards[0]["body"]["elements"])
     assert cards[1]["header"]["title"]["content"] == "分析完成"
+    assert store.for_task("tr_demo")[0]["status"] == "delivered"
 
 
 def test_feishu_runtime_requires_enabled_credentials_and_channel_key(tmp_path, monkeypatch):

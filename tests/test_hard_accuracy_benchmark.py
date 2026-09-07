@@ -96,7 +96,7 @@ def test_bird_runtime_root_ignores_partial_flat_layout(tmp_path: Path):
 
 
 def test_full_mini_dev_suite_has_official_coverage_without_model_calls():
-    if not all((hard._DB_ROOT / db_id / f"{db_id}.sqlite").exists() for db_id in ("california_schools", "financial", "formula_1")):
+    if not all((hard.bird_runtime_root() / "dev_databases" / db_id / f"{db_id}.sqlite").exists() for db_id in ("california_schools", "financial", "formula_1")):
         pytest.skip("full Mini-Dev runtime assets are not installed")
     suite = hard.load_suite(hard._FULL_SUITE_ID)
     assert len(suite["cases"]) == 500
@@ -111,7 +111,7 @@ def test_full_mini_dev_suite_has_official_coverage_without_model_calls():
 
 
 def test_full_gold_cache_avoids_runtime_gold_queries(monkeypatch):
-    if not all((hard._DB_ROOT / db_id / f"{db_id}.sqlite").exists() for db_id in ("california_schools", "financial", "formula_1")):
+    if not all((hard.bird_runtime_root() / "dev_databases" / db_id / f"{db_id}.sqlite").exists() for db_id in ("california_schools", "financial", "formula_1")):
         pytest.skip("full Mini-Dev runtime assets are not installed")
     suite = hard.load_suite(hard._FULL_SUITE_ID)
     monkeypatch.setattr(

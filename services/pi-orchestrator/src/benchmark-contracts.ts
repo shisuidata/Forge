@@ -15,6 +15,7 @@ export const BENCHMARK_FAILURE_CODES = [
   "retrieval_insufficient", "context_failed", "agent_failed", "generation_empty", "malformed_output",
   "candidate_contract_invalid", "compile_failed", "readonly_violation", "sql_parse_failed",
   "unknown_table", "unknown_column", "unknown_schema_reference", "dialect_unsupported",
+  "dialect_required",
   "execution_timeout", "execution_failed", "gold_execution_failed", "result_row_count_mismatch",
   "result_column_count_mismatch", "result_column_alignment_ambiguous",
   "result_order_or_value_mismatch", "result_value_mismatch", "official_ea_mismatch",

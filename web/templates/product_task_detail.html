@@ -27,6 +27,10 @@
         <header class="panel-header"><div><h2>交付与证据</h2><p>查询结果、分析与报告来源</p></div></header>
         <div class="panel-body flush"><div class="state-box state-box-compact"><p>正在读取交付…</p></div></div>
       </section>
+      <section class="panel" data-task-deliveries hidden>
+        <header class="panel-header"><div><h2>渠道投递</h2><p>独立于任务执行；重送只读取原任务展示，不重新调用模型或执行 SQL</p></div></header>
+        <div class="panel-body"></div>
+      </section>
     </div>
     <aside class="layout-grid task-side">
       <section class="panel" data-task-actions>
@@ -53,4 +57,4 @@
   </form>
 </dialog>
 {% endblock %}
-{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=6"></script>{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=7"></script>{% endblock %}

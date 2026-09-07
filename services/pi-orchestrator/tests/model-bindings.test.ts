@@ -90,3 +90,12 @@ test("Pi rejects an active binding whose required gate is no longer valid", asyn
   const config = loadConfig({ PI_MODEL_CONTROL_DB_PATH: path });
   assert.throws(() => resolveStageModelBinding(config, "analysis"), /no longer satisfies/);
 });
+
+test("attempt scope follows authorized identity rather than report/query substrings", () => {
+  assert.equal(attemptModelStage("skill:daily-report-writer"), "analysis");
+  assert.equal(attemptModelStage("skill:data-doc-writer"), "knowledge_answer");
+  assert.equal(attemptModelStage("data_analysis_report"), "report");
+  assert.throws(() => attemptModelStage("custom_query_report"), Error);
+  assert.throws(() => attemptModelStage("skill:unknown-report-writer"), Error);
+  assert.throws(() => skillModelStage("__proto__"), Error);
+});
