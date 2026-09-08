@@ -1,0 +1,20 @@
+{
+  "schema_version": "forge-output-descriptions-v1",
+  "canonical_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+  "profiles": {
+    "off": {
+      "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "descriptions": {}
+    },
+    "interfaces-v1": {
+      "wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f",
+      "descriptions": {
+        "scan": "The FROM source of this query block. Bind a local table, CTE or derived query with scan or joins before referencing its columns; declaring a CTE alone is not a FROM binding. Correlated references may use a visible enclosing scope.",
+        "cte": "Named query blocks. Each query.select defines its exported columns; downstream blocks may reference only those exported names. A CTE definition does not add the CTE to scan or joins.",
+        "agg": "Aggregate definitions local to this query block. Refer to a definition by its exact as alias. Defining an aggregate does not add it to select or export it to another query block.",
+        "window": "Window definitions local to this query block. Refer to a definition by its exact as alias. Use qualify for filtering them in this block. Downstream blocks can reference a window result only if select exports it.",
+        "select": "The output interface of this query block. In a CTE, explicitly select the columns or expressions needed downstream. In the final query, return only the requested answer columns or expressions, not intermediate counts or helper values unless requested."
+      }
+    }
+  }
+}

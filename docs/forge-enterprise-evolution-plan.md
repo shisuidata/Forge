@@ -1404,6 +1404,19 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 合成回归与实际API/SQLite维护零被测模型调用；旧报告、未知用量、失败/未完成实验及H/R0.6门禁不变，不把本次维护记为模型准确率增益。版本验证结果集中于release-verification-2026-09-07.json。
 - 首次push的CI暴露外部DATA旁仓依赖，随后加强隔离又暴露六项HTTP测试默认状态目录依赖；只修复测试夹具与独立配置，不跳过用例、不改生产失败关闭语义。首轮失败和隔离更正保留于同一发布验证报告。
 
+#### 15.1.35 关键DSL说明单变量候选（REQ-065，实跑完成、门槛未过）
+
+- 用户接受REQ-064首选方向；本切片只增加默认off的interfaces-v1工具Schema说明，五字段scan/cte/agg/window/select，字段顺序与完整DSL不变；不叠加范例、键序、答案规划或返修。
+- 沿用现有冻结/双臂/重放链，新增参数型schema_descriptions因素，不放宽原schema确定性重放。共享说明契约绑定canonical与wire hash，Python/Pi校验同一来源；新协议拒绝旧冻结续跑。
+- 已完成零调用验收：45项SQLite正反行为、500题默认输入/off wire不变、候选仅增1137 Schema字节；16原候选两条件SQL/结果/EX/Contract相同。真实CLI/认证HTTP和真实Pi SDK本地合成SSE通过，重开/漂移拒绝由回归覆盖；不将合成回放记作模型生成。
+- 八题D与ABBA两重复原卡已执行：用户撤销后加的人民币20元门禁，保留64次订阅OAuth/零重试/扩样。实际64次HTTP200、64原响应匹配与64臂重放一致；Forge EX/Contract10/16→12/16，Direct保持10/16，但无目标题两重复稳定恢复，md-052控制回退、控制7/8，预注册门槛失败。222015 tokens且用量完整，总tokens+3.39%、Forge每正确答案tokens−11.73%、生成P95−5.42%；人民币不可核算，不承诺免费。默认继续off，不补跑追分、不自动扩大R500/H，R0.6不晋级。保留[原准备卡](archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json)与[实跑报告](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.json)。
+
+#### 15.1.36 限定样本里程碑归档（REQ-066，不发布版本）
+
+- 用户明确要求记录本轮突破、具体优化动作、文案与文档，并commit/push GitHub。沿当前候选分支串行交付，不恢复模型实验，不merge main/tag/Release/部署安装。
+- 里程碑为本轮处理Forge EX/Contract12/16 vsDirect10/16、两重复各6/8 vs5/8；保留8题重复分母、md-052控制回退及未通过门槛，不称首次/总体/统计优势。
+- 复用同名[技术简报](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.md)、[devlog文案](devlog/2026-09-08-forge-schema-descriptions-milestone.md)和原JSON事实源；区分五字段description单变量、实验完整性工程及历史Structured/Compiler基础。默认off、H/R0.6与历史得分不变；归档不等于阶段晋级。
+
 ## 16. 整体工程质量优化（REQ-060，已实施并本地验收）
 
 - 整体评估已完成，基线018317d；16项发现与6个优化包的证据见[architecture-quality-review-2026-09-07.json](archive/engineering/architecture-quality-review-2026-09-07.json)。该文件保留评估时点，不改写为实施证据。

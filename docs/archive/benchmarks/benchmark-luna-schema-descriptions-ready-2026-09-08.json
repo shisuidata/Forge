@@ -1,0 +1,3957 @@
+{
+  "schema_version": "benchmark-schema-descriptions-ready-v1",
+  "date": "2026-09-08",
+  "requirement": "REQ-2026-09-08-065",
+  "status": "zero_model_call_preparation_complete_candidate_default_off",
+  "conclusion": {
+    "candidate_ready": true,
+    "default_enabled": false,
+    "new_generation_evidence": false,
+    "new_model_calls": 0,
+    "decision": "准备完成；保持默认off，等待固定64次Luna开发预算的单独明确授权。未证明任何EX提升或超过Direct SQL。"
+  },
+  "implementation": {
+    "shared_catalog": "agent/contracts/forge-output-descriptions-v1.json",
+    "protocol_version": "bird-protocol-v5",
+    "factor": "schema_descriptions",
+    "default": "off",
+    "candidate": "interfaces-v1",
+    "description_fields": [
+      "scan",
+      "cte",
+      "agg",
+      "window",
+      "select"
+    ],
+    "off_schema_bytes": 8034,
+    "candidate_schema_bytes": 9171,
+    "additional_schema_bytes": 1137,
+    "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+    "wire_revisions": {
+      "off": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "interfaces-v1": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f"
+    },
+    "strict_structure_order_unchanged": true,
+    "canonical_prompt_compiler_assurance_unchanged": true,
+    "cutover": "仅v5新冻结；缺说明metadata、v4/旧冻结、伪mode/catalog/canonical/wire、未声明因素失败关闭；旧记录保留并仅可显式诊断。",
+    "actual_binding": "Python freeze/preflight/validate/verify_case及Pi start/resume/runArm/onPayload/decode/log使用同一说明来源与所属Run缓存profile；真实wire复算，不复制转换器。",
+    "compare": "schema_descriptions必须完整且各自与manifest绑定的Pi generation_contract/model provenance；只放行mode及wire，拒绝Prompt/context/canonical/catalog/source/runtime/SDK/model漂移；原schema确定性因素继续要求同候选。",
+    "packaging": "沿用pyproject.toml agent.contracts = [*.json]；无额外打包约定。"
+  },
+  "semantic_review": {
+    "method": "独立内存SQLite，非调用compile的回显；手工预定正确结果和拒绝边界，普通/空/NULL+并列三类fixture。",
+    "passed": 45,
+    "total": 45,
+    "positive_per_fixture": 11,
+    "negative_per_fixture": 4,
+    "results": {
+      "fixtures": {
+        "ordinary": [
+          [
+            1,
+            "A",
+            10.0
+          ],
+          [
+            2,
+            "A",
+            20.0
+          ],
+          [
+            3,
+            "B",
+            5.0
+          ]
+        ],
+        "empty": [],
+        "null_and_ties": [
+          [
+            1,
+            "A",
+            null
+          ],
+          [
+            2,
+            "A",
+            null
+          ],
+          [
+            3,
+            "B",
+            5.0
+          ],
+          [
+            4,
+            "B",
+            5.0
+          ]
+        ]
+      },
+      "cases": [
+        {
+          "name": "local_source",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                3
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                3
+              ],
+              [
+                4
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "local_aggregate_alias",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp",
+              "total"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                "A",
+                30.0
+              ],
+              [
+                "B",
+                5.0
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                "A",
+                null
+              ],
+              [
+                "B",
+                10.0
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "declared_aggregate_is_not_an_output",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                "A"
+              ],
+              [
+                "B"
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                "A"
+              ],
+              [
+                "B"
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "hidden_aggregate_in_having",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ],
+            "having": [
+              {
+                "col": "total",
+                "op": "gt",
+                "val": 15
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                "A"
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": []
+          },
+          "reject": false
+        },
+        {
+          "name": "aggregate_alias_must_match",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "missing"
+            ]
+          },
+          "expected": null,
+          "reject": true
+        },
+        {
+          "name": "renamed_cte_output",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ],
+                  "select": [
+                    {
+                      "expr": "total",
+                      "as": "exported_total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "exported_total"
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                35.0
+              ]
+            ],
+            "empty": [
+              [
+                null
+              ]
+            ],
+            "null_and_ties": [
+              [
+                10.0
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "cte_cannot_export_undeclared_alias",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "select": [
+                    "id"
+                  ],
+                  "sort": [
+                    {
+                      "col": "id",
+                      "dir": "asc"
+                    }
+                  ],
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "total"
+            ]
+          },
+          "expected": null,
+          "reject": true
+        },
+        {
+          "name": "declared_cte_requires_from_binding",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ],
+            "scan": "facts",
+            "select": [
+              "totals.n"
+            ]
+          },
+          "expected": null,
+          "reject": true
+        },
+        {
+          "name": "unused_cte_does_not_change_source",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                3
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                3
+              ],
+              [
+                4
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "local_hidden_window_qualify",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "window": [
+              {
+                "fn": "row_number",
+                "partition": [
+                  "grp"
+                ],
+                "order": [
+                  {
+                    "col": "amount",
+                    "dir": "desc"
+                  },
+                  {
+                    "col": "id",
+                    "dir": "asc"
+                  }
+                ],
+                "as": "r"
+              }
+            ],
+            "qualify": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                2
+              ],
+              [
+                3
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                1
+              ],
+              [
+                3
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "export_window_then_filter_downstream",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id",
+                    "r"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                2
+              ],
+              [
+                3
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                1
+              ],
+              [
+                3
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "hidden_window_is_not_exported",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ]
+          },
+          "expected": null,
+          "reject": true
+        },
+        {
+          "name": "derived_source_remains_legal",
+          "query": {
+            "scan": "(SELECT id, amount FROM facts) AS source",
+            "select": [
+              "source.id"
+            ],
+            "sort": [
+              {
+                "col": "source.id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                3
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                3
+              ],
+              [
+                4
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "correlated_reference_remains_legal",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "facts.id",
+              {
+                "expr": "(SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp)",
+                "as": "group_max"
+              }
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                1,
+                20.0
+              ],
+              [
+                2,
+                20.0
+              ],
+              [
+                3,
+                5.0
+              ]
+            ],
+            "empty": [],
+            "null_and_ties": [
+              [
+                1,
+                null
+              ],
+              [
+                2,
+                null
+              ],
+              [
+                3,
+                5.0
+              ],
+              [
+                4,
+                5.0
+              ]
+            ]
+          },
+          "reject": false
+        },
+        {
+          "name": "final_expression_not_intermediate_counts",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "count_all",
+                "as": "all_count"
+              },
+              {
+                "fn": "count",
+                "col": "id",
+                "as": "part",
+                "filter": [
+                  {
+                    "col": "grp",
+                    "op": "eq",
+                    "val": "A"
+                  }
+                ]
+              }
+            ],
+            "select": [
+              {
+                "expr": "100.0 * part / NULLIF(all_count,0)",
+                "as": "percentage"
+              }
+            ]
+          },
+          "expected": {
+            "ordinary": [
+              [
+                66.66666666666667
+              ]
+            ],
+            "empty": [
+              [
+                null
+              ]
+            ],
+            "null_and_ties": [
+              [
+                50.0
+              ]
+            ]
+          },
+          "reject": false
+        }
+      ],
+      "results": [
+        {
+          "case": "local_source",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT id\nFROM facts\nORDER BY id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_aggregate_alias",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp",
+              "total"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT grp, SUM(amount) AS total\nFROM facts\nGROUP BY grp\nORDER BY grp ASC",
+          "expected": [
+            [
+              "A",
+              30.0
+            ],
+            [
+              "B",
+              5.0
+            ]
+          ],
+          "actual": [
+            [
+              "A",
+              30.0
+            ],
+            [
+              "B",
+              5.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "declared_aggregate_is_not_an_output",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT grp\nFROM facts\nGROUP BY grp\nORDER BY grp ASC",
+          "expected": [
+            [
+              "A"
+            ],
+            [
+              "B"
+            ]
+          ],
+          "actual": [
+            [
+              "A"
+            ],
+            [
+              "B"
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "hidden_aggregate_in_having",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ],
+            "having": [
+              {
+                "col": "total",
+                "op": "gt",
+                "val": 15
+              }
+            ]
+          },
+          "sql": "SELECT grp\nFROM facts\nGROUP BY grp\nHAVING SUM(amount) > 15\nORDER BY grp ASC",
+          "expected": [
+            [
+              "A"
+            ]
+          ],
+          "actual": [
+            [
+              "A"
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "aggregate_alias_must_match",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "missing"
+            ]
+          },
+          "sql": "SELECT missing\nFROM facts",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "renamed_cte_output",
+          "fixture": "ordinary",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ],
+                  "select": [
+                    {
+                      "expr": "total",
+                      "as": "exported_total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "exported_total"
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT SUM(amount) AS exported_total\n  FROM facts\n)\nSELECT exported_total\nFROM totals",
+          "expected": [
+            [
+              35.0
+            ]
+          ],
+          "actual": [
+            [
+              35.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "cte_cannot_export_undeclared_alias",
+          "fixture": "ordinary",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "select": [
+                    "id"
+                  ],
+                  "sort": [
+                    {
+                      "col": "id",
+                      "dir": "asc"
+                    }
+                  ],
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "total"
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT id\n  FROM facts\n  ORDER BY id ASC\n)\nSELECT total\nFROM totals",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "declared_cte_requires_from_binding",
+          "fixture": "ordinary",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ],
+            "scan": "facts",
+            "select": [
+              "totals.n"
+            ]
+          },
+          "sql": null,
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "compile",
+          "passed": true,
+          "error": "字段引用了未加入 FROM/JOIN 的表：totals。请先声明正确的 JOIN。"
+        },
+        {
+          "case": "unused_cte_does_not_change_source",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT COUNT(*) AS n\n  FROM facts\n)\nSELECT id\nFROM facts\nORDER BY id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_hidden_window_qualify",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "window": [
+              {
+                "fn": "row_number",
+                "partition": [
+                  "grp"
+                ],
+                "order": [
+                  {
+                    "col": "amount",
+                    "dir": "desc"
+                  },
+                  {
+                    "col": "id",
+                    "dir": "asc"
+                  }
+                ],
+                "as": "r"
+              }
+            ],
+            "qualify": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ]
+          },
+          "sql": "SELECT id FROM (\n  SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY amount DESC, id ASC) AS r\n  FROM facts\n  ORDER BY id ASC\n) AS _q\nWHERE r = 1",
+          "expected": [
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "export_window_then_filter_downstream",
+          "fixture": "ordinary",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id",
+                    "r"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "WITH ranked AS (\n  SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY amount DESC, id ASC) AS r\n  FROM facts\n)\nSELECT id\nFROM ranked\nWHERE r = 1\nORDER BY id ASC",
+          "expected": [
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "hidden_window_is_not_exported",
+          "fixture": "ordinary",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ]
+          },
+          "sql": "WITH ranked AS (\n  SELECT id\n  FROM facts\n)\nSELECT id\nFROM ranked\nWHERE r = 1",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "derived_source_remains_legal",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "(SELECT id, amount FROM facts) AS source",
+            "select": [
+              "source.id"
+            ],
+            "sort": [
+              {
+                "col": "source.id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT source.id\nFROM (SELECT id, amount FROM facts) AS source\nORDER BY source.id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "correlated_reference_remains_legal",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "facts.id",
+              {
+                "expr": "(SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp)",
+                "as": "group_max"
+              }
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT facts.id, (SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp) AS group_max\nFROM facts\nORDER BY id ASC",
+          "expected": [
+            [
+              1,
+              20.0
+            ],
+            [
+              2,
+              20.0
+            ],
+            [
+              3,
+              5.0
+            ]
+          ],
+          "actual": [
+            [
+              1,
+              20.0
+            ],
+            [
+              2,
+              20.0
+            ],
+            [
+              3,
+              5.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "final_expression_not_intermediate_counts",
+          "fixture": "ordinary",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "count_all",
+                "as": "all_count"
+              },
+              {
+                "fn": "count",
+                "col": "id",
+                "as": "part",
+                "filter": [
+                  {
+                    "col": "grp",
+                    "op": "eq",
+                    "val": "A"
+                  }
+                ]
+              }
+            ],
+            "select": [
+              {
+                "expr": "100.0 * part / NULLIF(all_count,0)",
+                "as": "percentage"
+              }
+            ]
+          },
+          "sql": "SELECT 100.0 * COUNT(id) FILTER (WHERE grp = 'A') / NULLIF(COUNT(*),0) AS percentage\nFROM facts",
+          "expected": [
+            [
+              66.66666666666667
+            ]
+          ],
+          "actual": [
+            [
+              66.66666666666667
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_source",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT id\nFROM facts\nORDER BY id ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_aggregate_alias",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp",
+              "total"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT grp, SUM(amount) AS total\nFROM facts\nGROUP BY grp\nORDER BY grp ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "declared_aggregate_is_not_an_output",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT grp\nFROM facts\nGROUP BY grp\nORDER BY grp ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "hidden_aggregate_in_having",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ],
+            "having": [
+              {
+                "col": "total",
+                "op": "gt",
+                "val": 15
+              }
+            ]
+          },
+          "sql": "SELECT grp\nFROM facts\nGROUP BY grp\nHAVING SUM(amount) > 15\nORDER BY grp ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "aggregate_alias_must_match",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "missing"
+            ]
+          },
+          "sql": "SELECT missing\nFROM facts",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "renamed_cte_output",
+          "fixture": "empty",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ],
+                  "select": [
+                    {
+                      "expr": "total",
+                      "as": "exported_total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "exported_total"
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT SUM(amount) AS exported_total\n  FROM facts\n)\nSELECT exported_total\nFROM totals",
+          "expected": [
+            [
+              null
+            ]
+          ],
+          "actual": [
+            [
+              null
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "cte_cannot_export_undeclared_alias",
+          "fixture": "empty",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "select": [
+                    "id"
+                  ],
+                  "sort": [
+                    {
+                      "col": "id",
+                      "dir": "asc"
+                    }
+                  ],
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "total"
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT id\n  FROM facts\n  ORDER BY id ASC\n)\nSELECT total\nFROM totals",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "declared_cte_requires_from_binding",
+          "fixture": "empty",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ],
+            "scan": "facts",
+            "select": [
+              "totals.n"
+            ]
+          },
+          "sql": null,
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "compile",
+          "passed": true,
+          "error": "字段引用了未加入 FROM/JOIN 的表：totals。请先声明正确的 JOIN。"
+        },
+        {
+          "case": "unused_cte_does_not_change_source",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT COUNT(*) AS n\n  FROM facts\n)\nSELECT id\nFROM facts\nORDER BY id ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_hidden_window_qualify",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "window": [
+              {
+                "fn": "row_number",
+                "partition": [
+                  "grp"
+                ],
+                "order": [
+                  {
+                    "col": "amount",
+                    "dir": "desc"
+                  },
+                  {
+                    "col": "id",
+                    "dir": "asc"
+                  }
+                ],
+                "as": "r"
+              }
+            ],
+            "qualify": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ]
+          },
+          "sql": "SELECT id FROM (\n  SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY amount DESC, id ASC) AS r\n  FROM facts\n  ORDER BY id ASC\n) AS _q\nWHERE r = 1",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "export_window_then_filter_downstream",
+          "fixture": "empty",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id",
+                    "r"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "WITH ranked AS (\n  SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY amount DESC, id ASC) AS r\n  FROM facts\n)\nSELECT id\nFROM ranked\nWHERE r = 1\nORDER BY id ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "hidden_window_is_not_exported",
+          "fixture": "empty",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ]
+          },
+          "sql": "WITH ranked AS (\n  SELECT id\n  FROM facts\n)\nSELECT id\nFROM ranked\nWHERE r = 1",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "derived_source_remains_legal",
+          "fixture": "empty",
+          "query": {
+            "scan": "(SELECT id, amount FROM facts) AS source",
+            "select": [
+              "source.id"
+            ],
+            "sort": [
+              {
+                "col": "source.id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT source.id\nFROM (SELECT id, amount FROM facts) AS source\nORDER BY source.id ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "correlated_reference_remains_legal",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "facts.id",
+              {
+                "expr": "(SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp)",
+                "as": "group_max"
+              }
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT facts.id, (SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp) AS group_max\nFROM facts\nORDER BY id ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "final_expression_not_intermediate_counts",
+          "fixture": "empty",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "count_all",
+                "as": "all_count"
+              },
+              {
+                "fn": "count",
+                "col": "id",
+                "as": "part",
+                "filter": [
+                  {
+                    "col": "grp",
+                    "op": "eq",
+                    "val": "A"
+                  }
+                ]
+              }
+            ],
+            "select": [
+              {
+                "expr": "100.0 * part / NULLIF(all_count,0)",
+                "as": "percentage"
+              }
+            ]
+          },
+          "sql": "SELECT 100.0 * COUNT(id) FILTER (WHERE grp = 'A') / NULLIF(COUNT(*),0) AS percentage\nFROM facts",
+          "expected": [
+            [
+              null
+            ]
+          ],
+          "actual": [
+            [
+              null
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_source",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT id\nFROM facts\nORDER BY id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_aggregate_alias",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp",
+              "total"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT grp, SUM(amount) AS total\nFROM facts\nGROUP BY grp\nORDER BY grp ASC",
+          "expected": [
+            [
+              "A",
+              null
+            ],
+            [
+              "B",
+              10.0
+            ]
+          ],
+          "actual": [
+            [
+              "A",
+              null
+            ],
+            [
+              "B",
+              10.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "declared_aggregate_is_not_an_output",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT grp\nFROM facts\nGROUP BY grp\nORDER BY grp ASC",
+          "expected": [
+            [
+              "A"
+            ],
+            [
+              "B"
+            ]
+          ],
+          "actual": [
+            [
+              "A"
+            ],
+            [
+              "B"
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "hidden_aggregate_in_having",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "group": [
+              "grp"
+            ],
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "grp"
+            ],
+            "sort": [
+              {
+                "col": "grp",
+                "dir": "asc"
+              }
+            ],
+            "having": [
+              {
+                "col": "total",
+                "op": "gt",
+                "val": 15
+              }
+            ]
+          },
+          "sql": "SELECT grp\nFROM facts\nGROUP BY grp\nHAVING SUM(amount) > 15\nORDER BY grp ASC",
+          "expected": [],
+          "actual": [],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "aggregate_alias_must_match",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "sum",
+                "col": "amount",
+                "as": "total"
+              }
+            ],
+            "select": [
+              "missing"
+            ]
+          },
+          "sql": "SELECT missing\nFROM facts",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "renamed_cte_output",
+          "fixture": "null_and_ties",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ],
+                  "select": [
+                    {
+                      "expr": "total",
+                      "as": "exported_total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "exported_total"
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT SUM(amount) AS exported_total\n  FROM facts\n)\nSELECT exported_total\nFROM totals",
+          "expected": [
+            [
+              10.0
+            ]
+          ],
+          "actual": [
+            [
+              10.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "cte_cannot_export_undeclared_alias",
+          "fixture": "null_and_ties",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "select": [
+                    "id"
+                  ],
+                  "sort": [
+                    {
+                      "col": "id",
+                      "dir": "asc"
+                    }
+                  ],
+                  "agg": [
+                    {
+                      "fn": "sum",
+                      "col": "amount",
+                      "as": "total"
+                    }
+                  ]
+                }
+              }
+            ],
+            "scan": "totals",
+            "select": [
+              "total"
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT id\n  FROM facts\n  ORDER BY id ASC\n)\nSELECT total\nFROM totals",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "declared_cte_requires_from_binding",
+          "fixture": "null_and_ties",
+          "query": {
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ],
+            "scan": "facts",
+            "select": [
+              "totals.n"
+            ]
+          },
+          "sql": null,
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "compile",
+          "passed": true,
+          "error": "字段引用了未加入 FROM/JOIN 的表：totals。请先声明正确的 JOIN。"
+        },
+        {
+          "case": "unused_cte_does_not_change_source",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "cte": [
+              {
+                "name": "totals",
+                "query": {
+                  "scan": "facts",
+                  "agg": [
+                    {
+                      "fn": "count_all",
+                      "as": "n"
+                    }
+                  ],
+                  "select": [
+                    "n"
+                  ]
+                }
+              }
+            ]
+          },
+          "sql": "WITH totals AS (\n  SELECT COUNT(*) AS n\n  FROM facts\n)\nSELECT id\nFROM facts\nORDER BY id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "local_hidden_window_qualify",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ],
+            "window": [
+              {
+                "fn": "row_number",
+                "partition": [
+                  "grp"
+                ],
+                "order": [
+                  {
+                    "col": "amount",
+                    "dir": "desc"
+                  },
+                  {
+                    "col": "id",
+                    "dir": "asc"
+                  }
+                ],
+                "as": "r"
+              }
+            ],
+            "qualify": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ]
+          },
+          "sql": "SELECT id FROM (\n  SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY amount DESC, id ASC) AS r\n  FROM facts\n  ORDER BY id ASC\n) AS _q\nWHERE r = 1",
+          "expected": [
+            [
+              1
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "export_window_then_filter_downstream",
+          "fixture": "null_and_ties",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id",
+                    "r"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "WITH ranked AS (\n  SELECT id, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY amount DESC, id ASC) AS r\n  FROM facts\n)\nSELECT id\nFROM ranked\nWHERE r = 1\nORDER BY id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              3
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              3
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "hidden_window_is_not_exported",
+          "fixture": "null_and_ties",
+          "query": {
+            "cte": [
+              {
+                "name": "ranked",
+                "query": {
+                  "scan": "facts",
+                  "window": [
+                    {
+                      "fn": "row_number",
+                      "partition": [
+                        "grp"
+                      ],
+                      "order": [
+                        {
+                          "col": "amount",
+                          "dir": "desc"
+                        },
+                        {
+                          "col": "id",
+                          "dir": "asc"
+                        }
+                      ],
+                      "as": "r"
+                    }
+                  ],
+                  "select": [
+                    "id"
+                  ]
+                }
+              }
+            ],
+            "scan": "ranked",
+            "filter": [
+              {
+                "col": "r",
+                "op": "eq",
+                "val": 1
+              }
+            ],
+            "select": [
+              "id"
+            ]
+          },
+          "sql": "WITH ranked AS (\n  SELECT id\n  FROM facts\n)\nSELECT id\nFROM ranked\nWHERE r = 1",
+          "expected": null,
+          "actual": null,
+          "rejected": true,
+          "stage": "assurance",
+          "passed": true,
+          "error": "Registry/权限校验失败：SQL 使用了未授权或不存在的表/字段。"
+        },
+        {
+          "case": "derived_source_remains_legal",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "(SELECT id, amount FROM facts) AS source",
+            "select": [
+              "source.id"
+            ],
+            "sort": [
+              {
+                "col": "source.id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT source.id\nFROM (SELECT id, amount FROM facts) AS source\nORDER BY source.id ASC",
+          "expected": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ],
+            [
+              2
+            ],
+            [
+              3
+            ],
+            [
+              4
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "correlated_reference_remains_legal",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "select": [
+              "facts.id",
+              {
+                "expr": "(SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp)",
+                "as": "group_max"
+              }
+            ],
+            "sort": [
+              {
+                "col": "id",
+                "dir": "asc"
+              }
+            ]
+          },
+          "sql": "SELECT facts.id, (SELECT MAX(inner_facts.amount) FROM facts AS inner_facts WHERE inner_facts.grp = facts.grp) AS group_max\nFROM facts\nORDER BY id ASC",
+          "expected": [
+            [
+              1,
+              null
+            ],
+            [
+              2,
+              null
+            ],
+            [
+              3,
+              5.0
+            ],
+            [
+              4,
+              5.0
+            ]
+          ],
+          "actual": [
+            [
+              1,
+              null
+            ],
+            [
+              2,
+              null
+            ],
+            [
+              3,
+              5.0
+            ],
+            [
+              4,
+              5.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        },
+        {
+          "case": "final_expression_not_intermediate_counts",
+          "fixture": "null_and_ties",
+          "query": {
+            "scan": "facts",
+            "agg": [
+              {
+                "fn": "count_all",
+                "as": "all_count"
+              },
+              {
+                "fn": "count",
+                "col": "id",
+                "as": "part",
+                "filter": [
+                  {
+                    "col": "grp",
+                    "op": "eq",
+                    "val": "A"
+                  }
+                ]
+              }
+            ],
+            "select": [
+              {
+                "expr": "100.0 * part / NULLIF(all_count,0)",
+                "as": "percentage"
+              }
+            ]
+          },
+          "sql": "SELECT 100.0 * COUNT(id) FILTER (WHERE grp = 'A') / NULLIF(COUNT(*),0) AS percentage\nFROM facts",
+          "expected": [
+            [
+              50.0
+            ]
+          ],
+          "actual": [
+            [
+              50.0
+            ]
+          ],
+          "rejected": false,
+          "stage": "execute",
+          "passed": true
+        }
+      ],
+      "new_model_calls": 0
+    },
+    "description_corrections": "scan明确保留derived及合法祖先相关引用；window说明允许同层qualify隐藏内部列，但下游需要select导出。",
+    "fixture_corrections": "初版烟测误用count_all.filter（改为已有count(id).filter）及把所有静态拒绝限定为Assurance（改为编译或Assurance拒绝）；生产Compiler/Schema无改动。"
+  },
+  "default_input_invariance": {
+    "public_cases": 500,
+    "checked_fields": [
+      "context_snapshot",
+      "schema_context",
+      "forge_instructions",
+      "direct_instructions"
+    ],
+    "unchanged": 500,
+    "new_model_calls": 0,
+    "gold_executions": 0
+  },
+  "actual_cli_http": {
+    "freeze_command_base": ".venv/bin/python -m forge.cli benchmark bird freeze --cohort D --provider openai-codex --model gpt-5.6-luna --case-ids md-009 md-079 md-199 md-289 md-002 md-052 md-312 md-386 --variable schema_descriptions",
+    "control_flag": "--schema-descriptions off",
+    "treatment_flag": "--schema-descriptions interfaces-v1",
+    "only_manifest_differences": [
+      "/schema_descriptions/mode",
+      "/schema_descriptions/wire_schema_revision"
+    ],
+    "gold_readiness": {
+      "policy": "require_all",
+      "selected": 8,
+      "blocked": 0,
+      "control_http_status": 200,
+      "treatment_http_status": 200
+    },
+    "runtime": "真实FastAPI路由/认证、真实冻结/上下文/评分；隔离cfg，仅合成服务key，没有加载真实.env/forge.yaml/凭据。",
+    "known_timeout_cases_not_executed": [
+      "md-340",
+      "md-393"
+    ]
+  },
+  "native_pi_sdk_smoke": {
+    "status": "passed",
+    "boundary": "real Pi SDK and real authenticated Python HTTP routes; only provider responses are deterministic loopback replay",
+    "new_model_calls": 0,
+    "synthetic_sse_dispatches": 4,
+    "external_network_requests": 0,
+    "unauthorized_http_status": 401,
+    "direct_payload_identical": true,
+    "forge_payload_identical_except_descriptions": true,
+    "candidate_outputs_identical": true,
+    "forged_mode_rejected_before_dispatch": true,
+    "runs": [
+      {
+        "protocol_revision": "sha256:f9f11322f2f7e35ebd6615e097bdc8cde2cc6d0be685935bc091088b485262c5",
+        "generation_contract": {
+          "forge_output_mode": "pi_tool_schema",
+          "forge_prompt_revision": "forge-structured-benchmark-v1",
+          "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+          "provider_json_schema_request": "required",
+          "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+          "schema_descriptions": {
+            "mode": "off",
+            "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+            "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d"
+          },
+          "direct_output_mode": "text_sql",
+          "sampling": "provider_default",
+          "transport": "sse",
+          "max_output_tokens": null,
+          "timeout_seconds": 120,
+          "provider_retries": 0,
+          "max_agent_turns_per_arm": 1,
+          "isolation_revision": "pi-benchmark-isolation-v1",
+          "pi_runtime_revision": "sha256:f6612f91028af494784d8ecc982513b47ba4ff2086df444ae19231b8c2f22d0d",
+          "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+        },
+        "status": "completed",
+        "completed_synthetic_dispatches": 2,
+        "candidate_hashes": {
+          "forge": "sha256:eb54a3d6314be71e0de235500c981383c203716769e8352555a5ef20718cf3f1",
+          "direct": "sha256:a003db1086a1e223084f68747070f9d1f8c6f44d15a4613a9540d24701e4156c"
+        }
+      },
+      {
+        "protocol_revision": "sha256:af97ed0bcf94e414aa07483c826457c7c782fc00e4e1c1ea8a457eb1b53727df",
+        "generation_contract": {
+          "forge_output_mode": "pi_tool_schema",
+          "forge_prompt_revision": "forge-structured-benchmark-v1",
+          "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+          "provider_json_schema_request": "required",
+          "forge_wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f",
+          "schema_descriptions": {
+            "mode": "interfaces-v1",
+            "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+            "wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f"
+          },
+          "direct_output_mode": "text_sql",
+          "sampling": "provider_default",
+          "transport": "sse",
+          "max_output_tokens": null,
+          "timeout_seconds": 120,
+          "provider_retries": 0,
+          "max_agent_turns_per_arm": 1,
+          "isolation_revision": "pi-benchmark-isolation-v1",
+          "pi_runtime_revision": "sha256:f6612f91028af494784d8ecc982513b47ba4ff2086df444ae19231b8c2f22d0d",
+          "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+        },
+        "status": "completed",
+        "completed_synthetic_dispatches": 2,
+        "candidate_hashes": {
+          "forge": "sha256:eb54a3d6314be71e0de235500c981383c203716769e8352555a5ef20718cf3f1",
+          "direct": "sha256:a003db1086a1e223084f68747070f9d1f8c6f44d15a4613a9540d24701e4156c"
+        }
+      }
+    ],
+    "network_paths": [
+      "/api/internal/benchmark-v2/suite",
+      "/api/internal/benchmark-v2/suite",
+      "/api/internal/benchmark-v2/protocol",
+      "/api/internal/benchmark-v2/context",
+      "/v1/chat/completions",
+      "/v1/chat/completions",
+      "/api/internal/benchmark-v2/evaluate",
+      "/api/internal/benchmark-v2/evaluate",
+      "/api/internal/benchmark-v2/suite",
+      "/api/internal/benchmark-v2/protocol",
+      "/api/internal/benchmark-v2/context",
+      "/v1/chat/completions",
+      "/v1/chat/completions",
+      "/api/internal/benchmark-v2/evaluate",
+      "/api/internal/benchmark-v2/evaluate",
+      "/api/internal/benchmark-v2/suite",
+      "/api/internal/benchmark-v2/protocol"
+    ]
+  },
+  "fixed_historical_candidates": {
+    "new_model_calls": 0,
+    "diagnostic_only": true,
+    "candidate_count": 16,
+    "authenticated_http_evaluations": 32,
+    "all_candidate_sql_results_ex_contract_identical": true,
+    "checked_fields": [
+      "sql",
+      "official_ea",
+      "contract_accuracy",
+      "scored",
+      "compile_status",
+      "execution_status",
+      "error_code",
+      "semantic_verdict",
+      "column_mapping",
+      "result"
+    ],
+    "cases": [
+      {
+        "case_id": "md-009",
+        "arm": "forge",
+        "source_candidate_sha256": "7a200ebd6e606ac5d03f6ea8d9d444f0426a83a210ff31acf9f0b9157456df2a",
+        "sql_sha256": "sha256:04dc3b849258f656d07035ccbc9bfb63418f6a82a9412847bfaa24984cebf3c2",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-009",
+        "arm": "direct",
+        "source_candidate_sha256": "4df139f77261375201e49469e41e424aa5b0277f6e5e431a4dcdc1a3fa4aab3f",
+        "sql_sha256": "sha256:2d89a9da793aee274d5915f2bb14f9105f59ffe4b6394d3e5858007ff0a713d8",
+        "official_ea": false,
+        "contract_accuracy": false,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": "result_value_mismatch",
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-079",
+        "arm": "forge",
+        "source_candidate_sha256": "3feb6376f8ef7ba2e2394273ae1d9f16cdb71dec8bc74ebbd3f29f6c0777251e",
+        "sql_sha256": "sha256:9f74f3ce2e7303569f788580958c1cd6a90e2318d4ed36cbadfd6a9d93e3eb9f",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-079",
+        "arm": "direct",
+        "source_candidate_sha256": "341fd41f7d126be42c5b7606230108da2517ec952c4f9c756239da89a2f40133",
+        "sql_sha256": "sha256:b46838189dec7de2b430681399bd7ee8af47e06e6342fa51fd1079fdbd6ab550",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-199",
+        "arm": "forge",
+        "source_candidate_sha256": "555de2c3ad4a58e41aaddf1f882f335e593d14ff5b3009577dd302134c32db7a",
+        "sql_sha256": "sha256:7be0318a2d7986be512e14591feab44f0e5626eb15c0926a0fbd6bd2cf92cea4",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-199",
+        "arm": "direct",
+        "source_candidate_sha256": "7ccdeef8b21501e3fe038e757fecbe7b7f9339fbb25813bad7875d4b49fc7234",
+        "sql_sha256": "sha256:86db0af5453871a3fdf776783a427a51beeef927ae414ee14de637c0d3500b29",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-289",
+        "arm": "forge",
+        "source_candidate_sha256": "229ac25b0b0282f202c9c19e0da66deca6186d546ffb91466854c7ecd352d42e",
+        "sql_sha256": "sha256:b2eccf19a9fb73f04654ab6bbcad4785634c949f06cbba1078b1f9c7f9e2f883",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-289",
+        "arm": "direct",
+        "source_candidate_sha256": "4c100533ab3036bc2afc50e496ba5fc7a71257ef9cf5ba2a3240a3c6dd181253",
+        "sql_sha256": "sha256:d5c5026d2ac97c6e9a31a2f73bcef0c1b695a4ae7e58fbd9d2dba1bb85a2775b",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-002",
+        "arm": "forge",
+        "source_candidate_sha256": "466f527f9a340534fdbffb394a12611cf443694676cf727a58d79df6cc5fd502",
+        "sql_sha256": "sha256:fc7d3ac6cf6569c8a022bd09102aba40626000a32408273f64f5137bae7e98dc",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-002",
+        "arm": "direct",
+        "source_candidate_sha256": "93ccd6d06cc0dac612c0b138b1232a00fd7643b0f53ee1564fe1ec8516a5fc69",
+        "sql_sha256": "sha256:550cf0b350eb024e3dca08146f71a5f78a29c39c71a59b8c1ddd71a5f21e106d",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-052",
+        "arm": "forge",
+        "source_candidate_sha256": "2b5e1e9a50f6487b0f1c810287ce66fae69909c85d7c43841654069d5d66751c",
+        "sql_sha256": "sha256:45d806332d3c76813cf790a0d9c18b108e3a1eb3ca726b50c26360d991743a68",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-052",
+        "arm": "direct",
+        "source_candidate_sha256": "a003db1086a1e223084f68747070f9d1f8c6f44d15a4613a9540d24701e4156c",
+        "sql_sha256": "sha256:cd6c2e6d5fed721e2710b2d142d06922d9cc57db5be17777dab22d46e1dbeda3",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-312",
+        "arm": "forge",
+        "source_candidate_sha256": "1de49f917c865bc0fdc4bb28c9d7c585cdaab940b002826a207d7299abd7e8fc",
+        "sql_sha256": "sha256:a2e80be2dbb2981196b44cce495a3b94c45636fe4b3777916e7274d48f4d420e",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-312",
+        "arm": "direct",
+        "source_candidate_sha256": "86754a14a0358e2f4ad764e08a46f0d91e994c651b2d511ab3175c40d35a1297",
+        "sql_sha256": "sha256:fc48952c2fe78f65653f22ad9c534b6c18cc29461ae822d60383b8d8913247fc",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-386",
+        "arm": "forge",
+        "source_candidate_sha256": "4ad1e7672a76414859a6cc8acf741e5f00a07019a4654e0472acf30770274724",
+        "sql_sha256": "sha256:4328a5326fc1345545d21b5ca0975ab40fcd47e8ee52de66b497fbd1270caa6c",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      },
+      {
+        "case_id": "md-386",
+        "arm": "direct",
+        "source_candidate_sha256": "5751e80fadcd8bd6f0820391686bd71318d27b9545b4bf4fe7e57220b9578c52",
+        "sql_sha256": "sha256:5f043c0cfe8bcb54138b0c178d34365dd35f19879d37f137361f7f41f071cf7c",
+        "official_ea": true,
+        "contract_accuracy": true,
+        "scored": true,
+        "execution_status": "passed",
+        "error_code": null,
+        "identical_in_both_conditions": true
+      }
+    ],
+    "explanation": "未修改的Sol原候选在当前两条件下诊断评分；无Pi新生成provenance，不作为生成收益或正式比较基线。"
+  },
+  "regression_verification": {
+    "python": {
+      "command": "FORGE_DISABLE_DOTENV=true .venv/bin/python -m pytest tests -q",
+      "passed": 1012,
+      "skipped": 26,
+      "warnings": 1,
+      "warning": "lark_oapi dependency utcfromtimestamp DeprecationWarning"
+    },
+    "pi": {
+      "command": "npm --prefix services/pi-orchestrator run typecheck && npm --prefix services/pi-orchestrator test",
+      "typecheck": "passed",
+      "passed": 226,
+      "failed": 0,
+      "warning": "Node experimental SQLite warning"
+    },
+    "critical_behavior_coverage": [
+      "候选实际payload与off/处理并发Run隔离",
+      "递归查询、SQL NULL、额外字段拒绝",
+      "候选pause/resume、重开及旧合同禁止续跑",
+      "未知/伪造mode/wire/catalog/canonical、缺对象、旧v4、未声明因素派发前拒绝",
+      "冻结后context及schema_context漂移、catalog/raw source漂移拒绝",
+      "无真实生成合同不可声明Schema说明可比收益；旧schema因素不可更换候选"
+    ]
+  },
+  "experiment_card": {
+    "status": "frozen_proposal_pending_explicit_64_call_authorization",
+    "requirement": "REQ-2026-09-08-065",
+    "hypothesis": "仅在strict工具Schema五字段增加准确说明，可减少定义/导出/引用错误并改善完整答案EX；键序、Prompt及其他输入不变。",
+    "model": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "expected_revision": "sha256:b18e69afb680689956ba8399d31d67e3f695b07da8aaf5ff44c5148bfc367693",
+      "revision_source": "REQ-058真实Luna回执；本轮未读取实际模型目录或凭据，启动前必须复核；不一致则派发前停止。"
+    },
+    "cohort": "D; previously exposed mechanism probes, not representative, not H, not seed49",
+    "case_ids": [
+      "md-009",
+      "md-079",
+      "md-199",
+      "md-289",
+      "md-002",
+      "md-052",
+      "md-312",
+      "md-386"
+    ],
+    "targets": [
+      {
+        "case_id": "md-009",
+        "basis": "REQ-054出现已定义CTE未进入FROM/JOIN的完整答案失败；固定value_context=off，不叠加取值补充。"
+      },
+      {
+        "case_id": "md-079",
+        "basis": "REQ-056/058正确百分比对照在别名、聚合/CTE投影上回退；检验无需CTE的最终答案接口。"
+      },
+      {
+        "case_id": "md-199",
+        "basis": "REQ-052/058暴露CTE导出与外层引用问题；不追加旧CTE Prompt范例。"
+      },
+      {
+        "case_id": "md-289",
+        "basis": "REQ-047同输入Forge从CTE引用失败变为成功，适合观察结构错误及重复稳定性，不把旧随机改善归因新处理。"
+      }
+    ],
+    "controls": [
+      {
+        "case_id": "md-002",
+        "db_id": "debit_card_specializing",
+        "basis": "既有Sol双臂EX与Contract均正确；本次必须与新Luna控制配对，历史成绩不替代新控制。"
+      },
+      {
+        "case_id": "md-052",
+        "db_id": "student_club",
+        "basis": "既有Sol双臂EX与Contract均正确；本次必须与新Luna控制配对，历史成绩不替代新控制。"
+      },
+      {
+        "case_id": "md-312",
+        "db_id": "codebase_community",
+        "basis": "既有Sol双臂EX与Contract均正确；本次必须与新Luna控制配对，历史成绩不替代新控制。"
+      },
+      {
+        "case_id": "md-386",
+        "db_id": "card_games",
+        "basis": "既有Sol双臂EX与Contract均正确；本次必须与新Luna控制配对，历史成绩不替代新控制。"
+      }
+    ],
+    "selection_audit": {
+      "excluded_before_freeze": "md-119虽有CTE导出错误，但旧triage标注Gold IGM边界争议；未进入正式冻结，改用已有CTE开发目标题md-199。此时零新生成，非事后换题。",
+      "no_replacement_after_freeze": true,
+      "gold_policy": "require_all",
+      "gold_ready": 8,
+      "blocked_cases": []
+    },
+    "conditions": {
+      "A": {
+        "schema_descriptions": "off",
+        "file": ".forge/benchmarks/schema-descriptions-ready-20260908/control.frozen.json",
+        "protocol_revision": "sha256:abece786f68ce4700ce2c95490f2ab04f5a7a6b959c2c95d82ba240501549866"
+      },
+      "B": {
+        "schema_descriptions": "interfaces-v1",
+        "file": ".forge/benchmarks/schema-descriptions-ready-20260908/treatment.frozen.json",
+        "protocol_revision": "sha256:7af14fb4447304214c28474626cb8ed82e5e93ce21ebf052706ccef2df7709c5"
+      }
+    },
+    "schedule": [
+      {
+        "position": 1,
+        "repeat": 1,
+        "condition": "A",
+        "logical_calls": 16
+      },
+      {
+        "position": 2,
+        "repeat": 1,
+        "condition": "B",
+        "logical_calls": 16
+      },
+      {
+        "position": 3,
+        "repeat": 2,
+        "condition": "B",
+        "logical_calls": 16
+      },
+      {
+        "position": 4,
+        "repeat": 2,
+        "condition": "A",
+        "logical_calls": 16
+      }
+    ],
+    "schedule_method": "ABBA运行级平衡分块；同一八题顺序、Pi现有固定并发2。一个Run终止后才启动下一个，重复1配A1/B1，重复2配A2/B2；不是逐次随机化，也不宣称完全消除时变噪声。无第二套调度。",
+    "authorization": {
+      "requested_logical_calls": 64,
+      "currently_authorized_model_calls": 0,
+      "actual_model_calls": 0,
+      "provider_retries": 0,
+      "replacement_calls": 0,
+      "extra_canary_calls": 0,
+      "new_r500_or_h_calls": 0,
+      "no_historical_budget_reuse": true
+    },
+    "fixed_contract": {
+      "sole_factor": "schema_descriptions",
+      "prompt": "forge-structured-benchmark-v1",
+      "date_context": "off",
+      "grain_context": "off",
+      "value_context": "off",
+      "sampling": "provider_default",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "freeze_and_provenance": "同模型revision、数据/Gold/上下文、canonical/Compiler/Assurance/评价器、SDK/runtime/catalog；仅mode与对应wire revision可变。"
+    },
+    "development_screen": {
+      "complete_denominator": "64次/64臂结果完整，EX均实际评分、usage全已知；失败、取消与未知不补零、不剔除、不补跑。",
+      "minimum_forge_ex_gain": 2,
+      "gain_denominator": "每条件16个Forge观测（8题×2重复）；DeltaF=EX_B-EX_A。",
+      "repeat_stable_target_gain": "至少一个预定目标题在两重复均A-EX错误→B-EX正确，且B两次Contract均正确；只修复编译不能算成功。",
+      "regression_guard": "两重复逐题均不得出现Forge EX或Contract已确认正确→错误/未知；四个正确控制的B-EX须8/8。",
+      "direct_noise_guard": "DeltaF-abs(DeltaD)>=2；DeltaD为同样16观测的Direct EX_B-EX_A。Direct变化全列配对表，下降不算Forge改动收益。",
+      "cost_guards": {
+        "treatment_total_tokens_max_control_ratio": 1.2,
+        "forge_tokens_per_ex_correct_max_control_ratio": 1.0,
+        "forge_generation_p95_max_control_ratio": 1.25,
+        "basis": "沿用REQ-058成本阈值，不重评或放宽旧实验结论。",
+        "tokens": "合并同条件两个Run的全部观测input/output/cache用量，含错误答案；分别单报两臂及两重复。",
+        "p95": "沿用forge.accuracy_benchmark._p95的nearest-rank：每条件16个Forge generation_ms观测，在此恰为最大值；不含SQL执行，不是生产P95估计。",
+        "undefined_metrics": "not_passed"
+      },
+      "metrics": "Official EX主指标，Contract独立；每重复/合并的wrong→correct、correct→wrong、执行/拒绝/静默错误代理、first-pass（本实验即final）、tokens/正确任务、时延/未知费用全部披露。",
+      "failure_action": "输入/模型漂移、Provider错误或未知用量立即停止后续Run，保留已发生调用与完整分母；任一最终门槛失败则默认继续off，不重试/换题/扩样追分。",
+      "promotion": "只筛查值得进一步验证的开发信号；即使通过也不宣称超过Direct或自动默认开启。另行获批R500与未参与调参的H；预定业务增益/功效，H配对差值95%区间下界>0才称统计优势。现有已曝光500题不得改称H。"
+    },
+    "cost_disclosure": {
+      "billing_amount": null,
+      "hard_currency_or_token_cap": false,
+      "explanation": "64是逻辑调用上限，不是结算费用/Token硬上限；沿用max_output_tokens=null及120秒，新增1137 Schema字节不等于实测Token数。相对成本/P95阈值是结果验收门槛，不能保证事前费用。若需要硬Token预算，须另定协议而非暗改本单因素。"
+    },
+    "user_decision_required": "是否接受上述固定设计、成本边界与门槛，并单独授权最多64次Luna真实生成。",
+    "card_sha256": "sha256:2229da5b5a68ac941663c6de3c4fed8ef82f18087e5bf124565e333223e2164b"
+  },
+  "frozen_manifests": {
+    "control": {
+      "schema_version": "bird-protocol-v5",
+      "source": {
+        "dataset": "BIRD-SQL Mini-Dev",
+        "repository": "https://github.com/bird-bench/mini_dev",
+        "license": "CC BY-SA 4.0",
+        "exposed": true,
+        "gold_use": "scoring_only"
+      },
+      "cohort": "D",
+      "purpose": "development",
+      "case_ids": [
+        "md-009",
+        "md-079",
+        "md-199",
+        "md-289",
+        "md-002",
+        "md-052",
+        "md-312",
+        "md-386"
+      ],
+      "selection": {
+        "method": "explicit"
+      },
+      "denominator": 8,
+      "official_denominator": 500,
+      "dataset_files": {
+        "dev_databases/california_schools/california_schools.sqlite": "sha256:c0903eec662e63068fd1d14403d3d6c1d473287fc10c4356333ea58f878db983",
+        "dev_databases/california_schools/database_description/frpm.csv": "sha256:f2c3fa53a02c5d711866a192f580c6a545389192a096441767f40d72ffa41334",
+        "dev_databases/california_schools/database_description/satscores.csv": "sha256:a44145158100894387d05a96987c487e3c83742892b13127b486de309bb8f138",
+        "dev_databases/california_schools/database_description/schools.csv": "sha256:f18d96abf47892e4bd8094dd47d6978ea6bbc11821eccdf91f3f54dd1685979f",
+        "dev_databases/card_games/card_games.sqlite": "sha256:c98bdb57fe7474da798b407785544b9af0daaad5d61fd21e2a73309493bc1227",
+        "dev_databases/card_games/database_description/cards.csv": "sha256:41bc566e91e165f43f7484a1d3d3f17e66094e2c0cc3092829366f6e2f019d23",
+        "dev_databases/card_games/database_description/foreign_data.csv": "sha256:ac254726eeb2d0fd574ec64bac31617ac233842623f692469b7569febe9f3310",
+        "dev_databases/card_games/database_description/legalities.csv": "sha256:223def1785f0f6f277db07a7881e8938e4314382697da47c080d14b52f1253e9",
+        "dev_databases/card_games/database_description/rulings.csv": "sha256:c50c64dd4d882a17d1a8478cd48b889103a39464c78f3da5dd904fde966bd3d4",
+        "dev_databases/card_games/database_description/set_translations.csv": "sha256:d6f172ff2add8a399176cdb9ef32a5d60c8cf11186363e6142bb48a09debb2ff",
+        "dev_databases/card_games/database_description/sets.csv": "sha256:3679c8051713f1574d40ff6793eaebf590705915d20f086ffe3ee930a4ddbb0e",
+        "dev_databases/codebase_community/codebase_community.sqlite": "sha256:92101be6d2a9f6adceea59d38f6d1c556087f9eea1432432a21268cb1348036d",
+        "dev_databases/codebase_community/database_description/badges.csv": "sha256:a1a7fc9783f11107c6b80adc54d0404a31d7bc162a1f5ae5e246e4852dc41a09",
+        "dev_databases/codebase_community/database_description/comments.csv": "sha256:bd8de09b3eab2b4a1f69d9298460b0f39d919504d5dfb34d00de302b77e520eb",
+        "dev_databases/codebase_community/database_description/postHistory.csv": "sha256:053779c106b3bc61da71744e918b321a2436180e5c57ad2a706e9c29fef11e94",
+        "dev_databases/codebase_community/database_description/postLinks.csv": "sha256:789fefbd5b9b8db2653f8079c78325d6e3fd23a2ceff69ed7ee8959674ff014c",
+        "dev_databases/codebase_community/database_description/posts.csv": "sha256:33e6883bbadc4fe77b5f4f593f7f23d74c2bc2bc45c8f2086c328beeefeb28e2",
+        "dev_databases/codebase_community/database_description/tags.csv": "sha256:27bc5022eeb20e18dc588a1f3cb63ac2c23720670f003fdd776ae9a5aad0a0d7",
+        "dev_databases/codebase_community/database_description/users.csv": "sha256:69d3297922932d9b39eb56e673606ba56fb3474a650fe417ea32d4d627160014",
+        "dev_databases/codebase_community/database_description/votes.csv": "sha256:9c3856469bc9fd563d86f7062bfb9d632c6e98ae42fd7c52117e0be15e9e7ccf",
+        "dev_databases/debit_card_specializing/database_description/customers.csv": "sha256:fd1ff06796da13f6331801dba2a24536fd0aed887cde2a8d08cd03530de88f2d",
+        "dev_databases/debit_card_specializing/database_description/gasstations.csv": "sha256:4e44804b860c9fe412dd8872a4f53fc0e1094035ecc027fac4d9477d05766199",
+        "dev_databases/debit_card_specializing/database_description/products.csv": "sha256:b61419d9b6481b170230a302c313fd787b5f0291f9a1a15fb3a55eb6d4f5f538",
+        "dev_databases/debit_card_specializing/database_description/transactions_1k.csv": "sha256:08bed279bc784952f1e17c97b290cf869ede6f9ea0914641052546408626b0af",
+        "dev_databases/debit_card_specializing/database_description/yearmonth.csv": "sha256:7faf48ff08295935610dc07b33596028483f8270dd1ace0c6a512ae65f8a2e16",
+        "dev_databases/debit_card_specializing/debit_card_specializing.sqlite": "sha256:b3d149ad05746dbbe5116e229e17e18f09c39db43cf117d9ef3441753608b691",
+        "dev_databases/european_football_2/database_description/Country.csv": "sha256:e74aa65527321782a69ec5fdc68c3993aa6e1e5684426724776b81d12bcbe437",
+        "dev_databases/european_football_2/database_description/League.csv": "sha256:d44bbef373f44c16dee4729012375c1bf901664f1097e3af4bb3dfc973067437",
+        "dev_databases/european_football_2/database_description/Match.csv": "sha256:2facc86ec5e869e7bb61b67fa660591c0a4f6291da79125dc2777a2bdafdd4dd",
+        "dev_databases/european_football_2/database_description/Player.csv": "sha256:a7a3cdc5c995227bbfcddf88d789f9244ffcfe0f6aed8aa69fcbef084149b92c",
+        "dev_databases/european_football_2/database_description/Player_Attributes.csv": "sha256:d01a00206b4ec6e94435f3af7e5153abca01931c4e93a519bb86ca5bbd42b46c",
+        "dev_databases/european_football_2/database_description/Team.csv": "sha256:104e03607f09cb41deddcb24a96add08aa2e9d8fc169454c3091a792df9f81ef",
+        "dev_databases/european_football_2/database_description/Team_Attributes.csv": "sha256:3fbad7950903c65a467c291282ab90d773a9e517802e0fffad5c5abfa7390840",
+        "dev_databases/european_football_2/european_football_2.sqlite": "sha256:f72f5c9b990371417288a67b27a02e601ef904d45525c2c9f7931fb01001c536",
+        "dev_databases/financial/database_description/account.csv": "sha256:98f9b72619c30593fadc013efc668d081193f34f2bda1353214c48c8013f03b3",
+        "dev_databases/financial/database_description/card.csv": "sha256:1dd79bf48c7696a5e6c3fc4835c9994b129f58307ad75c2f874f9cd1078fe300",
+        "dev_databases/financial/database_description/client.csv": "sha256:d1ef6f74b4730737517307c2f3b219496af264d83fe3e34f435c078b368dd800",
+        "dev_databases/financial/database_description/disp.csv": "sha256:3b7ade14650a78e7122fdf4f423c4dae241e923d73039c65e5e85b7ac7919ffe",
+        "dev_databases/financial/database_description/district.csv": "sha256:6da804294fe9e7f9f8285759b842e39e0c5c8cb10390a93d5e292c2cb28fdc48",
+        "dev_databases/financial/database_description/loan.csv": "sha256:e6f4c7393d3973c9647913206ec4da2b9480bca4a8fb1ed45f4d42c433112756",
+        "dev_databases/financial/database_description/order.csv": "sha256:d01db89f3121b96a8c5876108d835ad0ab8d8bd5e132d9d823d384ae12706476",
+        "dev_databases/financial/database_description/trans.csv": "sha256:59efafabbb4347853f29ebfc14fdd18633f724a669e7e26cb7b2ecd628d6c4a2",
+        "dev_databases/financial/financial.sqlite": "sha256:d15d89cdb068a202b6f2b99342af44dffc1d52545b39ceaf62efdc0ba570101e",
+        "dev_databases/formula_1/database_description/circuits.csv": "sha256:fd69591f97ae0cb3b36b2d35524f03e5ec250c52358a71b2e41d435f3b2b658d",
+        "dev_databases/formula_1/database_description/constructorResults.csv": "sha256:b446078a76a422e9fbbb3246acf18a36bc75a441fac5f907555ac7031834f7d5",
+        "dev_databases/formula_1/database_description/constructorStandings.csv": "sha256:d7df8f78744b244375278bb092f8b6d05c9cf4964bdc9cd41eb60261678db861",
+        "dev_databases/formula_1/database_description/constructors.csv": "sha256:79eb5ffde214702c1465ffa8584d59d3fc2e6a43fd8c41db91c02402af239dd4",
+        "dev_databases/formula_1/database_description/driverStandings.csv": "sha256:3cc467154abbf10dfc7f8ea5fdec512b5674f0683d36b893085a04de5d9aca5e",
+        "dev_databases/formula_1/database_description/drivers.csv": "sha256:0444a1610c97dcc1cb1af25a8aed4dc3ca585a0b27f8326d1bb9ffaa6f4e8635",
+        "dev_databases/formula_1/database_description/lapTimes.csv": "sha256:6fc86f0867ca9fc350b8583c18a74784d7a2e78afb1bc6462f83e3b7cddf5573",
+        "dev_databases/formula_1/database_description/pitStops.csv": "sha256:6c1c7eb14a445b617710ac286e1f5a303e8b808062fa760c2054c276b2b79fab",
+        "dev_databases/formula_1/database_description/qualifying.csv": "sha256:35b7e1ce9def76a653407a54f2b18901768392d92d1ef2484d24c20077c77e0e",
+        "dev_databases/formula_1/database_description/races.csv": "sha256:a8e61de0c7e966c5198c701475d80276065f3a1cf96c3b79051c3541d8fd60d3",
+        "dev_databases/formula_1/database_description/results.csv": "sha256:7f7cde75b468b8ea135c6ed0872ef30ff715fda691786ca58e70d783b0a23b5d",
+        "dev_databases/formula_1/database_description/seasons.csv": "sha256:6a87681dcc94db3f6c81879c8569ec29a966eccc7277aa1d9ad59b16e314e5c9",
+        "dev_databases/formula_1/database_description/status.csv": "sha256:78725236cee342600f862cea296e87a4ea2e047d64d365f594526363f8acde57",
+        "dev_databases/formula_1/formula_1.sqlite": "sha256:79770caf966707e35516fa566e24b40ae515c74ec1ec4631235245645b87b24d",
+        "dev_databases/student_club/database_description/Attendance.csv": "sha256:33a5d912e8fea231ecd73d1ee3847433ced7d1768b91866bd1403fb7fd88ea22",
+        "dev_databases/student_club/database_description/Budget.csv": "sha256:b9000d8f18b4a1613ea3c1877a41823375c2405647756a694591722ba86e60cd",
+        "dev_databases/student_club/database_description/Event.csv": "sha256:1bf99aa2ce4ae79886eb0d4204e3edd1f0c8c0e44ed427c166f3a1a1af0aec04",
+        "dev_databases/student_club/database_description/Expense.csv": "sha256:b323e60df3ebfa3ec64686a1d76bece0bb94d81cfe5b642a54b6763b67be302d",
+        "dev_databases/student_club/database_description/Income.csv": "sha256:573755cd0f41a5dce3a053eb877a52f101bf21af745aaf83170093aa5a4d0579",
+        "dev_databases/student_club/database_description/Major.csv": "sha256:baca5c68fa1b1c9a427445bd60a1c8702cbdab9d27d5eb0a4304fb7f2ef32e0d",
+        "dev_databases/student_club/database_description/Member.csv": "sha256:1b9dda90d5fdccc4f70f057bf594a6935975e55a9f81d333714d74d1f4d9674a",
+        "dev_databases/student_club/database_description/Zip_Code.csv": "sha256:1c903324ec3ff9decd6abb10ac96e3746e1c1b776a26d3a8d4bf5244c8620ecb",
+        "dev_databases/student_club/student_club.sqlite": "sha256:eb89bcfe97eefa386a27904ec5aa15159811a7eac894ec659a36e48fa9f76b77",
+        "dev_databases/superhero/database_description/alignment.csv": "sha256:ebff59e5832b2870c298d2bbc85607e0f6b93c4921ff4d3265803d02a8796dce",
+        "dev_databases/superhero/database_description/attribute.csv": "sha256:3c6bac9176d61e05ba059e8be6a3d5c5aa6eb743f526f07a1570f172cdbf6c72",
+        "dev_databases/superhero/database_description/colour.csv": "sha256:ba732eddb938dc077cbc3f038057f566f9f12ccb53cc131168a5da538514b9cf",
+        "dev_databases/superhero/database_description/gender.csv": "sha256:7311f964c77b6319184bbfc9ce8cc0ef87a103106bb1d6967461a5c681a3fe08",
+        "dev_databases/superhero/database_description/hero_attribute.csv": "sha256:65af1dfdb96e4ddaba6262f3dffe9f61ea240c31d0ea2122e974d769827f039b",
+        "dev_databases/superhero/database_description/hero_power.csv": "sha256:54eb40baa6b5b726bff28c872478caa8da8500f195239f8c6c3c552797c3794f",
+        "dev_databases/superhero/database_description/publisher.csv": "sha256:232e8656107f426beb3c7a25f1833afb295dbfa2ae3981b2a200f08ed4f1f000",
+        "dev_databases/superhero/database_description/race.csv": "sha256:8eb79fe0d1fc7d5641eff43d34e0e10b89fa726360d913bbee31dd55191064c7",
+        "dev_databases/superhero/database_description/superhero.csv": "sha256:503f0a71acd1766923c571865277f81accbf79b2c9d8df4a18439dfe01ec6f44",
+        "dev_databases/superhero/database_description/superpower.csv": "sha256:4edef8900f158238382843e348ff9842991c83f1d384c53bef5dd8cb1e613ee2",
+        "dev_databases/superhero/superhero.sqlite": "sha256:75e94a2c3236ee3bb2c01fb97a1c4b4c1c269bcefd4eab1d04be323d2d0825b1",
+        "dev_databases/thrombosis_prediction/database_description/Examination.csv": "sha256:b563c9030159bf169236e4582b653386bd34706e309227bf5eceb63b91eb0a89",
+        "dev_databases/thrombosis_prediction/database_description/Laboratory.csv": "sha256:cf9704e56cf3aca75e38de09277c307a7f0f726301b472254ce66ff4a352ff9f",
+        "dev_databases/thrombosis_prediction/database_description/Patient.csv": "sha256:519838a9f2592760bb26d1fb4f074bc304eee4e7aeaf46d03f652c370230e175",
+        "dev_databases/thrombosis_prediction/thrombosis_prediction.sqlite": "sha256:87583183c3dc472fba04de702965560a9d7c0a548836613f242317e0eeb83f00",
+        "dev_databases/toxicology/database_description/atom.csv": "sha256:9de75492701c77c1229242e8c3b688ced9eb9095ac59d37361dfb0ec34300245",
+        "dev_databases/toxicology/database_description/bond.csv": "sha256:7d200d38b0dcc07e8fe22718bd6bdb1bdf4b6522b7a84a5d0c95340b6d8cb4bc",
+        "dev_databases/toxicology/database_description/connected.csv": "sha256:589b24206b9f884863ca57f3e339abcb2409a15feeaff0b08afcd955cd211036",
+        "dev_databases/toxicology/database_description/molecule.csv": "sha256:a6ff2966916d03b07fd3ce275823d9ec65abb0b55158e871b07c40972b292d70",
+        "dev_databases/toxicology/toxicology.sqlite": "sha256:35ef27ae6bdfda530e125ed369666ac0abb8bc8c0bcc0ad09407f547ecb61a93",
+        "dev_tables.json": "sha256:48aa9febe7282d1690f3ed1f222dc040c182df83812ba4e9bee956084d99c8ff",
+        "mini_dev_sqlite.json": "sha256:4ba5fa8de55856222f484d380d2ba872b380bf79d825de70478e2120cb0fc43b"
+      },
+      "sources": {
+        "prompt": {
+          "agent/prompts.py": "sha256:eff191736809d2645248b467ccafa49245f1f93480334694fe4c5d3ae6354e0b"
+        },
+        "schema": {
+          "agent/contracts/query-candidate-v1.schema.json": "sha256:2ff6c4447f8f516bdec9fb877c6deff696fae7a822efdbe27559d151b8ec652d",
+          "forge/schema.json": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723"
+        },
+        "schema_descriptions": {
+          "agent/contracts/forge-output-descriptions-v1.json": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18"
+        },
+        "compiler": {
+          "forge/compiler.py": "sha256:05d5d6e4b38431aa8e2e1d34b6f38cffc43cd38482e6cfd127a650f017903284"
+        },
+        "context": {
+          "forge/benchmark_metadata.py": "sha256:e8c7752faeed4d954e73b9763233e729979bd4cef0dcc82d44a16fe6b8f70bb5",
+          "forge/benchmark_v2.py": "sha256:74b689dd3de3fbf4c51dda6e23be1b4193cc377c3e1e6d1794b2b7867f1c967e"
+        },
+        "safety": {
+          "forge/executor.py": "sha256:cc2e821ae8c7e48d0f5a956d943e4b6330343e02d169edb9a0780eb44cd658f1",
+          "forge/lint.py": "sha256:b78c85be53defb33c96f0507f67dae072c49447c0798fbfac79c05148ee27d94",
+          "registry/relationships.py": "sha256:d2d109af1e2b11fd661c6140a10c37d3e1e5619538088f9d4c6a65867191135a"
+        },
+        "official_snapshot": {
+          "tests/datasets/bird_mini_dev_standard.json": "sha256:0886f203ad6f41412b66ef843d3e87f939f565bc5cddbe7232b1ebe24d11698f"
+        },
+        "evaluator": {
+          "agent/contracts/__init__.py": "sha256:12146de2af766d894a2f78abfa6e40a2fd1469a8dabefd00bd6dd02192b6812c",
+          "agent/contracts/benchmark-failure-v1.schema.json": "sha256:0d57f63bdd06b29aa54006fd768a6addd174a1cccce72a699a09a0c4d85702c0",
+          "forge/assurance.py": "sha256:25232efe2311b536822783a7129c9d89536c194b3e13205d05a00502e94c62f0",
+          "forge/benchmark_methods.py": "sha256:22ec345d80b90db7a96d83f6b9cce2e4fe9493e25c709ef1bd831dbc3ee5f01d",
+          "forge/benchmark_service.py": "sha256:1f0398858e5e7fab387c860953249a01369de141a35948b856652910cabd1386",
+          "forge/bird_benchmark.py": "sha256:b4a1482b6f245c885347741ce691c898c6f00a3c954161faaa7e9afde2c5e40c",
+          "forge/hard_accuracy_benchmark.py": "sha256:32963cce5222a8f5d26a77374491445c61c45358a1ecaaf1d259d469eb2c6a0c",
+          "pyproject.toml": "sha256:088f3b0c5960661037ab6de0129ec6eec433eb3304eec7f66a82cdfbcfba1bcd"
+        }
+      },
+      "model": {
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna"
+      },
+      "generation": {
+        "max_model_calls": 16,
+        "provider_retries": 0,
+        "max_agent_turns_per_arm": 1,
+        "timeout_seconds": 120,
+        "sampling": "provider_default",
+        "max_output_tokens": null
+      },
+      "gold_readiness": {
+        "policy": "require_all",
+        "blocked_cases": []
+      },
+      "variables": {
+        "allowed_changes": [
+          "schema_descriptions"
+        ]
+      },
+      "date_context": {
+        "mode": "off",
+        "max_rows": 100
+      },
+      "grain_context": {
+        "mode": "off"
+      },
+      "value_context": {
+        "mode": "off",
+        "field": null,
+        "max_values": 16
+      },
+      "schema_descriptions": {
+        "mode": "off",
+        "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+        "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d"
+      },
+      "metric_revision": "semantic-result-compare-v2",
+      "official_ex_revision": "bird_execution_accuracy_exact_set_v1",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "context_hashes": {
+        "md-009": {
+          "snapshot": "sha256:b0fe819ea69c7d9dcda31dff5b6073f1bded828078467e8fa8c42b5f4ca43d22",
+          "schema": "sha256:b915f6c4b8f985b6cf2e4d90e561f217c342c5b3e33ed8a01f51252ce18ed53c",
+          "forge": "sha256:6fa52964572271372c6c38f3c1875e4682e7709bcfc879dfa878ea2fc3f8ea93",
+          "direct": "sha256:93f2d51ab4b7fa40f6821f3ac6de8465044659e545057c8d0459bdfa031b52d8",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-079": {
+          "snapshot": "sha256:21ab8fd129d69e3e08563c59682deda787d2d932da61425ffa39422a06b0129a",
+          "schema": "sha256:4c0f1254efae5e9e57c43300f80151ee10e00bcd312ac648c41fbef399985b7b",
+          "forge": "sha256:0361cf4e9f7bc97d6b7d0f0825e85c7032504e461de1834a340c928b91b1b489",
+          "direct": "sha256:e5e64f9573e3687e69811f574beafb0ad428c662d3778bf6293249ea175efb79",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-199": {
+          "snapshot": "sha256:9e7ac9eae571e86e02fc4402fc46f432610ee7954f062bcb92e381c931604b55",
+          "schema": "sha256:8b3c67bb47b8fb49bc27d8d9ab8bb62d936a382b268eae99d55101d7b0d3adbc",
+          "forge": "sha256:4d494cfb100a4afd5786fb45d7b21b9c54428242ade9106ecaad4020ca7f74a4",
+          "direct": "sha256:baf37bd1577e965c54fa4ce62d0596d7d64c03c66fc6341fd7d7c82a1b03f015",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-289": {
+          "snapshot": "sha256:9d7ac490c3e9ea1cfd532d3879003b5555a36471ee2cc3ec3c8f9c149718ad31",
+          "schema": "sha256:092165277e5a0b0795c180332993df873996d7e66ff2c158657a1ec5103297fa",
+          "forge": "sha256:2ffe1082026016359e3d83f8995e5ef48714b1c16abc0c86a4d2da1334134f5f",
+          "direct": "sha256:13242726ff2e9c32fa4cb31be09eb91ac7a26b806bea4dc596081b4c4573438e",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-002": {
+          "snapshot": "sha256:0ecba77b6d59f89bd98e355d93c429c7f91dbdfca79f41b4b0eadf9bd39d483e",
+          "schema": "sha256:b915f6c4b8f985b6cf2e4d90e561f217c342c5b3e33ed8a01f51252ce18ed53c",
+          "forge": "sha256:593c0e9b5acb70f0904c269d91641ba93deccbc9a3f198c2e414c36c62fce80f",
+          "direct": "sha256:8adffd53d8ba1565f855208a2a38433c3b16a69311eba8ce043425118709baf5",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-052": {
+          "snapshot": "sha256:d63c1decac44459f9d672e6dfad4655b72e0da81a0426cb2ca253d141b49b781",
+          "schema": "sha256:7c0395d7270401bf6e5253c4604e33a18b4d7263bbb6466d19648006dc6ee5ff",
+          "forge": "sha256:0ca7b8ce2376366213cc8c7f0828148a2558990c4a555e38a1ce36e7a0281955",
+          "direct": "sha256:59d9180585309f09670abb2681c14400a4121e88e0ac1ff2a090606817aaf7de",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-312": {
+          "snapshot": "sha256:75437f836736f9e96b3260c36baa0e62493bc14f7186e78b5dc292db77e51426",
+          "schema": "sha256:161e5567a4dd24f75807d29c2034b5739b6b6347b3c65a1904e83d474774e92a",
+          "forge": "sha256:bd66bff745024e706025df05f06a05508ad12a419e72eac1e4eb0b44ce53f0e4",
+          "direct": "sha256:3c83ee0c8ea95f2c8bb01e7a44d1158a42a954bee00258ce1df45df42ef1d4ff",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-386": {
+          "snapshot": "sha256:620fc864784d339de7ca10a6322073b6cb4b900bc3205800ecb71652eb14ccda",
+          "schema": "sha256:3df9b560b244b44495961f169977414f063fdf08819b134982cbc62eb8fe2017",
+          "forge": "sha256:aad0642910ee0268d06fe2d0ba66fefc6c0dba7b4573ffea0e79b6aeb4569ccc",
+          "direct": "sha256:5ec2bf42875efed48f45aad16fc17ef98c706c6e02cde529cda018a954d352fd",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      },
+      "runtime": {
+        "python": "3.14.7",
+        "sqlite": "3.53.4",
+        "sqlglot": "29.0.1",
+        "jsonschema": "4.26.0",
+        "numpy": "2.5.2",
+        "pydantic": "2.13.5"
+      }
+    },
+    "treatment": {
+      "schema_version": "bird-protocol-v5",
+      "source": {
+        "dataset": "BIRD-SQL Mini-Dev",
+        "repository": "https://github.com/bird-bench/mini_dev",
+        "license": "CC BY-SA 4.0",
+        "exposed": true,
+        "gold_use": "scoring_only"
+      },
+      "cohort": "D",
+      "purpose": "development",
+      "case_ids": [
+        "md-009",
+        "md-079",
+        "md-199",
+        "md-289",
+        "md-002",
+        "md-052",
+        "md-312",
+        "md-386"
+      ],
+      "selection": {
+        "method": "explicit"
+      },
+      "denominator": 8,
+      "official_denominator": 500,
+      "dataset_files": {
+        "dev_databases/california_schools/california_schools.sqlite": "sha256:c0903eec662e63068fd1d14403d3d6c1d473287fc10c4356333ea58f878db983",
+        "dev_databases/california_schools/database_description/frpm.csv": "sha256:f2c3fa53a02c5d711866a192f580c6a545389192a096441767f40d72ffa41334",
+        "dev_databases/california_schools/database_description/satscores.csv": "sha256:a44145158100894387d05a96987c487e3c83742892b13127b486de309bb8f138",
+        "dev_databases/california_schools/database_description/schools.csv": "sha256:f18d96abf47892e4bd8094dd47d6978ea6bbc11821eccdf91f3f54dd1685979f",
+        "dev_databases/card_games/card_games.sqlite": "sha256:c98bdb57fe7474da798b407785544b9af0daaad5d61fd21e2a73309493bc1227",
+        "dev_databases/card_games/database_description/cards.csv": "sha256:41bc566e91e165f43f7484a1d3d3f17e66094e2c0cc3092829366f6e2f019d23",
+        "dev_databases/card_games/database_description/foreign_data.csv": "sha256:ac254726eeb2d0fd574ec64bac31617ac233842623f692469b7569febe9f3310",
+        "dev_databases/card_games/database_description/legalities.csv": "sha256:223def1785f0f6f277db07a7881e8938e4314382697da47c080d14b52f1253e9",
+        "dev_databases/card_games/database_description/rulings.csv": "sha256:c50c64dd4d882a17d1a8478cd48b889103a39464c78f3da5dd904fde966bd3d4",
+        "dev_databases/card_games/database_description/set_translations.csv": "sha256:d6f172ff2add8a399176cdb9ef32a5d60c8cf11186363e6142bb48a09debb2ff",
+        "dev_databases/card_games/database_description/sets.csv": "sha256:3679c8051713f1574d40ff6793eaebf590705915d20f086ffe3ee930a4ddbb0e",
+        "dev_databases/codebase_community/codebase_community.sqlite": "sha256:92101be6d2a9f6adceea59d38f6d1c556087f9eea1432432a21268cb1348036d",
+        "dev_databases/codebase_community/database_description/badges.csv": "sha256:a1a7fc9783f11107c6b80adc54d0404a31d7bc162a1f5ae5e246e4852dc41a09",
+        "dev_databases/codebase_community/database_description/comments.csv": "sha256:bd8de09b3eab2b4a1f69d9298460b0f39d919504d5dfb34d00de302b77e520eb",
+        "dev_databases/codebase_community/database_description/postHistory.csv": "sha256:053779c106b3bc61da71744e918b321a2436180e5c57ad2a706e9c29fef11e94",
+        "dev_databases/codebase_community/database_description/postLinks.csv": "sha256:789fefbd5b9b8db2653f8079c78325d6e3fd23a2ceff69ed7ee8959674ff014c",
+        "dev_databases/codebase_community/database_description/posts.csv": "sha256:33e6883bbadc4fe77b5f4f593f7f23d74c2bc2bc45c8f2086c328beeefeb28e2",
+        "dev_databases/codebase_community/database_description/tags.csv": "sha256:27bc5022eeb20e18dc588a1f3cb63ac2c23720670f003fdd776ae9a5aad0a0d7",
+        "dev_databases/codebase_community/database_description/users.csv": "sha256:69d3297922932d9b39eb56e673606ba56fb3474a650fe417ea32d4d627160014",
+        "dev_databases/codebase_community/database_description/votes.csv": "sha256:9c3856469bc9fd563d86f7062bfb9d632c6e98ae42fd7c52117e0be15e9e7ccf",
+        "dev_databases/debit_card_specializing/database_description/customers.csv": "sha256:fd1ff06796da13f6331801dba2a24536fd0aed887cde2a8d08cd03530de88f2d",
+        "dev_databases/debit_card_specializing/database_description/gasstations.csv": "sha256:4e44804b860c9fe412dd8872a4f53fc0e1094035ecc027fac4d9477d05766199",
+        "dev_databases/debit_card_specializing/database_description/products.csv": "sha256:b61419d9b6481b170230a302c313fd787b5f0291f9a1a15fb3a55eb6d4f5f538",
+        "dev_databases/debit_card_specializing/database_description/transactions_1k.csv": "sha256:08bed279bc784952f1e17c97b290cf869ede6f9ea0914641052546408626b0af",
+        "dev_databases/debit_card_specializing/database_description/yearmonth.csv": "sha256:7faf48ff08295935610dc07b33596028483f8270dd1ace0c6a512ae65f8a2e16",
+        "dev_databases/debit_card_specializing/debit_card_specializing.sqlite": "sha256:b3d149ad05746dbbe5116e229e17e18f09c39db43cf117d9ef3441753608b691",
+        "dev_databases/european_football_2/database_description/Country.csv": "sha256:e74aa65527321782a69ec5fdc68c3993aa6e1e5684426724776b81d12bcbe437",
+        "dev_databases/european_football_2/database_description/League.csv": "sha256:d44bbef373f44c16dee4729012375c1bf901664f1097e3af4bb3dfc973067437",
+        "dev_databases/european_football_2/database_description/Match.csv": "sha256:2facc86ec5e869e7bb61b67fa660591c0a4f6291da79125dc2777a2bdafdd4dd",
+        "dev_databases/european_football_2/database_description/Player.csv": "sha256:a7a3cdc5c995227bbfcddf88d789f9244ffcfe0f6aed8aa69fcbef084149b92c",
+        "dev_databases/european_football_2/database_description/Player_Attributes.csv": "sha256:d01a00206b4ec6e94435f3af7e5153abca01931c4e93a519bb86ca5bbd42b46c",
+        "dev_databases/european_football_2/database_description/Team.csv": "sha256:104e03607f09cb41deddcb24a96add08aa2e9d8fc169454c3091a792df9f81ef",
+        "dev_databases/european_football_2/database_description/Team_Attributes.csv": "sha256:3fbad7950903c65a467c291282ab90d773a9e517802e0fffad5c5abfa7390840",
+        "dev_databases/european_football_2/european_football_2.sqlite": "sha256:f72f5c9b990371417288a67b27a02e601ef904d45525c2c9f7931fb01001c536",
+        "dev_databases/financial/database_description/account.csv": "sha256:98f9b72619c30593fadc013efc668d081193f34f2bda1353214c48c8013f03b3",
+        "dev_databases/financial/database_description/card.csv": "sha256:1dd79bf48c7696a5e6c3fc4835c9994b129f58307ad75c2f874f9cd1078fe300",
+        "dev_databases/financial/database_description/client.csv": "sha256:d1ef6f74b4730737517307c2f3b219496af264d83fe3e34f435c078b368dd800",
+        "dev_databases/financial/database_description/disp.csv": "sha256:3b7ade14650a78e7122fdf4f423c4dae241e923d73039c65e5e85b7ac7919ffe",
+        "dev_databases/financial/database_description/district.csv": "sha256:6da804294fe9e7f9f8285759b842e39e0c5c8cb10390a93d5e292c2cb28fdc48",
+        "dev_databases/financial/database_description/loan.csv": "sha256:e6f4c7393d3973c9647913206ec4da2b9480bca4a8fb1ed45f4d42c433112756",
+        "dev_databases/financial/database_description/order.csv": "sha256:d01db89f3121b96a8c5876108d835ad0ab8d8bd5e132d9d823d384ae12706476",
+        "dev_databases/financial/database_description/trans.csv": "sha256:59efafabbb4347853f29ebfc14fdd18633f724a669e7e26cb7b2ecd628d6c4a2",
+        "dev_databases/financial/financial.sqlite": "sha256:d15d89cdb068a202b6f2b99342af44dffc1d52545b39ceaf62efdc0ba570101e",
+        "dev_databases/formula_1/database_description/circuits.csv": "sha256:fd69591f97ae0cb3b36b2d35524f03e5ec250c52358a71b2e41d435f3b2b658d",
+        "dev_databases/formula_1/database_description/constructorResults.csv": "sha256:b446078a76a422e9fbbb3246acf18a36bc75a441fac5f907555ac7031834f7d5",
+        "dev_databases/formula_1/database_description/constructorStandings.csv": "sha256:d7df8f78744b244375278bb092f8b6d05c9cf4964bdc9cd41eb60261678db861",
+        "dev_databases/formula_1/database_description/constructors.csv": "sha256:79eb5ffde214702c1465ffa8584d59d3fc2e6a43fd8c41db91c02402af239dd4",
+        "dev_databases/formula_1/database_description/driverStandings.csv": "sha256:3cc467154abbf10dfc7f8ea5fdec512b5674f0683d36b893085a04de5d9aca5e",
+        "dev_databases/formula_1/database_description/drivers.csv": "sha256:0444a1610c97dcc1cb1af25a8aed4dc3ca585a0b27f8326d1bb9ffaa6f4e8635",
+        "dev_databases/formula_1/database_description/lapTimes.csv": "sha256:6fc86f0867ca9fc350b8583c18a74784d7a2e78afb1bc6462f83e3b7cddf5573",
+        "dev_databases/formula_1/database_description/pitStops.csv": "sha256:6c1c7eb14a445b617710ac286e1f5a303e8b808062fa760c2054c276b2b79fab",
+        "dev_databases/formula_1/database_description/qualifying.csv": "sha256:35b7e1ce9def76a653407a54f2b18901768392d92d1ef2484d24c20077c77e0e",
+        "dev_databases/formula_1/database_description/races.csv": "sha256:a8e61de0c7e966c5198c701475d80276065f3a1cf96c3b79051c3541d8fd60d3",
+        "dev_databases/formula_1/database_description/results.csv": "sha256:7f7cde75b468b8ea135c6ed0872ef30ff715fda691786ca58e70d783b0a23b5d",
+        "dev_databases/formula_1/database_description/seasons.csv": "sha256:6a87681dcc94db3f6c81879c8569ec29a966eccc7277aa1d9ad59b16e314e5c9",
+        "dev_databases/formula_1/database_description/status.csv": "sha256:78725236cee342600f862cea296e87a4ea2e047d64d365f594526363f8acde57",
+        "dev_databases/formula_1/formula_1.sqlite": "sha256:79770caf966707e35516fa566e24b40ae515c74ec1ec4631235245645b87b24d",
+        "dev_databases/student_club/database_description/Attendance.csv": "sha256:33a5d912e8fea231ecd73d1ee3847433ced7d1768b91866bd1403fb7fd88ea22",
+        "dev_databases/student_club/database_description/Budget.csv": "sha256:b9000d8f18b4a1613ea3c1877a41823375c2405647756a694591722ba86e60cd",
+        "dev_databases/student_club/database_description/Event.csv": "sha256:1bf99aa2ce4ae79886eb0d4204e3edd1f0c8c0e44ed427c166f3a1a1af0aec04",
+        "dev_databases/student_club/database_description/Expense.csv": "sha256:b323e60df3ebfa3ec64686a1d76bece0bb94d81cfe5b642a54b6763b67be302d",
+        "dev_databases/student_club/database_description/Income.csv": "sha256:573755cd0f41a5dce3a053eb877a52f101bf21af745aaf83170093aa5a4d0579",
+        "dev_databases/student_club/database_description/Major.csv": "sha256:baca5c68fa1b1c9a427445bd60a1c8702cbdab9d27d5eb0a4304fb7f2ef32e0d",
+        "dev_databases/student_club/database_description/Member.csv": "sha256:1b9dda90d5fdccc4f70f057bf594a6935975e55a9f81d333714d74d1f4d9674a",
+        "dev_databases/student_club/database_description/Zip_Code.csv": "sha256:1c903324ec3ff9decd6abb10ac96e3746e1c1b776a26d3a8d4bf5244c8620ecb",
+        "dev_databases/student_club/student_club.sqlite": "sha256:eb89bcfe97eefa386a27904ec5aa15159811a7eac894ec659a36e48fa9f76b77",
+        "dev_databases/superhero/database_description/alignment.csv": "sha256:ebff59e5832b2870c298d2bbc85607e0f6b93c4921ff4d3265803d02a8796dce",
+        "dev_databases/superhero/database_description/attribute.csv": "sha256:3c6bac9176d61e05ba059e8be6a3d5c5aa6eb743f526f07a1570f172cdbf6c72",
+        "dev_databases/superhero/database_description/colour.csv": "sha256:ba732eddb938dc077cbc3f038057f566f9f12ccb53cc131168a5da538514b9cf",
+        "dev_databases/superhero/database_description/gender.csv": "sha256:7311f964c77b6319184bbfc9ce8cc0ef87a103106bb1d6967461a5c681a3fe08",
+        "dev_databases/superhero/database_description/hero_attribute.csv": "sha256:65af1dfdb96e4ddaba6262f3dffe9f61ea240c31d0ea2122e974d769827f039b",
+        "dev_databases/superhero/database_description/hero_power.csv": "sha256:54eb40baa6b5b726bff28c872478caa8da8500f195239f8c6c3c552797c3794f",
+        "dev_databases/superhero/database_description/publisher.csv": "sha256:232e8656107f426beb3c7a25f1833afb295dbfa2ae3981b2a200f08ed4f1f000",
+        "dev_databases/superhero/database_description/race.csv": "sha256:8eb79fe0d1fc7d5641eff43d34e0e10b89fa726360d913bbee31dd55191064c7",
+        "dev_databases/superhero/database_description/superhero.csv": "sha256:503f0a71acd1766923c571865277f81accbf79b2c9d8df4a18439dfe01ec6f44",
+        "dev_databases/superhero/database_description/superpower.csv": "sha256:4edef8900f158238382843e348ff9842991c83f1d384c53bef5dd8cb1e613ee2",
+        "dev_databases/superhero/superhero.sqlite": "sha256:75e94a2c3236ee3bb2c01fb97a1c4b4c1c269bcefd4eab1d04be323d2d0825b1",
+        "dev_databases/thrombosis_prediction/database_description/Examination.csv": "sha256:b563c9030159bf169236e4582b653386bd34706e309227bf5eceb63b91eb0a89",
+        "dev_databases/thrombosis_prediction/database_description/Laboratory.csv": "sha256:cf9704e56cf3aca75e38de09277c307a7f0f726301b472254ce66ff4a352ff9f",
+        "dev_databases/thrombosis_prediction/database_description/Patient.csv": "sha256:519838a9f2592760bb26d1fb4f074bc304eee4e7aeaf46d03f652c370230e175",
+        "dev_databases/thrombosis_prediction/thrombosis_prediction.sqlite": "sha256:87583183c3dc472fba04de702965560a9d7c0a548836613f242317e0eeb83f00",
+        "dev_databases/toxicology/database_description/atom.csv": "sha256:9de75492701c77c1229242e8c3b688ced9eb9095ac59d37361dfb0ec34300245",
+        "dev_databases/toxicology/database_description/bond.csv": "sha256:7d200d38b0dcc07e8fe22718bd6bdb1bdf4b6522b7a84a5d0c95340b6d8cb4bc",
+        "dev_databases/toxicology/database_description/connected.csv": "sha256:589b24206b9f884863ca57f3e339abcb2409a15feeaff0b08afcd955cd211036",
+        "dev_databases/toxicology/database_description/molecule.csv": "sha256:a6ff2966916d03b07fd3ce275823d9ec65abb0b55158e871b07c40972b292d70",
+        "dev_databases/toxicology/toxicology.sqlite": "sha256:35ef27ae6bdfda530e125ed369666ac0abb8bc8c0bcc0ad09407f547ecb61a93",
+        "dev_tables.json": "sha256:48aa9febe7282d1690f3ed1f222dc040c182df83812ba4e9bee956084d99c8ff",
+        "mini_dev_sqlite.json": "sha256:4ba5fa8de55856222f484d380d2ba872b380bf79d825de70478e2120cb0fc43b"
+      },
+      "sources": {
+        "prompt": {
+          "agent/prompts.py": "sha256:eff191736809d2645248b467ccafa49245f1f93480334694fe4c5d3ae6354e0b"
+        },
+        "schema": {
+          "agent/contracts/query-candidate-v1.schema.json": "sha256:2ff6c4447f8f516bdec9fb877c6deff696fae7a822efdbe27559d151b8ec652d",
+          "forge/schema.json": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723"
+        },
+        "schema_descriptions": {
+          "agent/contracts/forge-output-descriptions-v1.json": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18"
+        },
+        "compiler": {
+          "forge/compiler.py": "sha256:05d5d6e4b38431aa8e2e1d34b6f38cffc43cd38482e6cfd127a650f017903284"
+        },
+        "context": {
+          "forge/benchmark_metadata.py": "sha256:e8c7752faeed4d954e73b9763233e729979bd4cef0dcc82d44a16fe6b8f70bb5",
+          "forge/benchmark_v2.py": "sha256:74b689dd3de3fbf4c51dda6e23be1b4193cc377c3e1e6d1794b2b7867f1c967e"
+        },
+        "safety": {
+          "forge/executor.py": "sha256:cc2e821ae8c7e48d0f5a956d943e4b6330343e02d169edb9a0780eb44cd658f1",
+          "forge/lint.py": "sha256:b78c85be53defb33c96f0507f67dae072c49447c0798fbfac79c05148ee27d94",
+          "registry/relationships.py": "sha256:d2d109af1e2b11fd661c6140a10c37d3e1e5619538088f9d4c6a65867191135a"
+        },
+        "official_snapshot": {
+          "tests/datasets/bird_mini_dev_standard.json": "sha256:0886f203ad6f41412b66ef843d3e87f939f565bc5cddbe7232b1ebe24d11698f"
+        },
+        "evaluator": {
+          "agent/contracts/__init__.py": "sha256:12146de2af766d894a2f78abfa6e40a2fd1469a8dabefd00bd6dd02192b6812c",
+          "agent/contracts/benchmark-failure-v1.schema.json": "sha256:0d57f63bdd06b29aa54006fd768a6addd174a1cccce72a699a09a0c4d85702c0",
+          "forge/assurance.py": "sha256:25232efe2311b536822783a7129c9d89536c194b3e13205d05a00502e94c62f0",
+          "forge/benchmark_methods.py": "sha256:22ec345d80b90db7a96d83f6b9cce2e4fe9493e25c709ef1bd831dbc3ee5f01d",
+          "forge/benchmark_service.py": "sha256:1f0398858e5e7fab387c860953249a01369de141a35948b856652910cabd1386",
+          "forge/bird_benchmark.py": "sha256:b4a1482b6f245c885347741ce691c898c6f00a3c954161faaa7e9afde2c5e40c",
+          "forge/hard_accuracy_benchmark.py": "sha256:32963cce5222a8f5d26a77374491445c61c45358a1ecaaf1d259d469eb2c6a0c",
+          "pyproject.toml": "sha256:088f3b0c5960661037ab6de0129ec6eec433eb3304eec7f66a82cdfbcfba1bcd"
+        }
+      },
+      "model": {
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna"
+      },
+      "generation": {
+        "max_model_calls": 16,
+        "provider_retries": 0,
+        "max_agent_turns_per_arm": 1,
+        "timeout_seconds": 120,
+        "sampling": "provider_default",
+        "max_output_tokens": null
+      },
+      "gold_readiness": {
+        "policy": "require_all",
+        "blocked_cases": []
+      },
+      "variables": {
+        "allowed_changes": [
+          "schema_descriptions"
+        ]
+      },
+      "date_context": {
+        "mode": "off",
+        "max_rows": 100
+      },
+      "grain_context": {
+        "mode": "off"
+      },
+      "value_context": {
+        "mode": "off",
+        "field": null,
+        "max_values": 16
+      },
+      "schema_descriptions": {
+        "mode": "interfaces-v1",
+        "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+        "wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f"
+      },
+      "metric_revision": "semantic-result-compare-v2",
+      "official_ex_revision": "bird_execution_accuracy_exact_set_v1",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "context_hashes": {
+        "md-009": {
+          "snapshot": "sha256:b0fe819ea69c7d9dcda31dff5b6073f1bded828078467e8fa8c42b5f4ca43d22",
+          "schema": "sha256:b915f6c4b8f985b6cf2e4d90e561f217c342c5b3e33ed8a01f51252ce18ed53c",
+          "forge": "sha256:6fa52964572271372c6c38f3c1875e4682e7709bcfc879dfa878ea2fc3f8ea93",
+          "direct": "sha256:93f2d51ab4b7fa40f6821f3ac6de8465044659e545057c8d0459bdfa031b52d8",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-079": {
+          "snapshot": "sha256:21ab8fd129d69e3e08563c59682deda787d2d932da61425ffa39422a06b0129a",
+          "schema": "sha256:4c0f1254efae5e9e57c43300f80151ee10e00bcd312ac648c41fbef399985b7b",
+          "forge": "sha256:0361cf4e9f7bc97d6b7d0f0825e85c7032504e461de1834a340c928b91b1b489",
+          "direct": "sha256:e5e64f9573e3687e69811f574beafb0ad428c662d3778bf6293249ea175efb79",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-199": {
+          "snapshot": "sha256:9e7ac9eae571e86e02fc4402fc46f432610ee7954f062bcb92e381c931604b55",
+          "schema": "sha256:8b3c67bb47b8fb49bc27d8d9ab8bb62d936a382b268eae99d55101d7b0d3adbc",
+          "forge": "sha256:4d494cfb100a4afd5786fb45d7b21b9c54428242ade9106ecaad4020ca7f74a4",
+          "direct": "sha256:baf37bd1577e965c54fa4ce62d0596d7d64c03c66fc6341fd7d7c82a1b03f015",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-289": {
+          "snapshot": "sha256:9d7ac490c3e9ea1cfd532d3879003b5555a36471ee2cc3ec3c8f9c149718ad31",
+          "schema": "sha256:092165277e5a0b0795c180332993df873996d7e66ff2c158657a1ec5103297fa",
+          "forge": "sha256:2ffe1082026016359e3d83f8995e5ef48714b1c16abc0c86a4d2da1334134f5f",
+          "direct": "sha256:13242726ff2e9c32fa4cb31be09eb91ac7a26b806bea4dc596081b4c4573438e",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-002": {
+          "snapshot": "sha256:0ecba77b6d59f89bd98e355d93c429c7f91dbdfca79f41b4b0eadf9bd39d483e",
+          "schema": "sha256:b915f6c4b8f985b6cf2e4d90e561f217c342c5b3e33ed8a01f51252ce18ed53c",
+          "forge": "sha256:593c0e9b5acb70f0904c269d91641ba93deccbc9a3f198c2e414c36c62fce80f",
+          "direct": "sha256:8adffd53d8ba1565f855208a2a38433c3b16a69311eba8ce043425118709baf5",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-052": {
+          "snapshot": "sha256:d63c1decac44459f9d672e6dfad4655b72e0da81a0426cb2ca253d141b49b781",
+          "schema": "sha256:7c0395d7270401bf6e5253c4604e33a18b4d7263bbb6466d19648006dc6ee5ff",
+          "forge": "sha256:0ca7b8ce2376366213cc8c7f0828148a2558990c4a555e38a1ce36e7a0281955",
+          "direct": "sha256:59d9180585309f09670abb2681c14400a4121e88e0ac1ff2a090606817aaf7de",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-312": {
+          "snapshot": "sha256:75437f836736f9e96b3260c36baa0e62493bc14f7186e78b5dc292db77e51426",
+          "schema": "sha256:161e5567a4dd24f75807d29c2034b5739b6b6347b3c65a1904e83d474774e92a",
+          "forge": "sha256:bd66bff745024e706025df05f06a05508ad12a419e72eac1e4eb0b44ce53f0e4",
+          "direct": "sha256:3c83ee0c8ea95f2c8bb01e7a44d1158a42a954bee00258ce1df45df42ef1d4ff",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        },
+        "md-386": {
+          "snapshot": "sha256:620fc864784d339de7ca10a6322073b6cb4b900bc3205800ecb71652eb14ccda",
+          "schema": "sha256:3df9b560b244b44495961f169977414f063fdf08819b134982cbc62eb8fe2017",
+          "forge": "sha256:aad0642910ee0268d06fe2d0ba66fefc6c0dba7b4573ffea0e79b6aeb4569ccc",
+          "direct": "sha256:5ec2bf42875efed48f45aad16fc17ef98c706c6e02cde529cda018a954d352fd",
+          "date_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "grain_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+          "value_evidence": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      },
+      "runtime": {
+        "python": "3.14.7",
+        "sqlite": "3.53.4",
+        "sqlglot": "29.0.1",
+        "jsonschema": "4.26.0",
+        "numpy": "2.5.2",
+        "pydantic": "2.13.5"
+      }
+    }
+  },
+  "source_fingerprints": {
+    "agent/contracts/forge-output-descriptions-v1.json": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+    "forge/bird_benchmark.py": "sha256:b4a1482b6f245c885347741ce691c898c6f00a3c954161faaa7e9afde2c5e40c",
+    "forge/cli.py": "sha256:6b952376848881ebf4b185c4c4550095b324c62789c108fb767843c508b1bffc",
+    "services/pi-orchestrator/src/strict-forge-output.ts": "sha256:3f98829caa719772f365b9f602215719144f825e13154d6317f6232cfa663f36",
+    "services/pi-orchestrator/src/benchmark-runtime.ts": "sha256:a8840390ac4cbb4e2e72b7ff29950ffbb1b3abd92db9a2d68694e7c881e593ba",
+    "services/pi-orchestrator/src/benchmark-contracts.ts": "sha256:48ed10cda019128a4f8ac5da273c192a3dc7cca9df370ab5185f3ca9b9d4566b",
+    "tests/test_bird_benchmark.py": "sha256:8ae4fef17403b9b2bd466e07493c89f92cc4ba7b795b7611bcdbf60308cd3931",
+    "services/pi-orchestrator/tests/strict-forge-output.test.ts": "sha256:c8c69cd1ae917c9f8c6d6f7a6abda596f516df8d0e9f4e475f56b0a8534ea1c9",
+    "services/pi-orchestrator/tests/benchmark-runtime.test.ts": "sha256:e37be3df13dbbb828014b8c73ef9deb5d8bb9868945fcff1c44bf0a5366b1a6c"
+  },
+  "protected_source_fingerprints": {
+    "agent/prompts.py": "sha256:eff191736809d2645248b467ccafa49245f1f93480334694fe4c5d3ae6354e0b",
+    "forge/schema.json": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "forge/compiler.py": "sha256:05d5d6e4b38431aa8e2e1d34b6f38cffc43cd38482e6cfd127a650f017903284",
+    "forge/assurance.py": "sha256:25232efe2311b536822783a7129c9d89536c194b3e13205d05a00502e94c62f0",
+    "docs/archive/benchmarks/benchmark-sol-error-triage-2026-09-05.json": "sha256:39cdfcf83d51d2f4dbb2618d54021f326598b668bca08f25565473fde1335573",
+    "docs/archive/benchmarks/benchmark-sol-metric-replay-2026-09-05.json": "sha256:2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796",
+    "docs/archive/benchmarks/benchmark-luna-projection-instructions-2026-09-05.json": "sha256:b59dac931ff210af8ec4a38f75e6b92587758a2f1cadcbdfb951a0a8d604a602",
+    "docs/archive/benchmarks/benchmark-luna-date-context-2026-09-05.json": "sha256:97e7842a38a7bd3f3b0f27d9a63d9875ebf81da8e7cfd5c07a9bac21c11acd46",
+    "docs/archive/benchmarks/benchmark-luna-value-context-2026-09-06.json": "sha256:6077229f0efb9ef678eed4e14a37aa50c23575f89abb197b81c4592d16e739be",
+    "docs/archive/benchmarks/benchmark-luna-denominator-scope-2026-09-07.json": "sha256:69546731b83a6d0e25aa13c38084d56d45f9d6360e3ae0d17cd0f54aa7458506",
+    "docs/archive/benchmarks/benchmark-luna-cte-interface-2026-09-07.json": "sha256:dfcb5e6a3faba7d3c2dedb4cf76fedc23696a370cb39b1b0613fdda9e4bf98d2"
+  },
+  "local_evidence_fingerprints": {
+    ".forge/benchmarks/schema-descriptions-ready-20260908/control.frozen.json": "sha256:9421620febf7e1465aff0cf9d66334165f48d811ed94ce4b17f6613569ff17c8",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/treatment.frozen.json": "sha256:1ffcb7ac1d95f0758105b4d18e048272e10dca312274cb805116cac296268e4e",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/control.preflight.json": "sha256:b6a9f4a814dac817e3ab652723334b873b67b1279491f151a27f22870cf79bd8",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/treatment.preflight.json": "sha256:58753a6ac98c03a888b13582d395c0c287fa92260a0aee66f85efd273a15dcde",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/semantic-audit-revised.json": "sha256:23ed4535767250605fe76d44db6dd6b7ec1b17cdb6851e52a2e9330f6ba9b661",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/input-invariance.json": "sha256:4e83860309696cdf1a6b23eb971daea662e2414c31467532b8e595b5b4d1b8c2",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/historical-replay.json": "sha256:94a27284f8e588cacc374cd22c1f20193ffe98ecadc9172e2e5f03b481acaa66",
+    ".forge/benchmarks/schema-descriptions-ready-20260908/real-sdk-http-smoke.json": "sha256:ac1c79c51be89c91dd5cf2c0e0ed58bab6d977da80187a2868e1b4b92fd4dad7"
+  },
+  "captured_smoke_sources": {
+    "note": "仅为审计保留实际临时驱动源码；不是新增运行入口、测试框架或业务状态。重做须使用新证据目录，不覆盖本报告冻结。",
+    "native_pi_sdk": "import assert from \"node:assert/strict\";\nimport { createHash } from \"node:crypto\";\nimport { createServer } from \"node:http\";\nimport { mkdtemp, readFile, writeFile, rm } from \"node:fs/promises\";\nimport { tmpdir } from \"node:os\";\nimport { resolve, join } from \"node:path\";\nimport { setTimeout as pause } from \"node:timers/promises\";\nimport { loadConfig } from \"../src/config.js\";\nimport { SqliteOrchestratorState } from \"../src/sqlite-store.js\";\nimport { OrchestratorApplication } from \"../src/application.js\";\nimport { PiBenchmarkRuntime } from \"../src/benchmark-runtime.js\";\nimport { createStrictForgeOutput } from \"../src/strict-forge-output.js\";\nconst root=resolve(\"../..\");\nconst evidence=join(root,\".forge/benchmarks/schema-descriptions-ready-20260908\");\nconst fixture=JSON.parse(await readFile(join(evidence,\"sdk-smoke-fixture.json\"),\"utf8\"));\nconst catalog=JSON.parse(await readFile(join(root,\"agent/contracts/forge-output-descriptions-v1.json\"),\"utf8\"));\nconst canonical=JSON.parse(await readFile(join(root,\"forge/schema.json\"),\"utf8\"));\nconst hash=(v:unknown)=>\"sha256:\"+createHash(\"sha256\").update(JSON.stringify(v)).digest(\"hex\");\nfunction deref(s:any,whole:any):any { return s.$ref===\"#\"?whole:s.$ref?deref(s.$ref.slice(2).split(\"/\").reduce((n:any,k:string)=>n[k],whole),whole):s; }\nfunction fits(v:any,s:any,whole:any):boolean {\n  s=deref(s,whole);\n  if(s.anyOf) return s.anyOf.some((n:any)=>fits(v,n,whole));\n  if(s.enum&&!s.enum.includes(v))return false;\n  if(s.type===\"null\")return v===null;\n  if(s.type===\"string\")return typeof v===\"string\";\n  if(s.type===\"number\"||s.type===\"integer\")return typeof v===\"number\";\n  if(s.type===\"boolean\")return typeof v===\"boolean\";\n  if(s.type===\"array\")return Array.isArray(v)&&v.every((n:any)=>fits(n,s.items,whole));\n  if(s.type===\"object\")return v!==null&&typeof v===\"object\"&&!Array.isArray(v)&&Object.entries(v).every(([k,n])=>s.properties[k]&&fits(n,s.properties[k],whole));\n  return true;\n}\nfunction strict(v:any,s:any,whole:any):any {\n  s=deref(s,whole);\n  if(s.anyOf){const branch=s.anyOf.find((n:any)=>fits(v,n,whole));assert.ok(branch,\"No strict branch for historical candidate\");return strict(v,branch,whole);}\n  if(v===null)return null;\n  if(Array.isArray(v))return v.map(n=>strict(n,s.items,whole));\n  if(s.type===\"object\")return Object.fromEntries(s.required.map((k:string)=>[k,k in v?strict(v[k],s.properties[k],whole):null]));\n  return v;\n}\nfunction withoutDescriptions(v:any):any {if(Array.isArray(v))return v.map(withoutDescriptions);if(v&&typeof v===\"object\")return Object.fromEntries(Object.entries(v).filter(([k])=>k!==\"description\").map(([k,n])=>[k,withoutDescriptions(n)]));return v;}\nconst directory=await mkdtemp(join(tmpdir(),\"forge-schema-real-sdk-\"));\nconst requests:any[]=[];\nconst network:string[]=[];\nconst nativeFetch=globalThis.fetch;\nglobalThis.fetch=async(input:any,init?:any)=>{\n  const url=new URL(typeof input===\"string\"||input instanceof URL?input:input.url);\n  assert.equal(url.hostname,\"127.0.0.1\",\"External network is forbidden in this smoke\");network.push(url.pathname);\n  return nativeFetch(input,init);\n};\nconst provider=createServer(async(req,res)=>{\n  try{\n    let raw=\"\";for await(const part of req)raw+=part;\n    const body=JSON.parse(raw);requests.push(body);\n    const tool=body.tools?.[0]?.function;\n    let delta:any,finish:string;\n    if(tool){\n      assert.equal(tool.name,\"emit_forge_query\");assert.equal(tool.strict,true);\n      const args=strict(fixture.forge,tool.parameters,tool.parameters);\n      const mode=tool.parameters.properties.scan.description?\"interfaces-v1\":\"off\";\n      assert.deepEqual(createStrictForgeOutput(canonical,catalog.profiles[mode].descriptions).decode(args),fixture.forge);\n      delta={role:\"assistant\",tool_calls:[{index:0,id:\"synthetic-call\",type:\"function\",function:{name:tool.name,arguments:JSON.stringify(args)}}]};finish=\"tool_calls\";\n    }else{delta={role:\"assistant\",content:fixture.direct};finish=\"stop\";}\n    res.writeHead(200,{\"content-type\":\"text/event-stream\"});\n    const chunk=(choices:any[],usage?:any)=>res.write(\"data: \"+JSON.stringify({id:\"synthetic-response\",object:\"chat.completion.chunk\",created:0,model:\"fixture\",choices,...(usage?{usage}:{})})+\"\\n\\n\");\n    chunk([{index:0,delta,finish_reason:null}]);chunk([{index:0,delta:{},finish_reason:finish}]);\n    chunk([],{prompt_tokens:100,completion_tokens:50,total_tokens:150});res.end(\"data: [DONE]\\n\\n\");\n  }catch(error){console.error(error);res.writeHead(500);res.end(\"Synthetic fixture failed\");}\n});\nawait new Promise<void>(r=>provider.listen(0,\"127.0.0.1\",r));\nconst port=(provider.address() as any).port;\nawait writeFile(join(directory,\"models.json\"),JSON.stringify({providers:{\"local-schema-smoke\":{baseUrl:`http://127.0.0.1:${port}/v1`,api:\"openai-completions\",apiKey:\"synthetic-not-a-real-key\",authHeader:true,models:[{id:\"fixture\",name:\"Deterministic historical replay — not a model\",reasoning:false,input:[\"text\"],contextWindow:128000,maxTokens:16384,cost:{input:0,output:0,cacheRead:0,cacheWrite:0},compat:{supportsDeveloperRole:false,supportsReasoningEffort:false,supportsStrictMode:true}}]}}}));\nawait writeFile(join(directory,\"auth.json\"),\"{}\");\nconst config=loadConfig({PI_ORCHESTRATOR_AGENT_DIR:directory,PI_ORCHESTRATOR_STATE_DB:join(directory,\"state.sqlite\"),SHISUI_DATA_SKILLS_DIR:directory,PI_BENCHMARK_CONCURRENCY:\"1\",FORGE_BASE_URL:\"http://127.0.0.1:19043\",FORGE_PI_SERVICE_KEY:\"synthetic-schema-smoke\"});\nconst state=new SqliteOrchestratorState(config.stateDbPath);\nconst application=new OrchestratorApplication({config,state});\nconst runtime=new PiBenchmarkRuntime(config,application);\nconst runs:any[]=[];\ntry{\n  const unauthorized=await fetch(config.forgeBaseUrl+\"/api/internal/benchmark-v2/suite\");assert.equal(unauthorized.status,401);\n  for(const mode of [\"off\",\"interfaces-v1\"]){\n    const frozen=JSON.parse(await readFile(join(evidence,`synthetic-${mode}.frozen.json`),\"utf8\"));\n    const started=await runtime.start({provider:\"local-schema-smoke\",model:\"fixture\",caseIds:[fixture.case_id],confirmModelCalls:2,protocolManifest:frozen.manifest});\n    let run:any;\n    for(let i=0;i<600;i++){run=runtime.get(started.run_id);if([\"completed\",\"failed\",\"stopped\",\"interrupted\"].includes(run.status))break;await pause(50);}\n    assert.equal(run.status,\"completed\",JSON.stringify({run,logs:runtime.logs(started.run_id)}));\n    assert.equal(run.completed_calls,2);assert.equal(run.generation_contract.schema_descriptions.mode,mode);\n    assert.equal(run.generation_contract.forge_wire_schema_revision,catalog.profiles[mode].wire_schema_revision);\n    for(const arm of [\"forge\",\"direct\"]){assert.equal(run.cases[0][arm].evidence.dispatches,1);assert.equal(run.cases[0][arm].usage_observed,true);}\n    runs.push(run);\n  }\n  assert.equal(requests.length,4);\n  const forge=requests.filter(r=>r.tools?.length),direct=requests.filter(r=>!r.tools?.length);\n  assert.deepEqual(direct[0],direct[1]);assert.deepEqual(withoutDescriptions(forge[0]),withoutDescriptions(forge[1]));\n  assert.equal(hash(forge[0].tools[0].function.parameters),catalog.profiles.off.wire_schema_revision);\n  assert.equal(hash(forge[1].tools[0].function.parameters),catalog.profiles[\"interfaces-v1\"].wire_schema_revision);\n  assert.deepEqual(runs[0].cases[0].forge.output,runs[1].cases[0].forge.output);\n  assert.equal(runs[0].cases[0].direct.output,runs[1].cases[0].direct.output);\n  const forged=JSON.parse(await readFile(join(evidence,\"synthetic-interfaces-v1.frozen.json\"),\"utf8\"));forged.manifest.schema_descriptions.mode=\"unknown\";\n  await assert.rejects(runtime.start({provider:\"local-schema-smoke\",model:\"fixture\",caseIds:[fixture.case_id],confirmModelCalls:2,protocolManifest:forged.manifest}));\n  assert.equal(requests.length,4);\n  const result={status:\"passed\",boundary:\"real Pi SDK and real authenticated Python HTTP routes; only provider responses are deterministic loopback replay\",new_model_calls:0,synthetic_sse_dispatches:requests.length,external_network_requests:0,unauthorized_http_status:unauthorized.status,direct_payload_identical:true,forge_payload_identical_except_descriptions:true,candidate_outputs_identical:true,forged_mode_rejected_before_dispatch:true,runs:runs.map(r=>({protocol_revision:r.protocol_revision,generation_contract:r.generation_contract,status:r.status,completed_synthetic_dispatches:r.completed_calls,candidate_hashes:{forge:hash(r.cases[0].forge.output),direct:hash(r.cases[0].direct.output)}})),network_paths:network};\n  await writeFile(join(evidence,\"real-sdk-http-smoke.json\"),JSON.stringify(result,null,2),{flag:\"wx\"});\n  console.log(JSON.stringify(result));\n}finally{await runtime.close();state.close();await new Promise<void>(r=>provider.close(()=>r()));globalThis.fetch=nativeFetch;await rm(directory,{recursive:true,force:true});}\n",
+    "isolated_python_http": "import os, sys, types, json\nfrom pathlib import Path\nos.environ[\"FORGE_DISABLE_DOTENV\"]=\"true\"\n# Isolated test configuration; never import/read real forge.yaml, .env or credentials.\nmodule=types.ModuleType(\"config\")\nmodule.cfg=types.SimpleNamespace(PI_SERVICE_API_KEYS=[\"synthetic-schema-smoke\"])\nsys.modules[\"config\"]=module\nfrom fastapi import FastAPI\nimport uvicorn\nfrom forge import bird_benchmark as bird\nfrom web.routes.benchmark_v2 import router\nroot=Path(\".forge/benchmarks/schema-descriptions-ready-20260908\")\nbird.PROTOCOL_DIR=root/\"synthetic-protocols\"\nfor mode in (\"off\",\"interfaces-v1\"):\n    frozen=bird.freeze(cohort=\"D\",provider=\"local-schema-smoke\",model=\"fixture\",case_ids=[\"md-052\"],variable=\"schema_descriptions\",schema_descriptions=mode)\n    with (root/(\"synthetic-\"+mode+\".frozen.json\")).open(\"x\") as f: json.dump(frozen,f,ensure_ascii=False,indent=2)\napp=FastAPI()\napp.include_router(router)\nuvicorn.run(app,host=\"127.0.0.1\",port=19043,log_level=\"warning\")\n",
+    "all_500_default_inputs": "import hashlib, json, sys, types\nfrom pathlib import Path\nmodule=types.ModuleType(\"config\");module.cfg=types.SimpleNamespace();sys.modules[\"config\"]=module\nfrom forge import hard_accuracy_benchmark as hard\nfrom forge.benchmark_service import build_context_response\nroot=Path(\".forge/benchmarks/schema-descriptions-ready-20260908\")\nbaseline=json.loads((root/\"baseline-input-hashes.json\").read_text())[\"cases\"]\ndef digest(value):return \"sha256:\"+hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(\",\",\":\"),allow_nan=False).encode()).hexdigest()\ncurrent={}\nfor case in hard.load_suite(hard._FULL_SUITE_ID)[\"cases\"]:\n    ctx=build_context_response(hard.load_suite(hard._FULL_SUITE_ID),case)\n    current[case[\"case_id\"]]={\"snapshot\":digest(ctx[\"context_snapshot\"]),\"schema\":digest(ctx[\"schema_context\"]),\"forge\":digest(ctx[\"forge_instructions\"]),\"direct\":digest(ctx[\"direct_instructions\"])}\nassert current==baseline\nresult={\"public_cases\":len(current),\"checked_fields\":[\"context_snapshot\",\"schema_context\",\"forge_instructions\",\"direct_instructions\"],\"unchanged\":len(current),\"new_model_calls\":0,\"gold_executions\":0}\nwith (root/\"input-invariance.json\").open(\"x\") as f:json.dump(result,f,indent=2)\nprint(json.dumps(result))\n"
+  },
+  "boundaries": {
+    "real_provider_calls": 0,
+    "synthetic_loopback_sse_responses": 4,
+    "real_model_readiness_checked": false,
+    "customer_data_accessed": false,
+    "production_configuration_modified": false,
+    "commit_push_deploy": false,
+    "default_changed": false,
+    "seed49_started": false,
+    "r500_or_h_generation_started": false,
+    "r06_promoted": false,
+    "historical_reports_rewritten": false,
+    "temporary_http_service_stopped": true
+  },
+  "integrity": {
+    "algorithm": "SHA-256 of UTF-8 JSON with ensure_ascii=false, sort_keys=true, compact separators, excluding report_sha256; experiment card uses same rule excluding card_sha256."
+  },
+  "report_sha256": "sha256:8a4d4a3b72622a642212a490975cfe251bb50d32698deb0aedbd52746e3a6440"
+}

@@ -22,6 +22,8 @@ const pi = {
   recursiveCandidate: false,
   failure: null as "throw" | "empty" | "second-payload" | "second-turn" | "invalid-raw" | "partial-usage" | "unknown-usage" | "provider-error" | "deadline-finalization" | null,
   sessionsCreated: 0,
+  payloads: [] as Array<Record<string, any>>,
+  beforePayload: undefined as (() => Promise<void>) | undefined,
   ModelRuntime: { create: async () => ({
     getModel: () => ({ id: "fixed", api: "openai-codex-responses" }),
     getAvailable: async () => [{ id: "fixed" }],
@@ -49,7 +51,9 @@ const pi = {
         const tool = options.customTools?.[0];
         await session.agent.streamFunction({}, {}, {});
         const payload = tool ? { tools: [{ type: "function", name: "emit_forge_query" }] } : {};
-        await session.agent.onPayload?.(payload, { api: "openai-codex-responses" });
+        if (tool) await pi.beforePayload?.();
+        const effective = await session.agent.onPayload?.(payload, { api: "openai-codex-responses" });
+        if (tool) pi.payloads.push(JSON.parse(JSON.stringify(effective)));
         if (pi.failure === "second-payload") await session.agent.onPayload?.(payload, { api: "openai-codex-responses" });
         if (pi.failure === "second-turn") await session.agent.streamFunction({}, {}, {});
         if (pi.failure === "provider-error") {
@@ -430,12 +434,145 @@ test("all-blocked explicit Gold skip authorizes zero calls without creating SDK 
   assert.equal((run.metrics.forge as Record<string, unknown>).official_ea, null);
 });
 
+test("schema description admission rejects unknown, unbound and undeclared profiles before sessions", async (t) => {
+  const { runtime } = await fixture(t);
+  let protocol = protocolData(["a"], undefined, undefined, "interfaces-v1");
+  t.mock.method(globalThis, "fetch", async (input: string) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a")], metric_revision: revision });
+    assert.ok(input.endsWith("/protocol"));
+    return Response.json(protocol);
+  });
+  const mutations: Array<(value: ReturnType<typeof protocolData>) => void> = [
+    (value) => { Object.assign(value.schema_descriptions, { mode: "unknown" }); },
+    (value) => { value.schema_descriptions.wire_schema_revision = "sha256:forged"; },
+    (value) => { value.manifest.schema_descriptions.catalog_revision = "sha256:stale"; },
+    (value) => { value.manifest.schema_descriptions = schemaDescriptions("off"); },
+    (value) => { value.manifest.variables.allowed_changes = []; },
+    (value) => { value.manifest.schema_version = "bird-protocol-v4"; },
+    (value) => { Object.assign(value, { schema_descriptions: null }); },
+  ];
+  for (const mutate of mutations) {
+    protocol = protocolData(["a"], undefined, undefined, "interfaces-v1");
+    mutate(protocol);
+    await assert.rejects(runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 2 }));
+    assert.deepEqual(runtime.history(), []);
+    assert.equal(pi.sessionsCreated, 0);
+  }
+  protocol = protocolData(["a"], undefined, undefined, "interfaces-v1");
+  await assert.rejects(runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 2,
+    protocolManifest: protocolData(["a"]).manifest }));
+  assert.equal(pi.sessionsCreated, 0);
+});
+
+test("independent concurrent runs send their own cached wire profile and preserve it on reopen", { timeout: 5000 }, async (t) => {
+  const first = await fixture(t);
+  const second = await fixture(t);
+  let admitted = 0;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  pi.beforePayload = async () => { if (++admitted === 2) release(); await ready; };
+  pi.recursiveCandidate = true;
+  const modeFor = (id: string) => id === "a" ? "off" as const : "interfaces-v1" as const;
+  t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a"), caseData("b")], metric_revision: revision });
+    const body = JSON.parse(String(options?.body));
+    if (input.endsWith("/protocol")) return Response.json(protocolData(body.case_ids, undefined, undefined, modeFor(body.case_ids[0])));
+    if (input.endsWith("/context")) return Response.json(contextData(body.case_id));
+    if (body.arm === "forge") assert.deepEqual(body.output, { scan: "filtered", select: [{ expr: "filtered.id * 1", as: "value" }], cte: [{ name: "filtered", query: { scan: "orders", select: ["orders.id"] } }] });
+    return Response.json(evaluationData);
+  });
+  const starts = await Promise.all([first.runtime.start({ provider: "test", model: "fixed", caseIds: ["a"], confirmModelCalls: 2 }),
+    second.runtime.start({ provider: "test", model: "fixed", caseIds: ["b"], confirmModelCalls: 2 })]);
+  const runs = await Promise.all(starts.map((run, index) => settled(index === 0 ? first.runtime : second.runtime, run.run_id)));
+  assert.equal(pi.payloads.length, 2);
+  for (const [index, owner] of [first, second].entries()) {
+    const run = runs[index]!;
+    const mode = index === 0 ? "off" : "interfaces-v1";
+    const expected = schemaDescriptions(mode);
+    assert.equal(run.status, "completed");
+    assert.deepEqual(run.generation_contract.schema_descriptions, expected);
+    assert.equal(run.generation_contract.forge_wire_schema_revision, expected.wire_schema_revision);
+    const log = owner.runtime.logs(run.run_id, { arm: "forge", stage: "generation.payload" }).items[0]!;
+    const payload = pi.payloads.find((value) => "sha256:" + createHash("sha256").update(JSON.stringify(value)).digest("hex") === log.payload.payload_hash)!;
+    assert.ok(payload, "The run must log its own effective onPayload result");
+    const schema = payload.tools[0].parameters;
+    assert.equal("sha256:" + createHash("sha256").update(JSON.stringify(schema)).digest("hex"), expected.wire_schema_revision);
+    assert.deepEqual(Object.fromEntries(Object.entries(schema.properties as Record<string, any>).filter(([, field]) => field.description).map(([key, field]) => [key, field.description])), catalog.profiles[mode].descriptions);
+    const session = owner.runtime.logs(run.run_id, { arm: "forge", stage: "generation.session" }).items[0]!;
+    assert.equal(session.payload.tool_schema_chars, JSON.stringify(schema).length);
+    const reopened = new PiBenchmarkRuntime(owner.config, owner.application);
+    try { assert.deepEqual(reopened.get(run.run_id)!.generation_contract, run.generation_contract); }
+    finally { await reopened.close(); }
+  }
+});
+
+test("description candidate resumes pending cases without changing the emitted wire schema", async (t) => {
+  const { runtime } = await fixture(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let entered!: () => void;
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => { entered = resolve; });
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a"), caseData("b")], metric_revision: revision });
+    const body = JSON.parse(String(options?.body));
+    if (input.endsWith("/protocol")) return Response.json(protocolData(body.case_ids, undefined, undefined, "interfaces-v1"));
+    if (input.endsWith("/context")) {
+      if (body.case_id === "a") { entered(); await gate; }
+      return Response.json(contextData(body.case_id));
+    }
+    return Response.json(evaluationData);
+  });
+  const started = await runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 4 });
+  await waiting;
+  runtime.pause(started.run_id);
+  release();
+  for (let attempt = 0; attempt < 200 && runtime.get(started.run_id)!.status !== "paused"; attempt++) await nextTurn();
+  assert.equal(runtime.get(started.run_id)!.status, "paused");
+  assert.equal(runtime.get(started.run_id)!.controls.can_resume, true);
+  assert.equal(runtime.get(started.run_id)!.completed_calls, 2);
+  runtime.resume(started.run_id);
+  t.mock.timers.tick(250);
+  const completed = await settled(runtime, started.run_id);
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.completed_calls, 4);
+  assert.equal(pi.payloads.length, 2);
+  for (const payload of pi.payloads) assert.equal("sha256:" + createHash("sha256").update(JSON.stringify(payload.tools[0].parameters)).digest("hex"), schemaDescriptions("interfaces-v1").wire_schema_revision);
+});
+
+test("fresh protocol and schema-context drift stop a described run before sessions", async (t) => {
+  const { runtime } = await fixture(t);
+  let drift = "protocol";
+  t.mock.method(globalThis, "fetch", async (input: string) => {
+    if (input.endsWith("/suite")) return Response.json({ suite: { suite: "fixed" }, cases: [caseData("a")], metric_revision: revision });
+    if (input.endsWith("/protocol")) return Response.json(protocolData(["a"], undefined, undefined, "interfaces-v1"));
+    assert.ok(input.endsWith("/context"));
+    const context = contextData("a");
+    if (drift === "protocol") context.protocol_revision = "sha256:another-protocol";
+    else context.schema_context = "changed input";
+    return Response.json(context);
+  });
+  for (drift of ["protocol", "schema-context"]) {
+    const started = await runtime.start({ provider: "test", model: "fixed", confirmModelCalls: 2 });
+    const run = await settled(runtime, started.run_id);
+    assert.equal(run.status, "failed");
+    assert.equal(run.completed_calls, 0);
+    assert.equal(pi.sessionsCreated, 0);
+  }
+});
+
 hooks.deregister();
 delete globals.benchmarkTestPi;
 
 const revision = "test-fixed-comparator";
 const caseData = (caseId: string) => ({
   case_id: caseId, question_id: 1, db_id: "fixed", difficulty: "simple", question: "List order ids", evidence: "orders.id",
+});
+const catalogBytes = readFileSync(new URL("../../../agent/contracts/forge-output-descriptions-v1.json", import.meta.url));
+const catalog = JSON.parse(catalogBytes.toString("utf8"));
+const schemaDescriptions = (mode: "off" | "interfaces-v1") => ({
+  mode, catalog_revision: "sha256:" + createHash("sha256").update(catalogBytes).digest("hex"),
+  wire_schema_revision: catalog.profiles[mode].wire_schema_revision as string,
 });
 const protocolRevision = "sha256:frozen-protocol";
 const contextData = (caseId: string, promptRevision = "forge-structured-benchmark-v1") => ({
@@ -451,12 +588,17 @@ const contextData = (caseId: string, promptRevision = "forge-structured-benchmar
     result_contract: {},
   },
 });
-const protocolData = (ids: string[], goldReadiness: { policy: "require_all" | "skip_unscorable"; blocked_cases: Array<{ case_id: string; db_id: string; code: string }> } = { policy: "require_all", blocked_cases: [] }, promptRevision = "forge-structured-benchmark-v1") => ({
-  manifest: { protocol_revision: protocolRevision, gold_readiness: goldReadiness, forge_prompt_revision: promptRevision }, protocol_revision: protocolRevision,
+const protocolData = (ids: string[], goldReadiness: { policy: "require_all" | "skip_unscorable"; blocked_cases: Array<{ case_id: string; db_id: string; code: string }> } = { policy: "require_all", blocked_cases: [] }, promptRevision = "forge-structured-benchmark-v1", mode: "off" | "interfaces-v1" = "off") => ({
+  manifest: { schema_version: "bird-protocol-v5", gold_readiness: goldReadiness, forge_prompt_revision: promptRevision,
+    variables: { allowed_changes: mode === "off" ? [] : ["schema_descriptions"] }, schema_descriptions: schemaDescriptions(mode) },
+  protocol_revision: protocolRevision, schema_descriptions: schemaDescriptions(mode),
   gold_readiness: goldReadiness,
   case_ids: ids, metric_revision: revision, forge_prompt_revision: promptRevision,
   forge_schema_revision: "sha256:" + createHash("sha256").update(readFileSync(new URL("../../../forge/schema.json", import.meta.url))).digest("hex"),
-  contexts: Object.fromEntries(ids.map((id) => [id, contextData(id, promptRevision)])),
+  contexts: Object.fromEntries(ids.map((id) => {
+    const { protocol_revision, ...context } = contextData(id, promptRevision);
+    return [id, context];
+  })),
   generation: { max_model_calls: (ids.length - goldReadiness.blocked_cases.length) * 2, provider_retries: 0, max_agent_turns_per_arm: 1,
     timeout_seconds: 120, sampling: "provider_default", max_output_tokens: null },
 });
@@ -471,6 +613,8 @@ async function fixture(t: TestContext) {
   pi.recursiveCandidate = false;
   pi.failure = null;
   pi.sessionsCreated = 0;
+  pi.payloads = [];
+  pi.beforePayload = undefined;
   const directory = await mkdtemp(join(tmpdir(), "pi-benchmark-runtime-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, "models.json"), JSON.stringify({ providers: {} }));
@@ -584,6 +728,7 @@ test("unversioned historical runs project unknown, cannot resume, and never back
     created_at: "2020-01-01", started_at: null, completed_at: null, error: null,
   });
   db.prepare("INSERT INTO benchmark_v2_runs VALUES(?,?,?,?)").run("historical", "paused", "2020-01-01", raw);
+  assert.equal(runtime.get("historical")!.generation_contract.schema_descriptions, null);
   assert.equal(runtime.get("historical")!.metric_revision, null);
   assert.equal(runtime.get("historical")!.controls.can_resume, false);
   assert.throws(() => runtime.resume("historical"));
@@ -601,7 +746,7 @@ test("unversioned historical runs project unknown, cannot resume, and never back
   assert.equal(db.prepare("SELECT data_json FROM benchmark_v2_runs").get()!.data_json, knownMetricRaw);
 });
 
-for (const drift of ["prefer", "wire-schema", "pi-runtime", "sdk-lock", "prompt"]) {
+for (const drift of ["prefer", "wire-schema", "pi-runtime", "sdk-lock", "prompt", "catalog", "description-wire", "mode", "missing-descriptions", "old-protocol", "undeclared"]) {
   test(`paused ${drift} generation contract cannot mix with required strict output`, async (t) => {
     const { runtime, config } = await fixture(t);
     t.mock.method(globalThis, "fetch", async (input: string, options?: RequestInit) => {
@@ -622,6 +767,16 @@ for (const drift of ["prefer", "wire-schema", "pi-runtime", "sdk-lock", "prompt"
     else if (drift === "wire-schema") stored.generation_contract.forge_wire_schema_revision = "sha256:old-wire-schema";
     else if (drift === "pi-runtime") stored.generation_contract.pi_runtime_revision = "sha256:old-runtime";
     else if (drift === "prompt") stored.generation_contract.forge_prompt_revision = "unbound-prompt";
+    else if (drift === "catalog") stored.generation_contract.schema_descriptions.catalog_revision = "sha256:old-catalog";
+    else if (drift === "description-wire") stored.generation_contract.schema_descriptions.wire_schema_revision = "sha256:old-wire";
+    else if (drift === "mode") stored.generation_contract.schema_descriptions = schemaDescriptions("interfaces-v1");
+    else if (drift === "missing-descriptions") delete stored.generation_contract.schema_descriptions;
+    else if (drift === "old-protocol") stored.protocol_manifest.schema_version = "bird-protocol-v4";
+    else if (drift === "undeclared") {
+      stored.generation_contract.schema_descriptions = schemaDescriptions("interfaces-v1");
+      stored.generation_contract.forge_wire_schema_revision = schemaDescriptions("interfaces-v1").wire_schema_revision;
+      stored.protocol_manifest.schema_descriptions = schemaDescriptions("interfaces-v1");
+    }
     else stored.generation_contract.pi_sdk_lock_revision = "sha256:old-sdk-lock";
     const raw = JSON.stringify(stored);
     db.prepare("UPDATE benchmark_v2_runs SET status=?, data_json=? WHERE run_id=?").run("paused", raw, started.run_id);

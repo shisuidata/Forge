@@ -78,7 +78,7 @@
 
 ## Accuracy / Benchmark 逐轮报告
 
-本节覆盖所有 `accuracy-*.json` 与 `benchmark-*` 正式报告、准备清单和同名简报：**40份JSON＋15份Markdown，共55个文件**（含1份早期运行文档重建汇总）。同一实验的JSON与简报不是两轮；新生成、旧候选离线重放、准备快照及失败未完成记录分别标明。下方另列16份早期测试/工程验收报告，避免因文件名前缀遗漏。
+本节REQ-028–058历史部分覆盖当时所有 `accuracy-*.json` 与 `benchmark-*` 正式报告、准备清单和同名简报：**40份JSON＋15份Markdown，共55个文件**（含1份早期运行文档重建汇总）；后续REQ-064–066材料单列追加，不回写历史计数。同一实验的JSON与简报不是两轮；新生成、旧候选离线重放、准备快照及失败未完成记录分别标明。下方另列16份早期测试/工程验收报告，避免因文件名前缀遗漏。
 
 ### 公开报告与本地原始证据边界
 
@@ -147,7 +147,19 @@ REQ-035为规划；REQ-042/043为目标与方向讨论，不是遗漏的模型�
 | REQ-058 | [`archive/benchmarks/benchmark-cte-interface-ready-2026-09-07.json`](archive/benchmarks/benchmark-cte-interface-ready-2026-09-07.json) | 准备快照 | 新生成0；CTE接口范例与16次独立授权提案，保留准备时状态；不替代生成报告。 |
 | REQ-058 | [`archive/benchmarks/benchmark-luna-cte-interface-2026-09-07.json`](archive/benchmarks/benchmark-luna-cte-interface-2026-09-07.json) | 新生成／门槛失败 | 16请求、67367 tokens、未知usage 0；Forge EX/Contract 3/4→3/4、Direct 3/4→2/4；目标/零回退及Forge每正确答案tokens、生成P95护栏失败，默认不启用。 |
 
-最新REQ-058：Forge目标一题恢复、一题回退，Direct输入不变仍发生回退，不能归因于Forge范例；处理总tokens +8.57%、Forge每正确答案tokens +13.11%、生成P95 +41.53%，后两项护栏失败。**默认不启用，不补跑、不扩样、不自动返修；历史滚动父Run仍seed48。** 准备快照与最终负结果均保留，不把16次开发对照视为新的完整基线。
+REQ-058当时结论：Forge目标一题恢复、一题回退，Direct输入不变仍发生回退，不能归因于Forge范例；处理总tokens +8.57%、Forge每正确答案tokens +13.11%、生成P95 +41.53%，后两项护栏失败。**默认不启用，不补跑、不扩样、不自动返修；历史滚动父Run仍seed48。** 准备快照与最终负结果均保留，不把16次开发对照视为新的完整基线。
+
+### REQ-064 生成优化研究（不计新模型实验）
+
+- [调研与离线复算](archive/benchmarks/forge-json-generation-research-2026-09-08.json)：旧500题配对统计、当前strict Schema说明/键序审计、500候选重排键的编译烟测及六项一手方法。新增模型/SQL/Gold执行均0；不是新EX或优化采用证据。
+- [原始需求与评估](requirements-pool.md#req-2026-09-08-064以超过direct-sql的ex为目标重评forge-json生成优化)：优先单变量DSL说明，再研究答案规划；键序与有界返修分别验证，研究时64次开发设计仅为提案，后续准备及实跑见REQ-065。主动计划、H与R0.6不变；上方55份历史报告计数与负结果保留。
+
+### REQ-065–066 关键DSL说明实验与限定样本里程碑
+
+- [零调用准备卡](archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json)：默认off的五字段说明、v5跨语言冻结与严格比较；45项SQLite语义检查、500题默认输入、原候选/真实SDK合成HTTP闭环。当时真实生成未授权的历史状态保留，不替代后续实跑。
+- [64次真实ABBA报告](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.json) · [技术简报](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.md)：8题各两重复，处理Forge EX/Contract12/16 vsDirect10/16，两重复各6/8 vs5/8；原响应/重放一致。无同一目标题稳定恢复且有控制回退，采用门槛未过，保持off。
+- [里程碑文案草稿](devlog/2026-09-08-forge-schema-descriptions-milestone.md)：解释本轮五字段接口说明、局部得分突破及限制；未发布，不声称总体或历史首次优势。
+- [本次公开处理记录](archive/engineering/schema-descriptions-publication-2026-09-08.json)：三份JSON的原件/公开副本hash与最小路径脱敏；原始SSE、状态库、凭据和数据集不入Git。用户仅授权当前分支commit/push，不发布版本。
 
 ### 其他历史测试与工程验收报告
 

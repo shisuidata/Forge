@@ -30,8 +30,9 @@ from agent.prompts import STRUCTURED_BENCHMARK_PROMPT_REVISION, STRUCTURED_BENCH
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL_DIR = ROOT / ".forge" / "benchmarks" / "protocols"
 STANDARD_CATALOG = ROOT / "tests/datasets/bird_mini_dev_standard.json"
-VERSION = "bird-protocol-v4"
-FACTORS = ("model", "prompt", "compiler", "schema", "date_context", "grain_context", "value_context")
+VERSION = "bird-protocol-v5"
+SCHEMA_DESCRIPTIONS_CATALOG = ROOT / "agent/contracts/forge-output-descriptions-v1.json"
+FACTORS = ("model", "prompt", "compiler", "schema", "date_context", "grain_context", "value_context", "schema_descriptions")
 _GRAIN_PATTERN = re.compile(r"(?:\b(?:each|per)\b|\bgrouped?\s+by\b|每个|各(?:个|类|项)?|按.+(?:分组|统计))")
 
 
@@ -57,6 +58,32 @@ def file_hash(path: Path) -> str:
     if signature != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
         raise ValueError("Input changed while fingerprinting")
     return result
+
+
+def schema_description_config(mode: str) -> dict[str, str]:
+    if mode not in ("off", "interfaces-v1"):
+        raise ValueError("Unknown schema_descriptions mode")
+    revision = file_hash(SCHEMA_DESCRIPTIONS_CATALOG)
+    catalog = json.loads(SCHEMA_DESCRIPTIONS_CATALOG.read_text(encoding="utf-8"))
+    if (not isinstance(catalog, dict)
+            or set(catalog) != {"schema_version", "canonical_schema_revision", "profiles"}
+            or catalog["schema_version"] != "forge-output-descriptions-v1"
+            or catalog["canonical_schema_revision"] != file_hash(ROOT / "forge/schema.json")
+            or not isinstance(catalog["profiles"], dict)
+            or set(catalog["profiles"]) != {"off", "interfaces-v1"}):
+        raise ValueError("Invalid schema descriptions catalog or canonical Schema drift")
+    for name, profile in catalog["profiles"].items():
+        if (not isinstance(profile, dict) or set(profile) != {"wire_schema_revision", "descriptions"}
+                or not isinstance(profile["wire_schema_revision"], str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", profile["wire_schema_revision"])
+                or not isinstance(profile["descriptions"], dict)
+                or set(profile["descriptions"]) != (set() if name == "off" else {"scan", "cte", "agg", "window", "select"})
+                or any(not isinstance(text, str) or not text.strip() for text in profile["descriptions"].values())):
+            raise ValueError("Invalid schema descriptions profile")
+    if revision != file_hash(SCHEMA_DESCRIPTIONS_CATALOG):
+        raise ValueError("Schema descriptions catalog changed while reading")
+    return {"mode": mode, "catalog_revision": revision,
+            "wire_schema_revision": catalog["profiles"][mode]["wire_schema_revision"]}
 
 
 def _fingerprints(root: Path, paths: list[Path]) -> dict[str, str]:
@@ -102,6 +129,7 @@ def source_fingerprints() -> dict[str, dict[str, str]]:
     groups = {
         "prompt": [ROOT / "agent/prompts.py"],
         "schema": [ROOT / "forge/schema.json", ROOT / "agent/contracts/query-candidate-v1.schema.json"],
+        "schema_descriptions": [SCHEMA_DESCRIPTIONS_CATALOG],
         "compiler": [ROOT / "forge/compiler.py"],
         "context": [ROOT / "forge/benchmark_v2.py", ROOT / "forge/benchmark_metadata.py"],
         "safety": [ROOT / "forge/executor.py", ROOT / "forge/lint.py", ROOT / "registry/relationships.py"],
@@ -316,7 +344,7 @@ def freeze(*, cohort: str, provider: str, model: str, case_ids: list[str] | None
            repeat: dict | None = None, gold_policy: str = "require_all",
            date_context: str = "off", date_max_rows: int = 100, grain_context: str = "off",
            value_context: str = "off", value_field: list[str] | None = None, value_max_values: int = 16,
-           forge_prompt_revision: str = STRUCTURED_BENCHMARK_PROMPT_REVISION,
+           forge_prompt_revision: str = STRUCTURED_BENCHMARK_PROMPT_REVISION, schema_descriptions: str = "off",
            _gold_readiness: dict | None = None) -> dict:
     if not provider.strip() or not model.strip() or variable not in (None, *FACTORS):
         raise ValueError("Nonempty provider/model and a supported single variable are required")
@@ -342,8 +370,13 @@ def freeze(*, cohort: str, provider: str, model: str, case_ids: list[str] | None
         raise ValueError("Value observations and qualified controls require the explicit value_context factor and field")
     value_config = {"mode": value_context, "field": list(value_field) if value_field is not None else None,
                     "max_values": value_max_values}
+    if schema_descriptions not in ("off", "interfaces-v1") or (schema_descriptions != "off" and variable != "schema_descriptions"):
+        raise ValueError("Schema descriptions require off/interfaces-v1 and the explicit schema_descriptions factor")
     before = dataset_fingerprints()
     sources = source_fingerprints()
+    description_config = schema_description_config(schema_descriptions)
+    if description_config["catalog_revision"] != sources["schema_descriptions"][SCHEMA_DESCRIPTIONS_CATALOG.relative_to(ROOT).as_posix()]:
+        raise ValueError("Schema descriptions catalog changed during freeze")
     suite = hard.load_suite(hard._FULL_SUITE_ID)
     if len(suite["cases"]) != 500:
         raise ValueError("Freezing requires the complete official 500-case input, including for D")
@@ -397,6 +430,7 @@ def freeze(*, cohort: str, provider: str, model: str, case_ids: list[str] | None
         "gold_readiness": gold_readiness,
         "variables": {"allowed_changes": [variable] if variable else []},
         "date_context": date_config, "grain_context": grain_config, "value_context": value_config,
+        "schema_descriptions": description_config,
         "metric_revision": RESULT_COMPARATOR_REVISION,
         "official_ex_revision": hard._SCORING_STANDARD,
         "forge_prompt_revision": forge_prompt_revision,
@@ -408,7 +442,8 @@ def freeze(*, cohort: str, provider: str, model: str, case_ids: list[str] | None
             "contexts": contexts, "generation": manifest["generation"], "gold_readiness": gold_readiness,
             "metric_revision": manifest["metric_revision"],
             "forge_prompt_revision": manifest["forge_prompt_revision"],
-            "forge_schema_revision": manifest["forge_schema_revision"]}
+            "forge_schema_revision": manifest["forge_schema_revision"],
+            "schema_descriptions": description_config}
 
 
 def unwrap(value: dict) -> dict:
@@ -422,6 +457,9 @@ def unwrap(value: dict) -> dict:
 
 def validate(value: dict, *, allow_declared_drift: bool = False) -> dict:
     manifest = unwrap(value)
+    if (value is not manifest and "schema_descriptions" in value
+            and value["schema_descriptions"] != manifest.get("schema_descriptions")):
+        raise ValueError("Schema descriptions response differs from frozen manifest")
     try:
         selection = manifest["selection"]
         cohort = manifest["cohort"]
@@ -438,13 +476,14 @@ def validate(value: dict, *, allow_declared_drift: bool = False) -> dict:
                           grain_context=manifest["grain_context"]["mode"],
                           value_context=manifest["value_context"]["mode"], value_field=manifest["value_context"]["field"],
                           value_max_values=manifest["value_context"]["max_values"],
-                          forge_prompt_revision=manifest["forge_prompt_revision"])
+                          forge_prompt_revision=manifest["forge_prompt_revision"],
+                          schema_descriptions=manifest["schema_descriptions"]["mode"])
     except (KeyError, TypeError, StopIteration, AttributeError) as exc:
         raise ValueError("Malformed protocol manifest") from exc
     # Parameter-only treatments never authorize source drift. Recompute all hashes
     # even in compare so a caller cannot substitute arbitrary prompt facts.
     source_drift = allow_declared_drift and manifest["variables"]["allowed_changes"] not in (
-        ["date_context"], ["grain_context"], ["value_context"])
+        ["date_context"], ["grain_context"], ["value_context"], ["schema_descriptions"])
     actual = _comparison_manifest(manifest) if source_drift else manifest
     expected = _comparison_manifest(response["manifest"]) if source_drift else response["manifest"]
     if canonical(actual) != canonical(expected):
@@ -482,7 +521,13 @@ def load_revision(revision: str) -> dict:
 
 
 def verify_case(revision: str, case_id: str) -> dict:
-    manifest = load_revision(revision)
+    manifest = unwrap(load_revision(revision))
+    description_config = manifest.get("schema_descriptions")
+    if (not isinstance(description_config, dict)
+            or description_config != schema_description_config(description_config.get("mode"))
+            or (description_config["mode"] != "off"
+                and manifest.get("variables") != {"allowed_changes": ["schema_descriptions"]})):
+        raise ValueError("Frozen schema descriptions drift or undeclared factor")
     if case_id not in manifest["case_ids"]:
         raise ValueError("Case is outside the frozen denominator")
     # Stat-keyed hashing avoids repeated DB reads, but catches post-preflight drift.
@@ -608,7 +653,7 @@ def _comparison_manifest(manifest: dict) -> dict:
     for factor in allowed:
         if factor == "model":
             result.pop("model")
-        elif factor not in ("date_context", "grain_context", "value_context"):
+        elif factor not in ("date_context", "grain_context", "value_context", "schema_descriptions"):
             result["sources"].pop(factor)
         if factor == "prompt":
             result.pop("forge_prompt_revision")
@@ -616,6 +661,9 @@ def _comparison_manifest(manifest: dict) -> dict:
                 context.pop("forge")
         elif factor == "schema":
             result.pop("forge_schema_revision")
+        elif factor == "schema_descriptions":
+            result[factor].pop("mode")
+            result[factor].pop("wire_schema_revision")
         elif factor in ("date_context", "grain_context", "value_context"):
             result[factor].pop("mode")
             for context in result["context_hashes"].values():
@@ -655,11 +703,38 @@ def compare(left: dict, right: dict) -> dict:
             if outputs[0] != outputs[1]:
                 reasons.append("Saved candidates changed during deterministic replay comparison")
         contracts = [copy.deepcopy(item.get("generation_contract")) for item in (left, right)]
-        if "prompt" in allowed:
-            for contract, manifest in zip(contracts, manifests):
-                if isinstance(contract, dict):
-                    if contract.get("forge_prompt_revision") != manifest["forge_prompt_revision"]:
-                        reasons.append("Actual Forge prompt revision differs from frozen input")
+        for item, contract, manifest in zip((left, right), contracts, manifests):
+            if "schema_descriptions" in allowed:
+                model = item.get("model")
+                if (not isinstance(contract, dict) or not isinstance(model, dict)
+                        or any(not isinstance(model.get(key), str) or not model[key] for key in ("provider", "model", "revision"))
+                        or {key: model[key] for key in ("provider", "model")} != manifest["model"]
+                        or "temperature" not in model or model["temperature"] is not None
+                        or "max_output_tokens" not in model or model["max_output_tokens"] is not None):
+                    reasons.append("Schema descriptions comparison requires complete Pi generation/model provenance")
+                    continue
+                expected = {key: manifest["generation"][key] for key in (
+                    "sampling", "max_output_tokens", "timeout_seconds", "provider_retries", "max_agent_turns_per_arm")}
+                expected.update(forge_output_mode="pi_tool_schema", provider_json_schema_request="required",
+                                direct_output_mode="text_sql", transport="sse", isolation_revision="pi-benchmark-isolation-v1")
+                if (any(key not in contract or canonical(contract[key]) != canonical(value) for key, value in expected.items())
+                        or any(not isinstance(contract.get(key), str) or not contract[key]
+                               for key in ("pi_runtime_revision", "pi_sdk_lock_revision"))):
+                    reasons.append("Incomplete or mismatched Pi generation contract")
+            if isinstance(contract, dict):
+                if (contract.get("schema_descriptions") != manifest["schema_descriptions"]
+                        or contract.get("forge_wire_schema_revision") != manifest["schema_descriptions"]["wire_schema_revision"]
+                        or contract.get("forge_schema_revision") != manifest["forge_schema_revision"]):
+                    reasons.append("Actual Forge schema descriptions or wire revision differs from frozen input")
+                if contract.get("forge_prompt_revision") != manifest["forge_prompt_revision"]:
+                    reasons.append("Actual Forge prompt revision differs from frozen input")
+                if "schema_descriptions" in allowed:
+                    contract.pop("forge_wire_schema_revision", None)
+                    descriptions = contract.get("schema_descriptions")
+                    if isinstance(descriptions, dict):
+                        descriptions.pop("mode", None)
+                        descriptions.pop("wire_schema_revision", None)
+                if "prompt" in allowed:
                     contract.pop("forge_prompt_revision", None)
         if canonical(contracts[0]) != canonical(contracts[1]):
             reasons.append("Actual generation contract or Pi runtime/SDK revision changed")

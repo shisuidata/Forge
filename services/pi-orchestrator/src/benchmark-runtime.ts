@@ -22,6 +22,7 @@ import type {
   BenchmarkCaseProjectionV2,
   BenchmarkLogV2,
   BenchmarkGenerationContractV2,
+  BenchmarkSchemaDescriptionsV2,
   BenchmarkGoldReadinessV2,
   BenchmarkRunProjectionV2,
   BenchmarkRunStatus,
@@ -34,22 +35,52 @@ import { currentRequestId } from "./request-context.js";
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const forgeSchemaJson = readFileSync(resolve(moduleDir, "../../../forge/schema.json"), "utf8");
 const canonicalForgeSchema = JSON.parse(forgeSchemaJson);
-const strictForgeOutput = createStrictForgeOutput(canonicalForgeSchema);
 const forgeToolSchema = canonicalForgeSchema as TSchema;
-const forgeToolSchemaChars = JSON.stringify(strictForgeOutput.schema).length;
-
-const FORGE_SCHEMA_REVISION = `sha256:${createHash("sha256").update(forgeSchemaJson).digest("hex")}`;
+const FORGE_SCHEMA_REVISION = "sha256:" + createHash("sha256").update(forgeSchemaJson).digest("hex");
+const descriptionsCatalogBytes = readFileSync(resolve(moduleDir, "../../../agent/contracts/forge-output-descriptions-v1.json"));
+const descriptionsCatalogRevision = "sha256:" + createHash("sha256").update(descriptionsCatalogBytes).digest("hex");
+const strictForgeProfiles = (() => {
+  const catalog = JSON.parse(descriptionsCatalogBytes.toString("utf8"));
+  const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  const exactKeys = (value: unknown, keys: readonly string[]): boolean =>
+    record(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+  const modes = ["off", "interfaces-v1"] as const;
+  if (!exactKeys(catalog, ["schema_version", "canonical_schema_revision", "profiles"])
+    || catalog.schema_version !== "forge-output-descriptions-v1"
+    || catalog.canonical_schema_revision !== FORGE_SCHEMA_REVISION || !exactKeys(catalog.profiles, modes)) {
+    throw new StrictForgeOutputError("Forge descriptions catalog or canonical schema mismatch");
+  }
+  const profiles = new Map<BenchmarkSchemaDescriptionsV2["mode"], {
+    output: ReturnType<typeof createStrictForgeOutput>; schemaChars: number; metadata: BenchmarkSchemaDescriptionsV2;
+  }>();
+  for (const mode of modes) {
+    const profile = catalog.profiles[mode];
+    const fields = mode === "off" ? [] : ["scan", "cte", "agg", "window", "select"];
+    if (!exactKeys(profile, ["wire_schema_revision", "descriptions"]) || !exactKeys(profile.descriptions, fields)
+      || !Object.values(profile.descriptions).every((value) => typeof value === "string" && value.trim())) {
+      throw new StrictForgeOutputError("Invalid Forge descriptions profile");
+    }
+    const output = createStrictForgeOutput(canonicalForgeSchema, profile.descriptions);
+    if (profile.wire_schema_revision !== output.revision) throw new StrictForgeOutputError("Forge descriptions wire schema mismatch");
+    profiles.set(mode, {
+      output, schemaChars: JSON.stringify(output.schema).length,
+      metadata: Object.freeze({ mode, catalog_revision: descriptionsCatalogRevision, wire_schema_revision: output.revision }),
+    });
+  }
+  return profiles;
+})();
 const PI_RUNTIME_REVISION = "sha256:" + createHash("sha256")
   .update("benchmark-runtime\0").update(readFileSync(fileURLToPath(import.meta.url)))
   .update("strict-forge-output\0").update(readFileSync(new URL("./strict-forge-output" + extname(fileURLToPath(import.meta.url)), import.meta.url)))
+  .update("forge-output-descriptions-v1\0").update(descriptionsCatalogBytes)
   .digest("hex");
 const PI_SDK_LOCK_REVISION = "sha256:" + createHash("sha256")
   .update(readFileSync(resolve(moduleDir, "../package-lock.json"))).digest("hex");
-const structuredGenerationContract: Omit<BenchmarkGenerationContractV2, "forge_prompt_revision"> = {
+const structuredGenerationContract: Omit<BenchmarkGenerationContractV2, "forge_prompt_revision" | "forge_wire_schema_revision" | "schema_descriptions"> = {
   forge_output_mode: "pi_tool_schema",
   forge_schema_revision: FORGE_SCHEMA_REVISION,
   provider_json_schema_request: "required",
-  forge_wire_schema_revision: strictForgeOutput.revision,
   sampling: "provider_default",
   transport: "sse",
   max_output_tokens: null,
@@ -67,6 +98,7 @@ const legacyGenerationContract: BenchmarkGenerationContractV2 = {
   forge_schema_revision: null,
   provider_json_schema_request: "disabled",
   forge_wire_schema_revision: null,
+  schema_descriptions: null,
   direct_output_mode: "text_sql",
 };
 
@@ -79,7 +111,7 @@ interface SuiteCase {
   evidence: string;
 }
 interface ContextResponse {
-  protocol_revision: string;
+  protocol_revision?: string;
   metric_revision: string;
   case: SuiteCase;
   context_snapshot: ContextSnapshotV2;
@@ -207,10 +239,28 @@ function requireMetricRevision(expected: string | undefined, received: unknown):
     throw new MetricRevisionMismatch(`Result comparator revision mismatch: expected ${expected ?? "unknown"}, received ${received ?? "unknown"}`);
   }
 }
+function descriptionProfile(value: unknown) {
+  const metadata = value as Partial<BenchmarkSchemaDescriptionsV2> | null | undefined;
+  const profile = metadata && strictForgeProfiles.get(metadata.mode as BenchmarkSchemaDescriptionsV2["mode"]);
+  return profile && Object.keys(metadata!).length === 3
+    && metadata!.catalog_revision === profile.metadata.catalog_revision
+    && metadata!.wire_schema_revision === profile.output.revision ? profile : undefined;
+}
+
+function manifestDescriptionProfile(manifest: Record<string, unknown> | undefined) {
+  if (manifest?.schema_version !== "bird-protocol-v5") return undefined;
+  const profile = descriptionProfile(manifest.schema_descriptions);
+  const changes = (manifest.variables as { allowed_changes?: unknown } | undefined)?.allowed_changes;
+  return profile && Array.isArray(changes)
+    && (profile.metadata.mode === "off" || changes.includes("schema_descriptions")) ? profile : undefined;
+}
+
 function hasCurrentGenerationContract(run: PersistedRun): boolean {
   const contract = run.generation_contract;
-  return contract?.provider_json_schema_request === "required"
-    && contract.forge_wire_schema_revision === strictForgeOutput.revision
+  const profile = manifestDescriptionProfile(run.protocol_manifest);
+  return Boolean(profile) && descriptionProfile(contract?.schema_descriptions) === profile
+    && contract?.provider_json_schema_request === "required"
+    && contract.forge_wire_schema_revision === profile!.output.revision
     && contract.forge_schema_revision === FORGE_SCHEMA_REVISION
     && typeof run.protocol_manifest?.forge_prompt_revision === "string"
     && Boolean(run.protocol_manifest.forge_prompt_revision)
@@ -221,8 +271,9 @@ function hasCurrentGenerationContract(run: PersistedRun): boolean {
     && contract.pi_runtime_revision === PI_RUNTIME_REVISION && contract.pi_sdk_lock_revision === PI_SDK_LOCK_REVISION;
 }
 
-function requireGenerationContract(run: PersistedRun): void {
+function requireGenerationContract(run: PersistedRun) {
   if (!hasCurrentGenerationContract(run)) throw new StrictForgeOutputError("Strict Forge generation contract mismatch; start a new run");
+  return manifestDescriptionProfile(run.protocol_manifest)!;
 }
 
 
@@ -361,6 +412,7 @@ export class PiBenchmarkRuntime {
       manifest: Record<string, unknown>; protocol_revision: string; case_ids: string[];
       metric_revision: string; forge_prompt_revision: string; forge_schema_revision: string;
       contexts: Record<string, ContextResponse>;
+      schema_descriptions: BenchmarkSchemaDescriptionsV2;
       gold_readiness: BenchmarkGoldReadinessV2;
       generation: { max_model_calls: number; provider_retries: number; max_agent_turns_per_arm: number; timeout_seconds: number; sampling: string; max_output_tokens: number | null };
     }>("/api/internal/benchmark-v2/protocol", {
@@ -373,6 +425,11 @@ export class PiBenchmarkRuntime {
     const manifestReadiness = requireGoldReadiness(protocol.manifest?.gold_readiness, cases);
     if (!sameGoldReadiness(goldReadiness, manifestReadiness) || !sameGoldReadiness(goldReadiness, requestedReadiness)) {
       throw new BenchmarkInputError("Frozen Gold readiness differs from the authorized manifest/report");
+    }
+    const profile = manifestDescriptionProfile(protocol.manifest);
+    if (!profile || descriptionProfile(protocol.schema_descriptions) !== profile
+      || (options.protocolManifest && manifestDescriptionProfile(options.protocolManifest) !== profile)) {
+      throw new StrictForgeOutputError("Frozen benchmark schema descriptions mismatch");
     }
     const blockedIds = new Set(goldReadiness.blocked_cases.map((item) => item.case_id));
     if (!protocol.protocol_revision || !protocol.manifest ||
@@ -392,6 +449,7 @@ export class PiBenchmarkRuntime {
     }
     const generationContract: BenchmarkGenerationContractV2 = {
       ...structuredGenerationContract, forge_prompt_revision: protocol.forge_prompt_revision,
+      schema_descriptions: profile.metadata, forge_wire_schema_revision: profile.output.revision,
     };
     this.#assertOwner();
     const run = this.application.state.transactions.run(() => {
@@ -662,10 +720,12 @@ export class PiBenchmarkRuntime {
         { case_id: caseId, protocol_revision: run.protocol_revision },
         runId,
       );
+      requireGenerationContract(run);
       const context = run.contexts?.[caseId];
       if (!context || checkedContext.protocol_revision !== run.protocol_revision ||
         checkedContext.forge_prompt_revision !== context.forge_prompt_revision ||
         JSON.stringify(checkedContext.context_snapshot) !== JSON.stringify(context.context_snapshot) ||
+        checkedContext.schema_context !== context.schema_context ||
         checkedContext.forge_instructions !== context.forge_instructions || checkedContext.direct_instructions !== context.direct_instructions) {
         throw new MetricRevisionMismatch("Frozen protocol context drift");
       }
@@ -818,6 +878,9 @@ export class PiBenchmarkRuntime {
       { context_snapshot_id: context.context_snapshot.content_hash },
     );
     try {
+      const profile = requireGenerationContract(run);
+      const strictForgeOutput = profile.output;
+      const forgeToolSchemaChars = profile.schemaChars;
       const runtime = await this.#runtime();
       const model = runtime.getModel(run.model.provider, run.model.model);
       if (!model) throw new Error(`Model unavailable: ${run.model.provider}/${run.model.model}`);
@@ -872,6 +935,7 @@ export class PiBenchmarkRuntime {
       const stream = session.agent.streamFunction;
       session.agent.streamFunction = (selected, providerContext, options) => {
         const current = this.#run(runId);
+        if (requireGenerationContract(current) !== profile) throw new StrictForgeOutputError("Benchmark schema descriptions changed before dispatch");
         if (controller.signal.aborted || ["failed", "stopping", "stopped"].includes(current.status)) throw new Error("Benchmark dispatch cancelled");
         if (evidence.dispatches !== 0 || (current.dispatched_calls ?? 0) >= current.total_calls) {
           throw new StrictForgeOutputError("A second agent turn or excess budget dispatch is forbidden");
@@ -886,6 +950,7 @@ export class PiBenchmarkRuntime {
         return stream(selected, providerContext, { ...options, maxRetries: 0, timeoutMs: 120000, transport: "sse" });
       };
       session.agent.onPayload = (payload, selected) => {
+        if (requireGenerationContract(this.#run(runId)) !== profile) throw new StrictForgeOutputError("Benchmark schema descriptions changed before payload");
         if (++strictRequests !== 1) throw new StrictForgeOutputError("A second provider payload is forbidden");
         if (controller.signal.aborted) throw new Error("Benchmark dispatch cancelled");
         const effective = arm === "forge"

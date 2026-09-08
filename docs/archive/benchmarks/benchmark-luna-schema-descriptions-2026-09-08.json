@@ -1,0 +1,841 @@
+{
+  "schema_version": "benchmark-luna-schema-descriptions-result-v1",
+  "task_id": "Forge-20260908-02",
+  "requirement": "REQ-2026-09-08-065",
+  "at": "2026-09-08T02:14:37.395314+00:00",
+  "summaries": {
+    "A1": {
+      "forge": {
+        "official_ea": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 35236,
+        "unknown_usage": 0,
+        "generation_p95_ms": 14027.8,
+        "execution_passed": 7,
+        "tokens_per_ex_correct": 7047.2
+      },
+      "direct": {
+        "official_ea": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 19074,
+        "unknown_usage": 0,
+        "generation_p95_ms": 12737.2,
+        "execution_passed": 8,
+        "tokens_per_ex_correct": 3814.8
+      }
+    },
+    "B1": {
+      "forge": {
+        "official_ea": {
+          "correct": 6,
+          "failed": 2,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 6,
+          "failed": 2,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 37853,
+        "unknown_usage": 0,
+        "generation_p95_ms": 19614.3,
+        "execution_passed": 8,
+        "tokens_per_ex_correct": 6308.833333333333
+      },
+      "direct": {
+        "official_ea": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 18925,
+        "unknown_usage": 0,
+        "generation_p95_ms": 14857.5,
+        "execution_passed": 8,
+        "tokens_per_ex_correct": 3785.0
+      }
+    },
+    "B2": {
+      "forge": {
+        "official_ea": {
+          "correct": 6,
+          "failed": 2,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 6,
+          "failed": 2,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 37398,
+        "unknown_usage": 0,
+        "generation_p95_ms": 17137.7,
+        "execution_passed": 8,
+        "tokens_per_ex_correct": 6233.0
+      },
+      "direct": {
+        "official_ea": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 18684,
+        "unknown_usage": 0,
+        "generation_p95_ms": 12778,
+        "execution_passed": 8,
+        "tokens_per_ex_correct": 3736.8
+      }
+    },
+    "A2": {
+      "forge": {
+        "official_ea": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 35808,
+        "unknown_usage": 0,
+        "generation_p95_ms": 20737.9,
+        "execution_passed": 6,
+        "tokens_per_ex_correct": 7161.6
+      },
+      "direct": {
+        "official_ea": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "contract_accuracy": {
+          "correct": 5,
+          "failed": 3,
+          "unknown": 0,
+          "observed_denominator": 8
+        },
+        "total_tokens": 19037,
+        "unknown_usage": 0,
+        "generation_p95_ms": 11284.5,
+        "execution_passed": 8,
+        "tokens_per_ex_correct": 3807.4
+      }
+    }
+  },
+  "combined": {
+    "A": {
+      "forge": {
+        "official_ea": {
+          "correct": 10,
+          "failed": 6,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "contract_accuracy": {
+          "correct": 10,
+          "failed": 6,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "total_tokens": 71044,
+        "unknown_usage": 0,
+        "generation_p95_ms": 20737.9,
+        "execution_passed": 13,
+        "tokens_per_ex_correct": 7104.4
+      },
+      "direct": {
+        "official_ea": {
+          "correct": 10,
+          "failed": 6,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "contract_accuracy": {
+          "correct": 10,
+          "failed": 6,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "total_tokens": 38111,
+        "unknown_usage": 0,
+        "generation_p95_ms": 12737.2,
+        "execution_passed": 16,
+        "tokens_per_ex_correct": 3811.1
+      }
+    },
+    "B": {
+      "forge": {
+        "official_ea": {
+          "correct": 12,
+          "failed": 4,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "contract_accuracy": {
+          "correct": 12,
+          "failed": 4,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "total_tokens": 75251,
+        "unknown_usage": 0,
+        "generation_p95_ms": 19614.3,
+        "execution_passed": 16,
+        "tokens_per_ex_correct": 6270.916666666667
+      },
+      "direct": {
+        "official_ea": {
+          "correct": 10,
+          "failed": 6,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "contract_accuracy": {
+          "correct": 10,
+          "failed": 6,
+          "unknown": 0,
+          "observed_denominator": 16
+        },
+        "total_tokens": 37609,
+        "unknown_usage": 0,
+        "generation_p95_ms": 14857.5,
+        "execution_passed": 16,
+        "tokens_per_ex_correct": 3760.9
+      }
+    }
+  },
+  "paired_transitions": [
+    {
+      "repeat": 1,
+      "case_id": "md-009",
+      "arm": "forge",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-009",
+      "arm": "direct",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-079",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-079",
+      "arm": "direct",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-199",
+      "arm": "forge",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-199",
+      "arm": "direct",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-289",
+      "arm": "forge",
+      "ex_A": false,
+      "ex_B": true,
+      "contract_A": false,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-289",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-002",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-002",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-052",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-052",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-312",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-312",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-386",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 1,
+      "case_id": "md-386",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-009",
+      "arm": "forge",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-009",
+      "arm": "direct",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-079",
+      "arm": "forge",
+      "ex_A": false,
+      "ex_B": true,
+      "contract_A": false,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-079",
+      "arm": "direct",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-199",
+      "arm": "forge",
+      "ex_A": false,
+      "ex_B": true,
+      "contract_A": false,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-199",
+      "arm": "direct",
+      "ex_A": false,
+      "ex_B": false,
+      "contract_A": false,
+      "contract_B": false
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-289",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-289",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-002",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-002",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-052",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": false,
+      "contract_A": true,
+      "contract_B": false
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-052",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-312",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-312",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-386",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    },
+    {
+      "repeat": 2,
+      "case_id": "md-386",
+      "arm": "direct",
+      "ex_A": true,
+      "ex_B": true,
+      "contract_A": true,
+      "contract_B": true
+    }
+  ],
+  "stable_target_gains": [],
+  "forge_regressions": [
+    {
+      "repeat": 2,
+      "case_id": "md-052",
+      "arm": "forge",
+      "ex_A": true,
+      "ex_B": false,
+      "contract_A": true,
+      "contract_B": false
+    }
+  ],
+  "control_B_ex_correct": 7,
+  "delta_forge": 2,
+  "delta_direct": 0,
+  "total_tokens_ratio": 1.0339425587467364,
+  "forge_tokens_per_correct_ratio": 0.8826806861475518,
+  "forge_generation_p95_ratio": 0.9458190077105203,
+  "gates": {
+    "complete_64_scored_known_usage": true,
+    "original_response_and_replay_consistent": true,
+    "both_repeats_comparable": true,
+    "forge_gain_at_least_2": true,
+    "repeat_stable_target_gain": false,
+    "zero_forge_ex_contract_regressions": false,
+    "control_B_ex_8_of_8": false,
+    "forge_gain_minus_absolute_direct_gain_at_least_2": true,
+    "total_tokens_ratio_at_most_1_2": true,
+    "forge_tokens_per_correct_not_increased": true,
+    "forge_generation_p95_ratio_at_most_1_25": true
+  },
+  "all_gates_passed": false,
+  "decision": "Keep default off. Mechanism-screening only; no broad accuracy superiority or automatic rollout.",
+  "cny_cost": null,
+  "cny_cap_revoked": true,
+  "historical_scores_unchanged": true,
+  "new_model_calls_during_analysis": 0,
+  "evidence_root": ".forge/benchmarks/schema-descriptions-run-20260908",
+  "execution": {
+    "task": "Forge-20260908-02",
+    "at": "2026-09-08T02:14:24.098Z",
+    "status": "completed",
+    "failure": null,
+    "actual_http_requests": 64,
+    "runs": [
+      {
+        "label": "A1",
+        "run_id": "pbr_c76dc1f4030041bcb423eed340268e36",
+        "status": "completed",
+        "dispatched_calls": 16,
+        "completed_calls": 16
+      },
+      {
+        "label": "B1",
+        "run_id": "pbr_0631628fcb774ba19d254e30ea44b22e",
+        "status": "completed",
+        "dispatched_calls": 16,
+        "completed_calls": 16
+      },
+      {
+        "label": "B2",
+        "run_id": "pbr_7bd01d7fe8404e8c9fa4719c3c3845e1",
+        "status": "completed",
+        "dispatched_calls": 16,
+        "completed_calls": 16
+      },
+      {
+        "label": "A2",
+        "run_id": "pbr_9ab15c21a9ec4dd7b4975795d1071749",
+        "status": "completed",
+        "dispatched_calls": 16,
+        "completed_calls": 16
+      }
+    ],
+    "planned_calls": 64,
+    "cny_cost": null,
+    "cny_cost_note": "Not computable from subscription OAuth; no free-use guarantee",
+    "no_retries_or_replacements": true
+  },
+  "authorization_history": [
+    {
+      "at": "2026-09-08T07:10:29+08:00",
+      "instruction": "64次且最多¥20；无法证明费用硬上界则停止",
+      "actual_calls": 0,
+      "evidence": ".forge/benchmarks/schema-descriptions-ready-20260908/budget-preflight-Forge-20260908-02.json"
+    },
+    {
+      "at": "2026-09-08T10:07:48+08:00",
+      "instruction": "用户明确说费用先不用管，当前GPT订阅制不用担心费用，继续推进；撤销¥20及人民币结算证明门禁，保留订阅OAuth、原64次ABBA、零重试/扩样；不切付费API或购买额度"
+    }
+  ],
+  "verification": {
+    "actual_http_requests": 64,
+    "http_200": 64,
+    "original_sse_captures": 64,
+    "raw_candidate_and_provider_usage_matches": 64,
+    "candidate_replays": 64,
+    "sql_status_ex_contract_replay_differences": 0,
+    "protocol_comparisons": 2,
+    "provider_retries": 0,
+    "extra_canary_or_replacement_calls": 0,
+    "all_usage_known": true,
+    "tests_rerun": false,
+    "source_changes": false,
+    "loopback_scoring_service_stopped": true,
+    "generation_and_replay_processes_exited": true
+  },
+  "interpretation_zh": "Forge EX/Contract由10/16增至12/16，Direct维持10/16；三次单重复恢复、一控制题回退，没有同一目标题在两重复稳定恢复，控制7/8，预注册门槛失败。保留默认off，不宣称超过Direct SQL总体准确率，不补跑追分。",
+  "cost_summary": {
+    "total_tokens": 222015,
+    "A_total_tokens": 109155,
+    "B_total_tokens": 112860,
+    "B_vs_A_percent": 3.394255874673635,
+    "forge_tokens_per_correct_percent": -11.73193138524482,
+    "forge_generation_p95_percent": -5.41809922894797,
+    "cny": null,
+    "note": "订阅OAuth人民币费用不可核算；不宣称免费。原tokens及P95相对验收门槛保留，已通过。"
+  },
+  "prepared_card_sha256": "sha256:2229da5b5a68ac941663c6de3c4fed8ef82f18087e5bf124565e333223e2164b",
+  "generation_contracts": {
+    "A1": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "schema_descriptions": {
+        "mode": "off",
+        "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+        "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d"
+      },
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:f6612f91028af494784d8ecc982513b47ba4ff2086df444ae19231b8c2f22d0d",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    },
+    "B1": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f",
+      "schema_descriptions": {
+        "mode": "interfaces-v1",
+        "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+        "wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f"
+      },
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:f6612f91028af494784d8ecc982513b47ba4ff2086df444ae19231b8c2f22d0d",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    },
+    "B2": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f",
+      "schema_descriptions": {
+        "mode": "interfaces-v1",
+        "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+        "wire_schema_revision": "sha256:d3d56c36a2a8fd0322e61474a1ae8602d40244bdba5d6a00a50095f0c254848f"
+      },
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:f6612f91028af494784d8ecc982513b47ba4ff2086df444ae19231b8c2f22d0d",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    },
+    "A2": {
+      "forge_output_mode": "pi_tool_schema",
+      "forge_prompt_revision": "forge-structured-benchmark-v1",
+      "forge_schema_revision": "sha256:e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+      "provider_json_schema_request": "required",
+      "forge_wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d",
+      "schema_descriptions": {
+        "mode": "off",
+        "catalog_revision": "sha256:796f6d6c15779b537cf3692ea315bd0d8fc6b8cd012e894e5833381d1c44ab18",
+        "wire_schema_revision": "sha256:01f2abbe6608b33610f4106f1acf8705ffca38a4aa3c8d990bc7b6f7fe739b8d"
+      },
+      "direct_output_mode": "text_sql",
+      "sampling": "provider_default",
+      "transport": "sse",
+      "max_output_tokens": null,
+      "timeout_seconds": 120,
+      "provider_retries": 0,
+      "max_agent_turns_per_arm": 1,
+      "isolation_revision": "pi-benchmark-isolation-v1",
+      "pi_runtime_revision": "sha256:f6612f91028af494784d8ecc982513b47ba4ff2086df444ae19231b8c2f22d0d",
+      "pi_sdk_lock_revision": "sha256:cd26acc8f80885074afc9042709d0337a4732637d185e5b0b13be99e961c80b6"
+    }
+  },
+  "local_evidence_fingerprints": {
+    ".forge/benchmarks/schema-descriptions-run-20260908/execution-start.json": "sha256:16ab39b2b10bc5a1e5af69f579d1e059c2bbb474bda53773cb9d39357ac3a2e8",
+    ".forge/benchmarks/schema-descriptions-run-20260908/execution-result.json": "sha256:52a3eb09a56abde51345c8ad4d5cdf63977be8f88f66ef8b681638c0cae3b19a",
+    ".forge/benchmarks/schema-descriptions-run-20260908/result.json": "sha256:de927ab6a505b04d042ab2913d51b6eed9ff88563d37885ab63eca50ca8529c8",
+    ".forge/benchmarks/schema-descriptions-run-20260908/original-response-and-replay-checks.json": "sha256:13db79dbbae7cd54a348baaa353be9719ff1761cd5b110767201252c2160c94c",
+    ".forge/benchmarks/schema-descriptions-run-20260908/paired-comparisons.json": "sha256:092fc8aa595be80be3c0d3ab035917864fbfd26fb632f8581bf84f06339e9a8e",
+    ".forge/benchmarks/schema-descriptions-run-20260908/A1-run.json": "sha256:d76749dfd7b773e63161cf76ba02577b8b9ae823ad219f01af0a4877e5bd3aeb",
+    ".forge/benchmarks/schema-descriptions-run-20260908/A1-replay.json": "sha256:d825db27426a3e72ad0ccb0814072cc63db8e7ed4b1ab326e31cadf9a64341ed",
+    ".forge/benchmarks/schema-descriptions-run-20260908/A1-logs.json": "sha256:75e4b6599b7568dac4f82a200c3e6433987e597180d04b0bc08153349054115e",
+    ".forge/benchmarks/schema-descriptions-run-20260908/B1-run.json": "sha256:eeac03e27ea4bb13cc681f2e358752d99eefc81ace91ee17ddf2a6069bae8048",
+    ".forge/benchmarks/schema-descriptions-run-20260908/B1-replay.json": "sha256:8d356999b5cd55065c1741f4b06c24b4e44ac53ee9e368784f4e532b4b699ab4",
+    ".forge/benchmarks/schema-descriptions-run-20260908/B1-logs.json": "sha256:70f72265af7c72e7beba91e46d0e31fa10843ab1168f425316939af3c09c421d",
+    ".forge/benchmarks/schema-descriptions-run-20260908/B2-run.json": "sha256:9009da1ca01b73e907416facf9e550befb38173413fd14079de82934133f93be",
+    ".forge/benchmarks/schema-descriptions-run-20260908/B2-replay.json": "sha256:5557ddadb7e1d2843836527b914fb2b9f258d7624303f7b3ea5e903b55c3a8af",
+    ".forge/benchmarks/schema-descriptions-run-20260908/B2-logs.json": "sha256:de4308c4f721e70b9672c9aff97f36fba68109ee17095b73e344ddba8fca7bc9",
+    ".forge/benchmarks/schema-descriptions-run-20260908/A2-run.json": "sha256:4be4471619a5ac28507339401bba4ef6cc667b20637eb44ddcd5f584a0265c19",
+    ".forge/benchmarks/schema-descriptions-run-20260908/A2-replay.json": "sha256:b29dca12c42449160d4d7914e31c7fb7ff9f7d599dd30ca282bd91ceb9e19e3f",
+    ".forge/benchmarks/schema-descriptions-run-20260908/A2-logs.json": "sha256:9e29a16d5e831166fc6ba4607b7727270c861c013cd5bad8c4afc3b5db6fbce6",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-01.sse": "sha256:3270b06f727c9ec988964a12c225ca29c44683b1c228b577de59609bc39cf7d3",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-02.sse": "sha256:fb37e2fa846130e07599e1eab10d1ffd39a7a82a843e631930fd57e31905accf",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-03.sse": "sha256:91b96915c9eef5029cce2aea9d17b46be42198ca94b32e5e78b47d5cba387ea4",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-04.sse": "sha256:69f43590e0ea0648935984acdb2752f6c20415f6c6d0169bd0a218ef9860f14a",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-05.sse": "sha256:b683faf85d91ed5fd8be9de3a674894582468f658695ba537f5fa99acacb6583",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-06.sse": "sha256:404492bf334e434bef20e811fb1fab0806a78b21492f9c5bd527768ffeacb2ee",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-07.sse": "sha256:20ad2ea1edd60e2ebd6d8c813b80f97c758defb7a87c7a84315e4fc2a068f5fa",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-08.sse": "sha256:94408ee9d24df7d379e53c1403ba84acda95c8a5399106f16623c7b2cc838ed8",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-09.sse": "sha256:57f508a016172bfbd88ebfedd34a6bc7bb1bcf608a4f21d0eef4ce5111c56e70",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-10.sse": "sha256:b754b71a7936d4b5ed79bc2d7b08e53a649866756f6aa1a339ee52a0ef335e01",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-11.sse": "sha256:9ae6268b5ba407e868fc9fc1d3b3a5f38c468d617da5d5908017f5a3aef1902a",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-12.sse": "sha256:53014e571ee15d44d0d35e3d5d3f27ad5053b09c18a615735d890fb5c73507e5",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-13.sse": "sha256:6b1096172bd9afc3cd56a7ea84f4c3e0409510da443acd1a0849d5c3e02abc38",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-14.sse": "sha256:bde79f8ad95ee96205c4697cc602b154d6c8697c66b4dd65be8be9f545a76916",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-15.sse": "sha256:fa13eb153922eab6eabf1121bbecd09dd4a4f24f453c507ebebdc00fdb19a9ed",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-16.sse": "sha256:e368dbe88c80e78f05304cae2ae957bc80ad04effe52ce32d129df3bf2f22295",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-17.sse": "sha256:156ca729d7ecf8672a359e5b217d218ed7d8dc5243e174b964fa12dc4c4dc83a",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-18.sse": "sha256:28d2501c22cb44dd4250ddc371b6be2d4402e85bf51f57841fa403cb6e4d4a6d",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-19.sse": "sha256:761d695d0e7903ac79e3a5a29b7c4831b272d7098a8976c6d3cc8cede7ba9251",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-20.sse": "sha256:46416bb0c7263993ecb68a4d22f3a1cf338c8bd2c7ab44484d7994b82f669776",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-21.sse": "sha256:1845df18fd32b781e00313d2c0c8670b1911c15cc62bdc69be33a34540fde7b0",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-22.sse": "sha256:af611283d242b86e039b7bc0966ace916b116a141826b13f45ef33e57ddc73df",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-23.sse": "sha256:3017ceb09ba32d69467c06bba9b26eca51e3fc36eebd9eb85d40cd9a38e4514b",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-24.sse": "sha256:671fb624cd5a2617917839488970c8477409a9bd15e429cb4d961a4eba3c6cd2",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-25.sse": "sha256:ab1ac74e37ee631d76bb17bbd0ad54bffc633dfa977122d21f90550c62909da5",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-26.sse": "sha256:1ac11bc86d3befb3f8a1e3e1e96804345599acf8e75646e9db62bd94014d9b72",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-27.sse": "sha256:107d1718a6a456bd200038b803a9037e3562538ec9665145ea948f91293d6b97",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-28.sse": "sha256:eb5fd0fcf7c1e43df4c27e69ec03e8de416ee2d3bd4922f9e3a27ca12b309171",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-29.sse": "sha256:fa7e1bf97e1364b219627355a0c148bec8aa7fed18af5e887efc866461e0aef0",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-30.sse": "sha256:5a1c1976c7216affc6c5e137289762fc70c0ad955498694242eb8e11f2cb2ed8",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-31.sse": "sha256:a3eb44fc006a08a45843eacf974e97755d91797db6a8efaedb8247d2882a793a",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-32.sse": "sha256:cd568747851fce8365869dcba15fcd901f11dbff7c6555bad96ac78db7f0122d",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-33.sse": "sha256:bfcb6735c3eb4c3a66cf03f49d14ef6c0c1c1ecadf3e3f6254cbac1e5e416389",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-34.sse": "sha256:622a3bf21c67639419a60469e06149f766addbbe15c8efeae0e1660e0e4f1c29",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-35.sse": "sha256:a518931944ea0df56c3faf87b5ff36f1263fc9cefb2e02040ae1c89a3def0e3f",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-36.sse": "sha256:5cba98725d17850f5b11aaddb6a815214604c414d0d26662d0884967deed6f88",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-37.sse": "sha256:43d1cdcdd7143ae81c29db4a554466604f0402f1494b2ae512d5b2de8e8fab0f",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-38.sse": "sha256:612d0f83fea671f65c3e850ff792ffca708a7c2e13f03235a9b69b4abfd4c163",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-39.sse": "sha256:9f198a5a4f40a7ad93257cc6821f551abfbae2b85441e68f6c748e8746b90447",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-40.sse": "sha256:8672a7bfdc710e419f99c9c1275e502123e12f2c8711286df6be25ce40609c94",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-41.sse": "sha256:0c9d6822ed99617a4d078815f2bb951945efa359ae08ba9101e4b1bff17cc5e3",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-42.sse": "sha256:ba811df7a130784ce24729d910bbca902a8d96dc02b055626c36d806210e10ba",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-43.sse": "sha256:53647400cb4a908a76741f32f0235220112b565582fe6a1a9bb35a7356eb416b",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-44.sse": "sha256:2b2caf1677f487dbc91b7d40b5856cd285aa2df99e018a2a39b6bd31d7ef1b16",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-45.sse": "sha256:2deaa3700a3296af94681be9594556b4481292efa511183ce650992446714554",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-46.sse": "sha256:56b39c46bfb48bf63176942209d64931182894261ac7263bcb7fcf3c49a43315",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-47.sse": "sha256:87b1af8d0939456fe225f55564b37f93abed91f1e34ed50e216d369fabd5e175",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-48.sse": "sha256:ca6c5e1ec3a400fb367f3cf1c13f8bb5851c9a1c7852b3da185d2b0e670888fa",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-49.sse": "sha256:7a4e65ffa5c4899a702a0c4585c16a34ed03c7922c62cafcd11ccc49dbd7fef8",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-50.sse": "sha256:4159a2239e0a5fe5c3051e003cf9dd2d42fbd87aee77e102508606f857d540f8",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-51.sse": "sha256:95d6bfb53d86bf317ca484bc33f87cfe791a741964ac700c8711702b25b2c043",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-52.sse": "sha256:a5999ada634d1a4e7352a4bfbb6389584ca932122884f07b32e72790330e2fe4",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-53.sse": "sha256:50c718ad6f0167dfbe99214e81f67c0e2af818cf35b1aef5d3c7ee6677827e8a",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-54.sse": "sha256:59ffb403c8cd4e9178637821119ac938db7a1198dd76cbf90df3d3c8ddbd6945",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-55.sse": "sha256:6dd4e380dfeb8dce4c1c31e9b794650931d455c63d1899e4215992265083e50d",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-56.sse": "sha256:30058a5f69af0f931535808ca7c6034f4283f50db7b0f4f2c0a7ca3e4b947c42",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-57.sse": "sha256:2318bab0f94b1a0de7a035b36eacfbaa29dbee55766279854f587ba5fad44652",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-58.sse": "sha256:b06e59d12ad930bbde70b0e67cbf8b3b00e7d4a5dfbbb66a5b78a0e518f0ea32",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-59.sse": "sha256:e6c41f06209030d7cacefa060b953f6dc3f4b718d80170556dc1826060e4e4b1",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-60.sse": "sha256:87491ee078bd2862e4837b4aa3f1f58b75e75e14ad978d024734931bb44a7bb0",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-61.sse": "sha256:daade27f5cb39448beb20c5744bc7ecdc7f5c5ee339891ebce3593501c51059b",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-62.sse": "sha256:e7bd4880f9ed3a27427ffc126af016e9329cd9fe6ff099806ea41498ec6e39fc",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-63.sse": "sha256:ab48a875f4013c2eb9a94bea3fddad1489fdb899280234448dfdaaac8089d363",
+    ".forge/benchmarks/schema-descriptions-run-20260908/response-64.sse": "sha256:06e50175958e147af07169a873111e170e0d88bfb22b474878681b227bcd40ae"
+  },
+  "captured_execution_sources": {
+    "serve.py": "import os\nimport sys\nimport types\nfrom pathlib import Path\n\nos.environ['FORGE_DISABLE_DOTENV'] = 'true'\nsys.path.insert(0, str(Path.cwd()))\nmodule = types.ModuleType('config')\nmodule.cfg = types.SimpleNamespace(PI_SERVICE_API_KEYS=['req065-loopback-only'])\nsys.modules['config'] = module\nfrom fastapi import FastAPI\nimport uvicorn\nfrom web.routes.benchmark_v2 import router\n\napp = FastAPI()\napp.include_router(router)\nuvicorn.run(app, host='127.0.0.1', port=19043, log_level='warning')\n",
+    "run.mts": "import assert from 'node:assert/strict';\nimport { readFile, writeFile, open } from 'node:fs/promises';\nimport { resolve, join } from 'node:path';\nimport { setTimeout as pause } from 'node:timers/promises';\nimport { loadConfig } from '../../../services/pi-orchestrator/src/config.ts';\nimport { SqliteOrchestratorState } from '../../../services/pi-orchestrator/src/sqlite-store.ts';\nimport { OrchestratorApplication } from '../../../services/pi-orchestrator/src/application.ts';\nimport { PiBenchmarkRuntime } from '../../../services/pi-orchestrator/src/benchmark-runtime.ts';\n\nconst root = process.cwd();\nconst dir = resolve('.forge/benchmarks/schema-descriptions-run-20260908');\nconst preparation = resolve('.forge/benchmarks/schema-descriptions-ready-20260908');\nconst card = JSON.parse(await readFile('docs/archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json', 'utf8')).experiment_card;\nconst schedule = ['A1', 'B1', 'B2', 'A2'];\nconst receipts: any[] = [];\nconst captures: Promise<void>[] = [];\nconst runs: any[] = [];\nconst nativeFetch = globalThis.fetch;\nlet dispatched = 0;\nlet currentLabel = 'none';\nlet captureFailure: string | null = null;\nconst save = (name: string, value: unknown) => writeFile(join(dir, name), JSON.stringify(value, null, 2), { flag: 'wx' });\nawait save('execution-start.json', { task: 'Forge-20260908-02', at: new Date().toISOString(), max_requests: 64, cny_cap_revoked: true, cny_cost: null, subscription_oauth: true, schedule, card_sha256: card.card_sha256 });\n\nglobalThis.fetch = async (input: any, init?: any) => {\n  const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);\n  const isGeneration = url.hostname === 'chatgpt.com' && /\\/responses$/.test(url.pathname);\n  if (!isGeneration) return nativeFetch(input, init);\n  assert.ok(dispatched < 64, 'Authorized 64-request ceiling reached');\n  const index = ++dispatched;\n  const receipt: any = { index, label: currentLabel, started_at: new Date().toISOString(), host: url.hostname, path: url.pathname };\n  receipts.push(receipt);\n  await save(`request-${String(index).padStart(2, '0')}-admitted.json`, receipt);\n  try {\n    const response = await nativeFetch(input, init);\n    receipt.http_status = response.status;\n    const clone = response.clone();\n    captures.push((async () => {\n      const file = await open(join(dir, `response-${String(index).padStart(2, '0')}.sse`), 'wx');\n      try {\n        if (clone.body) {\n          const reader = clone.body.getReader();\n          for (;;) {\n            const item = await reader.read();\n            if (item.done) break;\n            await file.write(item.value);\n          }\n        }\n        receipt.capture_complete = true;\n      } catch (error) {\n        receipt.capture_error = error instanceof Error ? error.message : String(error);\n        captureFailure = receipt.capture_error;\n      } finally {\n        await file.close();\n        receipt.ended_at = new Date().toISOString();\n        await save(`request-${String(index).padStart(2, '0')}-receipt.json`, receipt);\n      }\n    })());\n    return response;\n  } catch (error) {\n    receipt.transport_error = error instanceof Error ? error.message : String(error);\n    receipt.ended_at = new Date().toISOString();\n    await save(`request-${String(index).padStart(2, '0')}-receipt.json`, receipt);\n    throw error;\n  }\n};\n\nconst config = loadConfig({\n  PI_ORCHESTRATOR_AGENT_DIR: '<local-home>/.pi/agent',\n  PI_ORCHESTRATOR_STATE_DB: join(dir, 'orchestrator.sqlite3'),\n  SHISUI_DATA_SKILLS_DIR: root,\n  PI_BENCHMARK_CONCURRENCY: '2',\n  FORGE_BASE_URL: 'http://127.0.0.1:19043',\n  FORGE_PI_SERVICE_KEY: 'req065-loopback-only',\n});\nconst state = new SqliteOrchestratorState(config.stateDbPath);\nconst application = new OrchestratorApplication({ config, state });\nconst runtime = new PiBenchmarkRuntime(config, application);\nlet failure: string | null = null;\ntry {\n  for (const label of schedule) {\n    currentLabel = label;\n    const frozen = JSON.parse(await readFile(join(preparation, label.startsWith('A') ? 'control.frozen.json' : 'treatment.frozen.json'), 'utf8'));\n    const started = await runtime.start({ provider: 'openai-codex', model: 'gpt-5.6-luna', caseIds: card.case_ids, confirmModelCalls: 16, protocolManifest: frozen.manifest });\n    assert.equal(started.model.revision, card.model.expected_revision);\n    await save(`${label}-started.json`, started);\n    console.log(JSON.stringify({ label, run_id: started.run_id, status: started.status }));\n    let run: any;\n    let prior = '';\n    for (;;) {\n      run = runtime.get(started.run_id);\n      const progress = JSON.stringify({ label, run_id: run.run_id, status: run.status, dispatched_calls: run.dispatched_calls, completed_calls: run.completed_calls, actual_http_requests: dispatched });\n      if (progress !== prior) { console.log(progress); prior = progress; }\n      if (['completed', 'failed', 'stopped', 'interrupted'].includes(run.status)) break;\n      await pause(1000);\n    }\n    await Promise.all(captures);\n    await save(`${label}-run.json`, run);\n    await save(`${label}-logs.json`, runtime.logs(started.run_id));\n    runs.push({ label, run_id: run.run_id, status: run.status, dispatched_calls: run.dispatched_calls, completed_calls: run.completed_calls });\n    if (run.status !== 'completed' || run.dispatched_calls !== 16 || captureFailure || run.cases.some((c: any) => ['forge', 'direct'].some(a => c[a]?.usage_observed !== true))) {\n      failure = `Stop after ${label}: terminal=${run.status}, capture=${captureFailure}, incomplete generation/usage possible`;\n      break;\n    }\n  }\n} catch (error) {\n  failure = error instanceof Error ? error.message : String(error);\n  console.error(failure);\n} finally {\n  await runtime.close();\n  await Promise.all(captures);\n  state.close();\n  globalThis.fetch = nativeFetch;\n  const result = { task: 'Forge-20260908-02', at: new Date().toISOString(), status: failure ? 'stopped_fail_closed' : 'completed', failure, actual_http_requests: dispatched, receipts, runs, planned_calls: 64, cny_cost: null, cny_cost_note: 'Not computable from subscription OAuth; no free-use guarantee', no_retries_or_replacements: true };\n  await save('execution-result.json', result);\n  console.log(JSON.stringify(result));\n}\n",
+    "analyze.py": "import os, sys, types, json, hashlib, math\nfrom pathlib import Path\nfrom datetime import datetime, timezone\nfrom collections import Counter\nos.environ['FORGE_DISABLE_DOTENV'] = 'true'\nsys.path.insert(0, str(Path.cwd()))\ncfg_module = types.ModuleType('config')\ncfg_module.cfg = types.SimpleNamespace(PI_SERVICE_API_KEYS=['req065-loopback-only'])\nsys.modules['config'] = cfg_module\nfrom forge import bird_benchmark as bird\n\nroot = Path('.forge/benchmarks/schema-descriptions-run-20260908')\nready = json.loads(Path('docs/archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json').read_text())\nexecution = json.loads((root/'execution-result.json').read_text())\ndef save(name, value):\n    with (root/name).open('x') as out: json.dump(value, out, ensure_ascii=False, indent=2)\ndef key(value):\n    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))\ndef raw_key(arm, raw):\n    if arm == 'forge': return key(raw['tool_arguments'])\n    return ''.join(b.get('text', '') for m in raw['assistant'] for b in m['content'] if b['type']=='text')\n\nruns, replays, indexes, response_checks = {}, {}, {}, []\nfor item in execution['runs']:\n    label = item['label']\n    run = json.loads((root/f'{label}-run.json').read_text())\n    runs[label] = run\n    replay = bird.replay(run)\n    replays[label] = replay\n    save(f'{label}-replay.json', replay)\n    indexes[label] = {(r['case_id'],r['arm']):r for r in replay['candidates']}\n    original = {(c['case_id'],a):c[a] for c in run['cases'] for a in ('forge','direct')}\n    fields = ('scored','compile_status','execution_status','official_ea','contract_accuracy','sql')\n    for ident, r in indexes[label].items():\n        different = [f for f in fields if r['evaluation'].get(f)!=original[ident].get(f)]\n        response_checks.append({'label':label,'case_id':ident[0],'arm':ident[1],'replay_differences':different})\n    # Link captured original SSE to the Pi raw candidate without printing private reasoning.\n    available = [(cid,arm,metric) for (cid,arm),metric in original.items() if metric.get('raw_output') and metric.get('output') is not None]\n    for receipt in [r for r in execution['receipts'] if r['label']==label]:\n        p = root/f\"response-{receipt['index']:02d}.sse\"\n        events = [json.loads(line[6:]) for line in p.read_text().splitlines() if line.startswith('data: ') and line[6:]!='[DONE]']\n        done = [e['item'] for e in events if e.get('type')=='response.output_item.done']\n        calls = [i for i in done if i['type']=='function_call']\n        if calls:\n            arm='forge'; raw=key(json.loads(calls[0]['arguments']))\n        else:\n            arm='direct'; raw=''.join(b.get('text','') for i in done if i['type']=='message' for b in i.get('content',[]) if b.get('type')=='output_text')\n        matched = [(cid,a,m) for cid,a,m in available if a==arm and raw_key(a,m['raw_output'])==raw]\n        finals = [e['response'] for e in events if e.get('type')=='response.completed']\n        check = {'label':label,'request_index':receipt['index'],'http_status':receipt.get('http_status'),'sse_sha256':'sha256:'+hashlib.sha256(p.read_bytes()).hexdigest(),'raw_candidate_matched':bool(matched),'provider_completed':bool(finals)}\n        if matched:\n            cid,a,m=matched[0]; available.remove(matched[0]); check.update(case_id=cid,arm=a)\n            if finals:\n                usage=finals[-1].get('usage',{})\n                check['total_tokens_match']=usage.get('total_tokens')==m['total_tokens']\n                check['completion_tokens_match']=usage.get('output_tokens')==m['completion_tokens']\n        response_checks.append(check)\n    if available:\n        response_checks.append({'label':label,'unmatched_pi_candidates':[(c,a) for c,a,_ in available]})\nsave('original-response-and-replay-checks.json',response_checks)\n\ncomparisons = {}\nfor repeat in (1,2):\n    a,b=f'A{repeat}',f'B{repeat}'\n    if a in replays and b in replays:\n        comparisons[str(repeat)] = bird.compare(replays[a],replays[b])\nsave('paired-comparisons.json',comparisons)\n\ndef summary(labels, arm):\n    metrics=[c[arm] for label in labels if label in runs for c in runs[label]['cases']]\n    scores=[indexes[label][c['case_id'],arm]['evaluation'] for label in labels if label in indexes for c in runs[label]['cases']]\n    times=sorted(m['generation_ms'] for m in metrics if isinstance(m.get('generation_ms'),(int,float)))\n    result={k:{'correct':sum(e.get(k) is True for e in scores),'failed':sum(e.get(k) is False for e in scores),'unknown':sum(e.get(k) is None for e in scores),'observed_denominator':len(scores)} for k in ('official_ea','contract_accuracy')}\n    result.update(total_tokens=sum(m['total_tokens'] for m in metrics if m.get('usage_observed')),unknown_usage=sum(m.get('usage_observed') is not True for m in metrics),generation_p95_ms=times[math.ceil(.95*len(times))-1] if times else None,execution_passed=sum(e.get('execution_status')=='passed' for e in scores))\n    correct=result['official_ea']['correct']\n    result['tokens_per_ex_correct']=result['total_tokens']/correct if correct else None\n    return result\nsummaries={l:{a:summary([l],a) for a in ('forge','direct')} for l in runs}\ncombined={c:{a:summary([c+'1',c+'2'],a) for a in ('forge','direct')} for c in ('A','B')}\ncomplete=execution['actual_http_requests']==64 and set(runs)=={'A1','B1','B2','A2'} and all(r['status']=='completed' for r in runs.values()) and all(r['complete'] for r in replays.values()) and all(s['unknown_usage']==0 for s in summaries.values() for s in s.values())\nfg=combined['B']['forge']['official_ea']['correct']-combined['A']['forge']['official_ea']['correct']\ndg=combined['B']['direct']['official_ea']['correct']-combined['A']['direct']['official_ea']['correct']\ntransitions=[]\nfor rep in (1,2):\n    a,b=f'A{rep}',f'B{rep}'\n    if a in indexes and b in indexes:\n        for cid in ready['experiment_card']['case_ids']:\n            for arm in ('forge','direct'):\n                ae,be=indexes[a][cid,arm]['evaluation'],indexes[b][cid,arm]['evaluation']\n                transitions.append({'repeat':rep,'case_id':cid,'arm':arm,'ex_A':ae['official_ea'],'ex_B':be['official_ea'],'contract_A':ae['contract_accuracy'],'contract_B':be['contract_accuracy']})\nstable=[t['case_id'] for t in ready['experiment_card']['targets'] if sum(x['case_id']==t['case_id'] and x['arm']=='forge' and x['ex_A'] is False and x['ex_B'] is True and x['contract_B'] is True for x in transitions)==2]\nregressions=[t for t in transitions if t['arm']=='forge' and ((t['ex_A'] is True and t['ex_B'] is not True) or (t['contract_A'] is True and t['contract_B'] is not True))]\ncontrols={t['case_id'] for t in ready['experiment_card']['controls']}\ncontrol_correct=sum(t['arm']=='forge' and t['case_id'] in controls and t['ex_B'] is True for t in transitions)\ndef ratio(b,a): return b/a if a and b is not None else None\ntoken_ratio=ratio(sum(v['total_tokens'] for v in combined['B'].values()),sum(v['total_tokens'] for v in combined['A'].values()))\nper_correct_ratio=ratio(combined['B']['forge']['tokens_per_ex_correct'],combined['A']['forge']['tokens_per_ex_correct'])\np95_ratio=ratio(combined['B']['forge']['generation_p95_ms'],combined['A']['forge']['generation_p95_ms'])\noriginals_ok=all(not c.get('replay_differences') and not c.get('unmatched_pi_candidates') and ('request_index' not in c or all(c.get(k) is True for k in ('raw_candidate_matched','provider_completed','total_tokens_match','completion_tokens_match'))) for c in response_checks)\ngates={'complete_64_scored_known_usage':complete,'original_response_and_replay_consistent':originals_ok,'both_repeats_comparable':len(comparisons)==2 and all(v.get('comparable') for v in comparisons.values()),'forge_gain_at_least_2':complete and fg>=2,'repeat_stable_target_gain':complete and bool(stable),'zero_forge_ex_contract_regressions':complete and not regressions,'control_B_ex_8_of_8':complete and control_correct==8,'forge_gain_minus_absolute_direct_gain_at_least_2':complete and fg-abs(dg)>=2,'total_tokens_ratio_at_most_1_2':complete and token_ratio is not None and token_ratio<=1.2,'forge_tokens_per_correct_not_increased':complete and per_correct_ratio is not None and per_correct_ratio<=1,'forge_generation_p95_ratio_at_most_1_25':complete and p95_ratio is not None and p95_ratio<=1.25}\nreport={'schema_version':'benchmark-luna-schema-descriptions-result-v1','task_id':'Forge-20260908-02','requirement':'REQ-2026-09-08-065','at':datetime.now(timezone.utc).isoformat(),'execution':execution,'summaries':summaries,'combined':combined,'paired_transitions':transitions,'stable_target_gains':stable,'forge_regressions':regressions,'control_B_ex_correct':control_correct,'delta_forge':fg,'delta_direct':dg,'total_tokens_ratio':token_ratio,'forge_tokens_per_correct_ratio':per_correct_ratio,'forge_generation_p95_ratio':p95_ratio,'gates':gates,'all_gates_passed':all(gates.values()),'decision':'Keep default off. Mechanism-screening only; no broad accuracy superiority or automatic rollout.','cny_cost':None,'cny_cap_revoked':True,'historical_scores_unchanged':True,'new_model_calls_during_analysis':0,'evidence_root':str(root)}\nsave('result.json',report)\nprint(json.dumps({k:report[k] for k in ['combined','delta_forge','delta_direct','stable_target_gains','forge_regressions','control_B_ex_correct','total_tokens_ratio','forge_tokens_per_correct_ratio','forge_generation_p95_ratio','gates','all_gates_passed']},ensure_ascii=False,indent=2))\n"
+  },
+  "integrity": {
+    "algorithm": "SHA-256 of sorted compact UTF-8 JSON excluding report_sha256, ensure_ascii=false"
+  },
+  "report_sha256": "sha256:9544445c1ccf4db94cb825d8722839fe1b7173f7ea0db4191bc1eba9e2bd8596"
+}

@@ -40,12 +40,19 @@ export interface BenchmarkModelSnapshot {
   max_output_tokens: number | null;
 }
 
+export interface BenchmarkSchemaDescriptionsV2 {
+  mode: "off" | "interfaces-v1";
+  catalog_revision: string;
+  wire_schema_revision: string;
+}
+
 export interface BenchmarkGenerationContractV2 {
   forge_output_mode: "text_json" | "pi_tool_schema";
   forge_prompt_revision: string;
   forge_schema_revision: string | null;
   provider_json_schema_request: "disabled" | "prefer" | "required";
   forge_wire_schema_revision: string | null;
+  schema_descriptions: BenchmarkSchemaDescriptionsV2 | null;
   direct_output_mode: "text_sql";
   sampling?: "provider_default";
   transport?: "sse";

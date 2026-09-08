@@ -23,7 +23,7 @@ const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Native OpenAI strict schemas support recursive refs/unions that Pi's generic converter rejects. */
-export function createStrictForgeOutput(canonical: Schema) {
+export function createStrictForgeOutput(canonical: Schema, descriptions: Readonly<Record<string, string>> = {}) {
   const resolve = (node: Schema): Schema => {
     if (!node.$ref) return node;
     const prefix = "#/definitions/";
@@ -79,6 +79,11 @@ export function createStrictForgeOutput(canonical: Schema) {
     return result;
   };
   const schema = build(canonical);
+  for (const [key, description] of Object.entries(descriptions)) {
+    if (Object.hasOwn(schema.properties ?? {}, key) && description.trim()) {
+      schema.properties![key]!.description = description;
+    }
+  }
   const validator = Compile(schema as TSchema);
   const revision = `sha256:${createHash("sha256").update(JSON.stringify(schema)).digest("hex")}`;
 

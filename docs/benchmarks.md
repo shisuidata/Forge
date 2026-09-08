@@ -166,7 +166,18 @@ REQ-055当时将共享Assurance修订升为`query-assurance-v9`，Policy仍为v9
 
 ### 已实现的离线CLI
 
-以下命令不调用模型；PROVIDER/MODEL替换为真实配置名，输出使用新路径，不覆盖历史。D可用--case-ids显式列题，或seed/size按数据库×难度round-robin确定性抽样；R固定完整500题，不接受子集。变量只允许model/prompt/compiler/schema/date_context/grain_context/value_context之一。日期、粒度与取值提示变量只切换各自的窄参数；任意ContextSnapshot、Schema、采样上限或共享源码修改仍被拒绝，不能借此绕过评价器门禁。
+以下命令不调用模型；PROVIDER/MODEL替换为真实配置名，输出使用新路径，不覆盖历史。D可用--case-ids显式列题，或seed/size按数据库×难度round-robin确定性抽样；R固定完整500题，不接受子集。变量只允许model/prompt/compiler/schema/date_context/grain_context/value_context/schema_descriptions之一。日期、粒度、取值与Schema说明变量只切换各自的窄参数；任意ContextSnapshot、采样上限、未声明Schema或共享源码修改仍被拒绝，不能借此绕过评价器门禁。
+
+`--schema-descriptions`默认`off`；`interfaces-v1`仅给strict工具Schema的scan/cte/agg/window/select增加审核说明，必须同时声明`--variable schema_descriptions`。不改字段顺序、完整DSL、Prompt、Direct输入、Compiler或评分。共享`agent/contracts/forge-output-descriptions-v1.json`绑定canonical与实际wire hash；v5冻结、实际Pi派发和重开均校验。该因素compare只允许已声明mode/wire差异，必须有两侧完整且各自绑定的Pi生成合同与模型来源；无合同旧候选只能诊断。原schema因素仍要求同候选，不能借新因素绕过目录、源码、上下文或SDK漂移。
+
+REQ-065零调用实现验证与后续获批64次ABBA均已完成。8题各两重复，处理Forge EX/Contract12/16（75%）高于同期Direct10/16（62.5%），两重复各6/8 vs5/8；控制组两臂均10/16。此为限定样本里程碑，不是总体或统计优势；无同一目标题跨重复稳定恢复、控制题md-052回退，采用门槛失败，候选保持默认off。新增1137 Schema字节不是tokens；真实总用量222015 tokens。见[原准备卡](archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json)、[实跑报告](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.json)与[优化动作/完整简报](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.md)。不补跑、不启用、不发布版本。
+
+Schema说明候选的零调用冻结示例（控制组同清单、同变量，模式为off；真实生成另行授权）：
+
+```bash
+forge benchmark bird freeze --cohort D --provider "$PROVIDER" --model "$MODEL" --case-ids md-009 md-079 md-199 md-289 md-002 md-052 md-312 md-386 --variable schema_descriptions --schema-descriptions interfaces-v1 --out frozen-schema-descriptions.json
+forge benchmark bird preflight frozen-schema-descriptions.json
+```
 
 `--forge-prompt-revision`默认`forge-structured-benchmark-v1`，保持原指令；`forge-structured-benchmark-denominator-v1`只追加一条合成分母范围范例，必须同时声明`--variable prompt`。只接受注册的内置revision，不加载任意Prompt文件，不包含真实题目/Gold。冻结、HTTP上下文、Pi生成合同与重开均绑定同一revision；compare允许控制/处理各自绑定的Prompt revision不同，但不能顺带改变Direct、共享上下文、runtime或SDK。该范例已完成16次Luna开发对照：Forge EX/Contract2/4→3/4、Direct2/4不变，但正确对照md-079发生别名/投影错误回退，未过预声明门槛，不启用默认或补跑。见[完整机器证据](archive/benchmarks/benchmark-luna-denominator-scope-2026-09-07.json)。
 
@@ -198,7 +209,7 @@ forge benchmark bird freeze --cohort D --provider "$PROVIDER" --model "$MODEL" -
 forge benchmark bird preflight frozen-cte-interface.json
 ```
 
-候选账本为`{schema_version:"bird-candidates-v1",protocol_revision:"sha256:…",candidates:[{case_id,arm:"forge"|"direct",output}]}`；每个冻结case/arm恰好一项，生成失败保留output:null。也接受Pi导出的cases双臂output。历史无版本候选只能显式replay --diagnostic，不能参与可比较晋级；同一协议schema内跨源码版本重评需显式新--protocol并保留candidate_protocol_revision。已不支持的v1/v2/v3协议不得伪造升级；仅可保留原始Run/协议/文件hash，将原候选无修改提取到显式诊断账本，再用当前上下文重评，不能充当新生成或可比基线。quality-records.json形状为`{label_basis,records}`，遵守上面的质量契约；输入也可用`-`从stdin读取。日期审计可用--dataset-root指定官方数据根目录。
+候选账本为`{schema_version:"bird-candidates-v1",protocol_revision:"sha256:…",candidates:[{case_id,arm:"forge"|"direct",output}]}`；每个冻结case/arm恰好一项，生成失败保留output:null。也接受Pi导出的cases双臂output。历史无版本候选只能显式replay --diagnostic，不能参与可比较晋级；同一协议schema内跨源码版本重评需显式新--protocol并保留candidate_protocol_revision。当前只接受v5；不支持的v1/v2/v3/v4协议不得伪造升级，只能保留原始Run/协议/hash，将原候选无修改提取到显式诊断账本，用当前上下文重评，不能充当新生成或可比基线。quality-records.json形状为`{label_basis,records}`，遵守上面的质量契约；输入也可用`-`从stdin读取。
 
 需要实际生成时，沿用Pi现有鉴权调用`POST /v1/benchmarks`，提交`{provider,model,case_ids,confirm_model_calls:frozen.generation.max_model_calls,protocol_manifest:frozen.manifest}`；这是会消耗模型额度的步骤，必须另行明确授权。默认require_all为2N预算；显式Gold跳过则减去2×阻塞题数，题目分母不变。case_ids保留冻结顺序，R阶段使用显式R清单，不因题目数碰巧为500就把D自动升级为R。Web默认启动按钮仍确认2N预算；未传清单的启动由协议API冻结为D。随后导出现有Pi Run供replay，不另建生成器。
 

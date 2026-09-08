@@ -24,6 +24,23 @@ def ledger(response):
             ]}
 
 
+def pi_ledger(response):
+    result = ledger(response)
+    result["model"] = {**response["manifest"]["model"], "revision": "model-rev-1",
+                       "temperature": None, "max_output_tokens": None}
+    result["generation_contract"] = {
+        **{key: response["generation"][key] for key in (
+            "sampling", "max_output_tokens", "timeout_seconds", "provider_retries", "max_agent_turns_per_arm")},
+        "forge_output_mode": "pi_tool_schema", "provider_json_schema_request": "required",
+        "direct_output_mode": "text_sql", "transport": "sse", "isolation_revision": "pi-benchmark-isolation-v1",
+        "forge_prompt_revision": response["forge_prompt_revision"], "forge_schema_revision": response["forge_schema_revision"],
+        "forge_wire_schema_revision": response["schema_descriptions"]["wire_schema_revision"],
+        "schema_descriptions": copy.deepcopy(response["schema_descriptions"]),
+        "pi_runtime_revision": "runtime-1", "pi_sdk_lock_revision": "sdk-1",
+    }
+    return result
+
+
 def test_cohort_selection_preserves_full_denominator_and_seeded_strata():
     suite = {"cases": [{"case_id": f"md-{i:03d}", "db_id": f"db-{i % 4}", "difficulty": str(i % 3)} for i in range(500)]}
     ids, selection = bird.select_cases(suite, "R", None, None, None)
@@ -119,6 +136,15 @@ def test_revision_traversal_and_symlink_escape_rejected(benchmark_api, tmp_path)
         frozen()
 
 
+def test_schema_factor_still_requires_saved_candidates(benchmark_api):
+    response = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"], variable="schema")
+    candidates = ledger(response)
+    original = bird.replay(candidates)
+    assert bird.compare(original, original)["comparable"] is True
+    candidates["candidates"][1]["output"]["select"] = ["orders.id"]
+    assert bird.compare(original, bird.replay(candidates))["comparable"] is False
+
+
 def test_compiler_fix_compares_scored_failure_without_changing_candidates(benchmark_api, monkeypatch):
     from forge import benchmark_service as routes
     response = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"], variable="compiler")
@@ -199,9 +225,7 @@ def test_unknown_contract_is_separate_from_wrong_and_improvement(benchmark_api):
 
 def test_pi_generation_provenance_is_preserved_and_bound(benchmark_api):
     response = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"], variable="compiler")
-    candidates = ledger(response)
-    candidates["model"] = {"provider": "offline", "model": "fixture", "revision": "model-rev-1"}
-    candidates["generation_contract"] = {**response["generation"], "pi_runtime_revision": "runtime-1", "pi_sdk_lock_revision": "sdk-1"}
+    candidates = pi_ledger(response)
     baseline = bird.replay(candidates)
     assert baseline["model"] == candidates["model"]
     assert baseline["generation_contract"] == candidates["generation_contract"]
@@ -681,11 +705,7 @@ def test_prompt_compare_binds_each_revision_and_keeps_runtime_fixed(benchmark_ap
                             variable="prompt", forge_prompt_revision=DENOMINATOR_SCOPE_PROMPT_REVISION)
     results = []
     for response in (control, treatment):
-        candidates = ledger(response)
-        candidates["generation_contract"] = {
-            **response["generation"], "forge_prompt_revision": response["forge_prompt_revision"],
-            "pi_runtime_revision": "same-runtime", "pi_sdk_lock_revision": "same-sdk",
-        }
+        candidates = pi_ledger(response)
         results.append(bird.replay(candidates))
     assert bird.compare(*results)["comparable"] is True
     unbound = copy.deepcopy(results[1])
@@ -698,3 +718,122 @@ def test_prompt_compare_binds_each_revision_and_keeps_runtime_fixed(benchmark_ap
     shared_drift["protocol_manifest"]["context_hashes"]["one"]["direct"] = bird.digest("changed Direct prompt")
     shared_drift["protocol_revision"] = bird.digest(shared_drift["protocol_manifest"])
     assert bird.compare(results[0], shared_drift)["comparable"] is False
+
+
+@pytest.mark.asyncio
+async def test_schema_descriptions_roundtrip_keeps_inputs_and_scores_fixed(client, benchmark_api):
+    control = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"], variable="schema_descriptions")
+    treatment = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"],
+                            variable="schema_descriptions", schema_descriptions="interfaces-v1")
+    assert control["contexts"] == treatment["contexts"]
+    results = []
+    for response in (control, treatment):
+        ready = await client.post("/api/internal/benchmark-v2/protocol", headers=benchmark_api["headers"], json={
+            "provider": "offline", "model": "fixture", "case_ids": ["one"], "confirm_model_calls": 2,
+            "protocol_manifest": response["manifest"],
+        })
+        assert ready.status_code == 200
+        assert ready.json()["schema_descriptions"] == response["manifest"]["schema_descriptions"]
+        context = await client.post("/api/internal/benchmark-v2/context", headers=benchmark_api["headers"], json={
+            "case_id": "one", "protocol_revision": response["protocol_revision"],
+        })
+        assert context.status_code == 200
+        candidates = pi_ledger(response)
+        if response is treatment:
+            candidates["candidates"][1]["output"]["select"] = ["orders.id"]
+        results.append(bird.replay(candidates))
+    compared = bird.compare(*results)
+    assert compared["comparable"] is True, compared
+    assert compared["generation_provenance_known"] is True
+    assert compared["scores"][0] == compared["scores"][1]
+    assert compared["scores"][1]["forge"]["official_ea"]["passed"] == 1
+    forged = copy.deepcopy(results[1])
+    forged["candidates"][1]["output"]["limit"] = 0
+    assert bird.compare(results[0], forged)["comparable"] is False
+    offline = bird.replay(ledger(treatment), diagnostic=True)
+    assert offline["complete"] is True
+    assert bird.compare(offline, offline)["comparable"] is False
+
+
+@pytest.mark.parametrize("mode,variable", [("interfaces-v1", None), ("interfaces-v1", "schema"), ("invented", "schema_descriptions")])
+def test_schema_descriptions_require_registered_explicit_factor(benchmark_api, mode, variable):
+    with pytest.raises(ValueError):
+        bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"],
+                    schema_descriptions=mode, variable=variable)
+
+
+@pytest.mark.parametrize("path,value", [
+    (("schema_descriptions", "mode"), "invented"),
+    (("schema_descriptions", "catalog_revision"), "sha256:" + "0" * 64),
+    (("schema_descriptions", "wire_schema_revision"), "sha256:" + "0" * 64),
+    (("sources", "prompt", "agent/prompts.py"), "sha256:" + "0" * 64),
+    (("context_hashes", "one", "forge"), "sha256:" + "0" * 64),
+    (("forge_schema_revision",), "sha256:" + "0" * 64),
+    (("schema_version",), "bird-protocol-v4"),
+])
+def test_schema_descriptions_reject_forged_freezes(benchmark_api, path, value):
+    response = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"],
+                           variable="schema_descriptions", schema_descriptions="interfaces-v1")
+    manifest = copy.deepcopy(response["manifest"])
+    target = manifest
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    with pytest.raises(ValueError):
+        bird.validate(manifest, allow_declared_drift=True)
+    with pytest.raises(ValueError):
+        bird.preflight(provider="offline", model="fixture", case_ids=["one"], confirm_model_calls=2, protocol_manifest=manifest)
+    if path[0] in ("schema_descriptions", "schema_version"):
+        revision = bird.persist(manifest)
+        with pytest.raises(ValueError):
+            bird.verify_case(revision, "one")
+
+
+@pytest.mark.parametrize("change", ["missing_contract", "null_contract", "wire", "mode", "catalog", "prompt", "runtime", "sdk", "model", "sampling"])
+def test_schema_descriptions_compare_requires_bound_pi_provenance(benchmark_api, change):
+    response = bird.freeze(cohort="D", provider="offline", model="fixture", case_ids=["one"],
+                           variable="schema_descriptions", schema_descriptions="interfaces-v1")
+    original = bird.replay(pi_ledger(response))
+    changed = copy.deepcopy(original)
+    contract = changed["generation_contract"]
+    if change == "missing_contract":
+        changed.pop("generation_contract")
+    elif change == "null_contract":
+        changed["generation_contract"] = None
+    elif change == "wire":
+        contract["forge_wire_schema_revision"] = bird.schema_description_config("off")["wire_schema_revision"]
+    elif change in ("mode", "catalog"):
+        contract["schema_descriptions"]["mode" if change == "mode" else "catalog_revision"] = "unbound"
+    elif change == "prompt":
+        contract["forge_prompt_revision"] = "unbound"
+    elif change in ("runtime", "sdk"):
+        contract["pi_runtime_revision" if change == "runtime" else "pi_sdk_lock_revision"] = "changed"
+    elif change == "model":
+        changed["model"]["revision"] = "different-model-revision"
+    else:
+        contract.pop("sampling")
+    assert bird.compare(original, changed)["comparable"] is False
+    if change in ("missing_contract", "null_contract", "wire", "mode", "catalog", "prompt", "sampling"):
+        assert bird.compare(changed, changed)["comparable"] is False
+
+
+@pytest.mark.parametrize("change", ["version", "canonical", "unknown_profile", "missing_field", "empty_description", "wire"])
+def test_schema_descriptions_catalog_rejects_unregistered_content(tmp_path, monkeypatch, change):
+    catalog = json.loads(bird.SCHEMA_DESCRIPTIONS_CATALOG.read_text())
+    if change == "version":
+        catalog["schema_version"] = "future"
+    elif change == "canonical":
+        catalog["canonical_schema_revision"] = "sha256:" + "0" * 64
+    elif change == "unknown_profile":
+        catalog["profiles"]["future"] = catalog["profiles"]["off"]
+    elif change == "missing_field":
+        catalog["profiles"]["interfaces-v1"]["descriptions"].pop("cte")
+    elif change == "empty_description":
+        catalog["profiles"]["interfaces-v1"]["descriptions"]["cte"] = " "
+    else:
+        catalog["profiles"]["interfaces-v1"]["wire_schema_revision"] = "not-a-hash"
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps(catalog))
+    monkeypatch.setattr(bird, "SCHEMA_DESCRIPTIONS_CATALOG", path)
+    with pytest.raises(ValueError):
+        bird.schema_description_config("off")

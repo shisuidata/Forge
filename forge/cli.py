@@ -455,7 +455,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> None:
                                  date_context=args.date_context, date_max_rows=args.date_max_rows,
                                  grain_context=args.grain_context, value_context=args.value_context,
                                  value_field=args.value_field, value_max_values=args.value_max_values,
-                                 forge_prompt_revision=args.forge_prompt_revision)
+                                 forge_prompt_revision=args.forge_prompt_revision, schema_descriptions=args.schema_descriptions)
             bird.persist(result["manifest"])
         elif args.bird_command == "preflight":
             protocol = _read_json_input(args.input)
@@ -465,10 +465,12 @@ def _cmd_benchmark(args: argparse.Namespace) -> None:
                                      protocol_manifest=manifest)
             result = {"ready": True, "protocol_revision": checked["protocol_revision"],
                       "case_ids": checked["case_ids"], "gold_readiness": checked["gold_readiness"],
+                      "schema_descriptions": checked["schema_descriptions"],
                       "maximum_model_calls": checked["generation"]["max_model_calls"], "model_calls": 0}
         elif args.bird_command == "validate":
             frozen = bird.validate(_read_json_input(args.input))
             result = {"valid": True, "protocol_revision": frozen["protocol_revision"],
+                      "schema_descriptions": frozen["schema_descriptions"],
                       "case_ids": frozen["case_ids"], "model_calls": 0}
         elif args.bird_command == "replay":
             protocol = _read_json_input(args.protocol) if args.protocol else None
@@ -746,7 +748,7 @@ def main() -> None:
     freeze.add_argument("--case-ids", nargs="+")
     freeze.add_argument("--seed", type=int)
     freeze.add_argument("--size", type=int)
-    freeze.add_argument("--variable", choices=("model", "prompt", "compiler", "schema", "date_context", "grain_context", "value_context"),
+    freeze.add_argument("--variable", choices=("model", "prompt", "compiler", "schema", "date_context", "grain_context", "value_context", "schema_descriptions"),
                         help="The sole predeclared factor allowed to vary in compare")
     freeze.add_argument("--out", help="New immutable JSON output path; defaults to stdout")
     freeze.add_argument("--previous-run", help="Terminal Pi run: carry every failed or unscored case forward")
@@ -759,6 +761,8 @@ def main() -> None:
                         help="Fixed non-NULL sample bound per date field (1..10000), not a whole-column guarantee")
     freeze.add_argument("--grain-context", choices=("off", "question_heuristic"), default="off",
                         help="Explicit grain_context ablation only: unconfirmed question heuristic versus no hint")
+    freeze.add_argument("--schema-descriptions", choices=("off", "interfaces-v1"), default="off",
+                        help="Explicit schema_descriptions ablation: strict output interface descriptions only")
     freeze.add_argument("--value-context", choices=("off", "observed"), default="off",
                         help="Explicit value_context ablation: identical qualified-column observations for both arms")
     freeze.add_argument("--value-field", nargs=3, metavar=("DB", "TABLE", "COLUMN"),

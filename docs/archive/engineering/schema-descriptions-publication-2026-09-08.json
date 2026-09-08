@@ -1,0 +1,83 @@
+{
+  "schema_version": "report-publication-v1",
+  "date": "2026-09-08",
+  "requirement": "REQ-2026-09-08-066",
+  "task_id": "Forge-20260908-03",
+  "scope": "REQ-064 research, REQ-065 preparation and real 64-call ABBA reports; milestone documentation and related implementation/test commit, not a software release.",
+  "public_report_count": 3,
+  "changed_report_count": 1,
+  "original_archive": ".forge/benchmarks/schema-descriptions-publication-20260908/originals",
+  "original_archive_public": false,
+  "rules": [
+    "Reuse the report-publication-v1 policy from 2026-09-07; replace the one personal home prefix in captured run.mts with <local-home>.",
+    "Preserve metric values, case membership, model/SDK revisions, costs, failures, authorization history and original evidence hashes.",
+    "Do not add raw SSE, provider sessions, credentials, runtime databases, .maestri state or third-party datasets to Git."
+  ],
+  "limitations": [
+    "Public copies are not original-byte artifacts. Embedded report_sha256 and captured source hashes still describe original evidence; whole-file source/published mappings are listed below.",
+    "The captured script now contains a redacted local path; it documents the executed method, not a ready-to-run public command or permission for new calls.",
+    "Pattern scanning and source review are not independent security or anonymization certification. Local evidence references are not public download links.",
+    "This task does not rerun the 64 model requests, recalculate historical scores, enable the candidate, merge main, create tags/releases, deploy or install a version."
+  ],
+  "reports": [
+    {
+      "path": "docs/archive/benchmarks/forge-json-generation-research-2026-09-08.json",
+      "source_sha256": "sha256:29098c981cb5874ca6e5fe1f016554d578ed4bdd311bf2e2e7a5d8fe04b35a28",
+      "published_sha256": "sha256:29098c981cb5874ca6e5fe1f016554d578ed4bdd311bf2e2e7a5d8fe04b35a28",
+      "source_archive": ".forge/benchmarks/schema-descriptions-publication-20260908/originals/docs/archive/benchmarks/forge-json-generation-research-2026-09-08.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json",
+      "source_sha256": "sha256:93d12e540543e7ba94b3161ada1588b38fba9f9803bde992ab61213623a8922c",
+      "published_sha256": "sha256:93d12e540543e7ba94b3161ada1588b38fba9f9803bde992ab61213623a8922c",
+      "source_archive": ".forge/benchmarks/schema-descriptions-publication-20260908/originals/docs/archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json",
+      "redacted_or_reformatted": false,
+      "changed_lines": [],
+      "changed_json_fields": []
+    },
+    {
+      "path": "docs/archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.json",
+      "source_sha256": "sha256:18f415c3d54b1ff7d63de25964cbda7072e6d650b2209233d7b3cb2b428fb823",
+      "published_sha256": "sha256:dacc6abf22865feb9e4451e9f73d49c39dec85409b0a4e1dd66e93d8075b318d",
+      "source_archive": ".forge/benchmarks/schema-descriptions-publication-20260908/originals/docs/archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.json",
+      "redacted_or_reformatted": true,
+      "changed_lines": [
+        834
+      ],
+      "changed_json_fields": [
+        "$.captured_execution_sources.run.mts"
+      ]
+    }
+  ],
+  "precommit_verification": {
+    "completed_by": "2026-09-08T11:04:04+08:00",
+    "python": {
+      "command": ".venv/bin/python -m pytest tests/test_bird_benchmark.py -q",
+      "passed": 81,
+      "warnings": 1,
+      "warning_category": "third-party DeprecationWarning"
+    },
+    "pi": {
+      "cwd": "services/pi-orchestrator",
+      "typecheck": "npm run typecheck",
+      "typecheck_passed": true,
+      "test_command": "node --import tsx --test tests/benchmark-runtime.test.ts tests/strict-forge-output.test.ts",
+      "passed": 53,
+      "warnings": [
+        "Node SQLite ExperimentalWarning"
+      ]
+    },
+    "full_suite_rerun": false,
+    "new_model_calls": 0
+  },
+  "git_scope": {
+    "branch": "review/forge-engineering-evidence-2026-09-08",
+    "remote": "git@github.com:shisuidata/Forge.git",
+    "commit_and_push_authorized": true,
+    "release_authorized": false,
+    "remote_delivery_proof": "Actual commit SHA and remote head are reported after push; this pre-commit record does not claim delivery."
+  }
+}

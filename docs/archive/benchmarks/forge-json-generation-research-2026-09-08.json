@@ -1,0 +1,444 @@
+{
+  "schema_version": "forge-json-generation-research-v1",
+  "date": "2026-09-08",
+  "requirement": "REQ-2026-09-08-064",
+  "status": "research_complete_implementation_not_authorized",
+  "scope": {
+    "new_model_calls": 0,
+    "sql_executions": 0,
+    "gold_executions": 0,
+    "runtime_source_edits": false,
+    "historical_reports_modified": false,
+    "new_accuracy_claim": false,
+    "active_plan_changed": false
+  },
+  "conclusion": "先消除模型可见DSL语义/依赖呈现的可疑负担，再以有来源的答案规划作为准确率主攻；不继续叠加通用范例。超过同条件Direct SQL是待验证目标，不是JSON格式的天然保证。",
+  "paired_historical_analysis": {
+    "source": "docs/archive/benchmarks/benchmark-sol-metric-replay-2026-09-05.json",
+    "n": 500,
+    "forge_ex": 313,
+    "direct_ex": 314,
+    "both_correct": 291,
+    "both_wrong": 164,
+    "forge_only": 22,
+    "direct_only": 23,
+    "delta_percentage_points": -0.2,
+    "mcnemar_exact_two_sided_p": 1,
+    "oracle_union_correct": 336,
+    "oracle_union_is_not_a_method": true,
+    "nonexecuting_forge": 4,
+    "perfect_nonexecution_repair_ceiling_correct": 317,
+    "compile_reorder_smoke": {
+      "source": "docs/archive/benchmarks/benchmark-sol-error-triage-2026-09-05.json",
+      "source_sha256": "39cdfcf83d51d2f4dbb2618d54021f326598b668bca08f25565473fde1335573",
+      "cases": 500,
+      "compile_status": {
+        "compiled": 500
+      },
+      "serialization_changed": 49,
+      "compile_or_error_changed": [],
+      "candidate_values_changed": 0,
+      "gold_executions": 0,
+      "new_model_calls": 0,
+      "new_sql_executions": 0,
+      "invalid_shape_valid_query": {
+        "sql": "SELECT missing\nFROM facts",
+        "assurance": "QueryAssuranceError"
+      },
+      "candidate_order": [
+        "cte",
+        "scan",
+        "joins",
+        "filter",
+        "group",
+        "agg",
+        "window",
+        "having",
+        "qualify",
+        "select",
+        "distinct",
+        "sort",
+        "limit",
+        "offset",
+        "explain",
+        "union",
+        "intersect",
+        "except"
+      ]
+    },
+    "complexity_by_forge_candidate": {
+      "no_cte": {
+        "n": 454,
+        "forge_ex": 293,
+        "direct_ex": 293,
+        "window": 5
+      },
+      "cte": {
+        "n": 46,
+        "forge_ex": 20,
+        "direct_ex": 21,
+        "window": 3
+      }
+    },
+    "limitations": [
+      "历史固定候选统计，不是当前Luna/Assurance v11新EX；不执行或补算已知Gold超时。",
+      "按候选含CTE分组是事后描述，题难度和模型选择混杂，不能当CTE导致失分的因果。",
+      "317/500仅是四个旧非执行候选全部修成正确且其他候选完全不变的理想上界；不是收益预测。"
+    ]
+  },
+  "latest_experiment_review": {
+    "scope": "只读解析了指定五轮实验及 Sol triage/metric replay 的归档 JSON；仅查看必要字段与失败题原候选，没有执行 SQL、调用模型、重判 Gold、读取凭证/客户数据或写文件。以下路径均相对 docs/archive/benchmarks/。",
+    "priority_judgment": {
+      "first": "[研究建议，尚未验证] 下一刀应优先研究生成表示本身的“单一定义→显式最终答案→确定性导出/引用”设计，而不是再次添加投影/分母/CTE自然语言范例。已有机制证据集中在 agg/window 声明与 select 导出分离、CTE 定义与根 scan/引用分离，以及计算完成但根查询返回中间量。可以离线用保存候选和合法反例研究如何减少需模型重复维护的字段/名称；不能预先认定自动补列、自动补 JOIN、拒绝未使用 CTE 就是正确解法，也不能宣称能提高 EX。核心验收必须是完整最终答案，不是编译通过/引用连通。",
+      "second": "[研究建议，尚未验证] 值/日期事实确实能修正局部绑定，但要与完整答案形状、粒度、分母总体、百分比量纲分开观察；它们不是 DSL 导出问题。下一步如研究业务语义，应冻结一个独立机制，不叠加上一轮失败 Prompt。先要求答案计划能区分全体/子集分母、标量/实体行、字段拆分与百分比/比值，再检验最终生成是否遵循；不是再堆‘请注意粒度’提示。",
+      "deprioritize": "重复 REQ-044 投影说明、REQ-056 分母范例、REQ-058 CTE接口范例，或仅增加 Assurance 拒绝：前者已有无净收益/回退证据；后者只提前拦截，不产生正确答案。结构改造也只能列为可证伪假设：Sol 原始非执行错误只有4题，不能把整个 EX 差距解释为声明/导出冗余。"
+    },
+    "experiments": [
+      {
+        "requirement": "REQ-044",
+        "source": "benchmark-luna-projection-instructions-2026-09-05.json",
+        "fields": [
+          "decision",
+          "metrics",
+          "paired",
+          "outcomes[case_id=md-259,arm=forge].candidate",
+          "outcomes[case_id=md-259,arm=forge].evaluation"
+        ],
+        "scores": "5题×2条件×2臂，20次；Forge EX/Contract 4/5→4/5，零转正、零正确回退；md-085/312/386三个正确对照保持。Direct输入不变但4/5→5/5。",
+        "mechanism": "md-259 对照 select 已是百分比+Marvel坏人数量，但 INNER JOIN 缩小分母，结果[28.60998650472335,118]；处理组 agg 声明 total_count/bad_count/marvel_bad_count，根 select 直接返回三中间量[741,212,118]，同时重复声明一个同样计算的 stats CTE 却不消费它。这是业务分母错误与最终答案表达错误叠加；不是 Compiler 漏生成原 JSON 已要求的百分比。md-436 两条件均正确且 SQL 相同，旧失败恢复不能归因于处理。",
+        "cost": "总tokens 36,284→36,262；Forge自身23,660→23,719（+0.25%）。",
+        "limit": "一条件一采样，已曝光5题；Direct波动明确反对把旧失败恢复当Prompt因果收益。"
+      },
+      {
+        "requirement": "REQ-047",
+        "source": "benchmark-luna-date-context-2026-09-05.json",
+        "fields": [
+          "mechanism_observations",
+          "outcomes[case_id=md-483|md-077|md-289]",
+          "metrics",
+          "costs"
+        ],
+        "scores": "20次，Forge EX/Contract 2/5→3/5，执行4/5→5/5；Direct3/5→3/5。",
+        "suberror_only": [
+          "md-483：两臂从 YYMMDD 边界改 ISO 日期；Forge off 的 loan.date gte='950101'/lte='971231' 变 observed between='1995-01-01'/'1997-12-31'。日期命中修好，但处理组新增 group=['account.account_id']，select=['account.account_id','loan_count']，返回65行账户计数，而要求一行总计65；EX/Contract仍0。不是声明/导出失配，而是最终粒度改变。",
+          "md-077 Forge：date_received '9/9/2019'→'2019-09-09'，空结果变两名学生及金额；select 仍 first_name || ' ' || last_name 为一列，原Gold姓名分列，失败从result_row_count_mismatch变result_column_count_mismatch。日期子错误修好不等于完整答案修好。"
+        ],
+        "false_attribution_guard": "唯一 Forge 完整转正 md-289 没有日期补充，两条件输入完全相同：off 的 stats.agg 定义 total_count/blue_count，但 stats.select 只导出 superhero.superhero_name，外层百分比引用不存在别名，被Assurance拒绝；observed直接用单层聚合表达式通过。这是结构失配样本及同输入生成波动，不是日期上下文收益。",
+        "cost": "双臂tokens34,621→38,944，+12.49%，默认off。"
+      },
+      {
+        "requirement": "REQ-054",
+        "source": "benchmark-luna-value-context-2026-09-06.json",
+        "fields": [
+          "cases",
+          "acceptance",
+          "binding_observations",
+          "remaining_failure.output",
+          "remaining_failure.sql",
+          "remaining_failure.interpretation"
+        ],
+        "scores": "4题×2条件×2臂，16次；由cases聚合 Forge EX/Contract2/4→3/4，Direct3/4→4/4。目标处理4臂仅3/4正确，目标门槛失败；正确对照md-002/018均保持。",
+        "suberror_only": "目标均改用准确 Discount/Premium 字面量，md-026 Forge与md-009 Direct转正。但md-009 Forge原错误值候选虽能执行，处理组改对Discount后却执行失败：两CTE cze/svk均 agg count_distinct(GasStationID) as cnt 且 select=['cnt']，根 scan仍gasstations，根select=['cze.cnt - svk.cnt']，没有把cze/svk接入FROM/JOIN。编译SQL忠实为 WITH cze...,svk... SELECT cze.cnt-svk.cnt FROM gasstations；SQLite no such column:cze.cnt。这不是CTE漏导出，而是声明存在≠当前关系已绑定；更不是业务含义仍不清。",
+        "regression_precision": "md-009是执行通过但结果错→执行失败，不能说‘正确答案被改坏’；EX本来就是0。归档Assurance v8还曾放行它，后续提前拒绝不算准确率提升。",
+        "cost": "16,329→19,243 tokens，+17.85%；虽然低于1.25成本门槛，4/4目标未达，保持off。"
+      },
+      {
+        "requirement": "REQ-056",
+        "source": "benchmark-luna-denominator-scope-2026-09-07.json",
+        "fields": [
+          "summary",
+          "paired",
+          "changes_observed",
+          "predeclared_gates",
+          "cost_and_latency"
+        ],
+        "scores": "16次，Forge EX/Contract2/4→3/4：md-259、md-000转正，md-079真正确回退，md-312保持；Direct2/4→2/4。",
+        "complete_gain": "md-259 对照三计数[741,212,118]既没有百分比又被INNER JOIN缩小总体；处理独立 total CTE 保留750英雄，最终[28.266666666666666,118]。这轮确实修完整答案，但不能只称为分母单错误修复。md-000对照根select=['1']及未使用CTE，未返回比值；处理用EUR/CZK标量计数和1.0*eur.n/NULLIF(czk.n,0)，完整通过。",
+        "correct_broken": "md-079 对照EX/Contract均true，处理均false，unknown_schema_reference。changes_observed.regression.alias_declared原样为'n_last_presence_placeholder_wrong? no'，alias_selected='n'，独立SQLite记录no such column:n。原始/持久候选hash一致。分母仍Patient.SEX='F'，没有‘范例使它误用所有病人分母’证据；失败是同一中间结果的声明名和导出名不一致。",
+        "business_remaining": "Direct md-079两条件均漏×100；Direct md-259两条件仍INNER JOIN缩小分母。两者是纯语义/量纲问题，并非Forge特有冗余。",
+        "cost": "总tokens25,753→27,305（+6.03%）；Forge tokens/正确EX8,724.5→6,333；P95 21,679.7→16,925.5ms。成本通过仍因正确回退不采纳。"
+      },
+      {
+        "requirement": "REQ-058",
+        "source": "benchmark-luna-cte-interface-2026-09-07.json",
+        "fields": [
+          "paired.rows",
+          "changes_observed",
+          "summary",
+          "predeclared_gates",
+          "limitations"
+        ],
+        "scores": "16次，Forge EX/Contract3/4→3/4，执行3/4→4/4；md-199转正但md-079回退；Direct3/4→2/4。",
+        "correct_broken": "md-079 Forge fresh默认对照正确；处理只返回962和1023两计数，而原Gold为单列94.03714565004887百分比。CTE定义未被外层消费，执行成功也不是完整答案。与REQ-044 md-259重复出现‘算出中间量但根查询未完成答案’形态，不能当作旧别名错误已经修复→目标成功。Direct md-079处理漏×100得0.9403714565004888；模型输入逐字相同，其回退是采样波动，不能归因Forge范例。",
+        "gain_limit": "md-199 Forge对照best_ms声明/导出/引用本来已一致；此轮实际失败是原生执行30秒超时，且投影合并姓名只3列。处理用MATERIALIZED CTE并返回[67411,'Lewis','Hamilton','Austrian Grand Prix']四列，完整通过。因此该转正不能证明CTE漏导出机制改善（与seed48旧失败不同）。Direct两条件仍缺milliseconds，EX/Contract均0。",
+        "cost": "总tokens32,300→35,067（+8.57%）；Forge tokens/正确EX6,792.67→7,683（+13.11%，门槛失败）；P95 14,351.6→20,312ms（+41.53%，门槛失败）。P95每条件仅4样本、nearest-rank，不外推尾延迟。"
+      }
+    ],
+    "sol_mechanism": {
+      "source": "benchmark-sol-error-triage-2026-09-05.json",
+      "fields": [
+        "coverage",
+        "triage_summary.forge",
+        "candidate_error_categories",
+        "cases[case_id=md-006|md-119|md-339|md-405].arms.forge",
+        "bounds",
+        "limitations"
+      ],
+      "structural_cases": [
+        "md-006：ranked_customers.window定义consumption_rank，显式select仅Segment/CustomerID/annual_consumption，下游filter consumption_rank=1；no such column。跨CTE导出失配，同时原triage保留Gold统计粒度争议。",
+        "md-119：disease_counts.agg定义patient_count，但select仅Diagnosis，外层order patient_count；no such column。跨CTE导出失配，同时Gold IGM边界另有争议。",
+        "md-339：window定义comment_rank但未投影，且同层filter comment_rank<=10（窗口前WHERE），不存在可用名；不只是补上select就保证合法，也有阶段依赖问题。原triage另保留Gold评论作者/时间口径冲突。",
+        "md-405：同一聚合层MAX(COUNT(*))，misuse of aggregate function COUNT()；缺聚合分层，不是重复别名导致。"
+      ],
+      "quantitative_limit": "Sol187个Forge EX失败臂，初步主要标签candidate_error46，其中value_grounding13、relation_filter7、output_contract7、ordering_limit6、grain_aggregation5、arithmetic_precision4、sql_scope4；另外ambiguous_intent66、reference_conflict74、unresolved1。标签互斥仅为计数，其他标签候选仍可能有独立错误，不能说剩余183题全是业务语义。4个非执行错误即便理想全部修成EX正确，也最多+0.8个百分点，且前三题原记录另有语义/Gold争议，修可执行不保证转正。",
+      "classification": "机制上至少分三类：①声明/导出/引用与阶段依赖（006/119/339、近期289/009/079）；②根结果形状/表达未完成（044-259、058-079；可能受冗余表示影响，但尚无因果证明）；③值、日期、粒度、分母、百分比单位等可在Direct同样出现的业务语义。不能全部归成DSL复杂，也不能因Compiler忠实就否认生成接口有可研究负担。"
+    },
+    "metric_guard": {
+      "source": "benchmark-sol-metric-replay-2026-09-05.json",
+      "fields": [
+        "aggregate",
+        "protocol",
+        "limitations"
+      ],
+      "fact": "固定候选官方EX仍Forge313/500、Direct314/500；比较器v1→v2只让Contract Forge280→284（md-172/259/419/427），Direct291→294（md-172/419/427），无回退。这是评估器修正，不是模型或业务准确率收益。",
+      "cross_run_warning": "Sol的md-259官方EX原本true（LEFT JOIN保全总体），旧Contract因column fingerprint失败，metric replay修为true；这与Luna REQ-044/056的INNER JOIN和三计数失败是不同候选，不能合并成同一题固定病因。",
+      "definitions": "triage.metric_explanation：官方EX比较精确tuple-set，忽略行序和重复次数，保留列位置；Contract默认multiset、推断行序且做列映射。不能把Contract变化当官方EX增益，亦不能通过删除争议题或放宽列/重复/顺序规则声称超过Direct。",
+      "limits": "Sol诊断重放120秒只属于历史记录，非新生成/Assurance/延迟基准；本次未重跑。近期实验均Luna，4或5个已曝光D题、每条件每臂单采样，不能把子集机制证据合成为Sol全量效果预测。"
+    }
+  },
+  "external_primary_research": [
+    {
+      "来源": "PICARD，EMNLP 2021，§2.2–2.3、§3、Table 1",
+      "URL": "https://aclanthology.org/2021.emnlp-main.779.pdf",
+      "原文短引": [
+        "“rejecting inadmissible tokens at each decoding step”",
+        "“Additional checks and guards are conceivable, for instance, checking that only expressions of the same type are compared ... We leave these additional checks to future work.”"
+      ],
+      "核实条件与结果": "在 Spider 7,000 训练样本上微调 T5；Table 1 使用 beam=4、对 top-2 token prediction 做 parsing with guards。同一 T5-3B（含 DB content 的表末两行）Spider dev EX 74.4→79.3，test EX 70.1→75.1。guards 处理列属于表、alias 与表/子查询绑定、FROM 引入作用域、裸列唯一解析；同一 select scope 禁重复 alias，允许嵌套遮蔽。论文明确把表达式比较类型及 UNION/EXCEPT/INTERSECT 两侧类型一致性留作未来工作。",
+      "可迁移机制": "不是“JSON 格式合法”而是有状态 scope checking：CTE 只引用已定义输出；alias 绑定正确作用域；裸列不歧义。可在现有 compiler/assurance 与结构化生成之间设计最小反馈，而非重新发明第二个 SQL 编译器。",
+      "边界反例": "这是可访问逐 token logits 的微调 T5 + beam decoding，不是闭源 API 的 tool schema，也不是 SQL→JSON 的表示对照。不能把它称为已验证完整类型系统；不能把 +4.9pp 搬成 Forge 增益预测。"
+    },
+    {
+      "来源": "RESDSQL，AAAI 2023，Methodology / Experimental Setup、Tables 2、5",
+      "URL": "https://arxiv.org/html/2302.05965v3",
+      "原文短引": [
+        "“we encourage the decoder to first decode the skeleton of the SQL query, and based on this, we continue to decode the SQL query.”",
+        "“selects the first executable SQL query in the beam as the final result.”"
+      ],
+      "核实条件与结果": "训练 cross-encoder 排序 schema，再微调 T5；Spider 7,000 training、1,034 dev；beam=8，execution-guided selector 选第一个可执行候选。关键同模型消融是 RESDSQL-Base：完整 EX 77.9；去 schema ranking 70.1；去 skeleton parsing 77.1。Table 2 的 RESDSQL-3B SQL vs +NatSQL：dev EX 81.8→84.1，属于同规模模型、不同训练目标/表示的系统比较。",
+      "可迁移机制": "把结构决策和表列/值填槽分开，并让后续输出依赖已确定骨架；最接近 Forge 的表示研究。但可优先借用“先确定聚合粒度/子查询边界再填表达式”，不必迁移 NatSQL。",
+      "边界反例": "不是零样本现代大模型的单次 JSON 优势。去 skeleton 只有 -0.8pp，论文的大部分消融损失来自 schema ranking；不能把整个 RESDSQL 增益归给中间表示。第一个可执行不等于语义正确。NatSQL 隐去/重写 JOIN、GROUP 等语言差距的效果依赖训练及转换器，不能直接要求 Forge 也隐藏这些语义。"
+    },
+    {
+      "来源": "CHASE-SQL，ICLR 2025 对应 arXiv v1，§3.3–3.5、§4.4 Tables 4–5、Appendix A.2",
+      "URL": "https://arxiv.org/html/2410.01943v1",
+      "原文短引": [
+        "“decomposes complex queries into manageable sub-queries in a single LLM call”",
+        "“single candidate generation performance ... original BIRD prompt + zero-shot CoT with Gemini 1.5 pro on the BIRD dev set”"
+      ],
+      "核实条件与结果": "有用的不是 73.01 dev /73.0 test 总榜，而是 Table 4 同 Gemini 1.5 Pro、BIRD dev、单候选且未加 fixer 的对照：baseline 57.75，Query Plan CoT 63.62（+5.87pp），Divide-and-Conquer CoT 63.92（+6.17pp）。Online Synthetic 67.09 也叫 single candidate，但其输入示例在测试时额外生成，不能当成等调用的单次规划证据。Query Fixer 最多 3 次，使用 syntax error/empty-result feedback；QP 63.62→65.51，DC 63.92→65.77。最终系统每种 generator 7 候选，共21；跨执行结果候选成对比较且交换顺序。选择器是 Gemini 1.5 Flash，在 BIRD train 生成的 3.8K 样本上 LoRA 微调10 epoch/rank16；Claude 配置也复用该 Gemini 选择器。Table 5 的 binary accuracy 仅统计一对中恰好一正一误的样本：普通 Gemini 1.5 Pro 63.98%，微调 Flash 71.01%，不是端到端 EX。",
+      "可迁移机制": "最值得先借的是单候选的逻辑计划：哪些表扫描、哪些过滤在聚合前、怎样匹配、最终输出什么；DC 特别适合分子/分母及独立 CTE 的作用域分解。可形成很短、可检查的决策记录而不是长篇通用 CoT。",
+      "边界反例": "QP 的对象仍是 Direct SQL，说明 Direct 同样能享受规划增益；要证明 Forge 表示更好，Direct 必须给相同规划机会。21候选+最多3次修正+专门训练选择器明显属于 test-time scaling/多模型系统。不能直接搬到已失败的成本/P95门禁。原文 §3.5 的未微调选择器 58.01 与 Table 5 的63.98设置关系未充分解释，建议仅引用明确标表的63.98/71.01并说明条件，不混用。"
+    },
+    {
+      "来源": "CHESS，arXiv v3（2024-11-25），§3.1、§4.1–4.3 Tables 1、2、4、5",
+      "URL": "https://arxiv.org/html/2405.16755v3",
+      "原文短引": [
+        "“return the most relevant matches, along with their corresponding columns”",
+        "“we only call GPT-4-turbo model 6 times”",
+        "“restrict the number of candidate generations and revisions ... to only one and three times, respectively.”"
+      ],
+      "核实条件与结果": "低预算配置是微调 DeepSeek Coder 生成 + GPT-3.5-turbo 列筛选 + GPT-4-turbo 其他步骤，并非单次单模型；BIRD dev65.00/test66.69。Table4消融在 SDS147题（每个dev数据库取10%；81 simple/54 moderate/12 challenging）：完整64.62；去 entity+context retrieval59.86（-4.76pp）；去 revise57.82（-6.80pp）；只1次 revise61.22（比无修正+3.40pp，但低于完整）。高预算版本 Gemini1.5 Pro生成20候选+10个自然语言unit tests，去SS，dev68.31/test71.10。检索结合 LSH、编辑距离与 embedding，相似值必须带所属列返回；catalog提供列/值描述。Table5最终列召回降至0.94，说明裁剪确有漏列代价。",
+      "可迁移机制": "给生成器的应是可追溯的“问题片段→候选列→规范化值→证据/来源”关联，而不是更多散装示例。结合已有 ContextSnapshot，先审计 evidence 被选错/没用到，或 literal encoding/值格式误配；官方 evidence 已覆盖的内容不应再新增一个 LLM 检索代理重复解释。",
+      "边界反例": "文中的约+2pp、大幅 token节省来自合并数据库构造的最大4,337列 schema 实验；不是普通 BIRD 单库默认收益。v1常被引用的65/66.69和v3高预算68.31/71.10不能混成一个设置。“低预算”仍有多模型、6次GPT-4及其他调用。1次修正有局部依据，但不是当前模型/Forge的已证收益；也不能把空结果自动标错。"
+    },
+    {
+      "来源": "DIN-SQL，NeurIPS 2023，§4.3–4.4、§5.2/5.6 Tables4–5、§7",
+      "URL": "https://arxiv.org/html/2304.11015v3",
+      "原文短引": [
+        "“The gentle prompt ... does not assume the SQL query is buggy”",
+        "“incurs a cost of approximately $0.5 and exhibits a latency of approximately 60 seconds ... using GPT-4.”"
+      ],
+      "核实条件与结果": "四模块：schema linking、难度/分解分类、SQL生成、self-correction；部分非嵌套任务使用 NatSQL 中间表示。GPT-4/CodeX；temperature0，self-correction max350 tokens，其他模块600。Spider dev同GPT-4 few-shot67.4→DIN-SQL74.2是整条多调用链收益，不是单次表示优势。Table5极有价值：GPT-4无修正73.3，gentle修正74.2，generic“BUGGY SQL”修正70.0；CodeX则generic69.9优于gentle68.7与无修正67.3。",
+      "可迁移机制": "修正必须保留原候选，依据具体编译/执行错误或可核查语义矛盾，最多一次，允许回答无需修改。记录 correct→wrong 与 wrong→correct，而不是只数被救回的失败。",
+      "边界反例": "DIN-SQL修正本身是自审提示，不是以数据库执行反馈证明正确；模型越强未必越值得强制修正。GPT-4 generic自审反而比不修正低3.3pp，与REQ-056/058救回目标题却伤md-079的局部优化风险高度相关。"
+    },
+    {
+      "来源": "The Death of Schema Linking?，arXiv v2（2024-08-18），§3、§4、Table2",
+      "URL": "https://arxiv.org/html/2408.07702v2",
+      "原文短引": [
+        "“imperfect schema linking can often exclude essential columns needed for accurate query generation.”",
+        "“all the required columns and vary the amount of irrelevant columns”"
+      ],
+      "核实条件与结果": "评价取BIRD dev各数据库10%；微调GPT-4o使用500条训练样本。Exp1用Gold SQL构造oracle linker，保证所需列全保留，仅变化噪声列，并单次生成；因此是机制实验/idealized EX，不是可部署系统成绩。12模型显示更强模型对无关schema列更耐受。Table2完整pipeline的ftGPT-4o67.35；加table-to-column裁剪62.58（-4.77pp），逐列裁剪55.78（-11.57pp）；Gemini1.5Pro60.54→55.78/55.10。温度0，尽量structured output；不能可靠结构化的输出还经过GPT-4o-Mini identity JSON调用。",
+      "可迁移机制": "把 linking 理解为高召回证据定位与排序，而非一律删除schema。对join bridge、CTE依赖列、分母总体列不能因词面不相似就剪掉。",
+      "边界反例": "不是“schema linking已死”的普遍结论，也不能用含Gold oracle的IEX当EX。schema是否全给应依据当前snapshot大小及召回损失；CHESS在4,337列得到裁剪收益与本研究小schema反例并不矛盾。"
+    }
+  ],
+  "active_code_findings": {
+    "schema_source": "services/pi-orchestrator/src/benchmark-runtime.ts:34-39 静态加载forge/schema.json；本报告不把schema_builder.py的动态Schema当作当前Benchmark payload。",
+    "semantic_annotations": {
+      "canonical_description_count": 72,
+      "strict_wire_description_count": 0,
+      "canonical_examples_count": 0,
+      "wire_examples_count": 0,
+      "canonical_compact_utf8_bytes": 14787,
+      "strict_wire_compact_utf8_bytes": 8034,
+      "source": "services/pi-orchestrator/src/strict-forge-output.ts:annotationKeys/build",
+      "observation": "createStrictForgeOutput真实运行确认72条description被删除；build_structured_benchmark_system保留8条紧凑语义约束，但没有补回完整DSL字段说明。",
+      "interpretation": "[INFERENCE] 可能增大模型理解声明、导出和作用域的负担；是待测的信息/成本取舍，不是已证明的准确率Bug。Sol完整基线为旧prefer，不把当前strict的说明删除追溯成Sol失分原因。"
+    },
+    "field_order": {
+      "current_root_order": [
+        "scan",
+        "joins",
+        "filter",
+        "group",
+        "agg",
+        "having",
+        "select",
+        "window",
+        "qualify",
+        "sort",
+        "limit",
+        "offset",
+        "explain",
+        "cte",
+        "distinct",
+        "union",
+        "intersect",
+        "except"
+      ],
+      "observed_positions_one_based": {
+        "select": 7,
+        "window": 8,
+        "cte": 14
+      },
+      "interpretation": "[INFERENCE] 当前依赖定义后于消费，可能增加长查询生成不一致；JSON输出顺序不等于模型思考顺序，收益未知。候选只能单独改变生成端Schema序列化顺序，不改JSON字段集合、DSL能力、Compiler或隐式补列。"
+    },
+    "strict_is_not_scope_validation": {
+      "shape_valid_candidate": {
+        "scan": "facts",
+        "agg": [
+          {
+            "fn": "sum",
+            "col": "facts.amount",
+            "as": "total"
+          }
+        ],
+        "select": [
+          "missing"
+        ]
+      },
+      "strict_decode": "accepted",
+      "normalized_chars": 92,
+      "wire_chars": 314,
+      "unused_root_null_fields": 15,
+      "compiled_sql": "SELECT missing\nFROM facts",
+      "actual_assurance_result": "QueryAssuranceError",
+      "interpretation": "真实strict decode允许语义未绑定引用；共享Assurance正确拒绝。314/92是合成例的字符数，不是token比例或全量成本。"
+    },
+    "cost_reference": "历史Structured Sol比Direct多59.57% tokens、51.69%平均生成时间；最新CTE范例每EX正确答案tokens +13.11%，不能靠额外调用掩盖成本。",
+    "provider_contract": {
+      "url": "https://developers.openai.com/api/docs/guides/structured-outputs",
+      "verified_sections": [
+        "Step 1 recommends clear titles and descriptions for important keys",
+        "Key ordering: outputs follow schema key order",
+        "Handling mistakes: Structured Outputs can still contain mistakes"
+      ],
+      "interpretation": "官方文档支持description，且声明键顺序；未用新Provider请求验证本轮候选。"
+    }
+  },
+  "prioritized_hypotheses": [
+    {
+      "priority": "P0 narrow first experiment",
+      "name": "工具Schema语义说明完整性",
+      "change": "仅为scan/cte/agg/window/select等关键接口保留经过当前Compiler核对的简短description；不直接恢复全部旧说明，不加入Gold、范例或额外生成。",
+      "reason": "实际payload丢失72条说明，而当前Prompt依赖工具解释DSL；改动局部、可独立否证。",
+      "risk": "额外input tokens、旧说明过时、未必改善；描述不是动态约束。默认保持不变。"
+    },
+    {
+      "priority": "P0 independent alternative",
+      "name": "定义先于引用的Schema键顺序",
+      "change": "单独测试cte先于scan、window先于select；所有字段和null语义不变，不与description同轮叠加。",
+      "reason": "500旧候选真实SQLite编译对照0 SQL变化、49份序列化改变；可先研究纯呈现变量。",
+      "risk": "未验证闭源模型收益；可能改变生成习惯但不能约束任意字符串作用域。"
+    },
+    {
+      "priority": "P1 principal accuracy direction",
+      "name": "有来源的答案规划与证据绑定",
+      "change": "复用ContextSnapshot/Registry/ResultContract，区分事实与推断，明确计量实体、全集/子集分母、连接用途、时间、分组、单位和最终列。优先单次生成内规划，不恢复each/per强制grain，不新建Intent主状态或第二DSL。",
+      "reason": "CHASE-SQL单候选QP/DC消融提供机制证据；值/日期实验只修子错误而完整EX仍失败。",
+      "risk": "Direct也会受益，不能承诺表示优势；显式持久化计划若改变Contract，须另立协议而非偷加当前工具字段。"
+    },
+    {
+      "priority": "P2 conditional",
+      "name": "确定性诊断最多一次修正",
+      "change": "仅对具体结构/作用域/类型错误向Pi原Task返回有界反馈；保留初稿、终稿和全部成本，不按Gold选优。两臂同样的调用上限，SQL改变重新走审批。",
+      "reason": "PICARD表明动态合法性约束不同于JSON形状；DIN-SQL表明强制修正能反伤正确候选。",
+      "risk": "闭源API无token hook；历史4个非执行候选理想修复最多+0.8pp，相对旧Direct仅+0.6pp；空结果不是错误，业务歧义不是重猜理由。"
+    },
+    {
+      "priority": "P3 only with remaining structural evidence",
+      "name": "减少需模型重复维护的生成表示",
+      "change": "若前两项无效，再研究单一定义和明确最终答案接口能否减少agg/window/select/CTE重复绑定；先离线语义等价与表示负担审计，任何正式DSL迁移独立立项。",
+      "reason": "近期存在声明/导出断裂和返回中间量；单靠修提示已遇到回退。",
+      "risk": "新IR/NatSQL或SQL→JSON会新增编译器负担，不能用自动补列/补JOIN篡改显式输入，也不能把SQL先生成包装成JSON原生优势。"
+    }
+  ],
+  "not_recommended_now": [
+    "继续追加投影/分母/CTE通用范例并靠重复四题挑最好一次",
+    "直接启用之前未过门槛的date/value上下文",
+    "盲目裁剪当前小库Schema、建设全量GraphRAG",
+    "多Agent投票、21候选选择器、微调或无限重试作为下一步默认",
+    "更换Gold/EX、删争议题、拒绝换分、把执行通过冒充答案正确",
+    "为满足目标把Direct SQL输出装进JSON而宣称Forge JSON胜出"
+  ],
+  "next_experiment_proposal": {
+    "status": "proposal_only_no_dispatch_authorization",
+    "first_variable": "经过审核的关键DSL description；键順序和答案规划另做单因素",
+    "development_design": "预先冻结8道开发题（结构失配/最终输出目标与跨库正确控制各4）、两条件、两臂、2个独立重复；8×2×2×2=64次逻辑调用提案，尚未选题/冻结或授权。两重复用于估计波动，不按最好一次选优。",
+    "canary_accounting": "canary如另做须计入总上限或另行批准，不能隐去；Provider失败/未知用量保留，不补跑。",
+    "fairness": "同模型revision/SDK/数据/Gold/证据/评价器/Compiler/Assurance；当前Schema试验只允许已声明的wire revision差异。后续语义规划或反馈同时给Direct相同信息与最大调用机会；报告原Direct和同增强Direct。",
+    "order_and_stability": "预注册交错/分块次序；现行机制只支持顺序时，先评估最小协议变更，不能直接声称已支持。输入不变Direct的变化是噪声对照，不归因为Forge改动；不追溯放宽REQ-056/058门槛。",
+    "protocol_gap": "现有显式variable prompt是注册Prompt实验，不等于已支持wire_schema单因素；须最小扩展冻结/可比性Contract，仅放行预声明Schema差异，不关闭revision校验。",
+    "metrics": [
+      "完整预注册分母Official EX",
+      "Contract单报",
+      "wrong→correct / correct→wrong逐题配对",
+      "first-pass与final分开",
+      "执行/误拒/静默错误代理",
+      "tokens每题及每正确任务、实际调用、时延/P95与未知成本"
+    ],
+    "promotion": "开发信号只决定是否值得验证；同输入生成波动不当因果。候选冻结后R500回归与未参与本项目调参的H配对验证，预先确定最小业务增益/功效与成本阈值；95%配对差值区间下界>0才称统计优势。H开发污染后不得重复调参称独立。",
+    "gold_readiness": "已知md-340/md-393超时不为本研究复跑；后续事先解决/声明评分就绪，不能事后剔除或发布未知臂的完整准确率。",
+    "cost_authority": "64次只是待确认设计，token/成本/P95阈值须看结果前由用户确认；当前sampling=provider_default、max_output_tokens=null，不能把历史8192当实际预算硬上限。"
+  },
+  "verification": {
+    "compiler_smoke_source": "import json, hashlib\nfrom collections import Counter\nfrom pathlib import Path\nfrom forge.compiler import compile_query\nfrom forge.assurance import assure_compiled_sql, QueryAssuranceError\np=Path(\"docs/archive/benchmarks/benchmark-sol-error-triage-2026-09-05.json\")\nb=p.read_bytes(); data=json.loads(b)\norder=[\"cte\",\"scan\",\"joins\",\"filter\",\"group\",\"agg\",\"window\",\"having\",\"qualify\",\"select\",\"distinct\",\"sort\",\"limit\",\"offset\",\"explain\",\"union\",\"intersect\",\"except\"]\ndef reorder(x):\n    if isinstance(x,list): return [reorder(v) for v in x]\n    if not isinstance(x,dict): return x\n    keys=[k for k in order if k in x]+[k for k in x if k not in order] if \"scan\" in x and \"select\" in x else x.keys()\n    return {k:reorder(x[k]) for k in keys}\ndef outcome(q):\n    try: return {\"sql\":compile_query(q,dialect=\"sqlite\")}\n    except ValueError as e: return {\"error\":str(e)}\nchanges=[]; statuses=Counter(); ordered=0\nfor c in data[\"cases\"]:\n    q=c[\"arms\"][\"forge\"][\"candidate\"]; r=reorder(q)\n    assert q==r\n    ordered+=json.dumps(q)!=json.dumps(r)\n    a,z=outcome(q),outcome(r)\n    statuses[\"compiled\" if \"sql\" in a else \"rejected\"]+=1\n    if a!=z: changes.append(c[\"case_id\"])\nassert not changes\nbad={\"scan\":\"facts\",\"agg\":[{\"fn\":\"sum\",\"col\":\"facts.amount\",\"as\":\"total\"}],\"select\":[\"missing\"]}\nlocal=outcome(bad)\ntry:\n    assure_compiled_sql(local[\"sql\"],dialect=\"sqlite\",input_kind=\"forge_json\",allowed_tables=[\"facts\"],registry_snapshot={\"tables\":{\"facts\":{\"columns\":{\"amount\":{}}}}})\n    gate=\"allowed\"\nexcept QueryAssuranceError as e:\n    gate=type(e).__name__\nprint(json.dumps({\"source\":str(p),\"source_sha256\":hashlib.sha256(b).hexdigest(),\"cases\":len(data[\"cases\"]),\"compile_status\":dict(statuses),\"serialization_changed\":ordered,\"compile_or_error_changed\":changes,\"candidate_values_changed\":0,\"gold_executions\":0,\"new_model_calls\":0,\"new_sql_executions\":0,\"invalid_shape_valid_query\":{\"sql\":local.get(\"sql\"),\"assurance\":gate},\"candidate_order\":order},indent=2))\n",
+    "strict_schema_command": "bun -e: import createStrictForgeOutput and forge/schema.json; count canonical/wire descriptions; decode shape-valid missing reference. See active_code_findings for observed output.",
+    "result": "研究实际运行完成；无新增永久测试、临时脚本或服务。500×2次SQLite方言编译及合成Assurance检查，不是500题SQL执行/新准确率评测。"
+  },
+  "source_fingerprints": {
+    "agent/prompts.py": "eff191736809d2645248b467ccafa49245f1f93480334694fe4c5d3ae6354e0b",
+    "forge/schema.json": "e9b56c6f98d08c8b866bd4f49ab0076ff55510711429025d397a5acd9188e723",
+    "forge/compiler.py": "05d5d6e4b38431aa8e2e1d34b6f38cffc43cd38482e6cfd127a650f017903284",
+    "forge/assurance.py": "25232efe2311b536822783a7129c9d89536c194b3e13205d05a00502e94c62f0",
+    "services/pi-orchestrator/src/benchmark-runtime.ts": "905f6b91d0865d8860a41a0f44aebd52fdc5e3320d762e38c09f708b9b7e5a4b",
+    "services/pi-orchestrator/src/strict-forge-output.ts": "33f42cb95d71eb723428ac5de5f210af70c4464dc45b8c05da6ebf2deeb4bac3",
+    "docs/archive/benchmarks/benchmark-sol-error-triage-2026-09-05.json": "39cdfcf83d51d2f4dbb2618d54021f326598b668bca08f25565473fde1335573",
+    "docs/archive/benchmarks/benchmark-sol-metric-replay-2026-09-05.json": "2eee5ba01fe2f20c01542c74a6131be625bcf9c13a5847b1e85dc733403af796",
+    "docs/archive/benchmarks/benchmark-luna-projection-instructions-2026-09-05.json": "b59dac931ff210af8ec4a38f75e6b92587758a2f1cadcbdfb951a0a8d604a602",
+    "docs/archive/benchmarks/benchmark-luna-date-context-2026-09-05.json": "97e7842a38a7bd3f3b0f27d9a63d9875ebf81da8e7cfd5c07a9bac21c11acd46",
+    "docs/archive/benchmarks/benchmark-luna-value-context-2026-09-06.json": "6077229f0efb9ef678eed4e14a37aa50c23575f89abb197b81c4592d16e739be",
+    "docs/archive/benchmarks/benchmark-luna-denominator-scope-2026-09-07.json": "69546731b83a6d0e25aa13c38084d56d45f9d6360e3ae0d17cd0f54aa7458506",
+    "docs/archive/benchmarks/benchmark-luna-cte-interface-2026-09-07.json": "dfcb5e6a3faba7d3c2dedb4cf76fedc23696a370cb39b1b0613fdda9e4bf98d2"
+  },
+  "limitations": [
+    "调研不保证超过Direct，不叠加跨论文不同模型/数据/调用条件的百分点。",
+    "旧Sol归因是Agent初判，后续更正优先；不能按参考冲突标签改官方分。",
+    "公开报告SHA256是当前公开字节，不冒充脱敏前原件hash。",
+    "未批准主动计划/架构迁移、部署、commit或push；R0.6外部采用与H均未完成。"
+  ],
+  "report_sha256": "4faa99d1520a2a0ecbde8c7e425de2c4b9d42077faaff5124d19cab82d7e2a24"
+}
