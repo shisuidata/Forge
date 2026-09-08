@@ -1416,6 +1416,7 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 用户明确要求记录本轮突破、具体优化动作、文案与文档，并commit/push GitHub。沿当前候选分支串行交付，不恢复模型实验，不merge main/tag/Release/部署安装。
 - 里程碑为本轮处理Forge EX/Contract12/16 vsDirect10/16、两重复各6/8 vs5/8；保留8题重复分母、md-052控制回退及未通过门槛，不称首次/总体/统计优势。
 - 复用同名[技术简报](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.md)、[devlog文案](devlog/2026-09-08-forge-schema-descriptions-milestone.md)和原JSON事实源；区分五字段description单变量、实验完整性工程及历史Structured/Compiler基础。默认off、H/R0.6与历史得分不变；归档不等于阶段晋级。
+- 后续REQ-067：用户明确要求候选成果合并main并push，今后日常工作默认只在main，不自行新建分支；覆盖本节前述归档时的不merge限制。已无冲突快进合并018317d→ee6fa33，稳定规则写入AGENTS.md；不改运行时、不发布版本、不启用候选。实际远端交付以Git记录为准。
 
 ## 16. 整体工程质量优化（REQ-060，已实施并本地验收）
 
