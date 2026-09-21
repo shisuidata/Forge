@@ -482,7 +482,6 @@ JSON 格式：
                     break
 
         if not data_prompt:
-            from forge.chart import _recommend
             return ChartSpec(_stage="chart", chart_type="bar", title=run.question[:40])
 
         messages = [{
@@ -526,9 +525,9 @@ JSON 格式：
             pass
 
         # 降级：规则推荐
-        from forge.chart import _recommend
+        from forge.chart import recommend_chart
         if isinstance(input_artifact, QueryResult):
-            ct = _recommend(input_artifact.columns, input_artifact.rows)
+            ct = recommend_chart(input_artifact.columns, input_artifact.rows)
         else:
             ct = "bar"
         return ChartSpec(_stage="chart", chart_type=ct, title=run.question[:40])

@@ -51,7 +51,7 @@ def _col_is_numeric(col: str, sample_vals: list[Any]) -> bool:
 
 # ── 图表推荐 ──────────────────────────────────────────────────────────────────
 
-def _recommend(cols: list[str], rows: list[tuple]) -> str:
+def recommend_chart(cols: list[str], rows: list[tuple]) -> str:
     """返回推荐图表类型：bar / pie / line"""
     if len(cols) < 2:
         return "bar"
@@ -272,7 +272,7 @@ def generate_image(cols: list[str], rows: list[tuple], query_hint: str = "") -> 
         import io
 
         _setup_font()
-        chart_type = _recommend(cols, rows)
+        chart_type = recommend_chart(cols, rows)
         title = (query_hint[:50] + "…" if len(query_hint) > 50 else query_hint) or "查询结果"
 
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -357,7 +357,7 @@ def generate(cols: list[str], rows: list[tuple], query_hint: str = "") -> str | 
         return None
 
     try:
-        chart_type = _recommend(cols, rows)
+        chart_type = recommend_chart(cols, rows)
         title      = (query_hint[:40] + "…" if len(query_hint) > 40 else query_hint) or "查询结果"
 
         if chart_type == "pie":

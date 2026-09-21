@@ -26,7 +26,7 @@ async def test_web_task_list_uses_server_owned_scope_and_cross_channel_filters(
     client: AsyncClient, monkeypatch
 ):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
 
@@ -50,7 +50,7 @@ async def test_web_task_list_uses_server_owned_scope_and_cross_channel_filters(
 @pytest.mark.asyncio
 async def test_web_task_detail_fails_closed_outside_admin_scope(client: AsyncClient, monkeypatch):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     async def fake_pi_request(method, path, payload=None):
         return 200, {"task": {
@@ -96,7 +96,7 @@ async def test_web_proxy_forwards_task_creation_without_business_routing(
     client: AsyncClient, monkeypatch
 ):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
 
@@ -141,7 +141,7 @@ async def test_web_proxy_exposes_review_request_but_no_execution_endpoint(
     client: AsyncClient, monkeypatch
 ):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     async def fake_pi_request(method, path, payload=None):
         assert method == "POST"
@@ -180,7 +180,7 @@ async def test_web_proxy_exposes_review_request_but_no_execution_endpoint(
 @pytest.mark.asyncio
 async def test_web_proxy_forwards_structured_skill_stage(client: AsyncClient, monkeypatch):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
 
@@ -220,7 +220,7 @@ async def test_web_proxy_forwards_structured_skill_stage(client: AsyncClient, mo
 @pytest.mark.asyncio
 async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient, monkeypatch):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
 
@@ -316,7 +316,7 @@ async def test_web_proxy_forwards_analysis_and_report_stages(client: AsyncClient
 @pytest.mark.asyncio
 async def test_web_proxy_forwards_hash_bound_approval(client: AsyncClient, monkeypatch):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
 
@@ -356,7 +356,7 @@ async def test_web_chat_message_uses_shared_channel_event_with_server_identity(
     client: AsyncClient, monkeypatch
 ):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
 
@@ -397,7 +397,7 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
     client: AsyncClient, monkeypatch
 ):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     task = {
         "task_run_id": "tr_web_chat_001", "channel": "web", "user_id": "web_admin",
@@ -477,7 +477,7 @@ async def test_web_chat_task_flow_is_scoped_and_minimally_disclosed(
 @pytest.mark.asyncio
 async def test_web_chat_task_flow_rejects_cross_channel_task(client: AsyncClient, monkeypatch):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     async def fake_pi_request(method, path, payload=None):
         return 200, {"task": {
@@ -497,7 +497,7 @@ async def test_web_chat_action_must_match_current_presentation(
     client: AsyncClient, monkeypatch
 ):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     calls = []
     task = {
@@ -551,7 +551,7 @@ async def test_web_chat_action_must_match_current_presentation(
 @pytest.mark.asyncio
 async def test_web_chat_cannot_act_on_cross_channel_task(client: AsyncClient, monkeypatch):
     from config import cfg
-    import web.router as router_mod
+    import web.routes.pi as router_mod
 
     async def fake_pi_request(method, path, payload=None):
         return 200, {"task": {

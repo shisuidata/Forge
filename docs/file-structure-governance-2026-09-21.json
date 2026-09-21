@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-21",
+  "requirement": "REQ-2026-09-21-069",
+  "status": "completed",
+  "scope": {
+    "title": "仓库文件资源与代码结构第二轮治理",
+    "previous_round": "docs/file-structure-governance-2026-09-07.json (REQ-061)",
+    "head": "241fb866620639952bba1ef7d4db41fa79b62607",
+    "user_decisions": [
+      "范围 B：文件资源 + 死代码 + router.py 拆分 + 卫生门禁；不动 forge/lint.py、TypeScript 侧与 conftest。",
+      "四类 tracked 存量数据资产全部移出 Git 跟踪，磁盘保留并在本 manifest 登记 SHA-256。",
+      "local_sqlite.zip 移入 .forge/archives/ 归档（不读取内容，仅移动并登记）。"
+    ],
+    "in_scope": [
+      "git rm --cached 四类存量资产（磁盘保留）",
+      ".gitignore 新增 5 条共享规则（/.codex/ /.pi/ /registry/data/.forge/ /tests/datasets/large/database.db /website/.vscode/）",
+      "死代码删除（web/feishu.py、scripts/bot.sh、scripts/performance_smoke.py、demo/seed.py、demo/seed_mock_data.py 及 4 个本地死文件）",
+      "web/router.py 2775 行拆分为聚合器 + 按域模块；forge/chart.py _recommend 公开化为 recommend_chart",
+      "tests/test_repo_hygiene.py 卫生门禁",
+      "website/package.json name 修正；.codex/hooks.json 失效绝对路径修正；__pycache__/.pytest_cache 清理",
+      "失效 worktree 注册 prune"
+    ],
+    "out_of_scope": [
+      "不 commit/push/tag/部署/调用模型/访问真实数据源（用户另行决定提交）",
+      "不重写 git 历史；历史 blob 中的大文件随旧提交保留",
+      "不动 CI 矩阵、forge/lint.py、Pi TypeScript 源码、tests/conftest.py",
+      "不动 agent↔forge 包级双向 import（登记为 known_debt）",
+      "不删除 feat/deepseek-strict-mode 分支及其 2 个非 main 祖先提交",
+      "不读取或清理 .forge/ 运行时数据内容、docs/conversation-logs/（REQ-062 保全原则）"
+    ]
+  },
+  "decisions": {
+    "untrack_keep_on_disk": "tests/datasets/large/database.db 等四类资产 git rm --cached 后磁盘保留；database.db 由 tracked 的 demo/seed_large.py 确定性再生（random.seed(42)，读 tracked schema.registry.json），scripts/demo-setup.sh:236-243 负责复制。",
+    "symlink_repair": "tests/fixtures/large_registry.json 原指向失效绝对路径 /mnt/workspace/90_Dev/Forge/...，导致 seed_large.py 在任何非旧 Linux 环境（含 fresh clone）无法运行；已改为仓库内相对链接 ../datasets/large/schema.registry.json。这是 untrack database.db 成立的前提修复。",
+    "dead_code_via_git_rm": "demo/seed.py 与 demo/seed_mock_data.py 实际已被 HEAD 跟踪（计划期 scout 证据陈旧，称二者为未跟踪）；统一以 git rm 删除，git 历史即归档。",
+    "router_split_domain_first": "行号地图与实际边界有出入时按路由前缀域归组；_web_admin_task_scopes 被 Pi 路由与 admin overview 双消费，置于 web/pi_projections.py 共享；_run_sync 被 3 个模块消费，置于 web/router_support.py。",
+    "admin_memory_separate_module": "计划原拟扩展 web/routes/memory.py，但既有文件是 require_pi_service_auth 的 Pi 服务内部 API；混入 admin HTML 页面会破坏域边界，故新建 web/routes/admin_memory.py。",
+    "hygiene_size_via_index_blob": "tracked 文件大小门禁改用 git ls-files -s + git cat-file --batch-check 测量 index blob，跳过 symlink(120000)/gitlink(160000)；工作区 stat 会被本仓已存在的失效 symlink 打断，且 symlink blob 仅含链接文本。",
+    "e2e_skip_guard": "本轮所有 pytest 运行以 FORGE_BASE_URL=http://127.0.0.1:59999 固定 tests/test_e2e.py 跳过条件；本机 8000 端口被其他项目（SQL 模型评测台）占用，否则浏览器 e2e 会对错误服务运行并挂起。"
+  },
+  "moves": [
+    {
+      "from": "local_sqlite.zip",
+      "to": ".forge/archives/local_sqlite.zip",
+      "sha256_before": "d56acf7c9d89be4bdf1f4f1281f4a03d91735f1858f6d6d0cfe0f9d562e3a94f",
+      "size_bytes": 456643204,
+      "note": "本地归档，不读取内容；.forge/ 已被 gitignore"
+    }
+  ],
+  "untracked_legacy_assets": [
+    {
+      "path": "tests/accuracy/results/method_k/grading_prompt.txt",
+      "sha256": "ea553aef56b3692a62179ddf379c3253e38318ccf9f5776fbab387f9a69b1a74",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "tests/accuracy/results/method_k/runs.json",
+      "sha256": "1e32ad2f53b8e50800695c9912d9b09f1afbbe43e20bf4950407c9dd0177427d",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "tests/accuracy/results/method_k/scores.json",
+      "sha256": "1ab9b1f40b0a86e8f5d6bc995faae104f394ff5ca7fdfadf776c8afc90b8aa96",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "tests/text-to-sql-failures/test.db",
+      "sha256": "856cb30abb461b768130454826092cc555474659c155b3f77c00fd0d3ea19a5c",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "tests/datasets/large/database.db",
+      "sha256": "5dff83ed45ee54df6319a04c98408159b31e1572643d936ecb0125f083d32b5b",
+      "disposition": "untracked via git rm --cached; kept on disk; regenerable via demo/seed_large.py"
+    },
+    {
+      "path": "web/static/charts/0ea2c8ba5463.html",
+      "sha256": "f7ab8de1520af9a780f0d298866494d4ff2ad1f801556cccacf31cfe88b9a665",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/238ba28b9f2a.html",
+      "sha256": "310a83e2ce899a0d6209cb6a6d0ff3eb5de8f56fa7d4b68da37c0ccc50ced58f",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/2b0bf6e10904.html",
+      "sha256": "fd20d5d1e912a818b7bb722a985f36ee6c98a856ca4ed6eb399c3076a88703cd",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/35c70e80c953.html",
+      "sha256": "1877828b0bf9dcd777e366b1d6553efca4e481f493578710d6fcef8902903bf7",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/64ad23d902fe.html",
+      "sha256": "fa2061f0d8ae50d51f615d54cba1cae72bca9142663d3e29acc548205f029194",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/9a414d086289.html",
+      "sha256": "b8140a06610ea46fadc6b5adba7a1a53ec6f49b084688cb04d63c8e07a222616",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/a31e5cf52dc1.html",
+      "sha256": "dd2c9a56543959f9e3fd257509bbeb2927b49ee05ed23358f92a911274801250",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    },
+    {
+      "path": "web/static/charts/ebf270c4c393.html",
+      "sha256": "a605d21c3b476ba1a52804fbccba7c02d35d2fb259d32245cf66a1e15166467c",
+      "disposition": "untracked via git rm --cached; kept on disk"
+    }
+  ],
+  "deleted_files": [
+    {
+      "path": "web/feishu.py",
+      "sha256_before_delete": "8b396bbb40e4928de6e16c267492546b1e76856ec340e1572156b88c693da8b0",
+      "reason": "1266 行死代码；生产路径已由 web/feishu_pi.py + web/feishu_runtime.py 接管，全仓零引用，git 历史即归档",
+      "method": "git rm"
+    },
+    {
+      "path": "scripts/bot.sh",
+      "sha256_before_delete": "9cb58addcac1c19de2a50ea7e1f4d9cc36faf8c3eb75573fcdfe6ac8bb5b7766",
+      "reason": "零引用启动脚本；仅历史 docs/conversation-logs 与 docs/archive 提及",
+      "method": "git rm"
+    },
+    {
+      "path": "scripts/performance_smoke.py",
+      "sha256_before_delete": "c68c4d31286a4e988cd6dcd9ecc2d5adf2f46e980fadd4a8cdf1a49a71180e96",
+      "reason": "仅历史报告提及，无调用方",
+      "method": "git rm"
+    },
+    {
+      "path": "demo/seed.py",
+      "sha256_before_delete": "7c72debbd6420e2949270090e0abec13e90d0ffef9e7d7efe55203835bb5b25e",
+      "reason": "零调用方旧种子脚本（计划期误以为未跟踪，实际 tracked，统一 git rm）",
+      "method": "git rm"
+    },
+    {
+      "path": "demo/seed_mock_data.py",
+      "sha256_before_delete": "5f157990e2071f3c0bd64d705f41a6d13fdf29b5309ee0ca86fb37020f97989d",
+      "reason": "零调用方 mock 种子脚本",
+      "method": "git rm"
+    },
+    {
+      "path": "demo/small_demo.db",
+      "sha256_before_delete": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reason": "0 字节空库，ignored 本地残留",
+      "method": "rm"
+    },
+    {
+      "path": ".forge/bot.pid",
+      "sha256_before_delete": "740d77c3bf031ffa5fde6e5991f70193a4457c777e5b8a9e4980465817cb7ac3",
+      "reason": "6 个月前残留 PID 文件",
+      "method": "rm"
+    },
+    {
+      "path": "forge.skill.md",
+      "sha256_before_delete": "7472e53ef0fa84028265ee08c4674ed9f4cdbfdec3fac76ecf4c787005ce7e6d",
+      "reason": "ignored 本地 skill 草稿，硬编码 /Volumes 旧路径；已被 tracked 的 .agents/skills/forge-query/SKILL.md 取代",
+      "method": "rm"
+    },
+    {
+      "path": ".pi/skills/forge/",
+      "sha256_before_delete": null,
+      "reason": "空目录",
+      "method": "rmdir"
+    }
+  ],
+  "code_changes": {
+    "router_split": {
+      "before": "web/router.py 2775 行",
+      "after": "web/router.py 139 行聚合器（chat_router/admin router 装配 + login/logout 认证路由），main.py 导入契约不变",
+      "new_modules": [
+        "web/product_content.py（PRODUCT_SURFACES/PRODUCT_STATE_PAGES 纯数据公开化）",
+        "web/routes/shell_pages.py（Product Shell 16 个 GET 页面路由）",
+        "web/pi_projections.py（纯投影 helpers，无上游 I/O）",
+        "web/routes/pi.py（/api/pi/* 19 路由 + 11 个 Pydantic 请求模型 + _pi_scoped_task_get）",
+        "web/routes/legacy_agent.py（/api/chat|prepare-query|approve|cancel）",
+        "web/routes/workspace_api.py（/api/execute-raw /api/feedback）",
+        "web/admin_ai.py（_admin_ai_process + /api/admin-chat /api/admin-apply）",
+        "web/admin_registry_store.py（registry YAML/JSON 读写 helpers，函数名保持下划线以维持 docs/development.md 引用准确）",
+        "web/routes/admin_semantics.py（metrics/semantic CRUD）",
+        "web/routes/admin_staging.py（staging 4 路由）",
+        "web/routes/admin_knowledge.py（knowledge 11 路由）",
+        "web/routes/admin_teams.py（teams 6 路由）",
+        "web/routes/admin_memory.py（admin memory 4 路由 + SQL helpers）",
+        "web/routes/admin_overview.py（dashboard/architecture/schema/audit/sessions/pipelines）",
+        "web/router_support.py（_run_sync 共享 helper）"
+      ],
+      "path_constant_adjustments": [
+        "web/routes/admin_overview.py architecture_atlas: Path(__file__).parents[1]→[2]（模块下移至 web/routes/，解析结果不变）",
+        "web/routes/admin_knowledge.py .forge 临时文件目录: parent.parent→parent.parent.parent（同上）"
+      ],
+      "behavior_changes": "无；全部函数体原样迁移，路由路径/方法/响应模型不变"
+    },
+    "test_retargets": [
+      "tests/test_pi_orchestrator_web.py：12 处 import web.router as router_mod → import web.routes.pi as router_mod（仅 _pi_request 补丁目标路径变化，断言不变）",
+      "tests/test_api.py：4 处 → import web.routes.legacy_agent as router_mod（agent_prepare_query/agent_approve/execute 补丁目标）"
+    ],
+    "public_symbol_cutover": [
+      "forge/chart.py: _recommend → recommend_chart（定义 + 2 处内部调用）",
+      "agent/pipeline.py:529-531 lazy import 与调用同步",
+      "agent/pipeline.py:485 死 lazy import 删除（该分支 return 硬编码 bar，从未使用导入符号）"
+    ],
+    "symlink_repair": "tests/fixtures/large_registry.json: /mnt/workspace/90_Dev/Forge/...（失效绝对路径）→ ../datasets/large/schema.registry.json（仓库内相对路径）",
+    "hygiene_gates": "tests/test_repo_hygiene.py 4 项：legacy 资产 denylist、tracked blob ≤8MB、监控路径无未跟踪噪音、web/router.py ≤450 行",
+    "tooling_fixes": [
+      "website/package.json name → forge-website（package-lock.json 两处同步，npm build 验证通过）",
+      ".codex/hooks.json: /Volumes/WorkSpace/90_Dev/Forge/... → /Users/elazer/Desktop/Workspace/90_Dev/Forge/...（ignored 本地工具配置）"
+    ]
+  },
+  "verification": {
+    "pytest_baseline": "1012 passed, 26 skipped, 12.2s（FORGE_BASE_URL 指向空端口以跳过浏览器 e2e；与状态页历史 983/28 不直接可比——测试集此后有增长）",
+    "pytest_gates": "Phase 1 结束后 1012/26；Phase 2 结束后 1012/26；Phase 3 结束后 1012/26；全部与基线逐项一致",
+    "hygiene_tests": "tests/test_repo_hygiene.py 4 passed",
+    "database_regeneration": "demo/seed_large.py 退出码 0；demo/large_demo.db 再生为 26669056 字节，与再生前完全一致（确定性 seed 42）",
+    "uvicorn_smoke": "/health=200, /=302, /login=200, /chat=302（auth 重定向）, /admin/dashboard=302（auth 重定向）, GET /api/prepare-query=405",
+    "quickstart_golden_path": "forge quickstart --workdir /tmp/gov-quickstart --yes --json 总体 passed；fail_closed 按预期拒绝（readonly_violation, retryable=false）；evaluate passed；enforce completed；explain integrity=verified；dashboard passed；临时目录已清理",
+    "pi_side": "npm typecheck 通过；226 passed / 0 failed（未改 TS，仅门禁惯例复跑）",
+    "website_build": "npm run build 退出码 0，28 页面",
+    "git_metadata": "git worktree prune 清除 forge-deploy-fix/forge-deploy-bird 两个失效注册；origin_https remote 与 branch.review.* 配置在本轮开始前已不存在（no-op，计划期证据陈旧）",
+    "final_status_shape": "意图内 staged：13 D（untrack）+ 5 D（dead code git rm）；意图内 unstaged M：.gitignore/AGENTS.md/CONTRIBUTING.md/.dockerignore（前一轮 REQ-068 遗留）+ docs 与本轮代码；?? 计数 0"
+  },
+  "limits": {
+    "plan_evidence_stale_items": [
+      "计划称 demo/seed.py、demo/seed_mock_data.py、demo/seed_large.py 为未跟踪 ?? 文件；实际三者均已 tracked in HEAD（7b267d7/da8dbe6/e5f1727 引入），因此 git add demo/seed_large.py 为 no-op，前两者改用 git rm",
+      "计划称存在 review 分支残留的 origin_https remote；实际本轮开始前已不存在",
+      "计划称 __pycache__ 12 处；实际清理 22 处",
+      "计划称 web/routes/ 14 个子模块；实际 13 个（含 __init__.py 共 14 个文件）"
+    ],
+    "known_debt_carried": [
+      "agent↔forge 包级双向 import（模块级无环，靠 lazy import 打断）保留，供后续轮次",
+      "tests/datasets/spider/data 为 tracked symlink → ../../spider2/data（ignored 本地数据目录），刻意保留",
+      "docs/development.md:381 提及 _save_metrics()；admin_registry_store.py 刻意保留下划线函数名维持该引用",
+      "CI 单 Python 3.11 无矩阵，与本地 venv 3.14 有版本差（本轮不动 CI）"
+    ],
+    "no_commit": "所有变更留在工作区与 index；不 commit/push/tag/部署，用户另行授权",
+    "e2e_environmental_collision": "本机 8000 端口被其他项目占用时 tests/test_e2e.py 会误测并挂起；以 FORGE_BASE_URL 空端口固定跳过条件，未改测试源码"
+  },
+  "summary": "REQ-069 第二轮治理完成：13 个存量资产出 index 留盘（含 25.4MB database.db，配 symlink 修复后 seed_large.py 确定性再生已验证）；8 个死文件删除（含 1266 行 web/feishu.py）；local_sqlite.zip 435MB 归档至 .forge/archives/；web/router.py 2775→139 行按域拆分（行为零变化）；forge.chart._recommend 公开化为 recommend_chart；新增 4 项仓库卫生门禁；.gitignore 新增 5 条共享规则；全部 pytest 门禁与基线 1012/26 逐项一致，quickstart/uvicorn/Pi/website 验证通过。"
+}

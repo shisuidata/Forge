@@ -11,6 +11,7 @@ __pycache__
 !.env.production.example
 forge_audit.db
 .forge
+.maestri
 web/static/charts/*.html
 tests/accuracy/results
 tools/benchmarks/accuracy/results

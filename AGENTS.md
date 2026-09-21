@@ -19,10 +19,8 @@ Forge 是 Agent-native 的可信数据执行层。进入仓库后，先读 [`doc
 
 ## 当前产品与阶段
 
-- 当前产品切口：面向已有数据库或数仓的小型数据团队的可信业务问数助手，在真实提问中逐步沉淀并安全复用业务语义。
-- 当前有效需求：`REQ-2026-08-25-023`。
-- 唯一主动计划：`docs/forge-enterprise-evolution-plan.md`。
-- 当前只推进 **S0 Design Partner / Problem Baseline**；没有证据和用户确认，不实施 S1–S3、M1A、Agent Runtime、更多 Connector 或企业平台扩张。
+- 产品、当前有效需求及实施阶段以 `docs/current-project-state.md` 为准；不在本文件复制易变的需求编号或阶段进度。
+- 唯一主动计划：`docs/forge-enterprise-evolution-plan.md`；没有证据和用户确认，不自行晋级或扩展 Agent Runtime、更多 Connector 及企业平台范围。
 - 不承诺开放世界 100% 正确；通过语义、来源、权限、Evidence、确定性编译、审批和失败关闭减少静默错误。
 
 ## 稳定架构边界

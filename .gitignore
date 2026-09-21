@@ -17,6 +17,7 @@ demo/*.db
 .claude/
 .planning/
 .forge/
+.maestri/
 docs/conversation-logs/
 forge_audit.db
 uv.lock
@@ -51,3 +52,10 @@ services/pi-orchestrator/.runtime/
 services/pi-orchestrator/**/*.sqlite3
 services/pi-orchestrator/**/*.sqlite3-wal
 services/pi-orchestrator/**/*.sqlite3-shm
+
+# 2026-09-21 REQ-069: local tool state and regenerable data stay out of Git.
+/.codex/
+/.pi/
+/registry/data/.forge/
+/tests/datasets/large/database.db
+/website/.vscode/

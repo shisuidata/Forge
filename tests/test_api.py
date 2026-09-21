@@ -189,7 +189,7 @@ class TestChatAPI:
     async def test_prepare_query_returns_review_contract(self, client: AsyncClient, monkeypatch, tmp_path):
         """外部 Agent prepare-query 只返回审核材料，不返回执行结果。"""
         from agent import audit
-        import web.router as router_mod
+        import web.routes.legacy_agent as router_mod
 
         monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
         monkeypatch.setattr(
@@ -243,7 +243,7 @@ class TestChatAPI:
     async def test_prepare_query_does_not_feed_approve_execution(self, client: AsyncClient, monkeypatch, tmp_path):
         """prepare-query 不创建可由 /api/approve 消费的 pending SQL。"""
         from agent import audit
-        import web.router as router_mod
+        import web.routes.legacy_agent as router_mod
 
         monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
         monkeypatch.setattr(
@@ -301,7 +301,7 @@ class TestChatAPI:
         self, client: AsyncClient, monkeypatch, tmp_path
     ):
         from agent import audit
-        import web.router as router_mod
+        import web.routes.legacy_agent as router_mod
 
         monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
         monkeypatch.setattr(
@@ -339,7 +339,7 @@ class TestApproveExecutionFailure:
     async def test_failed_execution_terminates_pending_legacy_pipeline(
         self, client: AsyncClient, monkeypatch
     ):
-        import web.router as router_mod
+        import web.routes.legacy_agent as router_mod
         from agent.agent import AgentResponse
         from agent.memory import memory
         from forge.executor import ExecutionResult

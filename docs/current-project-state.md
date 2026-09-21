@@ -1,6 +1,6 @@
 # Forge 当前项目状态
 
-> 状态：当前事实投影 · Last updated: 2026-09-08
+> 状态：当前事实投影 · Last updated: 2026-09-09
 >
 > 本页是人和 Coding Agent 进入仓库后的第一入口。它只投影当前有效状态，不替代需求历史、主动计划或架构文档。
 
@@ -85,6 +85,7 @@ Forge 当前验证的是：
 - REQ-065关键DSL说明候选已完成64次Luna ABBA实跑，预注册门槛失败，保持off：真实HTTP64/64为200、用量完整222015 tokens。Forge EX/Contract10/16→12/16、Direct10/16→10/16；无目标题两重复稳定恢复，md-052第二重复回退，处理组控制7/8。总tokens+3.39%、Forge每正确答案tokens−11.73%、生成P95−5.42%，相对成本门槛通过但不抵消正确性门槛失败。64份原SSE与候选/用量匹配，64臂重放一致，零重试/补跑；人民币费用门禁已被用户撤销，订阅成本不可核算，不宣称免费或总体超过Direct。见[实跑报告](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.json)及[原准备卡](archive/benchmarks/benchmark-luna-schema-descriptions-ready-2026-09-08.json)。不扩样、不自动开启，H/R0.6不晋级。
 - `REQ-2026-09-08-066` 已归档本轮限定样本里程碑与[具体优化动作/技术简报](archive/benchmarks/benchmark-luna-schema-descriptions-2026-09-08.md)、[未发布文案](devlog/2026-09-08-forge-schema-descriptions-milestone.md)：处理Forge EX/Contract12/16 vsDirect10/16，两重复各6/8 vs5/8；不是历史首次或总体优势。候选交付提交ee6fa33b2665bed6b9936cb9a12e04b6edf79415已包含这些记录，后续main交付见REQ-067。
 - `REQ-2026-09-08-067` 用户明确要求合并main再push，并将日常工作默认限定在main，不自行新建分支；覆盖此前仅候选分支/不merge限制。已将4个候选提交从018317d快进合并至ee6fa33，当前检出main；稳定约定写入AGENTS.md，最终文档提交/远端SHA以Git记录为准。不打tag/Release、不发布版本/部署安装，不启用候选、不增加调用。
+- `REQ-2026-09-21-069` 仓库文件资源与代码结构第二轮治理已完成（零模型调用）：13个tracked存量资产出index留盘（含tests/datasets/large/database.db 25.4MB，配tests/fixtures/large_registry.json失效symlink修复后demo/seed_large.py确定性再生已验证）；8个死文件删除（含web/feishu.py 1266行）；local_sqlite.zip归档至.forge/archives/；web/router.py 2775→139行按域拆分（行为零变化，pytest门禁与基线1012/26逐项一致）；forge.chart._recommend公开化；新增tests/test_repo_hygiene.py 4项门禁。quickstart/uvicorn烟测/Pi226项/website构建全部通过。逐文件SHA-256与偏差说明见[治理记录](file-structure-governance-2026-09-21.json)，需求条目见[REQ-069](requirements-pool.md#req-2026-09-21-069仓库文件资源与代码结构第二轮治理)。未commit/push/部署，不改变R0.6/H。
 
 ## 4. 已完成且可复用的工程基础
 
@@ -120,6 +121,12 @@ Forge 当前验证的是：
 状态发生实质变化时，同步更新本页、对应 Requirement 和主动计划；不要把执行进度写进 AGENTS.md。
 
 ## 7. OMP 继续开发入口
+
+2026-09-09 起本项目退出 Maestri 开发工作流（REQ-068）。直接在原检出的 `main` 工作，不再依赖 Maestri Lead、角色目录、派单队列或外部协调状态。旧角色配置保留于本地 Git 忽略的 `.forge/retired-tools/maestri-2026-09-09/`，仅供溯源，不加载或恢复旧任务。
+
+退出核对：REQ-066 候选提交 `ee6fa33` 已在 `main@241fb86` 的祖先链中；本地 `origin/main` 跟踪引用同 SHA，此次未联网复核远端。旧 Forge 协调记录报告任务已完成、无在途，并已标记退役；其中 CI 是历史证据，不冒充本轮验证。`feat/deepseek-strict-mode` 仍有两个不在 main 祖先链中的提交，保留而不合并或删除；两个失效部署 worktree 登记亦保留。本轮不改变 R0.6/H、实验默认 off 或模型调用授权。
+
+本轮退出验证：6份角色原文件及协调快照原字节保全，580份受保护源码/测试/历史证据hash不变；隔离公开源码的真实 Quickstart 完成只读拒绝、Evaluate、Enforce、Explain 和 Dashboard HTTP检查。未复跑全套测试或远端CI；editable环境的打包烟测先被本机配置读取护栏拦截，详见[REQ-068](requirements-pool.md#req-2026-09-09-068退出-maestri-与项目目录治理)。临时验证目录已清理，本地归档不是异地备份。
 
 进入仓库后：
 

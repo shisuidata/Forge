@@ -70,14 +70,16 @@ Forge sends no telemetry. The receipt excludes hostnames, usernames, paths, SQL 
 | `forge/` | Trusted data runtime; runtime resources live with their owning package, including `forge/templates/poc/`. |
 | `agent/`, `registry/`, `web/` | Existing Agent adapters, Registry capabilities and Web/channel adapters; do not add a second orchestrator. |
 | `services/pi-orchestrator/` | Pi Task authority and its TypeScript tests; generated cross-language schemas remain in `agent/contracts/`. |
-| `tests/` | Automated regressions and shared versioned fixtures in `tests/datasets/`; not standalone model experiments. |
+| `tests/` | Automated regressions and shared versioned fixtures in `tests/datasets/`; not standalone model experiments. `tests/datasets/large/database.db` is not distributed with the repository: regenerate it via `scripts/demo-setup.sh` or `demo/seed_large.py` (deterministic, reads the tracked registry fixture). |
 | `tools/benchmarks/` | Manual accuracy, synthetic, Spider2 and failure-case research tools. Running these can call models; they are not part of ordinary pytest or the Forge package. |
 | Other `tools/` projects | Isolated, reproducible UI/chart experiments with their own dependencies. |
-| `scripts/`, `demo/` | Development/operations/verification entry points versus synthetic data generators. Run generators only against explicitly isolated stores. |
+| `scripts/`, `demo/` | Development/operations/verification entry points versus synthetic data generators; `demo/seed_large.py` is the tracked, deterministic regeneration script for the large demo dataset. Run generators only against explicitly isolated stores. |
 | `docs/`, `docs/archive/` | Current state, stable guides and the active plan versus completed evidence and superseded plans. Existing course, diagrams and devlog keep their own directories. |
 | `website/`, `examples/`, `constraints/`, `.github/` | Documentation site, public API examples, verified dependency constraints and repository automation. |
 
 Keep public startup/configuration entry points at the repository root. Do not add nesting solely to reduce a file count. Runtime code must not depend on benchmark tooling or pytest fixtures for general execution. Update imports, resource declarations, command examples and local links together when relocating a file.
+
+Local coding-tool state is not a project entry point or runtime dependency. Maestri has been retired for this checkout; `.maestri/` is excluded from Git and Docker contexts, and retained configuration belongs under the ignored `.forge/retired-tools/` directory. Do not load archived roles or resume their queues. Continue from `docs/current-project-state.md` on `main`; preserve historical evidence and branches unless their removal is explicitly authorized.
 
 The [file-governance manifest](docs/file-structure-governance-2026-09-07.json) records old/new paths and content hashes. Historical JSON paths describe the original run and are not rewritten; use the manifest to locate relocated evidence. Ignored local databases, credentials, caches and previous run outputs were deliberately not migrated. Inspect and authorize any private-data migration separately; never replay model runs to recreate history.
 

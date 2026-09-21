@@ -2440,3 +2440,35 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 - **稳定约定**：日常开发、维护与文档默认只在main，不自行新建功能/评审/临时分支；例外仅按用户明确要求。规则落入AGENTS.md，既有分支不擅自删除，全局Git配置不改。
 - **验证与交付**：合并操作不产生新的代码差异；REQ-066本地Python81项/Pi53项/typecheck为历史验证，不冒充本轮复跑。新增文档约定检查后在main提交并push，实际远端SHA和CI以Git/GitHub记录为准，不提前宣称远端通过。
 - **不做**：不打tag、不创建Release、不发布软件版本、不部署安装、不启用候选、不增加模型调用，不提交.maestri/.forge或原始运行数据。默认off、H/R0.6和原实验失败门槛保持。
+
+## REQ-2026-09-09-068：退出 Maestri 与项目目录治理
+
+### 用户原始表达与授权
+
+> 我在 maestri 中做了一些开发的工作，但我现在打算弃用了，所以需要你治理一下我们这个项 目目录和相关的文件
+
+- **状态**：completed；本地可回退治理与隔离Quickstart已完成，不恢复历史任务或授权；未commit/push。
+- **价值与范围**：保全已交付代码、实验结论及沟通记录，移出项目根目录的废弃角色配置；退役外部 Forge 协调入口，补齐 Git/Docker 排除，消除 AGENTS 中已过时的 S0/REQ-023 固定投影。当前状态仍是项目入口，不建立新队列或第二套项目真相源。
+- **核对**：main 与本地 origin/main 跟踪引用均为241fb86，REQ-066 候选ee6fa33已被包含；外部旧协调记录为done/无在途。本轮未联网验证远端或复跑历史CI。feat/deepseek-strict-mode有8398f80/5ff928f两个非main祖先提交，旧评审分支及两个失效部署worktree登记全部保留，不擅自合并、删除或prune。
+- **处置与保全**：两个角色的6个原文件移入Git忽略的 `.forge/retired-tools/maestri-2026-09-09/project-config/`，保存旧Forge协调记录原始快照及逐文件SHA-256；外部协调文件仅前置退役声明，历史正文不改写。归档是本地保全，不是异地备份，也不提交私人角色内容。
+- **风险、替代与机会成本**：直接删除可能丢失角色约定和沟通证据；只加ignore仍留下可误加载入口，故选择原字节归档并显式退役。大范围重新分层重复REQ-061且可能破坏数据路径，故沿用现有目录约定；数据库、凭证、缓存、旧results和历史报告保持原位。
+- **验证要求**：原角色和协调快照hash一致，受保护源码/测试/历史证据字节不变；Git忽略命中；实际隔离合成Quickstart不依赖Maestri。完成后追加本轮结果，不引用旧全套测试冒充本轮验证。
+- **边界**：不卸载全局Maestri、不改其他项目或全局画布，不commit/push/发布/部署，不读取凭证或连接真实数据，不新增模型调用。此为开发工具维护，不改变产品职责、主动计划阶段、R0.6/H或默认off。
+- **本轮验证**：6份角色原文件、旧协调快照SHA-256一致，580份受保护的公开源码/测试/历史证据字节不变，Git ignore实际命中。公开运行源码原字节复制到临时目录，以独立HOME和无本机配置运行真实 `quickstart --yes --json`：只读违规拒绝、Evaluate passed、Enforce completed、Explain verified、Dashboard HTTP检查passed；临时目录已移除。本地回执为 `.forge/retired-tools/maestri-2026-09-09/verification.json`。
+- **验证限制**：最初直接运行 `scripts/package_smoke.py` 因当前editable安装指向本机源码而尝试打开forge.yaml，被审计断言在读取前拦截，不能记为通过；随后完成上述隔离源码Quickstart，不是wheel/sdist安装验证。不改配置加载逻辑、不运行全套测试、Docker构建或浏览器视觉验收；历史CI未复核。
+
+## REQ-2026-09-21-069：仓库文件资源与代码结构第二轮治理
+
+### 用户原始表达与授权
+
+> 对我们这个项目做一次深入的评估，并给出一个文件资源和代码治理的方案
+
+用户确认三项决策：范围 B（文件资源 + 死代码 + router.py 拆分 + 卫生门禁；不动 forge/lint.py、TypeScript 侧、conftest.py）；四类 tracked 存量数据资产全部移出 Git 跟踪（磁盘保留 + manifest 登记 SHA-256）；local_sqlite.zip 移入 `.forge/archives/` 归档。
+
+- **状态**：completed；全部变更留在工作区与 index，未 commit/push。
+- **价值与范围**：处理 REQ-061 遗留边界（method_k 结果、text-to-sql-failures/test.db、web/static/charts 8 个运行时 HTML、tests/datasets/large/database.db 共 13 个 tracked 存量出 index 留盘）；删除 5 个 tracked 死代码（web/feishu.py 1266 行、scripts/bot.sh、scripts/performance_smoke.py、demo/seed.py、demo/seed_mock_data.py）与 4 个本地死文件；`.gitignore` 新增 5 条共享规则并把 `.git/info/exclude` 的 3 条本地规则提升为共享；`web/router.py` 2775 行拆为 139 行聚合器 + 15 个按域模块；`forge/chart.py` `_recommend` 公开化为 `recommend_chart`；新增 `tests/test_repo_hygiene.py` 4 项门禁。
+- **计划证据偏差（按实测执行）**：计划期称 demo/seed*.py 未跟踪，实际三者均在 HEAD；origin_https remote 与 branch.review.* 配置本轮开始前已不存在（no-op）；__pycache__ 实际 22 处而非 12；web/routes/ 实际 13 个子模块。
+- **关键修复**：tests/fixtures/large_registry.json 原为指向 /mnt 旧绝对路径的失效 symlink，导致 database.db 再生链在非旧 Linux 环境不可用；已改为仓库内相对链接 `../datasets/large/schema.registry.json`，这是 untrack database.db 成立的前提。
+- **本轮验证**：基线与各 Phase 门禁 pytest 均 1012 passed / 26 skipped（FORGE_BASE_URL 指向空端口固定浏览器 e2e 跳过；本机 8000 端口被其他项目占用，否则会误测并挂起）；seed_large.py 再生 large_demo.db 字节大小一致（26669056）；uvicorn 烟测 /health=200、/=302、/login=200；`forge quickstart --workdir /tmp/gov-quickstart --yes --json` 总体 passed（fail_closed 按预期拒绝 readonly_violation、Evaluate passed、Enforce completed、Explain integrity=verified、Dashboard passed）；Pi typecheck 通过、226 passed；website build 28 页退出码 0；卫生门禁 4 项通过。
+- **证据**：`docs/file-structure-governance-2026-09-21.json` 登记全部移出/删除文件的 SHA-256、router 拆分模块映射与偏差说明。
+- **边界**：不重写 git 历史；不删 feat/deepseek-strict-mode 分支及其 2 个非 main 祖先提交；不读取/清理 .forge/ 数据内容与 docs/conversation-logs/；不动 CI 矩阵；agent↔forge 包级双向 import 保留为 known_debt；不 commit/push/部署/调模型，提交授权另行给出。
