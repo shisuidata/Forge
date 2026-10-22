@@ -112,7 +112,7 @@ def deliver_receipt(delivery_id: str, *, wait: bool = False, presentation: dict 
             except Exception:
                 record("delivery_progress", delivery_id=delivery_id, task_run_id=receipt["task_run_id"], error_code="progress_delivery_unknown")
         if presentation is None:
-            presentation = client.wait_for_presentation(receipt["task_run_id"]) if wait else client.get_presentation(receipt["task_run_id"])
+            presentation = client.wait_for_presentation(receipt["task_run_id"], external_user_id=receipt["target_id"]) if wait else client.get_presentation(receipt["task_run_id"], external_user_id=receipt["target_id"])
         card = presentation_to_feishu_card(presentation, external_user_id=receipt["target_id"], conversation_id=receipt["conversation_id"])
         delivery_started = True
         if receipt["message_id"]:

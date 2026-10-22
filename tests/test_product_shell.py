@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 
+import pytest
+
+@pytest.fixture
+def client(governed_client):
+    return governed_client
+
 
 def test_product_shell_renders_active_navigation_without_runtime_data() -> None:
     from web.templates import templates

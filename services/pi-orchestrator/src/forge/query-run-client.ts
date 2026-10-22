@@ -7,28 +7,41 @@ export type QueryCandidateInput =
   | { kind: "forge_json"; forge_json: Record<string, unknown>; producer_revision?: string };
 
 export interface QueryRunReview {
+  schema_version: 2;
   query_run_id: string;
   task_run_id: string;
-  status: "needs_review" | "needs_clarification" | "timed_out" | "failed" | "cancelled";
-  question: string;
-  user_id: string;
-  datasource_id: string;
+  status: "ready" | "review_required" | "denied" | "executing" | "completed" | "failed" | "cancelled";
+  decision: { verdict: string; review_required: boolean; execution_authorized: boolean; execution_mode: "autonomous" | "human_review" | null };
+  context: { principal_context: Record<string, unknown>; delegated_mandate: Record<string, unknown>; purpose: string; resource_scope: unknown[] };
+  candidate: { input_kind: QueryCandidateInput["kind"]; candidate_revision: string; producer_revision: string; candidate_hash: string };
+  review: { sql: string | null; sql_hash: string | null; assurance_report_hash: string | null; enforcement_context_hash: string; expires_at: string };
+  assurance: Record<string, unknown> | null;
+  lineage: { assurance_revision: string | null; policy_revision: string; registry_revision: string; assurance_report_hash: string | null; enforcement_context_hash: string; [key: string]: unknown };
+  result: { columns: string[]; rows: unknown[][]; row_count: number; truncated: boolean; execution_ms: number; executed_at: string } | null;
+  failure: { code: string; stage: string; retryable: boolean } | null;
+  authorization: Record<string, unknown> | null;
+}
+
+export interface QueryRunResult {
+  query_run_id: string;
+  task_run_id: string;
+  status: "completed";
+  sql_hash: string;
   input_kind: QueryCandidateInput["kind"];
-  candidate_revision: "query-candidate-v1";
-  forge_json: Record<string, unknown> | null;
-  sql: string | null;
-  sql_hash: string | null;
+  candidate_revision: string;
   dialect: string;
   registry_version: string;
-  assurance_report: Record<string, unknown> | null;
-  assurance_report_hash: string | null;
-  assurance_revision: string | null;
-  policy_revision: string | null;
+  assurance_report_hash: string;
+  assurance_revision: string;
+  policy_revision: string;
   model_revision: string | null;
   assurance_registry_revision: string | null;
-  review_required: boolean;
-  can_execute: false;
-  expires_at: string;
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
+  truncated: boolean;
+  execution_ms: number;
+  executed_at: string;
   error: string;
 }
 
@@ -44,7 +57,6 @@ export interface ContextEvidence {
   updated_at: string | null;
   expires_at: string | null;
 }
-
 export interface ContextSearchResult {
   status: "ok";
   question: string;
@@ -53,7 +65,6 @@ export interface ContextSearchResult {
   context_revision: string;
   bounded: true;
 }
-
 export interface ReportPublication {
   report_id: string;
   task_run_id: string;
@@ -71,327 +82,121 @@ export interface ReportPublication {
   updated_at: string;
 }
 
-export interface QueryRunResult {
-  query_run_id: string;
-  task_run_id: string;
-  status: "completed";
-  sql_hash: string;
-  input_kind: QueryCandidateInput["kind"];
-  candidate_revision: "query-candidate-v1";
-  dialect: string;
-  registry_version: string;
-  assurance_report_hash: string;
-  assurance_revision: string;
-  policy_revision: string;
-  model_revision: string;
-  assurance_registry_revision: string;
-  columns: string[];
-  rows: unknown[][];
-  row_count: number;
-  truncated: boolean;
-  execution_ms: number;
-  executed_at: string;
-  error: string;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new ForgeClientError("Forge QueryRun API returned a non-object response");
-  }
+function record(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ForgeClientError("Forge returned a non-object response");
   return value as Record<string, unknown>;
+}
+function run(value: unknown): QueryRunReview {
+  const body = record(value);
+  const decision = record(body.decision);
+  const review = record(body.review);
+  if (body.schema_version !== 2 || typeof body.query_run_id !== "string" || typeof body.task_run_id !== "string" ||
+    !["ready", "review_required", "denied", "executing", "completed", "failed", "cancelled"].includes(String(body.status)) ||
+    !["autonomous", "human_review", null].includes(decision.execution_mode as string | null) ||
+    typeof decision.execution_authorized !== "boolean" || typeof review.enforcement_context_hash !== "string" ||
+    !body.candidate || !body.lineage || (body.status === "completed" && !body.result) ||
+    (body.status === "executing" && !decision.execution_authorized)) {
+    throw new ForgeClientError("Forge returned invalid governed QueryRun evidence");
+  }
+  return body as unknown as QueryRunReview;
 }
 
 export class ForgeQueryRunClient {
   readonly #baseUrl: string;
   readonly #serviceKey: string | undefined;
   readonly #timeoutMs: number;
-
   constructor(options: { baseUrl: string; serviceKey?: string; timeoutMs: number }) {
     this.#baseUrl = options.baseUrl.replace(/\/$/, "");
     this.#serviceKey = options.serviceKey;
     this.#timeoutMs = options.timeoutMs;
   }
 
-  async createQueryRun(
-    input: {
-      taskRunId: string;
-      orgId: string;
-      teamId: string;
-      userId: string;
-      question: string;
-      dialect?: ForgeDialect;
-      candidate?: QueryCandidateInput;
-      idempotencyKey: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<QueryRunReview> {
-    const body = await this.#request(
-      "POST",
-      "/api/internal/query-runs",
-      {
-        task_run_id: input.taskRunId,
-        org_id: input.orgId,
-        team_id: input.teamId,
-        user_id: input.userId,
-        question: input.question,
-        dialect: input.dialect,
-        candidate: input.candidate,
-      },
-      input.idempotencyKey,
-      signal,
-    );
-    return this.#validateReview(body);
-  }
-
-  async approveQueryRun(
-    input: {
-      queryRunId: string;
-      approverUserId: string;
-      sqlHash: string;
-      assuranceReportHash: string;
-      idempotencyKey: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<QueryRunResult> {
-    const body = await this.#request(
-      "POST",
-      `/api/internal/query-runs/${encodeURIComponent(input.queryRunId)}/approve`,
-      {
-        approver_user_id: input.approverUserId,
-        sql_hash: input.sqlHash,
-        assurance_report_hash: input.assuranceReportHash,
-      },
-      input.idempotencyKey,
-      signal,
-    );
-    return this.#validateResult(body);
-  }
-
-  async searchContext(
-    input: { orgId: string; teamId: string; userId: string; question: string; limit?: number },
-    signal?: AbortSignal,
-  ): Promise<ContextSearchResult> {
-    const body = await this.#request(
-      "POST",
-      "/api/internal/context/search",
-      {
-        org_id: input.orgId,
-        team_id: input.teamId,
-        user_id: input.userId,
-        question: input.question,
-        limit: input.limit ?? 8,
-      },
-      undefined,
-      signal,
-    );
-    return this.#validateContext(body);
-  }
-
-  async writeMemory(
-    input: Record<string, unknown>,
-    signal?: AbortSignal,
-  ): Promise<Record<string, unknown>> {
-    return asRecord(await this.#request(
-      "POST", "/api/internal/memory/entries", input, undefined, signal,
-    ));
-  }
-
-  async createReport(
-    input: Record<string, unknown>,
-    idempotencyKey: string,
-    signal?: AbortSignal,
-  ): Promise<ReportPublication> {
-    const body = asRecord(await this.#request(
-      "POST", "/api/internal/reports", input, idempotencyKey, signal,
-    ));
-    return this.#validatePublication(asRecord(body.report));
-  }
-
-  async getReport(reportId: string, signal?: AbortSignal): Promise<ReportPublication> {
-    const body = asRecord(await this.#request(
-      "GET", `/api/internal/reports/${encodeURIComponent(reportId)}`, {}, undefined, signal,
-    ));
-    return this.#validatePublication(asRecord(body.report));
-  }
-
-  async cancelQueryRun(
-    input: { queryRunId: string; userId: string },
-    signal?: AbortSignal,
-  ): Promise<QueryRunReview> {
-    const body = await this.#request(
-      "POST",
-      `/api/internal/query-runs/${encodeURIComponent(input.queryRunId)}/cancel`,
-      { user_id: input.userId },
-      undefined,
-      signal,
-    );
-    return this.#validateReview(body);
-  }
-
-  async #request(
-    method: string,
-    path: string,
-    payload: Record<string, unknown>,
-    idempotencyKey?: string,
-    signal?: AbortSignal,
-  ): Promise<unknown> {
-    if (!this.#serviceKey) {
-      throw new ForgeClientError("FORGE_PI_SERVICE_KEY is required");
-    }
-    const signals = [AbortSignal.timeout(this.#timeoutMs)];
-    if (signal !== undefined) signals.push(signal);
-    const headers: Record<string, string> = {
-      accept: "application/json",
-      "content-type": "application/json",
-      "x-pi-service-key": this.#serviceKey,
-    };
-    if (idempotencyKey !== undefined) headers["idempotency-key"] = idempotencyKey;
-    const requestId = currentRequestId();
-    if (requestId) headers["x-request-id"] = requestId;
-
-    let response: Response;
-    try {
-      response = await fetch(`${this.#baseUrl}${path}`, {
-        method,
-        headers,
-        ...(method === "GET" ? {} : { body: JSON.stringify(payload) }),
-        signal: AbortSignal.any(signals),
-      });
-    } catch (error) {
-      throw new ForgeClientError("Forge QueryRun transport failed", undefined, "upstream_unavailable");
-    }
-
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      throw new ForgeClientError("Forge QueryRun API returned invalid JSON", response.status);
-    }
-    if (!response.ok) {
-      const record = asRecord(body);
-      const code = typeof record.code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(record.code) ? record.code : "forge_request_failed";
-      throw new ForgeClientError(
-        `Forge QueryRun API returned HTTP ${response.status}`, response.status, code,
-      );
-    }
-    return body;
-  }
-
-  #validatePublication(body: Record<string, unknown>): ReportPublication {
-    if (
-      typeof body.report_id !== "string" || !/^rp_[A-Za-z0-9_-]+$/.test(body.report_id) ||
-      typeof body.task_run_id !== "string" || !/^tr_[A-Za-z0-9_-]+$/.test(body.task_run_id) ||
-      typeof body.revision !== "number" || typeof body.bundle_hash !== "string" ||
-      !new Set(["publishing", "published", "failed"]).has(String(body.status)) ||
-      !new Set(["pending", "ready", "failed"]).has(String(body.pdf_status)) ||
-      !new Set(["pending", "ready", "failed"]).has(String(body.pptx_status)) ||
-      typeof body.internal_url !== "string" || typeof body.technical_url !== "string"
-    ) {
-      throw new ForgeClientError("Forge Report API returned an invalid publication");
-    }
-    return body as unknown as ReportPublication;
-  }
-
-  #validateContext(value: unknown): ContextSearchResult {
-    const body = asRecord(value);
-    if (
-      body.status !== "ok" || body.bounded !== true || !Array.isArray(body.evidence) ||
-      body.evidence.length > 12 || typeof body.context_revision !== "string"
-    ) {
-      throw new ForgeClientError("Forge Context API returned an invalid bounded response");
-    }
-    const allowedTypes = new Set([
-      "schema", "metric", "disambiguation", "convention", "business_context", "semantic_memory",
-    ]);
-    for (const raw of body.evidence) {
-      const item = asRecord(raw);
-      if (
-        typeof item.evidence_ref !== "string" || !/^ctx_[a-f0-9]{24}$/.test(item.evidence_ref) ||
-        typeof item.source_type !== "string" || !allowedTypes.has(item.source_type) ||
-        typeof item.title !== "string" || typeof item.content !== "string" ||
-        item.content.length > 1_200 || typeof item.score !== "number" ||
-        typeof item.verification_level !== "string" ||
-        !new Set(["verified", "contextual", "inferred", "conflicted", "unknown"]).has(item.verification_level) ||
-        typeof item.scope !== "string" || !new Set(["user", "team", "org", "organization"]).has(item.scope) ||
-        typeof item.source_revision !== "string" ||
-        (item.updated_at !== null && typeof item.updated_at !== "string") ||
-        (item.expires_at !== null && typeof item.expires_at !== "string")
-      ) {
-        throw new ForgeClientError("Forge Context API returned invalid evidence");
+  async createQueryRun(input: { taskRunId: string; mandateId: string; purpose: string; question: string; dialect?: ForgeDialect; candidate?: QueryCandidateInput; idempotencyKey: string }, signal?: AbortSignal): Promise<QueryRunReview> {
+    let candidate = input.candidate;
+    if (!candidate) {
+      const generated = record(await this.#request("POST", "/api/internal/query-candidates", {
+        task_run_id: input.taskRunId, mandate_id: input.mandateId, question: input.question,
+        dialect: input.dialect ?? "auto",
+      }, undefined, signal));
+      if (!generated.candidate) {
+        const code = generated.status === "needs_clarification" ? "candidate_needs_clarification" :
+          generated.status === "timed_out" ? "candidate_timed_out" : "candidate_unavailable";
+        throw new ForgeClientError(typeof generated.error === "string" ? generated.error : code, undefined, code);
       }
+      candidate = record(generated.candidate) as unknown as QueryCandidateInput;
     }
-    if (body.evidence_count !== body.evidence.length || typeof body.question !== "string") {
-      throw new ForgeClientError("Forge Context API evidence count mismatch");
-    }
+    return run(await this.#request("POST", "/api/v2/enforce/query-runs", {
+      schema_version: 2, mandate_id: input.mandateId, task_run_id: input.taskRunId,
+      purpose: input.purpose, question: input.question, dialect: input.dialect ?? "auto", candidate,
+    }, input.idempotencyKey, signal));
+  }
+  async getQueryRun(queryRunId: string, signal?: AbortSignal): Promise<QueryRunReview> {
+    return run(await this.#request("GET", `/api/v2/enforce/query-runs/${encodeURIComponent(queryRunId)}`, undefined, undefined, signal));
+  }
+  async executeQueryRun(input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string }, signal?: AbortSignal): Promise<QueryRunReview> {
+    return this.#claim("execute", input, undefined, signal);
+  }
+  async approveQueryRun(input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string; controlToken: string }, signal?: AbortSignal): Promise<QueryRunReview> {
+    return this.#claim("approve", input, input.controlToken, signal);
+  }
+  async #claim(action: "execute" | "approve", input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string }, controlToken?: string, signal?: AbortSignal): Promise<QueryRunReview> {
+    const claimed = run(await this.#request("POST", `/api/v2/enforce/query-runs/${encodeURIComponent(input.queryRunId)}/${action}`, {
+      schema_version: 2, sql_hash: input.sqlHash, assurance_report_hash: input.assuranceReportHash,
+      enforcement_context_hash: input.enforcementContextHash,
+    }, input.idempotencyKey, signal, controlToken));
+    if (claimed.status !== "executing" && claimed.status !== "completed") throw new ForgeClientError("Forge did not commit execution claim");
+    return claimed;
+  }
+  async cancelQueryRun(input: { queryRunId: string }, signal?: AbortSignal): Promise<QueryRunReview> {
+    return run(await this.#request("POST", `/api/v2/enforce/query-runs/${encodeURIComponent(input.queryRunId)}/cancel`, {}, undefined, signal));
+  }
+  async getMandate(mandateId: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return record(await this.#request("GET", `/api/v2/governance/mandates/${encodeURIComponent(mandateId)}`, undefined, undefined, signal));
+  }
+  async searchContext(input: { taskRunId: string; question: string; limit?: number }, signal?: AbortSignal): Promise<ContextSearchResult> {
+    const body = record(await this.#request("POST", "/api/internal/context/search", {
+      task_run_id: input.taskRunId, question: input.question, limit: input.limit ?? 8,
+    }, undefined, signal));
+    if (body.status !== "ok" || body.bounded !== true || !Array.isArray(body.evidence)) throw new ForgeClientError("Invalid bounded context response");
     return body as unknown as ContextSearchResult;
   }
-
-  #validateReview(value: unknown): QueryRunReview {
-    const body = asRecord(value);
-    if (body.can_execute !== false) {
-      throw new ForgeClientError("Forge review response violated the non-executable boundary");
-    }
-    for (const field of [
-      "query_run_id",
-      "task_run_id",
-      "status",
-      "question",
-      "user_id",
-      "datasource_id",
-      "input_kind",
-      "candidate_revision",
-      "dialect",
-      "registry_version",
-      "expires_at",
-      "error",
-    ]) {
-      if (typeof body[field] !== "string") {
-        throw new ForgeClientError(`Invalid QueryRun review field: ${field}`);
-      }
-    }
-    if (
-      !new Set(["direct_sql", "forge_json"]).has(body.input_kind as string) ||
-      body.candidate_revision !== "query-candidate-v1"
-    ) {
-      throw new ForgeClientError("Forge review response has an invalid query candidate identity");
-    }
-    if (body.forge_json !== null) asRecord(body.forge_json);
-    if (body.status === "needs_review") {
-      if (
-        typeof body.sql !== "string" ||
-        typeof body.sql_hash !== "string" ||
-        typeof body.assurance_report_hash !== "string" ||
-        typeof body.assurance_revision !== "string" ||
-        typeof body.policy_revision !== "string" ||
-        typeof body.model_revision !== "string" ||
-        typeof body.assurance_registry_revision !== "string" ||
-        body.assurance_report === null ||
-        (body.input_kind === "forge_json" && body.forge_json === null) ||
-        (body.input_kind === "direct_sql" && body.forge_json !== null)
-      ) {
-        throw new ForgeClientError("Reviewable QueryRun is missing SQL evidence");
-      }
-    }
-    return body as unknown as QueryRunReview;
+  async writeMemory(input: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return record(await this.#request("POST", "/api/internal/memory/entries", input, undefined, signal));
   }
-
-  #validateResult(value: unknown): QueryRunResult {
-    const body = asRecord(value);
-    if (body.status !== "completed") {
-      throw new ForgeClientError(`QueryRun did not complete: ${String(body.status)}`);
+  async createReport(input: Record<string, unknown>, idempotencyKey: string, signal?: AbortSignal): Promise<ReportPublication> {
+    return this.#publication(record(await this.#request("POST", "/api/internal/reports", input, idempotencyKey, signal)));
+  }
+  async getReport(reportId: string, taskRunId: string, signal?: AbortSignal): Promise<ReportPublication> {
+    return this.#publication(record(await this.#request("GET", `/api/internal/reports/${encodeURIComponent(reportId)}?task_run_id=${encodeURIComponent(taskRunId)}`, undefined, undefined, signal)));
+  }
+  #publication(body: Record<string, unknown>): ReportPublication {
+    const publication = record(body.report);
+    if (typeof publication.report_id !== "string" || typeof publication.task_run_id !== "string") throw new ForgeClientError("Invalid report publication");
+    return publication as unknown as ReportPublication;
+  }
+  async #request(method: string, path: string, payload?: Record<string, unknown>, idempotencyKey?: string, signal?: AbortSignal, controlToken?: string): Promise<unknown> {
+    if (!this.#serviceKey) throw new ForgeClientError("FORGE_PI_SERVICE_KEY is required");
+    const headers: Record<string, string> = { accept: "application/json", "content-type": "application/json", "x-api-key": this.#serviceKey };
+    if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
+    if (controlToken) headers["x-forge-control-token"] = controlToken;
+    const requestId = currentRequestId();
+    if (requestId) headers["x-request-id"] = requestId;
+    let response: Response;
+    try {
+      response = await fetch(`${this.#baseUrl}${path}`, { method, headers,
+        ...(method === "GET" ? {} : { body: JSON.stringify(payload ?? {}) }),
+        signal: AbortSignal.any([AbortSignal.timeout(this.#timeoutMs), ...(signal ? [signal] : [])]) });
+    } catch {
+      throw new ForgeClientError("Forge QueryRun transport failed", undefined, "upstream_unavailable");
     }
-    if (!Array.isArray(body.columns) || !Array.isArray(body.rows)) {
-      throw new ForgeClientError("Completed QueryRun is missing result rows");
+    let body: unknown;
+    try { body = await response.json(); } catch { throw new ForgeClientError("Forge returned invalid JSON", response.status); }
+    if (!response.ok) {
+      const error = record(body);
+      const failure = error.failure && typeof error.failure === "object" ? record(error.failure) : error;
+      throw new ForgeClientError(`Forge returned HTTP ${response.status}`, response.status,
+        typeof failure.code === "string" ? failure.code : "forge_request_failed");
     }
-    if (
-      typeof body.sql_hash !== "string" ||
-      typeof body.assurance_report_hash !== "string" ||
-      typeof body.truncated !== "boolean" ||
-      !new Set(["direct_sql", "forge_json"]).has(body.input_kind as string) ||
-      body.candidate_revision !== "query-candidate-v1"
-    ) {
-      throw new ForgeClientError("Completed QueryRun has invalid execution evidence");
-    }
-    return body as unknown as QueryRunResult;
+    return body;
   }
 }

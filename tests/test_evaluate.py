@@ -12,6 +12,10 @@ from forge.cli import main as cli_main
 
 
 @pytest.fixture
+def client(governed_client):
+    return governed_client
+
+@pytest.fixture
 def evaluate_registry(tmp_path, monkeypatch):
     from config import cfg
 
@@ -292,21 +296,13 @@ async def test_public_evaluate_requires_expected_and_actual_results_together(
 
 
 @pytest.mark.asyncio
-async def test_public_evaluate_honors_api_auth(client, evaluate_registry, monkeypatch):
+async def test_public_evaluate_requires_registered_credential(client, evaluate_registry, monkeypatch):
     from config import cfg
-
-    monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
-    monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["valid-key"])
+    monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["configured-but-unregistered"])
     payload = _request({"kind": "direct_sql", "sql": "SELECT 1"})
-
-    unauthorized = await client.post("/api/v1/evaluate", json=payload)
-    authorized = await client.post(
-        "/api/v1/evaluate",
-        json=payload,
-        headers={"X-API-Key": "valid-key"},
-    )
-
-    assert unauthorized.status_code == 401
+    denied = await client.post("/api/v1/evaluate", json=payload, headers={"X-API-Key": "configured-but-unregistered"})
+    authorized = await client.post("/api/v1/evaluate", json=payload)
+    assert denied.status_code == 401
     assert authorized.status_code == 200
     assert authorized.json()["status"] == "passed"
 

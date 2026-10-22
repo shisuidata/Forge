@@ -127,3 +127,15 @@ test("task list is bounded to the requested team scope and channel", () => {
   tasks[0]!.metadata.mutated = true;
   assert.equal(store.get(feishu.task_run_id)?.metadata.mutated, undefined);
 });
+
+test("mandate attachment uses CAS, is idempotent, and blocks replacement while SQL is executing", () => {
+  const store = new InMemoryTaskStore();
+  const task = store.create({ org_id: "org", team_id: "team", user_id: "owner", channel: "api", intent: "query" });
+  const attached = store.attachMandate(task.task_run_id, null, "md_first", "pi_service");
+  assert.equal(attached.metadata.mandate_id, "md_first");
+  assert.deepEqual(store.attachMandate(task.task_run_id, null, "md_first", "pi_service"), attached);
+  assert.throws(() => store.attachMandate(task.task_run_id, null, "md_other", "pi_service"), TaskStateError);
+  store.transition({ taskRunId: task.task_run_id, expectedStatus: "created", status: "querying", currentStage: "query_execution" });
+  assert.throws(() => store.attachMandate(task.task_run_id, "md_first", "md_other", "pi_service"), TaskStateError);
+  assert.equal(store.get(task.task_run_id)?.metadata.mandate_id, "md_first");
+});

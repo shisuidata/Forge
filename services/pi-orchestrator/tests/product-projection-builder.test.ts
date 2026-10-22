@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { InMemoryArtifactStore } from "../src/artifacts.js";
 import { ProductProjectionService } from "../src/product-projection-builder.js";
+import { renderChannelPresentation } from "../src/channels/renderer.js";
 import { InMemoryStageAttemptStore } from "../src/stage-attempts.js";
 import { InMemoryTaskStore, TaskStateError, type TaskRun } from "../src/task-store.js";
 import { InMemoryTaskEventStore } from "../src/task-events.js";
@@ -254,7 +255,7 @@ test("Task Detail projects exact query review and fails closed on broken review 
   assert.ok(detail);
   assert.equal(detail.review_request?.query_run_id, "qr_demo_001");
   assert.equal(detail.review_request?.read_only, true);
-  assert.equal(detail.actions.find((action) => action.action_type === "approve_query")?.availability, "enabled");
+  assert.equal(detail.actions.find((action) => action.action_type === "approve_query")?.availability, "disabled");
   assert.equal(detail.presentation.source_artifact_ids.length, 1);
   assert.equal(
     stores.service.getTaskDetail({
@@ -286,4 +287,38 @@ test("Task Detail projects exact query review and fails closed on broken review 
     }),
     (error: unknown) => error instanceof TaskStateError && /query_review_required/.test(error.message),
   );
+});
+
+test("autonomous QueryRun projects policy authorization, not a human review request", () => {
+  const stores = state();
+  const task = createTask(stores.tasks);
+  stores.events.append(task.task_run_id, "query.review_requested", {
+    query_run_id: "qr_autonomous", sql: "SELECT 7", sql_hash: "sha256:" + "a".repeat(64),
+    assurance_report_hash: "sha256:" + "b".repeat(64),
+    enforcement_context_hash: "sha256:" + "c".repeat(64),
+    expires_at: "2099-01-01T00:00:00Z", review_required: false,
+  });
+  stores.events.append(task.task_run_id, "query.execution_authorized", {
+    query_run_id: "qr_autonomous", execution_mode: "autonomous", authorization_hash: "sha256:" + "d".repeat(64),
+  });
+  stores.tasks.transition({ taskRunId: task.task_run_id, expectedStatus: "created", status: "querying", currentStage: "query_execution" });
+  const detail = stores.service.getTaskDetail({ orgId: "org_demo", teamId: "team_data", userId: "user_001",
+    channel: "web", taskRunId: task.task_run_id });
+  assert.equal(detail?.review_request, null);
+  assert.equal(detail?.activity.find(item => item.event_type === "query.execution_authorized")?.title, "策略授权执行");
+  assert.equal(detail?.activity.find(item => item.event_type === "query.review_requested")?.state, "ready");
+});
+
+test("reviewer channel action carries all three claim hashes", () => {
+  const stores = state();
+  const task = waitingReviewTask(stores);
+  stores.events.append(task.task_run_id, "query.review_requested", {
+    query_run_id: "qr_demo_001", sql: "SELECT 7", sql_hash: "sha256:" + "a".repeat(64),
+    assurance_report_hash: "sha256:" + "b".repeat(64),
+    enforcement_context_hash: "sha256:" + "c".repeat(64), review_required: true,
+  });
+  const card = renderChannelPresentation({ task, events: stores.events.list(task.task_run_id), artifacts: stores.artifacts.list(task.task_run_id) });
+  const approve = card.actions.find(action => action.type === "approve_query");
+  assert.deepEqual(approve?.payload, { query_run_id: "qr_demo_001", sql_hash: "sha256:" + "a".repeat(64),
+    assurance_report_hash: "sha256:" + "b".repeat(64), enforcement_context_hash: "sha256:" + "c".repeat(64) });
 });

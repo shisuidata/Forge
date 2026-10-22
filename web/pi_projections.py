@@ -11,7 +11,6 @@ import re
 
 from pydantic import BaseModel
 
-from config import cfg
 from web.diagnostics import error_response
 
 
@@ -30,23 +29,6 @@ def _web_action_event_id(
         f"{message_id}\n{task_run_id}\n{action}\n{canonical}".encode()
     ).hexdigest()
     return f"web_action_{digest[:40]}"
-
-
-def _web_admin_task_scopes() -> list[tuple[str, str]]:
-    scopes: list[tuple[str, str]] = []
-    for raw_scope in cfg.PI_WEB_ADMIN_TASK_SCOPES.split(","):
-        org_id, separator, team_id = raw_scope.strip().partition(":")
-        if (
-            separator
-            and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", org_id)
-            and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", team_id)
-        ):
-            scopes.append((org_id, team_id))
-    return scopes
-
-
-def _web_admin_can_observe(task: dict) -> bool:
-    return (task.get("org_id"), task.get("team_id")) in set(_web_admin_task_scopes())
 
 
 def _bounded_web_execution_plan(artifacts: object) -> dict | None:

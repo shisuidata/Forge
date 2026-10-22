@@ -18,6 +18,10 @@ _PUBLIC_SUITE = _ROOT / "examples" / "evaluation-suite-v1.json"
 
 
 @pytest.fixture
+def client(governed_client):
+    return governed_client
+
+@pytest.fixture
 def evaluation_run_env(tmp_path, monkeypatch):
     from config import cfg
 
@@ -99,7 +103,8 @@ async def test_public_suite_persists_replays_and_exports_recomputable_manifest(
     assert exported.status_code == 200
     assert exported.json() == manifest
     assert suite.status_code == 200
-    assert suite.json() == evaluation_run_env
+    assert suite.json() == manifest["suite"]
+    assert all(set(case["allowed_tables"]) <= {"orders", "users", "dim_user", "numbers", "secrets"} for case in suite.json()["cases"])
     assert replay.status_code == 200
     replay_manifest = replay.json()
     assert replay_manifest["aggregate"] == manifest["aggregate"]

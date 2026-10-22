@@ -149,7 +149,10 @@ export interface ConversationGetOptions {
 export interface TaskStore {
   create(input: CreateTaskInput): TaskRun;
   get(taskRunId: string): TaskRun | undefined;
+  attachMandate(taskRunId: string, expectedMandateId: string | null, mandateId: string, executionActorId: string): TaskRun;
   list(options: TaskListOptions): TaskRun[];
+  listExecuting(): TaskRun[];
+  listRecoverableQueries(): TaskRun[];
   listChildren(taskRunId: string, limit: number): TaskRun[];
   listConversations(options: ConversationListOptions): ConversationTaskGroup[];
   getConversation(options: ConversationGetOptions): ConversationTaskGroup | undefined;
@@ -218,6 +221,19 @@ export class InMemoryTaskStore implements TaskStore {
     return task === undefined ? undefined : structuredClone(task);
   }
 
+  attachMandate(taskRunId: string, expectedMandateId: string | null, mandateId: string, executionActorId: string): TaskRun {
+    const task = this.#tasks.get(taskRunId);
+    if (task === undefined) throw new TaskStateError("TaskRun not found");
+    if (!mandateId || !executionActorId) throw new TaskStateError("Mandate and execution actor are required");
+    const current = typeof task.metadata.mandate_id === "string" ? task.metadata.mandate_id : null;
+    if (current === mandateId && task.metadata.execution_actor_id === executionActorId) return structuredClone(task);
+    if (current !== expectedMandateId || task.status === "querying") throw new TaskStateError("Task mandate conflict");
+    const updated = { ...task, metadata: { ...task.metadata, mandate_id: mandateId, execution_actor_id: executionActorId },
+      updated_at: new Date(Math.max(Date.now(), Date.parse(task.updated_at) + 1)).toISOString() };
+    this.#tasks.set(taskRunId, updated);
+    return structuredClone(updated);
+  }
+
   list(options: TaskListOptions): TaskRun[] {
     return [...this.#tasks.values()]
       .filter((task) =>
@@ -233,6 +249,16 @@ export class InMemoryTaskStore implements TaskStore {
       )
       .slice(0, options.limit)
       .map((task) => structuredClone(task));
+  }
+
+  listExecuting(): TaskRun[] {
+    return [...this.#tasks.values()].filter(task => task.status === "querying").map(task => structuredClone(task));
+  }
+
+  listRecoverableQueries(): TaskRun[] {
+    return [...this.#tasks.values()]
+      .filter(task => ["querying", "waiting_for_query_approval", "ready_for_query"].includes(task.status))
+      .map(task => structuredClone(task));
   }
 
   listChildren(taskRunId: string, limit: number): TaskRun[] {

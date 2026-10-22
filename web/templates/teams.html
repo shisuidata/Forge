@@ -16,7 +16,7 @@
   <div class="flex items-center justify-between mb-3">
     <div>
       <h2 class="text-base font-semibold text-gray-900">团队列表</h2>
-      <p class="text-xs text-gray-500 mt-0.5">为每个团队配置可见数据表，未配置任何限制的团队可访问所有表</p>
+      <p class="text-xs text-gray-500 mt-0.5">为每个团队配置可见数据表，未授权任何表即拒绝查询</p>
     </div>
     <button id="toggle-create-form"
             onclick="document.getElementById('create-form').classList.toggle('hidden')"
@@ -31,7 +31,8 @@
   {# 新建团队内联表单 #}
   <div id="create-form" class="hidden mb-4 bg-white border border-gray-200 rounded-lg p-4">
     <h3 class="text-sm font-medium text-gray-800 mb-3">新建团队</h3>
-    <form method="post" action="/admin/teams/create" class="flex items-end gap-3">
+    <form method="post" action="/admin/teams/create" class="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <div>
         <label class="block text-xs text-gray-500 mb-1">团队 ID <span class="text-red-500">*</span></label>
         <input type="text" name="team_id" placeholder="e.g. marketing" required
@@ -41,6 +42,11 @@
         <label class="block text-xs text-gray-500 mb-1">显示名称</label>
         <input type="text" name="display_name" placeholder="e.g. 市场团队"
                class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">组织 ID <span class="text-red-500">*</span></label>
+        <input type="text" name="organization_id" value="{{ organization_id }}" readonly required
+               class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-40" />
       </div>
       <button type="submit"
               class="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
@@ -56,7 +62,7 @@
 
   {# 团队表格 #}
   {% if teams %}
-  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-white border border-gray-200 rounded-lg overflow-x-auto">
     <table class="min-w-full text-sm divide-y divide-gray-100">
       <thead class="bg-gray-50 text-xs uppercase text-gray-500">
         <tr>
@@ -77,10 +83,10 @@
             {{ team.member_count }} 人
           </td>
           <td class="px-4 py-3">
-            {% if team.allowed_tables is none %}
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">不限制</span>
-            {% else %}
+            {% if team.allowed_tables %}
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{{ team.allowed_tables|length }} 张表</span>
+            {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">拒绝全部查询</span>
             {% endif %}
           </td>
           <td class="px-4 py-3">
@@ -105,10 +111,11 @@
                 <h4 class="text-sm font-semibold text-gray-800">
                   {{ team.display_name or team.team_id }} — 可见数据表
                 </h4>
-                <span class="text-xs text-gray-500">未选中任何表 = 不限制（所有表可见）</span>
+                <span class="text-xs text-gray-500">未选中任何表 = 拒绝全部查询</span>
               </div>
 
               <form method="post" action="/admin/teams/{{ team.team_id }}/acl">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 {# 全选/全不选 #}
                 {% if all_tables %}
                 <div class="flex gap-2 mb-3">
@@ -125,7 +132,7 @@
                   {% for tbl in all_tables %}
                   <label class="flex items-center gap-2 text-xs text-gray-700 hover:text-gray-900 cursor-pointer">
                     <input type="checkbox" name="tables" value="{{ tbl }}"
-                           {% if team.allowed_tables is not none and tbl in team.allowed_tables %}checked{% endif %}
+                           {% if tbl in team.allowed_tables %}checked{% endif %}
                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                     <span class="font-mono">{{ tbl }}</span>
                   </label>

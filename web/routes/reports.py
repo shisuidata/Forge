@@ -1,6 +1,8 @@
 """Authenticated report publication and download routes."""
 from __future__ import annotations
 
+import sqlite3
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -10,7 +12,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from config import cfg
 from forge.reporting import ReportStore
-from web.auth import require_pi_service_auth, require_web_auth, verify_web_request
+from web.auth import require_pi_service_auth, require_human_principal
+from web.pi_task_scope import task_scope
+from forge.governance import connect_governance, ensure_governance_schema
 
 router = APIRouter()
 
@@ -29,23 +33,64 @@ def _public(record: dict[str, Any], request: Request) -> dict[str, Any]:
     return visible
 
 
-@router.post("/api/internal/reports", dependencies=[Depends(require_pi_service_auth)])
-async def create_report(payload: dict[str, Any], background: BackgroundTasks, request: Request):
+async def _owned_report(report_id: str, task_run_id: str) -> tuple[dict, dict]:
+    scope = await task_scope(task_run_id)
     try:
-        record = get_report_store().create(payload)
+        record = get_report_store().get(report_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="report_not_found") from exc
+    except (OSError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=503, detail="report_store_unavailable") from exc
+    if any(record[k] != scope[v] for k, v in (("task_run_id", "task_id"), ("org_id", "org_id"),
+            ("team_id", "team_id"), ("user_id", "user_id"))):
+        raise HTTPException(status_code=404, detail="report_not_found")
+    return record, scope
+
+
+def _verify_query_evidence(scope: dict, payload: dict) -> None:
+    query = payload.get("query_result")
+    if not isinstance(query, dict) or not isinstance(query.get("query_run_id"), str):
+        raise HTTPException(status_code=422, detail="report_query_evidence_required")
+    try:
+        with connect_governance() as conn:
+            ensure_governance_schema(conn)
+            run = conn.execute("SELECT task_run_id,status,sql_hash,result_columns,result_rows,row_count,truncated FROM query_runs WHERE query_run_id=?",
+                               (query["query_run_id"],)).fetchone()
+    except (OSError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=503, detail="governance_unavailable") from exc
+    if (run is None or run["task_run_id"] != scope["task_id"] or run["status"] != "completed"
+            or query.get("sql_hash") != run["sql_hash"]
+            or query.get("columns") != json.loads(run["result_columns"] or "[]")
+            or query.get("rows") != json.loads(run["result_rows"] or "[]")
+            or query.get("row_count") != run["row_count"]
+            or query.get("truncated") != bool(run["truncated"])):
+        raise HTTPException(status_code=422, detail="report_query_evidence_invalid")
+
+
+@router.post("/api/internal/reports")
+async def create_report(payload: dict[str, Any], background: BackgroundTasks, request: Request,
+                        principal=Depends(require_pi_service_auth)):
+    if set(payload) != {"task_run_id", "report_id", "revision", "bundle_hash", "title", "business_report",
+                        "analysis", "query_result", "charts", "technical_report"}:
+        raise HTTPException(status_code=422, detail="report input fields do not match the fixed contract")
+    scope = await task_scope(payload["task_run_id"])
+    _verify_query_evidence(scope, payload)
+    source = {**payload, "org_id": scope["org_id"], "team_id": scope["team_id"], "user_id": scope["user_id"]}
+    try:
+        record = get_report_store().create(source)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (OSError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=503, detail="report_store_unavailable") from exc
     if record["status"] == "publishing":
         background.add_task(get_report_store().build, record["report_id"])
     return JSONResponse(status_code=202, content={"status": "accepted", "report": _public(record, request)})
 
 
-@router.get("/api/internal/reports/{report_id}", dependencies=[Depends(require_pi_service_auth)])
-async def get_internal_report(report_id: str, request: Request):
-    try:
-        record = get_report_store().get(report_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Report not found") from exc
+@router.get("/api/internal/reports/{report_id}")
+async def get_internal_report(report_id: str, task_run_id: str, request: Request,
+                              principal=Depends(require_pi_service_auth)):
+    record, _ = await _owned_report(report_id, task_run_id)
     return {"report": _public(record, request)}
 
 
@@ -53,9 +98,11 @@ def _share_cookie(report_id: str) -> str:
     return f"forge_report_share_{report_id}"
 
 
-def _require_report_access(request: Request, report_id: str, *, technical: bool = False) -> str:
-    if verify_web_request(request) or not cfg.AUTH_ENABLED:
-        return "web"
+async def _require_report_access(request: Request, report_id: str, *, technical: bool = False) -> str:
+    try:
+        record = get_report_store().get(report_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="report_not_found") from exc
     if not technical:
         token = request.cookies.get(_share_cookie(report_id), "")
         if token:
@@ -64,11 +111,16 @@ def _require_report_access(request: Request, report_id: str, *, technical: bool 
                 return share["share_id"]
             except KeyError:
                 pass
-    raise HTTPException(status_code=401, detail="Report access is unauthorized")
+    principal = await require_human_principal(request)
+    if ((principal.principal_id != record["user_id"] and principal.role != "admin") or
+            principal.organization_id != record["org_id"] or principal.workspace_id != record["team_id"]):
+        raise HTTPException(status_code=404, detail="report_not_found")
+    return principal.principal_id
 
 
-@router.post("/api/reports/{report_id}/shares", dependencies=[Depends(require_web_auth)])
+@router.post("/api/reports/{report_id}/shares", dependencies=[Depends(require_human_principal)])
 async def create_report_share(report_id: str, payload: dict[str, Any], request: Request):
+    await _require_report_access(request, report_id, technical=True)
     expires_at = payload.get("expires_at")
     if not isinstance(expires_at, str):
         raise HTTPException(status_code=422, detail="expires_at is required")
@@ -84,8 +136,9 @@ async def create_report_share(report_id: str, payload: dict[str, Any], request: 
     }
 
 
-@router.delete("/api/reports/{report_id}/shares/{share_id}", dependencies=[Depends(require_web_auth)])
-async def revoke_report_share(report_id: str, share_id: str):
+@router.delete("/api/reports/{report_id}/shares/{share_id}", dependencies=[Depends(require_human_principal)])
+async def revoke_report_share(report_id: str, share_id: str, request: Request):
+    await _require_report_access(request, report_id, technical=True)
     try:
         get_report_store().revoke_share(report_id, share_id)
     except KeyError as exc:
@@ -93,8 +146,9 @@ async def revoke_report_share(report_id: str, share_id: str):
     return {"status": "revoked"}
 
 
-@router.post("/api/reports/{report_id}/exports/{fmt}/retry", dependencies=[Depends(require_web_auth)])
-async def retry_report_export(report_id: str, fmt: str, background: BackgroundTasks):
+@router.post("/api/reports/{report_id}/exports/{fmt}/retry", dependencies=[Depends(require_human_principal)])
+async def retry_report_export(report_id: str, fmt: str, background: BackgroundTasks, request: Request):
+    await _require_report_access(request, report_id, technical=True)
     if fmt not in {"pdf", "pptx"}:
         raise HTTPException(status_code=404, detail="Unsupported report format")
     try:
@@ -138,7 +192,7 @@ async def exchange_report_share(share_id: str, payload: dict[str, Any]):
 
 @router.get("/reports/{report_id}")
 async def view_report(report_id: str, request: Request):
-    _require_report_access(request, report_id)
+    await _require_report_access(request, report_id)
     try:
         path = get_report_store().file(report_id, "index.html")
     except KeyError as exc:
@@ -148,7 +202,7 @@ async def view_report(report_id: str, request: Request):
 
 @router.get("/reports/{report_id}/technical")
 async def view_technical_report(report_id: str, request: Request):
-    _require_report_access(request, report_id, technical=True)
+    await _require_report_access(request, report_id, technical=True)
     try:
         path = get_report_store().file(report_id, "technical.html")
     except KeyError as exc:
@@ -158,7 +212,7 @@ async def view_technical_report(report_id: str, request: Request):
 
 @router.get("/reports/{report_id}/download/{fmt}")
 async def download_report(report_id: str, fmt: str, request: Request):
-    actor = _require_report_access(request, report_id)
+    actor = await _require_report_access(request, report_id)
     names = {"pdf": ("report.pdf", "application/pdf"),
              "pptx": ("report.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation")}
     if fmt not in names:

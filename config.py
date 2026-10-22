@@ -28,6 +28,8 @@ if os.getenv("FORGE_DISABLE_DOTENV") != "true":
 
 def _load_yaml_cfg() -> dict:
     """读取 forge.yaml，返回嵌套 dict；文件不存在或解析失败时返回空 dict。"""
+    if os.getenv("FORGE_DISABLE_YAML_CONFIG") == "true":
+        return {}
     try:
         import yaml
         p = Path(__file__).parent / "forge.yaml"
@@ -244,6 +246,8 @@ class Config:
 
     # ── 认证鉴权 ───────────────────────────────────────────────────────────────
     AUTH_ENABLED:        bool      = _env("AUTH_ENABLED", "server", "auth", "enabled", default="false").lower() == "true"
+    AUTH_ADMIN_PRINCIPAL_ID: str = _env("AUTH_ADMIN_PRINCIPAL_ID", "server", "auth", "admin_principal_id")
+    PI_EXECUTION_PRINCIPAL_ID: str = _env("PI_EXECUTION_PRINCIPAL_ID", "pi_orchestrator", "execution_principal_id")
     AUTH_ADMIN_PASSWORD: str       = (
         os.getenv("AUTH_PASSWORD")
         or _y("server", "auth", "admin_password", default="")

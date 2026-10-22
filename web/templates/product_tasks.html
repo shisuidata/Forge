@@ -3,8 +3,9 @@
 {% block page_actions %}<a class="button button-primary" href="/chat">在对话中发起</a>{% endblock %}
 {% block content %}
 <div class="content-width" data-product-page="tasks" data-pi-enabled="{{ 'true' if pi_enabled else 'false' }}">
-  <section class="page-intro">
-    <div><h2>数据任务</h2><p>查看跨 Conversation 的执行状态、等待项和恢复入口。任务由 Pi 持有，页面不复制状态。</p></div>
+  <section class="panel review-inbox" data-review-inbox hidden>
+    <header class="panel-header"><div><h2>待我审核</h2><p>仅展示指定给你的 SQL、校验摘要与授权信息，不开放他人的完整任务。</p></div></header>
+    <div class="panel-body" data-review-list></div>
   </section>
   <div class="panel">
     <header class="panel-header task-toolbar">
@@ -21,4 +22,4 @@
   </div>
 </div>
 {% endblock %}
-{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=7"></script>{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=8"></script>{% endblock %}

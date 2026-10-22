@@ -17,7 +17,7 @@ from web.admin_registry_store import (
     _save_disambiguations,
     _save_metrics,
 )
-from web.auth import require_api_auth
+from web.auth import require_admin_principal
 from web.router_support import _run_sync
 
 router = APIRouter()
@@ -112,14 +112,14 @@ delete 类型的 proposal 只需 {{"name": "要删除的标识符"}}。"""
 
 
 @router.post("/api/admin-chat", response_class=JSONResponse)
-async def api_admin_chat(req: AdminChatRequest, _auth=Depends(require_api_auth)):
+async def api_admin_chat(req: AdminChatRequest, _auth=Depends(require_admin_principal)):
     """管理助手 AI：返回结构化提议或文字回复。"""
     result = await _run_sync(_admin_ai_process, req.message, req.page)
     return result
 
 
 @router.post("/api/admin-apply", response_class=JSONResponse)
-async def api_admin_apply(request: Request, _auth=Depends(require_api_auth)):
+async def api_admin_apply(request: Request, _auth=Depends(require_admin_principal)):
     """应用管理助手的提议。"""
     body = await request.json()
     action_type = body.get("type", "")

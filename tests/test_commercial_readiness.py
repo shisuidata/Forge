@@ -45,7 +45,7 @@ def test_readiness_profiles_have_distinct_gates(monkeypatch, tmp_path):
     monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", False)
     monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", True)
 
-    assert readiness_payload("dev")["status"] == "warn"
+    assert readiness_payload("dev")["status"] == "fail"
     assert readiness_payload("poc")["status"] == "fail"
     assert readiness_payload("prod")["status"] == "fail"
 
@@ -57,7 +57,9 @@ def test_readiness_profiles_have_distinct_gates(monkeypatch, tmp_path):
     monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", True)
     monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", False)
 
-    assert readiness_payload("prod")["status"] == "ok"
+    checks = {check["name"]: check for check in readiness_payload("prod")["checks"]}
+    assert checks["governance_store"]["status"] == "fail"
+    assert readiness_payload("prod")["status"] == "fail"
 
 
 def test_poc_and_prod_reject_bundled_test_registry(monkeypatch, tmp_path):
@@ -96,7 +98,7 @@ def test_poc_and_prod_reject_bundled_test_registry(monkeypatch, tmp_path):
 
     assert poc_payload["status"] == "fail"
     assert prod_payload["status"] == "fail"
-    assert dev_payload["status"] == "warn"
+    assert dev_payload["status"] == "fail"
     assert next(c for c in poc_payload["checks"] if c["name"] == "registry")["status"] == "fail"
 
 
@@ -112,11 +114,13 @@ def test_doctor_json_cli_does_not_emit_secrets(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", False)
     monkeypatch.setattr(sys, "argv", ["forge", "doctor", "--profile", "dev", "--json"])
 
-    cli.main()
+    with pytest.raises(SystemExit) as stopped:
+        cli.main()
+    assert stopped.value.code == 1
     payload = json.loads(capsys.readouterr().out)
 
     assert payload["profile"] == "dev"
-    assert payload["status"] in {"ok", "warn"}
+    assert payload["status"] == "fail"
     assert "sk-secret-value" not in json.dumps(payload, ensure_ascii=False)
 
 

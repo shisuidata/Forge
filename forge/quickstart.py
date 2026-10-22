@@ -1,4 +1,4 @@
-"""Self-contained public Evaluate → Enforce → Explain quickstart."""
+"""Isolated authenticated Evaluate → Enforce → Explain demonstration."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -39,7 +39,8 @@ def _write_demo_inputs(workdir: Path) -> None:
                 "columns": {
                     "n": {"description": "A synthetic integer"},
                 },
-            }
+            },
+            "secrets": {"description": "Synthetic review-only data", "columns": {"label": {"description": "Synthetic label"}}},
         }
     }
     (workdir / "registry.json").write_text(
@@ -49,33 +50,77 @@ def _write_demo_inputs(workdir: Path) -> None:
     with sqlite3.connect(workdir / "data.db") as connection:
         connection.execute("CREATE TABLE numbers (n INTEGER NOT NULL)")
         connection.executemany("INSERT INTO numbers VALUES (?)", [(1,), (2,), (3,)])
+        connection.execute("CREATE TABLE secrets (label TEXT NOT NULL)")
+        connection.execute("INSERT INTO secrets VALUES ('synthetic')")
+    for name in ("metrics.yaml", "disambiguations.yaml", "conventions.yaml"):
+        (workdir / name).write_text("{}\n", encoding="utf-8")
 
 
 def _server_environment(workdir: Path) -> dict[str, str]:
-    environment = os.environ.copy()
-    project_root = str(Path(__file__).resolve().parent.parent)
-    existing_pythonpath = environment.get("PYTHONPATH")
-    environment["PYTHONPATH"] = (
-        project_root
-        if not existing_pythonpath
-        else os.pathsep.join((project_root, existing_pythonpath))
-    )
-    environment.update(
-        {
-            "AUTH_ENABLED": "false",
-            "DATABASE_DIALECT": "sqlite",
-            "DATABASE_READONLY_CONFIRMED": "true",
-            "DATABASE_URL": f"sqlite:///{workdir / 'data.db'}",
-            "DATASOURCE_ID": "quickstart",
-            "EXECUTION_ENABLED": "true",
-            "EXECUTION_MAX_ROWS": "2",
-            "EXECUTION_TIMEOUT_SECONDS": "5",
-            "QUERY_RUN_DB_PATH": str(workdir / "query_runs.db"),
-            "QUERY_RUN_REVIEW_TTL_SECONDS": "900",
-            "REGISTRY_PATH": str(workdir / "registry.json"),
-        }
-    )
+    # Never inherit application credentials, dotenv paths or a caller's database.
+    inherited = ("PATH", "HOME", "TMPDIR", "SYSTEMROOT", "VIRTUAL_ENV", "DYLD_LIBRARY_PATH")
+    environment = {key: os.environ[key] for key in inherited if key in os.environ}
+    environment.update({
+        "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+        "FORGE_DISABLE_DOTENV": "true", "FORGE_DISABLE_YAML_CONFIG": "true",
+        "AUTH_ENABLED": "true", "AUTH_ADMIN_PRINCIPAL_ID": "quickstart-admin",
+        "AUTH_PASSWORD": "", "AUTH_API_KEYS": "", "AUTH_COOKIE_SECURE": "false",
+        "DATABASE_DIALECT": "sqlite", "DATABASE_READONLY_CONFIRMED": "true",
+        "DATABASE_URL": f"sqlite:///{workdir / 'data.db'}", "DATASOURCE_ID": "quickstart",
+        "EXECUTION_ENABLED": "true", "RAW_SQL_ENABLED": "false",
+        "EXECUTION_MAX_ROWS": "2", "EXECUTION_TIMEOUT_SECONDS": "5",
+        "QUERY_RUN_DB_PATH": str(workdir / "query_runs.db"),
+        "AUDIT_DB_PATH": str(workdir / "audit.db"),
+        "REPORT_DB_PATH": str(workdir / "reports.db"),
+        "REPORT_ARTIFACT_DIR": str(workdir / "report-artifacts"),
+        "QUERY_RUN_REVIEW_TTL_SECONDS": "900",
+        "REGISTRY_PATH": str(workdir / "registry.json"),
+        "METRICS_PATH": str(workdir / "metrics.yaml"),
+        "DISAMBIGUATIONS_PATH": str(workdir / "disambiguations.yaml"),
+        "CONVENTIONS_PATH": str(workdir / "conventions.yaml"),
+        "PI_ORCHESTRATOR_ENABLED": "false", "PI_CHANNEL_SERVICE_KEY": "",
+        "PI_EXECUTION_PRINCIPAL_ID": "", "LEGACY_AGENT_API_ENABLED": "false",
+        "LLM_API_KEY": "", "EMBED_API_KEY": "", "FEISHU_APP_ID": "",
+        "DINGTALK_APP_KEY": "",
+    })
     return environment
+
+
+def _bootstrap_demo(workdir: Path) -> None:
+    manifest = {
+        "schema_version": 1,
+        "teams": [{"team_id": "quickstart-workspace", "organization_id": "quickstart-org",
+                   "display_name": "Synthetic quickstart", "allowed_tables": ["numbers", "secrets"]}],
+        "principals": [
+            {"principal_id": principal, "team_id": "quickstart-workspace",
+             "display_name": principal, "principal_type": kind, "role": role, "status": "active"}
+            for principal, kind, role in (
+                ("quickstart-admin", "human", "admin"),
+                ("quickstart-reviewer", "human", "reviewer"),
+                ("quickstart-agent", "agent", "member"),
+            )
+        ],
+        "channel_bindings": [],
+    }
+    (workdir / "bootstrap.json").write_text(json.dumps(manifest), encoding="utf-8")
+    bootstrap_code = (
+        "from pathlib import Path\n"
+        "import json, os\n"
+        "from forge.governance import bootstrap\n"
+        "from forge.governance_credentials import create_credential\n"
+        "bootstrap(json.loads(Path('bootstrap.json').read_text()))\n"
+        "for name in ('admin', 'reviewer', 'agent'):\n"
+        "    _, token = create_credential('quickstart-' + name)\n"
+        "    fd = os.open(name + '.key', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)\n"
+        "    with os.fdopen(fd, 'w') as file: file.write(token)\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", bootstrap_code], cwd=workdir,
+        env=_server_environment(workdir), stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL, check=False,
+    )
+    if completed.returncode:
+        raise QuickstartError("Isolated governance bootstrap failed")
 
 
 def _server_failure(log_path: Path) -> QuickstartError:
@@ -179,6 +224,9 @@ def _run_receipt(
         "runtime_duration_ms": round((time.monotonic() - started_monotonic) * 1000),
         "outcome": {
             "query_run_id": summary["query_run_id"],
+            "mandate_id": summary["mandate_id"],
+            "review": summary["review"],
+            "revocation": summary["revocation"],
             "fail_closed": summary["fail_closed"],
             "evaluate": summary["evaluate"],
             "enforce": {
@@ -199,221 +247,181 @@ def _run_receipt(
     return receipt
 
 
-def _principal(now: datetime) -> dict[str, Any]:
-    return {
-        "schema_version": 1,
-        "principal_context_id": "pc_quickstart",
-        "actor_principal": {
-            "principal_id": "quickstart-human",
-            "principal_type": "human",
-        },
-        "accountable_principal": {
-            "principal_id": "quickstart-human",
-            "principal_type": "human",
-        },
-        "organization_id": "quickstart-org",
-        "workspace_id": "quickstart-workspace",
-        "authentication_context": {
-            "method": "local",
-            "assurance_level": "single_factor",
-            "authenticated_at": now.isoformat(),
-            "session_id_hash": None,
-        },
-        "delegation_chain": [],
-        "issued_at": now.isoformat(),
-        "expires_at": (now + timedelta(minutes=15)).isoformat(),
-    }
+def _request_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
+    candidate = {"kind": "direct_sql", "sql": "SELECT numbers.n FROM numbers ORDER BY numbers.n",
+                 "producer_revision": "quickstart-v2"}
+    rejection = {"schema_version": 1, "question": "Delete synthetic numbers", "dialect": "sqlite",
+                 "candidate": {"kind": "direct_sql", "sql": "DELETE FROM numbers",
+                               "producer_revision": "quickstart-v2"}, "allowed_tables": ["numbers"]}
+    evaluation = {"schema_version": 1, "question": "List synthetic numbers", "dialect": "sqlite",
+                  "candidate": candidate, "allowed_tables": ["numbers"],
+                  "expected_result": {"columns": ["n"], "rows": [[1], [2], [3]]},
+                  "actual_result": {"columns": ["n"], "rows": [[1], [2], [3]]}}
+    return rejection, evaluation
 
 
-def _resource_scope() -> list[dict[str, Any]]:
-    return [
-        {
-            "schema_version": 1,
-            "resource_type": "datasource",
-            "resource_id": "quickstart",
-            "organization_id": "quickstart-org",
-            "workspace_id": "quickstart-workspace",
-            "parent_resource_id": "quickstart-workspace",
-            "resource_revision": None,
-        }
-    ]
+def _hash_action(run: dict[str, Any]) -> dict[str, Any]:
+    review = run.get("review")
+    if not isinstance(review, dict):
+        raise QuickstartError("QueryRun omitted review hashes")
+    return {"schema_version": 2, **{field: review[field] for field in (
+        "sql_hash", "assurance_report_hash", "enforcement_context_hash")}}
 
 
-def _request_payloads() -> tuple[
-    dict[str, Any],
-    dict[str, Any],
-    dict[str, Any],
-]:
-    sql = "SELECT numbers.n FROM numbers ORDER BY numbers.n"
-    candidate = {
-        "kind": "direct_sql",
-        "sql": sql,
-        "producer_revision": "quickstart-v1",
-    }
-    rejected_evaluate = {
-        "schema_version": 1,
-        "question": "Delete the synthetic numbers",
-        "dialect": "sqlite",
-        "candidate": {
-            "kind": "direct_sql",
-            "sql": "DELETE FROM numbers",
-            "producer_revision": "quickstart-v1",
-        },
-        "allowed_tables": ["numbers"],
-    }
-    evaluate = {
-        "schema_version": 1,
-        "question": "List the synthetic numbers in ascending order",
-        "dialect": "sqlite",
-        "candidate": candidate,
-        "allowed_tables": ["numbers"],
-        "expected_result": {
-            "columns": ["n"],
-            "rows": [[1], [2], [3]],
-        },
-        "actual_result": {
-            "columns": ["n"],
-            "rows": [[1], [2], [3]],
-        },
-    }
-    now = datetime.now(timezone.utc)
-    enforce = {
-        "schema_version": 1,
-        "task_run_id": "tr_quickstart_" + uuid.uuid4().hex[:12],
-        "purpose": "Demonstrate the public Trust Runtime Golden Path",
-        "question": evaluate["question"],
-        "principal_context": _principal(now),
-        "delegated_mandate": None,
-        "resource_scope": _resource_scope(),
-        "candidate": candidate,
-        "dialect": "sqlite",
-    }
-    return rejected_evaluate, evaluate, enforce
-
-
-def _approval_payload(review: dict[str, Any]) -> dict[str, Any]:
-    review_hashes = review.get("review")
-    if not isinstance(review_hashes, dict):
-        raise QuickstartError("Enforce prepare response omitted review hashes")
-    return {
-        "schema_version": 1,
-        "approver_principal": {
-            "principal_id": "quickstart-human",
-            "principal_type": "human",
-        },
-        "sql_hash": review_hashes["sql_hash"],
-        "assurance_report_hash": review_hashes["assurance_report_hash"],
-        "enforcement_context_hash": review_hashes["enforcement_context_hash"],
-    }
+def _wait_for_query_run(client: httpx.Client, run_id: str, headers: dict[str, str]) -> dict[str, Any]:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        result = _response_json(client.get(f"/api/v2/enforce/query-runs/{run_id}", headers=headers), "QueryRun read")
+        if result["status"] == "completed":
+            return result
+        if result["status"] in {"failed", "denied", "cancelled"}:
+            raise QuickstartError(f"QueryRun ended in {result['status']}")
+        time.sleep(0.1)
+    raise QuickstartError(f"QueryRun {run_id} result unknown; read the existing run before retrying")
 
 
 def _run_public_path(
-    base_url: str,
-    *,
-    approve: Callable[[str], bool],
-    progress: Callable[[str], None],
+    base_url: str, workdir: Path, *, agent_mode: bool,
+    approve: Callable[[str], bool], progress: Callable[[str], None],
 ) -> dict[str, Any]:
-    rejected_request, evaluate_request, enforce_request = _request_payloads()
+    rejection_request, evaluate_request = _request_payloads()
+    admin = {"X-API-Key": (workdir / "admin.key").read_text(encoding="utf-8")}
+    reviewer = {"X-API-Key": (workdir / "reviewer.key").read_text(encoding="utf-8")}
+    agent = {"X-API-Key": (workdir / "agent.key").read_text(encoding="utf-8")}
+    task_id = "tr_quickstart_" + uuid.uuid4().hex[:12]
+    purpose = "Demonstrate synthetic governed execution"
     with httpx.Client(base_url=base_url, timeout=10) as client:
-        rejection = _response_json(
-            client.post("/api/v1/evaluate", json=rejected_request),
-            "Fail-closed Evaluate",
-        )
+        rejection = _response_json(client.post("/api/v1/evaluate", json=rejection_request, headers=agent), "Fail-closed Evaluate")
         failure = rejection.get("failure")
-        if (
-            rejection.get("status") != "failed"
-            or not isinstance(failure, dict)
-            or failure.get("stage") != "assurance"
-            or failure.get("code") != "readonly_violation"
-        ):
-            raise QuickstartError("Evaluate did not fail closed on write SQL")
-        progress("[1/6] Evaluate failed closed: assurance/readonly_violation")
-
-        evaluation = _response_json(
-            client.post("/api/v1/evaluate", json=evaluate_request),
-            "Evaluate",
-        )
+        if not (rejection.get("status") == "failed" and isinstance(failure, dict)
+                and failure.get("stage") == "assurance" and failure.get("code") == "readonly_violation"):
+            raise QuickstartError("Evaluate did not reject write SQL")
+        progress("Evaluate rejected write SQL: assurance/readonly_violation")
+        evaluation = _response_json(client.post("/api/v1/evaluate", json=evaluate_request, headers=agent), "Evaluate")
         if evaluation.get("status") != "passed":
             raise QuickstartError("Evaluate did not pass the read-only candidate")
-        progress("[2/6] Evaluate passed: candidate and exact result are reproducible")
+        progress("Evaluate passed the synthetic direct SQL candidate")
 
-        run_key = uuid.uuid4().hex
-        review = _response_json(
-            client.post(
-                "/api/v1/enforce/query-runs",
-                json=enforce_request,
-                headers={"Idempotency-Key": f"quickstart-create-{run_key}"},
-            ),
-            "Enforce prepare",
-        )
-        if review.get("status") != "review_required":
-            raise QuickstartError("Enforce did not stop for human review")
-        sql = review.get("review", {}).get("sql")
-        if not isinstance(sql, str) or not sql:
-            raise QuickstartError("Enforce prepare response omitted the reviewed SQL")
-        progress(f"[3/6] Enforce stopped for review\n\nSQL to execute:\n{sql}\n")
-        if not approve(sql):
+        issued = _response_json(client.post("/api/v2/governance/mandates", json={
+            "schema_version": 1, "task_run_id": task_id,
+            "delegate_principal_id": "quickstart-agent",
+            "accountable_principal_id": "quickstart-admin",
+            "reviewer_principal_id": "quickstart-reviewer",
+            "purpose": purpose, "datasource_id": "quickstart",
+            "allowed_tables": ["numbers", "secrets"],
+            "autonomous_tables": ["numbers"] if agent_mode else [],
+            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        }, headers={**admin, "Idempotency-Key": "quickstart-mandate-" + task_id}), "Issue mandate")
+        mandate_id = issued["mandate_id"]
+        progress(f"Admin issued bounded mandate {mandate_id}")
+
+        def prepare(sql: str, question: str) -> dict[str, Any]:
+            response = client.post("/api/v2/enforce/query-runs", json={
+                "schema_version": 2, "mandate_id": mandate_id, "task_run_id": task_id,
+                "purpose": purpose, "question": question, "dialect": "sqlite",
+                "candidate": {"kind": "direct_sql", "sql": sql,
+                              "producer_revision": "quickstart-v2"},
+            }, headers={**agent, "Idempotency-Key": "quickstart-create-" + uuid.uuid4().hex})
+            return _response_json(response, "Enforce prepare")
+
+        numbers = prepare("SELECT numbers.n FROM numbers ORDER BY numbers.n", "List synthetic numbers")
+        expected = "ready" if agent_mode else "review_required"
+        if numbers["status"] != expected:
+            raise QuickstartError(f"Numbers query expected {expected}; received {numbers['status']}")
+        sql = numbers["review"]["sql"]
+        progress(f"SQL to execute ({expected}):\n{sql}")
+        if not agent_mode and not approve(sql):
             raise QuickstartError("Approval declined; no SQL was executed")
+        action = "execute" if agent_mode else "approve"
+        authorizer = agent if agent_mode else reviewer
+        started = _response_json(client.post(
+            f"/api/v2/enforce/query-runs/{numbers['query_run_id']}/{action}",
+            json=_hash_action(numbers),
+            headers={**authorizer, "Idempotency-Key": "quickstart-action-" + numbers["query_run_id"]},
+        ), "Enforce authorization")
+        if started["status"] not in {"executing", "completed"}:
+            raise QuickstartError("Enforce did not claim the authorized QueryRun")
+        completed = _wait_for_query_run(client, numbers["query_run_id"], agent)
+        explanation = _response_json(client.get(
+            f"/api/v2/explain/query-runs/{numbers['query_run_id']}", headers=admin,
+        ), "Explain")
+        if explanation.get("integrity", {}).get("status") != "verified":
+            raise QuickstartError("Explain did not verify governed Evidence")
+        progress("Numbers completed with verified mandate and authorization Evidence")
 
-        completed = _response_json(
-            client.post(
-                f"/api/v1/enforce/query-runs/{review['query_run_id']}/approve",
-                json=_approval_payload(review),
-                headers={"Idempotency-Key": f"quickstart-approve-{run_key}"},
-            ),
-            "Enforce approval",
-        )
-        if completed.get("status") != "completed":
-            raise QuickstartError("Approved QueryRun did not complete")
-        progress("[4/6] Enforce completed once with read-only and row-limit gates")
+        review_proof = None
+        revoked_proof = None
+        if agent_mode:
+            secrets_run = prepare("SELECT COUNT(*) AS n FROM secrets", "Count synthetic review-only records")
+            if secrets_run["status"] != "review_required":
+                raise QuickstartError("Non-autonomous table did not require human review")
+            progress(f"SQL requiring reviewer approval:\n{secrets_run['review']['sql']}")
+            if not approve(secrets_run["review"]["sql"]):
+                raise QuickstartError("Approval declined; no review-only SQL was executed")
+            started = _response_json(client.post(
+                f"/api/v2/enforce/query-runs/{secrets_run['query_run_id']}/approve",
+                json=_hash_action(secrets_run),
+                headers={**reviewer, "Idempotency-Key": "quickstart-approve-" + secrets_run["query_run_id"]},
+            ), "Reviewer approval")
+            if started["status"] not in {"executing", "completed"}:
+                raise QuickstartError("Reviewer approval did not claim the QueryRun")
+            _wait_for_query_run(client, secrets_run["query_run_id"], agent)
+            review_explanation = _response_json(client.get(
+                f"/api/v2/explain/query-runs/{secrets_run['query_run_id']}", headers=reviewer,
+            ), "Reviewer Evidence")
+            if review_explanation.get("integrity", {}).get("status") != "verified":
+                raise QuickstartError("Human review Evidence did not verify")
+            review_proof = {
+                "query_run_id": secrets_run["query_run_id"], "status": "completed",
+                "approval_principal_id": review_explanation["governance"]["approval"]["approver_principal"]["principal_id"],
+                "evidence_types": [item["evidence_type"] for item in review_explanation["evidence"]],
+            }
+            progress("Reviewer completed non-autonomous secrets query")
+            revoked = _response_json(client.post(
+                f"/api/v2/governance/mandates/{mandate_id}/revoke",
+                json={"expected_state_revision": issued["state_revision"], "reason": "Synthetic demo completed"},
+                headers=admin,
+            ), "Revoke mandate")
+            denied = client.post("/api/v2/enforce/query-runs", json={
+                "schema_version": 2, "mandate_id": mandate_id, "task_run_id": task_id,
+                "purpose": purpose, "question": "List synthetic numbers again", "dialect": "sqlite",
+                "candidate": evaluate_request["candidate"],
+            }, headers={**agent, "Idempotency-Key": "quickstart-after-revoke-" + task_id})
+            denied_body = denied.json()
+            if (denied.status_code < 400 or denied_body.get("status") != "error"
+                    or denied_body.get("failure", {}).get("code") in {"enforce_request_invalid", "query_run_invalid"}):
+                raise QuickstartError("Revoked mandate allowed a new QueryRun")
+            revoked_proof = {"status": revoked["status"], "new_prepare_status": denied.status_code,
+                             "failure_code": denied_body["failure"]["code"]}
+            progress("Revocation prevented a new execution claim")
 
-        explanation = _response_json(
-            client.get(f"/api/v1/explain/query-runs/{review['query_run_id']}"),
-            "Explain",
-        )
-        integrity = explanation.get("integrity", {}).get("status")
-        if integrity != "verified":
-            raise QuickstartError(f"Explain integrity is {integrity or 'missing'}")
-        progress("[5/6] Explain verified: Evidence, lineage, and limitations are bound")
-
+        login = client.post("/login", data={"api_key": admin["X-API-Key"], "next": "/admin/dashboard"},
+                            follow_redirects=True)
+        if login.status_code != 200 or "/admin/dashboard" not in str(login.url):
+            raise QuickstartError("Admin login failed for the browsable dashboard")
         dashboard = client.get("/admin/dashboard")
-        if dashboard.status_code != 200 or review["query_run_id"] not in dashboard.text:
-            raise QuickstartError("Dashboard did not project the completed QueryRun")
-        progress("[6/6] Dashboard projected the same governed QueryRun")
+        if dashboard.status_code != 200 or numbers["query_run_id"] not in dashboard.text:
+            raise QuickstartError("Dashboard did not project the same governed QueryRun")
+        progress("Authenticated dashboard projected the same QueryRun")
 
     result = explanation["statement"]["result"]
-    evidence_types = [item["evidence_type"] for item in explanation["evidence"]]
-    limitation_codes = [item["code"] for item in explanation["limitations"]]
     return {
-        "status": "passed",
-        "query_run_id": review["query_run_id"],
-        "fail_closed": {
-            "status": rejection["status"],
-            "failure": {
-                "stage": failure["stage"],
-                "code": failure["code"],
-                "retryable": failure["retryable"],
-            },
-        },
-        "evaluate": {
-            "status": evaluation["status"],
-            "policy_verdict": evaluation["policy"]["verdict"],
-            "result_comparison": evaluation["result_comparison"]["status"],
-        },
-        "enforce": {
-            "status": completed["status"],
-            "rows": result["rows"],
-            "truncated": result["truncated"],
-        },
-        "explain": {
-            "integrity": integrity,
-            "evidence_types": evidence_types,
-            "limitations": limitation_codes,
-        },
-        "dashboard": {
-            "status": "passed",
-            "path": "/admin/dashboard",
-        },
+        "status": "passed", "query_run_id": numbers["query_run_id"],
+        "mandate_id": mandate_id,
+        "fail_closed": {"status": rejection["status"], "failure": {
+            "stage": failure["stage"], "code": failure["code"], "retryable": failure["retryable"]}},
+        "evaluate": {"status": evaluation["status"],
+                     "policy_verdict": evaluation["policy"]["verdict"],
+                     "result_comparison": evaluation["result_comparison"]["status"]},
+        "enforce": {"status": completed["status"], "rows": result["rows"],
+                    "truncated": result["truncated"],
+                    "execution_mode": numbers["decision"]["execution_mode"]},
+        "explain": {"integrity": explanation["integrity"]["status"],
+                    "evidence_types": [item["evidence_type"] for item in explanation["evidence"]],
+                    "limitations": [item["code"] for item in explanation["limitations"]],
+                    "approval": explanation["governance"]["approval"]},
+        "review": review_proof, "revocation": revoked_proof,
+        "dashboard": {"status": "passed", "path": "/admin/dashboard"},
     }
 
 
@@ -421,6 +429,7 @@ def run_quickstart(
     *,
     workdir: Path | None,
     auto_approve: bool,
+    agent_mode: bool = False,
     progress: Callable[[str], None] = print,
     input_fn: Callable[[str], str] = input,
     hold_open: Callable[[dict[str, Any], str], None] | None = None,
@@ -437,7 +446,7 @@ def run_quickstart(
         root.mkdir(parents=True, exist_ok=True)
         occupied = [
             name
-            for name in ("data.db", "query_runs.db", "registry.json")
+            for name in ("data.db", "query_runs.db", "registry.json", "admin.key", "reviewer.key", "agent.key")
             if (root / name).exists()
         ]
         if occupied:
@@ -446,6 +455,7 @@ def run_quickstart(
             )
     try:
         _write_demo_inputs(root)
+        _bootstrap_demo(root)
 
         def approve(_sql: str) -> bool:
             if auto_approve:
@@ -458,7 +468,8 @@ def run_quickstart(
             return answer.strip().lower() in {"y", "yes"}
 
         with _local_server(root) as base_url:
-            summary = _run_public_path(base_url, approve=approve, progress=progress)
+            summary = _run_public_path(base_url, root, agent_mode=agent_mode,
+                                       approve=approve, progress=progress)
             summary["run_receipt"] = _run_receipt(
                 summary,
                 started_at=started_at,
@@ -471,6 +482,8 @@ def run_quickstart(
                     encoding="utf-8",
                 )
             if hold_open is not None:
+                summary["credential_files"] = {name: str(root / f"{name}.key")
+                                               for name in ("admin", "reviewer")}
                 hold_open(summary, base_url)
         return summary
     finally:

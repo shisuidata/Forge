@@ -368,6 +368,137 @@ export const governanceActionCatalogV1Schema = Type.Object(
   { additionalProperties: false },
 );
 
+const mandateId = Type.String({ pattern: "^md_[A-Za-z0-9_-]+$" });
+const taskRunId = Type.String({ pattern: "^tr_[A-Za-z0-9_-]+$", maxLength: 128 });
+const hash = Type.String({ pattern: "^sha256:[a-f0-9]{64}$" });
+const tables = Type.Array(id, { maxItems: 128, uniqueItems: true });
+const queryCandidateV1Schema = Type.Union([
+  Type.Object({ kind: Type.Literal("direct_sql"), sql: Type.String({ minLength: 1, maxLength: 100000 }), producer_revision: Type.Optional(id) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("forge_json"), forge_json: Type.Object({}, { additionalProperties: true }), producer_revision: Type.Optional(id) }, { additionalProperties: false }),
+]);
+
+export const mandateIssueV1Schema = Type.Object({
+  schema_version: Type.Literal(1), task_run_id: taskRunId,
+  delegate_principal_id: id, accountable_principal_id: id, reviewer_principal_id: id,
+  purpose: Type.String({ minLength: 1, maxLength: 1000 }), datasource_id: id,
+  allowed_tables: tables, autonomous_tables: tables, expires_at: dateTime,
+}, { additionalProperties: false });
+
+export const issuedMandateV1Schema = Type.Object({
+  schema_version: Type.Literal(1), mandate_id: mandateId, issuance_revision: Type.Literal(1),
+  issuance_hash: hash, issuer_principal_id: id, delegated_mandate: delegatedMandateV1Schema,
+  policy: Type.Object({ revision: Type.Literal("bounded-agent-policy-v1"), reviewer_principal_id: id,
+    allowed_tables: tables, autonomous_tables: tables }, { additionalProperties: false }),
+  status: Type.Union([Type.Literal("active"), Type.Literal("revoked"), Type.Literal("expired")]),
+  state_revision: Type.Integer({ minimum: 1 }), revoked_at: Type.Union([dateTime, Type.Null()]),
+  revoked_by: Type.Union([id, Type.Null()]),
+}, { additionalProperties: false });
+
+export const governanceBootstrapV1Schema = Type.Object({
+  schema_version: Type.Literal(1),
+  teams: Type.Array(Type.Object({ team_id: id, organization_id: id,
+    display_name: Type.String({ maxLength: 256 }), allowed_tables: tables }, { additionalProperties: false }), { minItems: 1, maxItems: 128 }),
+  principals: Type.Array(Type.Object({ principal_id: id, team_id: id, display_name: Type.String({ maxLength: 256 }),
+    principal_type: Type.Union([Type.Literal("human"), Type.Literal("agent"), Type.Literal("service")]),
+    role: Type.Union([Type.Literal("admin"), Type.Literal("reviewer"), Type.Literal("member")]),
+    status: Type.Union([Type.Literal("active"), Type.Literal("disabled")]),
+  }, { additionalProperties: false }), { minItems: 1, maxItems: 1024 }),
+  channel_bindings: Type.Array(Type.Object({ channel: Type.Union([Type.Literal("web"), Type.Literal("feishu"), Type.Literal("dingtalk")]),
+    external_user_id: id, principal_id: id }, { additionalProperties: false }), { maxItems: 1024 }),
+}, { additionalProperties: false });
+
+export const enforceQueryRequestV2Schema = Type.Object({
+  schema_version: Type.Literal(2), mandate_id: mandateId, task_run_id: taskRunId,
+  purpose: Type.String({ minLength: 1, maxLength: 1000 }), question: Type.String({ minLength: 1, maxLength: 10000 }),
+  candidate: queryCandidateV1Schema,
+  dialect: Type.Union([Type.Literal("auto"), Type.Literal("sqlite"), Type.Literal("postgresql"), Type.Literal("mysql"), Type.Literal("bigquery"), Type.Literal("snowflake")]),
+}, { additionalProperties: false });
+
+export const enforceQueryActionV2Schema = Type.Object({
+  schema_version: Type.Literal(2), sql_hash: hash, assurance_report_hash: hash, enforcement_context_hash: hash,
+}, { additionalProperties: false });
+
+const nullableHash = Type.Union([hash, Type.Null()]);
+const nullableString = Type.Union([Type.String(), Type.Null()]);
+const authorizationRecordV1Schema = Type.Object({
+  schema_version: Type.Literal(1), kind: Type.Union([Type.Literal("mandate"), Type.Literal("human_approval")]),
+  action: Type.Union([Type.Literal("execute"), Type.Literal("approve")]),
+  actor_principal_id: id, issuer_principal_id: id, accountable_principal_id: id,
+  reviewer_principal_id: nullableString, mandate_id: mandateId, mandate_issuance_revision: Type.Literal(1),
+  mandate_issuance_hash: hash, authorization_policy_revision: Type.String(),
+  sql_hash: hash, assurance_report_hash: hash, enforcement_context_hash: hash,
+  authorized_at: dateTime, execution_claim_id: id, credential_id: nullableString,
+  channel_binding_id: nullableString, authorizing_principal_id: id,
+}, { additionalProperties: false });
+
+export const enforceQueryResponseV2Schema = Type.Object({
+  schema_version: Type.Literal(2), query_run_id: Type.String({ pattern: "^qr_[a-f0-9]{32}$" }), task_run_id: taskRunId,
+  status: Type.Union(["ready", "review_required", "denied", "executing", "completed", "failed", "cancelled", "expired"].map(value => Type.Literal(value))),
+  decision: Type.Object({ verdict: Type.Union([Type.Literal("allow"), Type.Literal("conditional"), Type.Literal("deny")]),
+    review_required: Type.Boolean(), execution_authorized: Type.Boolean(),
+    execution_mode: Type.Union([Type.Literal("autonomous"), Type.Literal("human_review"), Type.Null()]),
+  }, { additionalProperties: false }),
+  context: Type.Object({ principal_context: Type.Object({}, { additionalProperties: true }),
+    delegated_mandate: Type.Union([Type.Object({}, { additionalProperties: true }), Type.Null()]),
+    purpose: Type.String(), resource_scope: Type.Array(Type.Object({}, { additionalProperties: true })),
+  }, { additionalProperties: false }),
+  candidate: Type.Object({ input_kind: Type.Union([Type.Literal("direct_sql"), Type.Literal("forge_json")]),
+    candidate_revision: Type.String(), producer_revision: Type.String(), candidate_hash: hash,
+  }, { additionalProperties: false }),
+  review: Type.Object({ sql: nullableString, sql_hash: nullableHash, assurance_report_hash: nullableHash,
+    enforcement_context_hash: hash, expires_at: dateTime,
+  }, { additionalProperties: false }),
+  policy_decision: Type.Object({}, { additionalProperties: true }),
+  assurance: Type.Union([Type.Object({}, { additionalProperties: true }), Type.Null()]),
+  lineage: Type.Object({ candidate_revision: Type.String(), candidate_hash: Type.String(),
+    assurance_revision: nullableString, assurance_report_hash: nullableString, policy_revision: nullableString,
+    policy_decision_hash: Type.String(), registry_revision: Type.String(), enforcement_context_hash: hash,
+    mandate_issuance_hash: hash, authorization_policy_revision: Type.Literal("bounded-agent-policy-v1"),
+    authorization_hash: nullableHash,
+  }, { additionalProperties: false }),
+  result: Type.Union([Type.Null(), Type.Object({ columns: Type.Array(Type.String()), rows: Type.Array(Type.Array(Type.Unknown())),
+    row_count: Type.Integer({ minimum: 0 }), truncated: Type.Boolean(), execution_ms: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+    executed_at: dateTime }, { additionalProperties: false })]),
+  failure: Type.Union([Type.Null(), Type.Object({ stage: Type.String(), code: Type.String(), retryable: Type.Boolean() }, { additionalProperties: false })]),
+  authorization: Type.Union([Type.Null(), authorizationRecordV1Schema]),
+}, { additionalProperties: false });
+
+const explainPrincipal = Type.Object({ principal_id: id, principal_type: Type.Union([Type.Literal("human"), Type.Literal("agent"), Type.Literal("service")]) }, { additionalProperties: false });
+export const explainQueryResponseV2Schema = Type.Object({
+  schema_version: Type.Literal(2), query_run_id: Type.String({ pattern: "^qr_[a-f0-9]{32}$" }), task_run_id: taskRunId,
+  status: enforceQueryResponseV2Schema.properties.status,
+  statement: Type.Object({ question: Type.String({ minLength: 1, maxLength: 10000 }), purpose: Type.String({ minLength: 1, maxLength: 1000 }),
+    actual_sql: nullableString, dialect: Type.String(), result: Type.Unknown(), failure: Type.Unknown() }, { additionalProperties: false }),
+  semantics: Type.Object({ input_kind: Type.Union([Type.Literal("direct_sql"), Type.Literal("forge_json")]),
+    candidate_revision: Type.String(), producer_revision: Type.String(), candidate: Type.Object({}, { additionalProperties: true }),
+    bindings: Type.Array(Type.Object({}, { additionalProperties: true })), extraction_status: Type.Union([Type.Literal("complete"), Type.Literal("partial"), Type.Literal("unavailable")]),
+  }, { additionalProperties: false }),
+  sources: Type.Object({ datasource_id: id, resource_scope: Type.Array(Type.Object({}, { additionalProperties: true })),
+    physical_tables: Type.Array(id, { uniqueItems: true }), registry_revision: id, context_hash: nullableHash, data_snapshot_ref: nullableString,
+  }, { additionalProperties: false }),
+  governance: Type.Object({ actor_principal: explainPrincipal, accountable_principal: Type.Object({ principal_id: id, principal_type: Type.Literal("human") }, { additionalProperties: false }),
+    issuer_principal: Type.Object({ principal_id: id, principal_type: Type.Literal("human") }, { additionalProperties: false }), mandate_id: nullableString, policy_decision: Type.Object({}, { additionalProperties: true }),
+    approval: Type.Union([Type.Object({}, { additionalProperties: true }), Type.Null()]),
+    authorization: Type.Union([authorizationRecordV1Schema, Type.Null()]),
+    current_authorization: Type.Object({ status: Type.Union([Type.Literal("active"), Type.Literal("revoked"), Type.Literal("expired")]),
+      checked_at: dateTime }, { additionalProperties: false }),
+  }, { additionalProperties: false }),
+  assurance: Type.Union([Type.Object({}, { additionalProperties: true }), Type.Null()]),
+  lineage: Type.Object({ explain_revision: Type.Literal("explain-query-v2"), candidate_hash: hash, sql_hash: nullableHash,
+    assurance_report_hash: nullableHash, policy_decision_hash: hash, registry_revision: id,
+    enforcement_context_hash: hash, explain_context_hash: nullableHash, approval_hash: nullableHash,
+    result_hash: nullableHash, authorization_hash: nullableHash, mandate_issuance_hash: hash,
+  }, { additionalProperties: false }),
+  evidence: Type.Array(Type.Object({ evidence_id: Type.String({ pattern: "^ev_[a-f0-9]{24}$" }),
+    evidence_type: Type.Union(["candidate", "query", "assurance", "policy", "source", "approval", "result", "mandate", "authorization"].map(value => Type.Literal(value))),
+    summary: Type.String({ minLength: 1, maxLength: 500 }), source_ref: Type.String({ minLength: 1, maxLength: 500 }), content_hash: hash,
+  }, { additionalProperties: false }), { minItems: 2, maxItems: 16 }),
+  limitations: Type.Array(Type.Object({ code: Type.String({ pattern: "^[a-z][a-z0-9_]{2,63}$" }), severity: Type.Union([Type.Literal("info"), Type.Literal("warning")]), description: Type.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }), { minItems: 1, maxItems: 16 }),
+  integrity: Type.Object({ status: Type.Union([Type.Literal("verified"), Type.Literal("partial")]), explanation_hash: hash,
+    verified_hashes: Type.Array(Type.String(), { uniqueItems: true }), unverified_components: Type.Array(Type.String()),
+  }, { additionalProperties: false }), generated_at: dateTime,
+}, { additionalProperties: false });
+
 export const governanceContractSchemas = {
   resource_ref_v1: resourceRefV1Schema,
   principal_context_v1: principalContextV1Schema,
@@ -376,6 +507,13 @@ export const governanceContractSchemas = {
   datasource_binding_v1: datasourceBindingV1Schema,
   registry_binding_v1: registryBindingV1Schema,
   governance_action_catalog_v1: governanceActionCatalogV1Schema,
+  mandate_issue_v1: mandateIssueV1Schema,
+  issued_mandate_v1: issuedMandateV1Schema,
+  governance_bootstrap_v1: governanceBootstrapV1Schema,
+  enforce_query_request_v2: enforceQueryRequestV2Schema,
+  enforce_query_action_v2: enforceQueryActionV2Schema,
+  enforce_query_response_v2: enforceQueryResponseV2Schema,
+  explain_query_response_v2: explainQueryResponseV2Schema,
 } as const satisfies Record<string, TSchema>;
 
 export type GovernanceContractName = keyof typeof governanceContractSchemas;
@@ -388,7 +526,22 @@ export type RegistryBindingV1 = Static<typeof registryBindingV1Schema>;
 export type GovernanceActionCatalogV1 = Static<typeof governanceActionCatalogV1Schema>;
 
 export function validateGovernanceContract(name: GovernanceContractName, value: unknown): boolean {
-  return Value.Check(governanceContractSchemas[name], value);
+  if (!Value.Check(governanceContractSchemas[name], value)) return false;
+  if (name === "mandate_issue_v1" || name === "issued_mandate_v1") {
+    const policy = name === "mandate_issue_v1" ? value as Static<typeof mandateIssueV1Schema> : (value as Static<typeof issuedMandateV1Schema>).policy;
+    return policy.allowed_tables.length > 0 && policy.autonomous_tables.every(table => policy.allowed_tables.includes(table));
+  }
+  if (name === "governance_bootstrap_v1") {
+    const manifest = value as Static<typeof governanceBootstrapV1Schema>;
+    const teams = new Set(manifest.teams.map(team => team.team_id));
+    const principals = new Set(manifest.principals.map(principal => principal.principal_id));
+    const bindings = new Set(manifest.channel_bindings.map(binding => `${binding.channel}:${binding.external_user_id}`));
+    return teams.size === manifest.teams.length && principals.size === manifest.principals.length &&
+      bindings.size === manifest.channel_bindings.length &&
+      manifest.principals.every(principal => teams.has(principal.team_id) && (principal.principal_type === "human" || principal.role === "member")) &&
+      manifest.channel_bindings.every(binding => principals.has(binding.principal_id));
+  }
+  return true;
 }
 
 export function governanceCoverage(catalog: GovernanceActionCatalogV1): {

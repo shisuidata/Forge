@@ -31,13 +31,14 @@
   </div>
 
   {% if members %}
-  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-white border border-gray-200 rounded-lg overflow-x-auto">
     <table class="min-w-full text-sm divide-y divide-gray-100">
       <thead class="bg-gray-50 text-xs uppercase text-gray-500">
         <tr>
           <th class="px-4 py-2.5 text-left">用户 ID</th>
           <th class="px-4 py-2.5 text-left">显示名称</th>
           <th class="px-4 py-2.5 text-left">角色</th>
+          <th class="px-4 py-2.5 text-left">类型 / 状态</th>
           <th class="px-4 py-2.5 text-left">操作</th>
         </tr>
       </thead>
@@ -47,21 +48,18 @@
           <td class="px-4 py-3 font-mono text-gray-800 text-xs">{{ m.user_id }}</td>
           <td class="px-4 py-3 text-gray-700">{{ m.display_name or '—' }}</td>
           <td class="px-4 py-3">
-            {% if m.role == 'admin' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">admin</span>
-            {% else %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">member</span>
-            {% endif %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{{ m.role }}</span>
           </td>
+          <td class="px-4 py-3 text-xs text-gray-600">{{ m.principal_type }} / {{ m.status }}</td>
           <td class="px-4 py-3">
+            {% if m.status == 'active' %}
             <form method="post" action="/admin/teams/{{ team_id }}/members/remove"
-                  onsubmit="return confirm('确认将 {{ m.user_id }} 移出该团队？')">
+                  onsubmit="return confirm('确认禁用此主体？')">
               <input type="hidden" name="user_id" value="{{ m.user_id }}" />
-              <button type="submit"
-                      class="text-xs text-red-500 hover:text-red-700 hover:underline">
-                移除
-              </button>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <button type="submit" class="text-xs text-red-500 hover:text-red-700 hover:underline">禁用</button>
             </form>
+            {% else %}<span class="text-xs text-gray-400">已禁用</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -77,9 +75,11 @@
 
 {# 添加成员表单 #}
 <div class="bg-white border border-gray-200 rounded-lg p-5 mb-6">
-  <h3 class="text-sm font-semibold text-gray-800 mb-4">添加成员</h3>
+  <h3 class="text-sm font-semibold text-gray-800 mb-1">添加主体</h3>
+  <p class="text-xs text-gray-500 mb-4">Agent 与 Service 仅可设为 member；禁用保留审计记录且即时撤销访问。</p>
   <form method="post" action="/admin/teams/{{ team_id }}/members/add"
         class="flex flex-wrap items-end gap-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     <div>
       <label class="block text-xs text-gray-500 mb-1">用户 ID <span class="text-red-500">*</span></label>
       <input type="text" name="user_id" placeholder="e.g. user_abc" required
@@ -91,10 +91,18 @@
              class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36" />
     </div>
     <div>
+      <label class="block text-xs text-gray-500 mb-1">主体类型</label>
+      <select name="principal_type" required onchange="this.form.elements.role.querySelectorAll('option[value=admin], option[value=reviewer]').forEach(option => option.disabled = this.value !== 'human'); if (this.value !== 'human') this.form.elements.role.value = 'member'"
+              class="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white">
+        <option value="human">human</option><option value="agent">agent</option><option value="service">service</option>
+      </select>
+    </div>
+    <div>
       <label class="block text-xs text-gray-500 mb-1">角色</label>
       <select name="role"
               class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
         <option value="member">member</option>
+        <option value="reviewer">reviewer</option>
         <option value="admin">admin</option>
       </select>
     </div>

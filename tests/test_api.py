@@ -12,10 +12,30 @@ Forge Web API 自动化测试。
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 import yaml
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from pathlib import Path
 
+
+@pytest_asyncio.fixture
+async def client(monkeypatch, tmp_path):
+    from config import cfg
+    from main import app
+    from agent.tenant import tenants
+    from forge.governance_credentials import create_credential
+
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "governance.db"))
+    monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+    monkeypatch.setattr(cfg, "AUTH_ADMIN_PASSWORD", "test")
+    monkeypatch.setattr(cfg, "AUTH_ADMIN_PRINCIPAL_ID", "test_admin")
+    tenants.create_team("test_team", organization_id="test_org")
+    tenants.set_team("test_admin", "test_team", role="admin", principal_type="human", status="active")
+    tenants.set_allowed_tables("test_team", ["numbers", "orders"])
+    _, token = create_credential("test_admin")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test",
+                           headers={"X-API-Key": token}) as scoped_client:
+        yield scoped_client
 
 # ── 基础端点 ──────────────────────────────────────────────────────────────────
 
@@ -143,308 +163,30 @@ class TestAuth:
         )
         assert resp.status_code == 401
 
-    async def test_logout_clears_session(self, client: AsyncClient):
-        resp = await client.get("/logout", follow_redirects=False)
-        assert resp.status_code == 302
+    async def test_logout_revokes_session(self, client: AsyncClient):
+        login = await client.post("/login", data={"password": "test"}, follow_redirects=False)
+        assert login.status_code == 303
+        client.headers.pop("X-API-Key")
+        csrf = (await client.get("/api/auth/csrf")).json()["csrf_token"]
+        resp = await client.post("/logout", headers={"Origin": "http://test", "X-CSRF-Token": csrf}, follow_redirects=False)
+        assert resp.status_code == 303
+        assert (await client.get("/api/auth/csrf")).status_code == 401
 
 
 # ── Chat API ─────────────────────────────────────────────────────────────────
 
-class TestChatAPI:
-    async def test_legacy_chat_is_gone_without_explicit_rollback_flag(
-        self, client: AsyncClient, monkeypatch
-    ):
+class TestClosedExecutionPaths:
+    async def test_legacy_agent_and_raw_sql_never_execute(self, client: AsyncClient, monkeypatch):
         from config import cfg
-        monkeypatch.setattr(cfg, "LEGACY_AGENT_API_ENABLED", False)
+        monkeypatch.setattr(cfg, "LEGACY_AGENT_API_ENABLED", True)
+        monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", True)
+        for path in ("/api/chat", "/api/approve", "/api/cancel", "/api/execute-raw"):
+            response = await client.post(path, json={"message": "查询订单", "sql": "SELECT 1"})
+            assert response.status_code == 410
 
-        response = await client.post("/api/chat", json={"user_id": "u1", "message": "查询订单"})
-
-        assert response.status_code == 410
-        assert response.json()["status"] == "deprecated"
-        approve = await client.post("/api/approve", json={"user_id": "u1", "message": ""})
-        cancel = await client.post("/api/cancel", json={"user_id": "u1", "message": ""})
-        assert approve.status_code == 410
-        assert cancel.status_code == 410
-
-    async def test_chat_with_llm(self, client: AsyncClient):
-        """完整 chat 流程（需要 LLM API Key）。"""
-        resp = await client.post(
-            "/api/chat",
-            json={"message": "test query", "user_id": "test_user"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data.get("action") in ("error", "message", "sql_review")
-
-    async def test_cancel_without_pending(self, client: AsyncClient):
-        """没有 pending SQL 时取消应正常返回。"""
-        resp = await client.post(
-            "/api/cancel",
-            json={"message": "", "user_id": "test_user_cancel"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "action" in data
-
-    async def test_prepare_query_returns_review_contract(self, client: AsyncClient, monkeypatch, tmp_path):
-        """外部 Agent prepare-query 只返回审核材料，不返回执行结果。"""
-        from agent import audit
-        import web.routes.legacy_agent as router_mod
-
-        monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
-        monkeypatch.setattr(
-            router_mod,
-            "agent_prepare_query",
-            lambda user_id, question, dialect=None: {
-                "status": "needs_review",
-                "question": question,
-                "user_id": user_id,
-                "forge_json": {"scan": "orders", "select": ["orders.id"]},
-                "sql": "SELECT orders.id\nFROM orders",
-                "dialect": dialect or "sqlite",
-                "review_required": True,
-                "can_execute": False,
-                "retry_count": 0,
-                "text": "",
-                "error": "",
-            },
-        )
-
-        resp = await client.post(
-            "/api/prepare-query",
-            json={"question": "查询订单 ID", "user_id": "external-1", "dialect": "postgresql"},
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert set(data) == {
-            "status",
-            "question",
-            "user_id",
-            "forge_json",
-            "sql",
-            "dialect",
-            "review_required",
-            "can_execute",
-            "retry_count",
-            "text",
-            "error",
-        }
-        assert data["status"] == "needs_review"
-        assert data["review_required"] is True
-        assert data["can_execute"] is False
-        assert "rows" not in data
-        assert "columns" not in data
-        assert "result" not in data
-
-        records = await audit.recent(limit=1)
-        assert records[0]["status"] == "needs_external_review"
-
-    async def test_prepare_query_does_not_feed_approve_execution(self, client: AsyncClient, monkeypatch, tmp_path):
-        """prepare-query 不创建可由 /api/approve 消费的 pending SQL。"""
-        from agent import audit
-        import web.routes.legacy_agent as router_mod
-
-        monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
-        monkeypatch.setattr(
-            router_mod,
-            "agent_prepare_query",
-            lambda user_id, question, dialect=None: {
-                "status": "needs_review",
-                "question": question,
-                "user_id": user_id,
-                "forge_json": {"scan": "orders", "select": ["orders.id"]},
-                "sql": "SELECT orders.id\nFROM orders",
-                "dialect": "sqlite",
-                "review_required": True,
-                "can_execute": False,
-                "retry_count": 0,
-                "text": "",
-                "error": "",
-            },
-        )
-
-        await client.post(
-            "/api/prepare-query",
-            json={"question": "查询订单 ID", "user_id": "external-no-approve"},
-        )
-        approve = await client.post(
-            "/api/approve",
-            json={"message": "", "user_id": "external-no-approve"},
-        )
-
-        assert approve.status_code == 200
-        data = approve.json()
-        assert data["action"] == "error"
-        assert data["rows"] is None
-        assert data["row_count"] == 0
-
-        records = await audit.recent(limit=1)
-        assert records[0]["status"] == "needs_external_review"
-
-    async def test_prepare_query_rejects_without_api_key_when_auth_enabled(
-        self, client: AsyncClient, monkeypatch
-    ):
-        from config import cfg
-
-        monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
-        monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["valid-key"])
-
-        resp = await client.post(
-            "/api/prepare-query",
-            json={"question": "查询订单 ID", "user_id": "external-auth"},
-        )
-
-        assert resp.status_code == 401
-
-    async def test_prepare_query_returns_error_for_invalid_dialect(
-        self, client: AsyncClient, monkeypatch, tmp_path
-    ):
-        from agent import audit
-        import web.routes.legacy_agent as router_mod
-
-        monkeypatch.setattr(audit.cfg, "AUDIT_DB_PATH", str(tmp_path / "audit.db"))
-        monkeypatch.setattr(
-            router_mod,
-            "agent_prepare_query",
-            lambda user_id, question, dialect=None: {
-                "status": "error",
-                "question": question,
-                "user_id": user_id,
-                "forge_json": None,
-                "sql": None,
-                "dialect": "",
-                "review_required": True,
-                "can_execute": False,
-                "retry_count": 0,
-                "text": "",
-                "error": "dialect must be one of: auto, sqlite, postgresql, mysql, bigquery, snowflake",
-            },
-        )
-
-        resp = await client.post(
-            "/api/prepare-query",
-            json={"question": "查询订单 ID", "user_id": "external-dialect", "dialect": "oracle"},
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "error"
-        assert "dialect must be one of" in data["error"]
-
-
-# ── Execute Raw API ──────────────────────────────────────────────────────────
-
-class TestApproveExecutionFailure:
-    async def test_failed_execution_terminates_pending_legacy_pipeline(
-        self, client: AsyncClient, monkeypatch
-    ):
-        import web.routes.legacy_agent as router_mod
-        from agent.agent import AgentResponse
-        from agent.memory import memory
-        from forge.executor import ExecutionResult
-
-        pipeline_state = {"status": "pending_approval", "stages": []}
-        monkeypatch.setattr(
-            router_mod,
-            "agent_approve",
-            lambda user_id: AgentResponse(
-                text="SQL 已确认", sql="SELECT missing FROM nowhere", action="approved"
-            ),
-        )
-        monkeypatch.setattr(
-            router_mod,
-            "execute",
-            lambda sql: ExecutionResult(
-                False, "SQL 引用了不存在的字段。", [], [], error_code="execution_reference_invalid"
-            ),
-        )
-        monkeypatch.setattr(
-            memory,
-            "get_state",
-            lambda user_id, key: pipeline_state if key == "pipeline_run" else None,
-        )
-        monkeypatch.setattr(
-            memory,
-            "set_state",
-            lambda user_id, key, value: pipeline_state.update(value),
-        )
-
-        resp = await client.post(
-            "/api/approve",
-            json={"message": "", "user_id": "pipeline-failure"},
-        )
-
-        data = resp.json()
-        assert data["action"] == "execution_failed"
-        assert pipeline_state["status"] == "failed"
-        assert data["error_code"] == "execution_reference_invalid"
-
-
-class TestExecuteRaw:
-    async def test_execute_simple_sql(self, client: AsyncClient):
-        """直接执行简单 SQL 应返回结果。"""
-        resp = await client.post(
-            "/api/execute-raw",
-            json={"sql": "SELECT 1 AS num", "user_id": "test_user"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["columns"] is not None
-        assert data["rows"] is not None
-        assert data["exec_error"] is None
-
-    async def test_execute_invalid_sql(self, client: AsyncClient):
-        """执行非法 SQL 应返回错误信息。"""
-        resp = await client.post(
-            "/api/execute-raw",
-            json={"sql": "SELECT FROM WHERE INVALID", "user_id": "test_user"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["exec_error"] is not None
-        assert data["action"] == "execution_failed"
-        assert "OperationalError" not in data["exec_error"]
-        assert "sqlalche.me" not in data["exec_error"]
-
-    async def test_execute_select_from_sqlite_master(self, client: AsyncClient):
-        """对数据库执行 SQLite 系统查询。"""
-        resp = await client.post(
-            "/api/execute-raw",
-            json={"sql": "SELECT name FROM sqlite_master WHERE type='table' LIMIT 5", "user_id": "test_user"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["columns"] is not None
-        assert data["exec_error"] is None
-
-    async def test_execute_raw_rejects_mutating_sql(self, client: AsyncClient):
-        """手动 SQL 执行接口只允许只读查询。"""
-        resp = await client.post(
-            "/api/execute-raw",
-            json={"sql": "DROP TABLE users", "user_id": "test_user"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["exec_error"] is not None
-        assert "只允许" in data["exec_error"] or "非只读" in data["exec_error"]
-
-    async def test_execute_raw_can_be_disabled(self, client: AsyncClient, monkeypatch):
-        from config import cfg
-
-        monkeypatch.setattr(cfg, "RAW_SQL_ENABLED", False)
-
-        resp = await client.post(
-            "/api/execute-raw",
-            json={"sql": "SELECT 1", "user_id": "test_user"},
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["exec_error"] is not None
-        assert data["action"] == "execution_failed"
-        assert "禁用" in data["exec_error"]
-
+    async def test_prepare_requires_registered_credential(self, client: AsyncClient):
+        response = await client.post("/api/prepare-query", json={"question": "查询订单"}, headers={"X-API-Key": "invalid"})
+        assert response.status_code == 401
 
 class TestFeedbackAPI:
     async def test_submit_feedback(self, client: AsyncClient, monkeypatch, tmp_path):
@@ -488,11 +230,8 @@ class TestFeedbackAPI:
 
 class TestAdminAIAuth:
     async def test_admin_ai_requires_auth_when_enabled(self, client: AsyncClient, monkeypatch):
-        from config import cfg
 
-        monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
-        monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["secret"])
-
+        client.headers["X-API-Key"] = "invalid"
         resp = await client.post(
             "/api/admin-apply",
             json={"type": "delete_metric", "proposal": {"name": "x"}},

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/enforce-query-action-v2.schema.json",
+  "title": "EnforceQueryActionV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sql_hash", "assurance_report_hash", "enforcement_context_hash"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "sql_hash": {"$ref": "#/$defs/hash"},
+    "assurance_report_hash": {"$ref": "#/$defs/hash"},
+    "enforcement_context_hash": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {"hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}
+}

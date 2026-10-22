@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from config import cfg
-from web.auth import require_web_auth
+from web.auth import require_human_principal
 from web.product_content import product_state_page, product_surface_page
 from web.templates import templates
 
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request, _auth=Depends(require_web_auth)):
+async def chat_page(request: Request, _auth=Depends(require_human_principal)):
     """First-class Web channel backed by Pi ChannelEvent and TaskRun contracts."""
     return templates.TemplateResponse(
         request,
@@ -30,7 +30,7 @@ async def chat_page(request: Request, _auth=Depends(require_web_auth)):
 
 
 @router.get("/tasks", response_class=HTMLResponse)
-async def task_workspace_page(request: Request, _auth=Depends(require_web_auth)):
+async def task_workspace_page(request: Request, _auth=Depends(require_human_principal)):
     """Canonical Pi task UI with Artifact rendering and non-executable SQL review."""
     return templates.TemplateResponse(
         request,
@@ -45,7 +45,7 @@ async def task_workspace_page(request: Request, _auth=Depends(require_web_auth))
 
 
 @router.get("/workspace", response_class=HTMLResponse)
-async def product_workspace_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_workspace_page(request: Request, _auth=Depends(require_human_principal)):
     return templates.TemplateResponse(
         request,
         "product_workspace.html",
@@ -57,7 +57,7 @@ async def product_workspace_page(request: Request, _auth=Depends(require_web_aut
 async def product_task_detail_page(
     task_run_id: str,
     request: Request,
-    _auth=Depends(require_web_auth),
+    _auth=Depends(require_human_principal),
 ):
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return product_state_page(request, "not_found", 404)
@@ -75,7 +75,7 @@ async def product_task_detail_page(
 
 @router.get("/deliverables", response_class=HTMLResponse)
 @router.get("/reports", response_class=HTMLResponse)
-async def product_report_library_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_report_library_page(request: Request, _auth=Depends(require_human_principal)):
     return templates.TemplateResponse(
         request,
         "product_reports.html",
@@ -87,13 +87,13 @@ async def product_report_library_page(request: Request, _auth=Depends(require_we
 async def product_deliverable_surface_page(
     surface_key: str,
     request: Request,
-    _auth=Depends(require_web_auth),
+    _auth=Depends(require_human_principal),
 ):
     return product_surface_page(request, f"deliverables/{surface_key}")
 
 
 @router.get("/data", response_class=HTMLResponse)
-async def product_data_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_data_page(request: Request, _auth=Depends(require_human_principal)):
     return templates.TemplateResponse(
         request,
         "product_data.html",
@@ -105,13 +105,13 @@ async def product_data_page(request: Request, _auth=Depends(require_web_auth)):
 async def product_data_surface_page(
     surface_key: str,
     request: Request,
-    _auth=Depends(require_web_auth),
+    _auth=Depends(require_human_principal),
 ):
     return product_surface_page(request, f"data/{surface_key}")
 
 
 @router.get("/governance", response_class=HTMLResponse)
-async def product_governance_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_governance_page(request: Request, _auth=Depends(require_human_principal)):
     return product_surface_page(request, "governance")
 
 
@@ -119,13 +119,13 @@ async def product_governance_page(request: Request, _auth=Depends(require_web_au
 async def product_governance_surface_page(
     surface_key: str,
     request: Request,
-    _auth=Depends(require_web_auth),
+    _auth=Depends(require_human_principal),
 ):
     return product_surface_page(request, f"governance/{surface_key}")
 
 
 @router.get("/runtime", response_class=HTMLResponse)
-async def product_runtime_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_runtime_page(request: Request, _auth=Depends(require_human_principal)):
     return product_surface_page(request, "runtime")
 
 
@@ -133,31 +133,31 @@ async def product_runtime_page(request: Request, _auth=Depends(require_web_auth)
 async def product_runtime_surface_page(
     surface_key: str,
     request: Request,
-    _auth=Depends(require_web_auth),
+    _auth=Depends(require_human_principal),
 ):
     return product_surface_page(request, f"runtime/{surface_key}")
 
 
 @router.get("/manage", response_class=HTMLResponse)
-async def product_manage_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_manage_page(request: Request, _auth=Depends(require_human_principal)):
     return product_surface_page(request, "manage")
 
 
 @router.get("/search", response_class=HTMLResponse)
-async def product_search_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_search_page(request: Request, _auth=Depends(require_human_principal)):
     return product_surface_page(request, "search")
 
 
 @router.get("/inbox", response_class=HTMLResponse)
-async def product_inbox_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_inbox_page(request: Request, _auth=Depends(require_human_principal)):
     return product_surface_page(request, "inbox")
 
 
 @router.get("/forbidden", response_class=HTMLResponse)
-async def product_forbidden_state_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_forbidden_state_page(request: Request, _auth=Depends(require_human_principal)):
     return product_state_page(request, "forbidden")
 
 
 @router.get("/offline", response_class=HTMLResponse)
-async def product_offline_state_page(request: Request, _auth=Depends(require_web_auth)):
+async def product_offline_state_page(request: Request, _auth=Depends(require_human_principal)):
     return product_state_page(request, "offline")

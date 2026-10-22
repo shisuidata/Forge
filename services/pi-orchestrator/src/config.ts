@@ -13,18 +13,10 @@ export interface OrchestratorConfig {
   skillsRoot: string;
   agentDir: string;
   stateDbPath: string;
-  channelIdentityMapPath: string;
   channelServiceKeys: string[];
-  channelAutoBindFirstFeishu: boolean;
-  channelBootstrapIdentity: {
-    org_id: string;
-    team_id: string;
-    user_id: string;
-  };
-  adminServiceKeys: string[];
   forgeBaseUrl: string;
-  forgeApiKey: string | undefined;
   forgePiServiceKey: string | undefined;
+  executionPrincipalId: string | undefined;
   forgeTimeoutMs: number;
   stageTimeoutMs: number;
   stageLeaseMs: number;
@@ -72,14 +64,6 @@ function parsePort(raw: string | undefined): number {
   }
   return port;
 }
-
-function parseBoolean(raw: string | undefined, fallback = false): boolean {
-  if (raw === undefined) return fallback;
-  if (raw === "true") return true;
-  if (raw === "false") return false;
-  throw new Error(`Invalid boolean value: ${raw}`);
-}
-
 function parsePositiveInteger(raw: string | undefined, fallback: number, name: string): number {
   if (raw === undefined) return fallback;
   const value = Number(raw);
@@ -155,26 +139,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OrchestratorCo
     stateDbPath: resolve(
       env.PI_ORCHESTRATOR_STATE_DB ?? resolve(agentDir, "state/orchestrator.sqlite3"),
     ),
-    channelIdentityMapPath: resolve(
-      env.PI_CHANNEL_IDENTITY_MAP ?? resolve(agentDir, "channel-identities.json"),
-    ),
     channelServiceKeys: (env.PI_CHANNEL_SERVICE_KEYS ?? "")
       .split(",")
       .map((key) => key.trim())
       .filter((key) => key.length > 0),
-    channelAutoBindFirstFeishu: parseBoolean(env.PI_CHANNEL_AUTO_BIND_FIRST_FEISHU),
-    channelBootstrapIdentity: {
-      org_id: env.PI_CHANNEL_BOOTSTRAP_ORG_ID ?? "org_default",
-      team_id: env.PI_CHANNEL_BOOTSTRAP_TEAM_ID ?? "team_default",
-      user_id: env.PI_CHANNEL_BOOTSTRAP_USER_ID ?? "feishu_owner",
-    },
-    adminServiceKeys: (env.PI_ADMIN_SERVICE_KEYS ?? "")
-      .split(",")
-      .map((key) => key.trim())
-      .filter((key) => key.length > 0),
     forgeBaseUrl: (env.FORGE_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, ""),
-    forgeApiKey: env.FORGE_API_KEY || undefined,
     forgePiServiceKey: env.FORGE_PI_SERVICE_KEY || undefined,
+    executionPrincipalId: env.PI_EXECUTION_PRINCIPAL_ID || undefined,
     forgeTimeoutMs,
     stageTimeoutMs,
     stageLeaseMs,

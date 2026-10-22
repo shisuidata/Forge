@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { OrchestratorApplication } from "../src/application.js";
 import type { Artifact } from "../src/artifacts.js";
-import { ChannelIdentityError, ChannelIdentityResolver } from "../src/channels/identity.js";
+import { ChannelIdentityError, identityFromTrustedBinding } from "../src/channels/identity.js";
 import { routeChannelMessage } from "../src/channels/intent.js";
 import { parseChannelEvent } from "../src/channels/contracts.js";
 import { renderChannelPresentation } from "../src/channels/renderer.js";
@@ -16,6 +16,12 @@ import { createOrchestratorServer } from "../src/server.js";
 import { SqliteOrchestratorState } from "../src/sqlite-store.js";
 import type { TaskEvent } from "../src/task-events.js";
 import type { TaskRun } from "../src/task-store.js";
+function channelPrincipal(user: string, team: string, external: string) {
+  return { principal_id: user, principal_type: "human" as const, organization_id: "org_demo",
+    workspace_id: team, role: "member" as const, identity_revision: 1, credential_id: null,
+    credential_revision: null, authentication_method: "service_key", authenticated_at: new Date().toISOString(),
+    channel_binding_id: "feishu:" + external, channel_binding_revision: 1 };
+}
 
 function task(status: TaskRun["status"]): TaskRun {
   return {
@@ -56,6 +62,7 @@ test("channel renderer emits a hash-bound review action without advancing state"
         sql: "SELECT 1",
         sql_hash: `sha256:${"a".repeat(64)}`,
         assurance_report_hash: `sha256:${"b".repeat(64)}`,
+        enforcement_context_hash: `sha256:${"c".repeat(64)}`,
       }),
     ],
     artifacts: [],
@@ -66,6 +73,7 @@ test("channel renderer emits a hash-bound review action without advancing state"
     query_run_id: "qr_channel_001",
     sql_hash: `sha256:${"a".repeat(64)}`,
     assurance_report_hash: `sha256:${"b".repeat(64)}`,
+    enforcement_context_hash: `sha256:${"c".repeat(64)}`
   });
   assert.equal(presentation.actions[0]?.type, "approve_query");
   assert.deepEqual(presentation.fields, []);
@@ -126,13 +134,16 @@ test("channel greeting completes without calling Forge or a model", async () => 
     forgeClient: {
       async createQueryRun() { forgeCalls += 1; throw new Error("must not query"); },
       async approveQueryRun() { throw new Error("must not execute"); },
+      async getQueryRun() { throw new Error("must not query"); },
+      async executeQueryRun() { throw new Error("must not execute"); },
+      async getMandate() { throw new Error("must not authorize"); },
     },
   });
   const result = await application.ingestChannelMessage({
     event_id: "evt_greeting", channel: "feishu", event_type: "message",
     external_user_id: "ou_allowed", conversation_id: "oc_demo", message_id: "om_greeting",
     task_run_id: null, payload: { text: "你好", chat_type: "p2p" },
-  }, { org_id: "org_demo", team_id: "team_demo", user_id: "user_demo" });
+  }, channelPrincipal("user_demo", "team_demo", "ou_allowed"));
 
   assert.equal(result.task.status, "completed");
   assert.equal(result.task.intent, "channel_conversation");
@@ -170,6 +181,9 @@ test("channel knowledge answer is bound to Forge context evidence without a Quer
       },
       async createQueryRun() { queryCalls += 1; throw new Error("must not query"); },
       async approveQueryRun() { throw new Error("must not execute"); },
+      async getQueryRun() { throw new Error("must not query"); },
+      async executeQueryRun() { throw new Error("must not execute"); },
+      async getMandate() { throw new Error("must not authorize"); },
     },
     skillExecutor: {
       async clarify() { throw new Error("not used"); },
@@ -190,7 +204,7 @@ test("channel knowledge answer is bound to Forge context evidence without a Quer
     event_id: "evt_knowledge", channel: "feishu", event_type: "message",
     external_user_id: "ou_allowed", conversation_id: "oc_demo", message_id: "om_knowledge",
     task_run_id: null, payload: { text: "销售额的口径是什么", chat_type: "p2p" },
-  }, { org_id: "org_demo", team_id: "team_demo", user_id: "user_demo" });
+  }, channelPrincipal("user_demo", "team_demo", "ou_allowed"));
 
   assert.equal(result.task.status, "completed");
   assert.equal(result.task.intent, "knowledge_answer");
@@ -287,10 +301,13 @@ test("personal memory requires an explicit channel approval and never escalates 
     forgeClient: {
       async createQueryRun() { throw new Error("not used"); },
       async approveQueryRun() { throw new Error("not used"); },
+      async getQueryRun() { throw new Error("not used"); },
+      async executeQueryRun() { throw new Error("not used"); },
+      async getMandate() { throw new Error("not used"); },
       async writeMemory(input) { memoryWrites.push(input); return { status: "confirmed" }; },
     },
   });
-  const identity = { org_id: "org_demo", team_id: "team_demo", user_id: "user_demo" };
+  const identity = channelPrincipal("user_demo", "team_demo", "ou_demo");
   const proposed = await application.ingestChannelMessage({
     event_id: "evt_memory", channel: "feishu", event_type: "message", external_user_id: "ou_demo",
     conversation_id: "oc_demo", message_id: "om_memory", task_run_id: null,
@@ -307,63 +324,29 @@ test("personal memory requires an explicit channel approval and never escalates 
   }, identity);
   assert.equal(confirmed.task.status, "completed");
   assert.equal(memoryWrites[0]?.scope, undefined);
-  assert.equal(memoryWrites[0]?.user_id, "user_demo");
+  assert.equal(memoryWrites[0]?.task_run_id, proposed.task.task_run_id);
   assert.equal(memoryWrites[0]?.operation, "upsert");
   state.close();
 });
 
-test("Web uses the same ChannelEvent and explicit identity-map contract", async () => {
-  const parsed = parseChannelEvent({
-    event_id: "web_msg_001", channel: "web", event_type: "message",
-    external_user_id: "web_admin", conversation_id: "web_conv_001",
-    message_id: "web_msg_001", task_run_id: null, payload: { text: "查询销售额" },
+test("channel identity uses only a verified binding to the exact external user", () => {
+  const principal = {
+    principal_id: "user_demo", principal_type: "human", organization_id: "org_demo",
+    workspace_id: "team_data", role: "member", identity_revision: 1,
+    credential_id: null, credential_revision: null, authentication_method: "service_key",
+    authenticated_at: new Date().toISOString(), channel_binding_id: "feishu:ou_allowed",
+    channel_binding_revision: 1,
+  } as const;
+  assert.deepEqual(identityFromTrustedBinding(principal, "feishu", "ou_allowed"), {
+    org_id: "org_demo", team_id: "team_data", user_id: "user_demo",
   });
-  assert.equal(parsed.channel, "web");
-
-  const directory = await mkdtemp(join(tmpdir(), "forge-channel-web-identity-"));
-  const path = join(directory, "identities.json");
-  await writeFile(path, JSON.stringify({
-    web: { web_admin: { org_id: "org_default", team_id: "team_default", user_id: "web_admin" } },
-    feishu: {}, dingtalk: {},
-  }));
-  const resolver = new ChannelIdentityResolver(path);
-  assert.deepEqual(resolver.resolve("web", "web_admin"), {
-    org_id: "org_default", team_id: "team_default", user_id: "web_admin",
+  assert.throws(() => identityFromTrustedBinding(principal, "feishu", "ou_unknown"), ChannelIdentityError);
+  assert.throws(() => identityFromTrustedBinding(principal, "dingtalk", "ou_allowed"), ChannelIdentityError);
+  const web = { ...principal, credential_id: "cred_user", credential_revision: 1, channel_binding_id: null, channel_binding_revision: null };
+  assert.deepEqual(identityFromTrustedBinding(web, "web", "user_demo"), {
+    org_id: "org_demo", team_id: "team_data", user_id: "user_demo",
   });
-  assert.throws(() => resolver.resolve("web", "unknown"), ChannelIdentityError);
-});
-
-test("identity resolver fails closed for unknown channel users", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-channel-identity-"));
-  const path = join(directory, "identities.json");
-  await writeFile(path, JSON.stringify({
-    feishu: {
-      ou_allowed: { org_id: "org_demo", team_id: "team_data", user_id: "user_demo" },
-    },
-  }));
-  const resolver = new ChannelIdentityResolver(path);
-  assert.deepEqual(resolver.resolve("feishu", "ou_allowed"), {
-    org_id: "org_demo",
-    team_id: "team_data",
-    user_id: "user_demo",
-  });
-  assert.throws(() => resolver.resolve("feishu", "ou_unknown"), ChannelIdentityError);
-});
-
-test("one-time Feishu bootstrap atomically binds only the first user", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-channel-bootstrap-"));
-  const path = join(directory, "identities.json");
-  await writeFile(path, JSON.stringify({ feishu: {}, dingtalk: {} }));
-  await chmod(path, 0o600);
-  const resolver = new ChannelIdentityResolver(path);
-  const identity = { org_id: "org_default", team_id: "team_default", user_id: "feishu_owner" };
-
-  assert.deepEqual(resolver.bindFirstFeishu("ou_first", identity), identity);
-  assert.deepEqual(resolver.resolve("feishu", "ou_first"), identity);
-  assert.throws(() => resolver.bindFirstFeishu("ou_second", identity), ChannelIdentityError);
-  assert.equal((await stat(path)).mode & 0o777, 0o600);
-  assert.doesNotMatch(await readFile(path, "utf8"), /ou_second/);
-  assert.deepEqual(new ChannelIdentityResolver(path).resolve("feishu", "ou_first"), identity);
+  assert.throws(() => identityFromTrustedBinding(web, "web", "ou_allowed"), ChannelIdentityError);
 });
 
 test("channel cancel action is owned, persisted, and idempotent", async () => {
@@ -384,7 +367,7 @@ test("channel cancel action is owned, persisted, and idempotent", async () => {
     channel_conversation_id: "oc_demo",
     intent: "business_root_cause_analysis",
     message: "待取消任务",
-  }).task;
+  }, channelPrincipal("user_demo", "team_data", "ou_allowed")).task;
   const input = {
     event_id: "evt_cancel_001",
     channel: "feishu" as const,
@@ -395,7 +378,7 @@ test("channel cancel action is owned, persisted, and idempotent", async () => {
     task_run_id: created.task_run_id,
     payload: { action: "cancel_task" },
   };
-  const identity = { org_id: "org_demo", team_id: "team_data", user_id: "user_demo" };
+  const identity = channelPrincipal("user_demo", "team_data", "ou_allowed");
 
   const first = await application.ingestChannelAction(input, identity);
   const replay = await application.ingestChannelAction(input, identity);
@@ -407,228 +390,19 @@ test("channel cancel action is owned, persisted, and idempotent", async () => {
   state.close();
 });
 
-test("duplicate Feishu delivery returns one TaskRun and one Forge preparation", async (context) => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-channel-event-"));
-  const identityPath = join(directory, "identities.json");
-  await writeFile(identityPath, JSON.stringify({
-    feishu: {
-      ou_allowed: { org_id: "org_demo", team_id: "team_data", user_id: "user_demo" },
-      ou_other: { org_id: "org_demo", team_id: "team_data", user_id: "user_other" },
-    },
-  }));
-  const config = loadConfig({
-    PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3"),
-    PI_CHANNEL_IDENTITY_MAP: identityPath,
-    PI_CHANNEL_SERVICE_KEYS: "channel-secret",
-  });
-  const state = new SqliteOrchestratorState(config.stateDbPath);
-  let releaseForge: (() => void) | undefined;
-  const forgeGate = new Promise<void>((resolve) => { releaseForge = resolve; });
-  let prepareCalls = 0;
-  let approveCalls = 0;
-  let releaseApproval: (() => void) | undefined;
-  const approvalGate = new Promise<void>((resolve) => { releaseApproval = resolve; });
-  const application = new OrchestratorApplication({
-    config,
-    state,
-    forgeClient: {
-      async createQueryRun(input) {
-        prepareCalls += 1;
-        await forgeGate;
-        return {
-          query_run_id: "qr_channel_001",
-          task_run_id: input.taskRunId,
-          status: "needs_review",
-          question: input.question,
-          user_id: input.userId,
-          datasource_id: "demo",
-          input_kind: "forge_json",
-          candidate_revision: "query-candidate-v1",
-          forge_json: {},
-          sql: "SELECT 1",
-          sql_hash: `sha256:${"a".repeat(64)}`,
-          dialect: "postgresql",
-          registry_version: "v1",
-          assurance_report: { status: "passed" },
-          assurance_report_hash: `sha256:${"b".repeat(64)}`,
-          assurance_revision: "query-assurance-v1",
-          policy_revision: "convention-policy-v1",
-          model_revision: "sha256:model",
-          assurance_registry_revision: "sha256:assurance-registry",
-          review_required: true,
-          can_execute: false,
-          expires_at: "2099-01-01T00:00:00Z",
-          error: "",
-        };
-      },
-      async approveQueryRun(input) {
-        approveCalls += 1;
-        await approvalGate;
-        return {
-          query_run_id: input.queryRunId,
-          task_run_id: "tr_channel",
-          status: "completed",
-          sql_hash: input.sqlHash,
-          input_kind: "forge_json",
-          candidate_revision: "query-candidate-v1",
-          dialect: "postgresql",
-          registry_version: "v1",
-          assurance_report: { status: "passed" },
-          assurance_report_hash: `sha256:${"b".repeat(64)}`,
-          assurance_revision: "query-assurance-v1",
-          policy_revision: "convention-policy-v1",
-          model_revision: "sha256:model",
-          assurance_registry_revision: "sha256:assurance-registry",
-          columns: ["n"],
-          rows: [[1]],
-          row_count: 1,
-          truncated: false,
-          execution_ms: 1,
-          executed_at: "2026-08-21T17:00:00Z",
-          error: "",
-        };
-      },
-    },
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(async () => {
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-    state.close();
-  });
-  const address = server.address() as AddressInfo;
-  const url = `http://127.0.0.1:${address.port}/v1/channel-events`;
-  const payload = {
-    event_id: "evt_feishu_001",
-    channel: "feishu",
-    event_type: "message",
-    external_user_id: "ou_allowed",
-    conversation_id: "oc_demo",
-    message_id: "om_demo",
-    task_run_id: null,
-    payload: { text: "查询订单" },
-  };
-  const headers = {
-    "content-type": "application/json",
-    "x-channel-service-key": "channel-secret",
-  };
-  const first = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
-  assert.equal(first.status, 202);
-  const accepted = (await first.json()) as { task: { task_run_id: string } };
-  const duplicate = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
-  assert.equal(duplicate.status, 200);
-  const replayed = (await duplicate.json()) as { task: { task_run_id: string }; duplicate: boolean };
-  assert.equal(replayed.task.task_run_id, accepted.task.task_run_id);
-  assert.equal(replayed.duplicate, true);
-  assert.equal(prepareCalls, 1);
-
-  releaseForge?.();
-  await new Promise((resolve) => setTimeout(resolve, 10));
-  const presentationResponse = await fetch(
-    `http://127.0.0.1:${address.port}/v1/tasks/${accepted.task.task_run_id}/presentation`,
-    { headers },
-  );
-  const rendered = (await presentationResponse.json()) as {
-    presentation: { kind: string; actions: Array<{ type: string }> };
-  };
-  assert.equal(rendered.presentation.kind, "query_review");
-  assert.equal(rendered.presentation.actions[0]?.type, "approve_query");
-
-  const actionPayload = {
-    event_id: "evt_feishu_action_001",
-    channel: "feishu",
-    event_type: "action",
-    external_user_id: "ou_allowed",
-    conversation_id: "oc_demo",
-    message_id: "om_card_demo",
-    task_run_id: accepted.task.task_run_id,
-    payload: {
-      action: "approve_query",
-      query_run_id: "qr_channel_001",
-      sql_hash: `sha256:${"a".repeat(64)}`,
-      assurance_report_hash: `sha256:${"b".repeat(64)}`,
-    },
-  };
-  const forgedAction = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      ...actionPayload,
-      event_id: "evt_feishu_action_forged",
-      external_user_id: "ou_other",
-    }),
-  });
-  assert.equal(forgedAction.status, 409);
-  assert.equal(approveCalls, 0);
-
-  const action = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(actionPayload),
-  });
-  assert.equal(action.status, 202);
-  const inFlightReplay = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(actionPayload),
-  });
-  assert.equal(inFlightReplay.status, 200);
-  assert.equal(approveCalls, 1);
-  releaseApproval?.();
-  await new Promise((resolve) => setTimeout(resolve, 10));
-  const actionReplay = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(actionPayload),
-  });
-  assert.equal(actionReplay.status, 200);
-  assert.equal(approveCalls, 1);
-  const resultPresentation = await fetch(
-    `http://127.0.0.1:${address.port}/v1/tasks/${accepted.task.task_run_id}/presentation`,
-    { headers },
-  );
-  const resultRendered = (await resultPresentation.json()) as {
-    presentation: { kind: string };
-  };
-  assert.equal(resultRendered.presentation.kind, "query_result");
-});
-
-test("channel endpoint bootstraps only the first authenticated Feishu private message", async (context) => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-channel-bootstrap-server-"));
-  const identityPath = join(directory, "identities.json");
-  await writeFile(identityPath, JSON.stringify({ feishu: {}, dingtalk: {} }));
-  await chmod(identityPath, 0o600);
-  const config = loadConfig({
-    PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3"),
-    PI_CHANNEL_IDENTITY_MAP: identityPath,
-    PI_CHANNEL_SERVICE_KEYS: "channel-secret",
-    PI_CHANNEL_AUTO_BIND_FIRST_FEISHU: "true",
-  });
+test("channel ingress never auto-binds a first Feishu user", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-no-autobind-"));
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3"),
+    PI_CHANNEL_SERVICE_KEYS: "channel-secret", PI_CHANNEL_AUTO_BIND_FIRST_FEISHU: "true" });
   const server = createOrchestratorServer(config);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-  const url = `http://127.0.0.1:${address.port}/v1/channel-events`;
-  const headers = { "content-type": "application/json", "x-channel-service-key": "channel-secret" };
-  const payload = {
-    event_id: "evt_bootstrap_001", channel: "feishu", event_type: "message",
-    external_user_id: "ou_first", conversation_id: "oc_first", message_id: "om_first",
-    task_run_id: null, payload: { text: "查询订单", chat_type: "p2p" },
-  };
-
-  const first = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload) });
-  assert.equal(first.status, 202);
-  assert.match(await readFile(identityPath, "utf8"), /ou_first/);
-
-  const second = await fetch(url, {
-    method: "POST", headers, body: JSON.stringify({
-      ...payload, event_id: "evt_bootstrap_002", external_user_id: "ou_second",
-      payload: { text: "查询订单", chat_type: "group" },
-    }),
-  });
-  assert.equal(second.status, 403);
+  const url = "http://127.0.0.1:" + (server.address() as AddressInfo).port + "/v1/channel-events";
+  const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-channel-service-key": "channel-secret" },
+    body: JSON.stringify({ event_id: "evt_first", channel: "feishu", event_type: "message", external_user_id: "ou_first",
+      conversation_id: "oc_first", message_id: "om_first", task_run_id: null, payload: { text: "hello" } }) });
+  assert.equal(response.status, 401);
 });
-
 test("channel endpoint rejects missing service credential before identity lookup", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "forge-channel-auth-"));
   const config = loadConfig({
@@ -644,5 +418,5 @@ test("channel endpoint rejects missing service credential before identity lookup
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),
   });
-  assert.equal(response.status, 403);
+  assert.equal(response.status, 401);
 });

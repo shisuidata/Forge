@@ -10,6 +10,10 @@ from web.routes.registry_studio import _store
 
 
 @pytest.fixture
+def client(governed_client):
+    return governed_client
+
+@pytest.fixture
 def studio_env(tmp_path, monkeypatch):
     registry = tmp_path / "schema.registry.json"
     registry.write_text(json.dumps({

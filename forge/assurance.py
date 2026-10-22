@@ -24,7 +24,7 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v11"
+ASSURANCE_REVISION = "query-assurance-v12"
 POLICY_REVISION = "scoped-policy-v1"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 QUERY_CANDIDATE_REVISION = "query-candidate-v1"
@@ -47,6 +47,7 @@ class QueryAssuranceReport:
     registry_revision: str
     model_revision: str
     gates: tuple[GateResult, ...]
+    referenced_tables: tuple[str, ...] = ()
     sql: str | None = None
     sql_hash: str | None = None
     input_kind: str = "forge_json"
@@ -255,7 +256,7 @@ def assure_compiled_sql(
             identify=False,
             validate_qualify_columns=True,
         )
-        _validate_relation_scopes(expression, qualified_schema)
+        referenced_tables = _validate_relation_scopes(expression, qualified_schema)
         gates.append(GateResult("registry_acl", "passed", resolved_registry_revision))
     except SqlglotError as exc:
         gates.append(GateResult(
@@ -275,6 +276,7 @@ def assure_compiled_sql(
         registry_revision=resolved_registry_revision,
         model_revision=producer_revision,
         gates=tuple(gates),
+        referenced_tables=referenced_tables,
         sql=sql,
         sql_hash="sha256:" + hashlib.sha256(sql.encode("utf-8")).hexdigest(),
         input_kind=input_kind,
@@ -578,10 +580,11 @@ def _validate_registry_fields(query: dict, registry: dict) -> None:
         raise ValueError("Registry/权限校验失败：查询使用了未授权或不存在的表/字段。")
 
 
-def _validate_relation_scopes(expression: exp.Expression, schema: MappingSchema) -> None:
+def _validate_relation_scopes(expression: exp.Expression, schema: MappingSchema) -> tuple[str, ...]:
     root = build_scope(expression)
     if root is None:
-        return
+        return ()
+    physical_tables: set[str] = set()
     for scope in root.traverse():
         for source in scope.sources.values():
             if isinstance(source, exp.Table):
@@ -589,6 +592,7 @@ def _validate_relation_scopes(expression: exp.Expression, schema: MappingSchema)
                 # CTE/derived sources are Scopes, resolved independently at every use site.
                 if source.db or source.catalog or schema.find(source) is None:
                     raise OptimizeError("Unauthorized physical SQL relation")
+                physical_tables.add(source.name)
     pending = [(root, frozenset())]
     visited: set[tuple[Scope, frozenset[str]]] = set()
     while pending:
@@ -610,6 +614,7 @@ def _validate_relation_scopes(expression: exp.Expression, schema: MappingSchema)
             source = scope.sources.get(name)
             if isinstance(source, Scope):
                 pending.append((source, inherited))
+    return tuple(sorted(physical_tables))
 
 
 

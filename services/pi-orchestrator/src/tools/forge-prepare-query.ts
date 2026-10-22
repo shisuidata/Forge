@@ -6,9 +6,8 @@ import { ForgeQueryRunClient } from "../forge/query-run-client.js";
 
 export interface TrustedTaskContext {
   taskRunId: string;
-  orgId: string;
-  teamId: string;
-  userId: string;
+  mandateId: string;
+  purpose: string;
   correlationId?: string;
 }
 
@@ -41,14 +40,11 @@ export function createForgePrepareQueryTool(options: {
       const result = await options.client.createQueryRun(
         {
           taskRunId: options.task.taskRunId,
-          orgId: options.task.orgId,
-          teamId: options.task.teamId,
-          userId: options.task.userId,
+          mandateId: options.task.mandateId,
+          purpose: options.task.purpose,
           question: params.question,
           idempotencyKey: `${options.task.taskRunId}:prepare`,
-          ...(params.dialect === undefined
-            ? {}
-            : { dialect: params.dialect as ForgeDialect }),
+          ...(params.dialect === undefined ? {} : { dialect: params.dialect as ForgeDialect }),
         },
         signal,
       );
@@ -61,15 +57,15 @@ export function createForgePrepareQueryTool(options: {
                 task_run_id: options.task.taskRunId,
                 query_run_id: result.query_run_id,
                 status: result.status,
-                sql: result.sql,
-                sql_hash: result.sql_hash,
-                forge_json: result.forge_json,
-                dialect: result.dialect,
-                registry_version: result.registry_version,
-                expires_at: result.expires_at,
-                review_required: result.review_required,
-                can_execute: result.can_execute,
-                clarification_or_error: result.error,
+                sql: result.review.sql,
+                sql_hash: result.review.sql_hash,
+                assurance_report_hash: result.review.assurance_report_hash,
+                enforcement_context_hash: result.review.enforcement_context_hash,
+                registry_version: result.lineage.registry_revision,
+                expires_at: result.review.expires_at,
+                review_required: result.decision.review_required,
+                execution_mode: result.decision.execution_mode,
+                clarification_or_error: result.failure?.code ?? null,
               },
               null,
               2,

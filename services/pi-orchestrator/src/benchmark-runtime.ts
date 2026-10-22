@@ -454,14 +454,15 @@ export class PiBenchmarkRuntime {
     this.#assertOwner();
     const run = this.application.state.transactions.run(() => {
       const runId = `pbr_${randomUUID().replaceAll("-", "")}`;
-      const created = this.application.createTask({
+      // Benchmark-only synthetic task: it cannot receive a mandate or authorize execution.
+      const task = this.application.state.tasks.create({
         org_id: "org_benchmark",
         team_id: "team_benchmark",
         user_id: "benchmark_operator",
         channel: "api",
         intent: "pi-native rag dual-subagent benchmark",
-        message: `Benchmark ${cases.length} BIRD cases`,
         metadata: {
+          original_message: `Benchmark ${cases.length} BIRD cases`,
           benchmark: true,
           benchmark_run_id: runId,
           suite_id: String(suite.suite.suite),
@@ -472,6 +473,9 @@ export class PiBenchmarkRuntime {
           forge_schema_revision: generationContract.forge_schema_revision,
         },
       });
+      this.application.state.events.append(task.task_run_id, "task.created", {
+        status: task.status, intent: task.intent, channel: task.channel,
+      });
       const revision = computePiModelRevision({
         agentDir: this.config.agentDir,
         provider: options.provider,
@@ -479,7 +483,7 @@ export class PiBenchmarkRuntime {
       }) ?? `unresolved:${options.provider}/${options.model}`;
       const run: PersistedRun = {
         run_id: runId,
-        task_run_id: created.task.task_run_id,
+        task_run_id: task.task_run_id,
         status: "queued",
         suite_id: String(suite.suite.suite),
         metric_revision: suite.metric_revision,

@@ -11,13 +11,17 @@
 
   <div class="layout-grid main-aside task-detail-grid">
     <div class="layout-grid">
-      <section class="panel" data-task-plan>
-        <header class="panel-header"><div><h2>计划与进度</h2><p>步骤按依赖顺序推进</p></div></header>
-        <div class="panel-body"><div class="state-box state-box-compact"><p>正在读取执行计划…</p></div></div>
-      </section>
       <section class="panel" data-task-review hidden>
         <header class="panel-header"><div><h2>SQL 审核</h2><p>你看到的 SQL 就是将要执行的 SQL</p></div></header>
         <div class="panel-body" data-task-review-body></div>
+      </section>
+      <section class="panel" data-task-mandate>
+        <header class="panel-header"><div><h2>查询授权</h2><p>明确总范围、自主范围和责任链</p></div></header>
+        <div class="panel-body"><p class="muted-copy">正在读取授权…</p></div>
+      </section>
+      <section class="panel" data-task-plan>
+        <header class="panel-header"><div><h2>计划与进度</h2><p>步骤按依赖顺序推进</p></div></header>
+        <div class="panel-body"><div class="state-box state-box-compact"><p>正在读取执行计划…</p></div></div>
       </section>
       <section class="panel" data-task-presentation>
         <header class="panel-header"><div><h2>当前输出</h2><p>数据范围、阶段结果与限制</p></div></header>
@@ -57,4 +61,4 @@
   </form>
 </dialog>
 {% endblock %}
-{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=7"></script>{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=10"></script>{% endblock %}

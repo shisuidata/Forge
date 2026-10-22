@@ -112,3 +112,52 @@ def test_feishu_action_id_is_stable_for_retries_and_changes_with_payload():
 def test_pi_channel_client_requires_channel_service_key():
     with pytest.raises(PiChannelError, match="PI_CHANNEL_SERVICE_KEY"):
         PiChannelClient(base_url="http://pi.test", service_key="")
+
+
+def test_unbound_channel_cannot_submit_or_poll(monkeypatch):
+    from forge.governance_credentials import authenticate_channel
+    monkeypatch.setattr("forge.governance_credentials.authenticate_channel", lambda channel, user: None)
+    client = PiChannelClient(base_url="http://pi.test", service_key="synthetic-key")
+    with pytest.raises(PiChannelError, match="channel_identity_unbound"):
+        client.submit_message(event_id="event_1", external_user_id="unknown",
+                              conversation_id="chat_1", message_id="msg_1", text="hello")
+    with pytest.raises(PiChannelError, match="channel_identity_unbound"):
+        client.get_presentation("tr_demo", external_user_id="unknown")
+
+
+def test_channel_approval_ticket_binds_exact_event_bytes_and_reviewer(monkeypatch):
+    from forge.governance import AuthenticatedPrincipal
+    principal = AuthenticatedPrincipal(
+        "reviewer_b", "human", "org", "team", "reviewer", 1, None, None,
+        "service_key", "now", "feishu:operator_b", 1,
+    )
+    observed = {}
+    class Response:
+        status_code = 202
+        def json(self):
+            return {"status": "executing"}
+    def mint(actor, method, path, body, action, **scope):
+        observed["ticket"] = (actor, method, path, body, action, scope)
+        return "synthetic-control-ticket"
+    def send(method, url, **kwargs):
+        observed["request"] = kwargs
+        return Response()
+    monkeypatch.setattr("forge.governance_credentials.authenticate_channel", lambda channel, user: principal)
+    monkeypatch.setattr("forge.governance.issue_control_token", mint)
+    monkeypatch.setattr("web.pi_channel.httpx.request", send)
+    client = PiChannelClient(base_url="http://pi.test", service_key="synthetic-key")
+    client.submit_action(event_id="event_b", external_user_id="operator_b",
+                         conversation_id="chat_1", message_id="msg_1",
+                         task_run_id="tr_a", action="approve_query",
+                         payload={"query_run_id": "qr_a", "sql_hash": "s",
+                                  "assurance_report_hash": "a", "enforcement_context_hash": "e"})
+    actor, method, path, signed, action, scope = observed["ticket"]
+    assert actor is principal and method == "POST" and path == "/v1/channel-events"
+    assert action == "query.approve" and scope["query_run_id"] == "qr_a"
+    assert scope["task_run_id"] == "tr_a" and scope["idempotency_key"] == "event_b"
+    assert scope["approval_hashes"] == {
+        "sql_hash": "s", "assurance_report_hash": "a", "enforcement_context_hash": "e",
+    }
+    assert observed["request"]["content"] == signed
+    assert observed["request"]["headers"]["Idempotency-Key"] == "event_b"
+    assert observed["request"]["headers"]["X-Forge-Control-Token"] == "synthetic-control-ticket"

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hmac
 from typing import Any
 
@@ -12,9 +12,14 @@ from agent.contracts import validate_contract
 from config import cfg
 from forge.assurance import POLICY_REVISION
 from forge.evaluate import canonical_hash
+from forge.governance import AuthenticatedPrincipal, GovernanceError
+from forge.governance_mandates import get_mandate
+from agent.tenant import tenants
 
 ENFORCE_SCHEMA_VERSION = 1
 ENFORCE_REVISION = "enforce-query-v1"
+GOVERNED_ENFORCE_REVISION = "enforce-query-v2"
+AUTHORIZATION_POLICY_REVISION = "bounded-agent-policy-v1"
 _REQUIRED_AGENT_CAPABILITIES = {"query.prepare", "query.execute"}
 
 
@@ -261,6 +266,234 @@ def prepare_governance_context(
         or None,
     }
 
+def _governed_snapshot(actor: AuthenticatedPrincipal, mandate: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read every authority whose revision must remain stable through preparation."""
+    delegated = mandate["delegated_mandate"]
+    ids = {
+        "issuer": mandate["issuer_principal_id"],
+        "delegate": delegated["delegate_principal"]["principal_id"],
+        "accountable": delegated["accountable_principal"]["principal_id"],
+        "reviewer": mandate["policy"]["reviewer_principal_id"],
+    }
+    principals = {role: tenants.get_principal(identifier) for role, identifier in ids.items()}
+    scope = (delegated["organization_id"], delegated["workspace_id"])
+    if any((person["organization_id"], person["workspace_id"]) != scope for person in principals.values()):
+        raise EnforceContextError("governance_drift", "Principal scope changed", status_code=409)
+    if (principals["issuer"]["principal_type"] != "human" or principals["issuer"]["role"] != "admin"
+            or principals["delegate"]["principal_type"] not in {"agent", "service"}
+            or principals["accountable"]["principal_type"] != "human"
+            or principals["reviewer"]["principal_type"] != "human"
+            or principals["reviewer"]["role"] not in {"admin", "reviewer"}):
+        raise EnforceContextError("governance_drift", "Mandate principals changed", status_code=409)
+    if (principals["delegate"]["principal_id"] != actor.principal_id
+            or principals["delegate"]["identity_revision"] != actor.identity_revision
+            or principals["delegate"]["principal_type"] != actor.principal_type
+            or principals["delegate"]["role"] != actor.role
+            or scope != (actor.organization_id, actor.workspace_id)):
+        raise EnforceContextError("mandate_actor_mismatch", "Mandate is not assigned to this actor", status_code=403)
+    if (delegated["delegate_principal"]["principal_type"] != actor.principal_type
+            or delegated["delegator_principal"] != {"principal_id": ids["issuer"], "principal_type": "human"}
+            or delegated["accountable_principal"]["principal_type"] != "human"):
+        raise EnforceContextError("mandate_integrity_failed", "Mandate principal snapshot is inconsistent", status_code=409)
+    revision = {
+        "identities": {role: person["identity_revision"] for role, person in principals.items()},
+        "acls": {person["workspace_id"]: person["acl_revision"] for person in principals.values()},
+    }
+    return principals, revision
+
+
+def _governed_policy(
+    *, mandate: dict[str, Any], principals: dict[str, dict[str, Any]],
+    report: dict[str, Any], mode: str | None, evaluated_at: datetime, expires_at: datetime,
+) -> dict[str, Any]:
+    delegated = mandate["delegated_mandate"]
+    resource = next(item for item in delegated["resource_scope"] if item["resource_type"] == "datasource")
+    suffix = canonical_hash({"mandate": mandate["issuance_hash"], "report": report,
+                             "mode": mode}).removeprefix("sha256:")[:24]
+    obligations = []
+    if mode:
+        for kind, enforcement, description in (
+            ("read_only", "database", "Execute with the confirmed read-only database identity."),
+            ("audit", "forge", "Persist authorization and result lineage."),
+            ("expiry", "forge", "Claim execution before the mandate expires."),
+        ):
+            obligations.append({"obligation_id": f"obl_{kind}_{suffix}",
+                                "obligation_type": kind, "enforcement_point": enforcement,
+                                "description": description})
+        if mode == "human_review":
+            obligations.append({"obligation_id": f"obl_approval_{suffix}",
+                                "obligation_type": "approval", "enforcement_point": "forge",
+                                "description": "Require exact hash-bound approval from the named reviewer."})
+    authority_role = "issuer" if mode == "autonomous" else "reviewer"
+    decision = {
+        "schema_version": 1, "policy_decision_id": f"pd_{suffix}", "revision": 1,
+        "subject_principal_id": principals["delegate"]["principal_id"],
+        "mandate_id": mandate["mandate_id"], "action": "query.execute", "resource": resource,
+        "effect": "allow" if mode == "autonomous" else "conditional" if mode else "deny",
+        "reason_code": ("policy.query.autonomous" if mode == "autonomous" else
+                        "policy.query.human_approval_required" if mode else "policy.query.assurance_denied"),
+        "reason": ("The issued mandate permits autonomous execution of the referenced tables."
+                   if mode == "autonomous" else "The designated reviewer must approve the exact query."
+                   if mode else "Query Assurance denied execution; approval cannot override denial."),
+        "obligations": obligations, "policy_revision": AUTHORIZATION_POLICY_REVISION,
+        "decision_authority": {"principal_id": principals[authority_role]["principal_id"],
+                               "principal_type": "human"},
+        "evaluated_at": evaluated_at.isoformat(), "expires_at": expires_at.isoformat(),
+    }
+    validate_contract("policy_decision_v1", decision)
+    return decision
+
+
+def prepare_governed_query(
+    *, actor: AuthenticatedPrincipal, mandate_id: str, task_run_id: str,
+    purpose: str, question: str, dialect: str | None, candidate: dict[str, Any],
+) -> dict[str, Any]:
+    """Prepare a v2 QueryRun without granting execution or trusting request scope."""
+    from forge.assurance import QueryAssuranceError, assure_direct_sql, assure_query
+    from forge.dialects import DialectResolutionError, resolve_dialect
+    from forge.query_runs import current_registry_version
+
+    try:
+        validate_contract("query_candidate_v1", candidate)
+    except (ValidationError, TypeError) as exc:
+        raise EnforceContextError("candidate_contract_invalid", "Invalid query candidate") from exc
+    if not task_run_id or not purpose.strip() or not question.strip():
+        raise EnforceContextError("governance_contract_invalid", "Task, purpose and question are required")
+    try:
+        mandate = get_mandate(actor=actor, mandate_id=mandate_id)
+        validate_contract("issued_mandate_v1", mandate)
+        delegated = mandate["delegated_mandate"]
+        now = _now()
+        if (mandate["status"] != "active" or delegated["status"] != "active"
+                or not _parse_time(delegated["issued_at"], "mandate_inactive") <= now
+                < _parse_time(delegated["expires_at"], "mandate_inactive")):
+            raise EnforceContextError("mandate_inactive", "Mandate is not active", status_code=409)
+        if delegated["task_run_id"] != task_run_id:
+            raise EnforceContextError("mandate_task_mismatch", "Mandate task does not match", status_code=403)
+        if delegated["purpose"] != purpose:
+            raise EnforceContextError("mandate_purpose_mismatch", "Mandate purpose does not match", status_code=403)
+        if (delegated["audience"] != "forge" or delegated["can_delegate"]
+                or delegated["budget_ref"] is not None
+                or not _REQUIRED_AGENT_CAPABILITIES.issubset(delegated["capabilities"])
+                or mandate["policy"]["revision"] != AUTHORIZATION_POLICY_REVISION):
+            raise EnforceContextError("mandate_integrity_failed", "Mandate does not grant bounded query execution", status_code=409)
+        principals, revisions = _governed_snapshot(actor, mandate)
+        policy_tables = mandate["policy"]["allowed_tables"]
+        resource_tables = {item["resource_id"] for item in delegated["resource_scope"]
+                           if item["resource_type"] == "table"}
+        if (not policy_tables or set(policy_tables) != resource_tables
+                or not set(mandate["policy"]["autonomous_tables"]).issubset(policy_tables)):
+            raise EnforceContextError("mandate_integrity_failed", "Mandate table policy is inconsistent", status_code=409)
+        allowed = sorted(set(policy_tables)
+                         & set(tenants.get_allowed_tables_for_user(principals["issuer"]["principal_id"]))
+                         & set(tenants.get_allowed_tables_for_user(actor.principal_id)))
+        if (len([r for r in delegated["resource_scope"] if r["resource_type"] == "datasource"]) != 1
+                or not any(r["resource_type"] == "datasource" and r["resource_id"] == cfg.DATASOURCE_ID
+                           for r in delegated["resource_scope"])):
+            raise EnforceContextError("datasource_scope_mismatch", "Mandate datasource is not configured", status_code=409)
+        if len(allowed) != len(policy_tables):
+            raise EnforceContextError("governance_drift", "Table permission was narrowed", status_code=409)
+        try:
+            resolution = resolve_dialect(dialect, configured_dialect=cfg.SQL_DIALECT,
+                                         database_url=cfg.DATABASE_URL)
+        except DialectResolutionError as exc:
+            raise EnforceContextError(exc.code, str(exc)) from exc
+        registry_before = current_registry_version()
+        producer = candidate.get("producer_revision", "external")
+        try:
+            if candidate["kind"] == "direct_sql":
+                assurance = assure_direct_sql(candidate["sql"], dialect=resolution.resolved,
+                                              allowed_tables=allowed, producer_revision=producer)
+            else:
+                assurance = assure_query(candidate["forge_json"], question,
+                                         dialect=resolution.resolved, allowed_tables=allowed,
+                                         model_revision=producer)
+            report = assurance.to_dict()
+        except QueryAssuranceError as exc:
+            report = exc.report.to_dict()
+        report["dialect_resolution"] = resolution.to_dict()
+        references = report.get("referenced_tables")
+        mode = None
+        if report["status"] == "passed":
+            if not isinstance(references, (list, tuple)) or any(not isinstance(t, str) for t in references):
+                raise EnforceContextError("assurance_context_invalid", "Assurance did not report physical tables", status_code=409)
+            if not set(references).issubset(allowed):
+                raise EnforceContextError("assurance_context_invalid", "Assurance referenced unauthorized tables", status_code=409)
+            mode = ("autonomous" if set(references).issubset(mandate["policy"]["autonomous_tables"])
+                    else "human_review")
+        latest = get_mandate(actor=actor, mandate_id=mandate_id)
+        latest_principals, latest_revisions = _governed_snapshot(actor, latest)
+        if (current_registry_version() != registry_before or latest["status"] != "active"
+                or latest["issuance_hash"] != mandate["issuance_hash"]
+                or latest["state_revision"] != mandate["state_revision"]
+                or latest_revisions != revisions or latest_principals != principals
+                or allowed != sorted(set(policy_tables)
+                                     & set(tenants.get_allowed_tables_for_user(principals["issuer"]["principal_id"]))
+                                     & set(tenants.get_allowed_tables_for_user(actor.principal_id)))):
+            raise EnforceContextError("governance_drift", "Governance or Registry changed during preparation", status_code=409)
+        expires_at = min(_parse_time(delegated["expires_at"], "mandate_inactive"),
+                         now + timedelta(seconds=max(1, int(cfg.QUERY_RUN_REVIEW_TTL_SECONDS))))
+        principal_context = {
+            "schema_version": 1, "principal_context_id": "pc_" + mandate_id.removeprefix("md_") + "_" + canonical_hash({"actor": actor.principal_id, "at": now.isoformat()})[-16:],
+            "actor_principal": delegated["delegate_principal"],
+            "accountable_principal": delegated["accountable_principal"],
+            "organization_id": delegated["organization_id"], "workspace_id": delegated["workspace_id"],
+            "authentication_context": {
+                "method": (actor.authentication_method if actor.authentication_method in {"local", "oidc", "service_key", "oauth", "workload_identity"} else "service_key"),
+                "assurance_level": "service_asserted" if actor.authentication_method == "service_key" else "single_factor",
+                "authenticated_at": actor.authenticated_at, "session_id_hash": None,
+            },
+            "delegation_chain": [{"delegation_id": "dlg_" + mandate_id.removeprefix("md_"),
+                                  "delegator_principal_id": principals["issuer"]["principal_id"],
+                                  "delegate_principal_id": actor.principal_id,
+                                  "mandate_id": mandate_id, "issued_at": delegated["issued_at"],
+                                  "expires_at": delegated["expires_at"]}],
+            "issued_at": now.isoformat(), "expires_at": expires_at.isoformat(),
+        }
+        validate_contract("principal_context_v1", principal_context)
+        policy = _governed_policy(mandate=mandate, principals=principals, report=report,
+                                  mode=mode, evaluated_at=now, expires_at=expires_at)
+        candidate_hash = canonical_hash(candidate)
+        report_hash = canonical_hash(report)
+        policy_hash = canonical_hash(policy)
+        context = {
+            "principal_context": principal_context, "principal_context_hash": canonical_hash(principal_context),
+            "delegated_mandate": delegated, "delegated_mandate_hash": canonical_hash(delegated),
+            "resource_scope": delegated["resource_scope"], "resource_scope_hash": _scope_hash(delegated["resource_scope"]),
+            "allowed_tables": allowed, "datasource_resource": policy["resource"],
+            "purpose": purpose,
+        }
+        hash_record = {
+            "enforce_schema_version": 2, "task_run_id": task_run_id, "purpose": purpose,
+            "candidate_revision": "query-candidate-v1", "candidate_hash": candidate_hash,
+            "sql_hash": report.get("sql_hash"), "assurance_revision": report["assurance_revision"],
+            "assurance_report_hash": report_hash, "policy_revision": report["policy_revision"],
+            "policy_decision_hash": policy_hash, "registry_version": registry_before,
+            "principal_context_hash": context["principal_context_hash"],
+            "delegated_mandate_hash": context["delegated_mandate_hash"],
+            "resource_scope_hash": context["resource_scope_hash"], "datasource_id": cfg.DATASOURCE_ID,
+            "mandate_issuance_hash": mandate["issuance_hash"], "mandate_issuance_revision": mandate["issuance_revision"],
+            "governance_revision_snapshot": revisions, "execution_mode": mode,
+            "reviewer_principal_id": principals["reviewer"]["principal_id"],
+            "authorization_policy_revision": AUTHORIZATION_POLICY_REVISION,
+            "referenced_tables": references if mode else (),
+        }
+        return {
+            "status": "ready" if mode == "autonomous" else "review_required" if mode else "denied",
+            "execution_mode": mode, "mandate": mandate, "context": context,
+            "candidate": candidate, "candidate_hash": candidate_hash,
+            "sql": report.get("sql") if mode else None, "dialect": resolution.resolved,
+            "assurance_report": report, "assurance_report_hash": report_hash,
+            "policy_decision": policy, "policy_decision_hash": policy_hash,
+            "enforcement_context_hash": build_enforcement_context_hash(hash_record),
+            "hash_record": hash_record, "governance_revision_snapshot": revisions,
+            "registry_version": registry_before, "expires_at": expires_at.isoformat(),
+        }
+    except GovernanceError as exc:
+        raise EnforceContextError(exc.code, str(exc), status_code=exc.status_code) from exc
+
+
+
 
 def build_policy_decision(
     context: dict[str, Any],
@@ -337,26 +570,36 @@ def build_policy_decision(
 
 
 def build_enforcement_context_hash(run: dict[str, Any]) -> str:
-    """Bind every mutable execution input to one approval digest."""
-    return canonical_hash(
-        {
-            "enforce_revision": ENFORCE_REVISION,
-            "task_run_id": run.get("task_run_id"),
-            "purpose": run.get("purpose"),
-            "candidate_revision": run.get("candidate_revision"),
-            "candidate_hash": run.get("candidate_hash"),
-            "sql_hash": run.get("sql_hash"),
-            "assurance_revision": run.get("assurance_revision"),
-            "assurance_report_hash": run.get("assurance_report_hash"),
-            "policy_revision": run.get("policy_revision"),
-            "policy_decision_hash": run.get("policy_decision_hash"),
-            "registry_revision": run.get("registry_version"),
-            "principal_context_hash": run.get("principal_context_hash"),
-            "delegated_mandate_hash": run.get("delegated_mandate_hash"),
-            "resource_scope_hash": run.get("resource_scope_hash"),
-            "datasource_id": run.get("datasource_id"),
-        }
-    )
+    """Bind v2 authority and scope while keeping the historical v1 digest stable."""
+    revision = GOVERNED_ENFORCE_REVISION if run.get("enforce_schema_version") == 2 else ENFORCE_REVISION
+    payload = {
+        "enforce_revision": revision,
+        "task_run_id": run.get("task_run_id"),
+        "purpose": run.get("purpose"),
+        "candidate_revision": run.get("candidate_revision"),
+        "candidate_hash": run.get("candidate_hash"),
+        "sql_hash": run.get("sql_hash"),
+        "assurance_revision": run.get("assurance_revision"),
+        "assurance_report_hash": run.get("assurance_report_hash"),
+        "policy_revision": run.get("policy_revision"),
+        "policy_decision_hash": run.get("policy_decision_hash"),
+        "registry_revision": run.get("registry_version"),
+        "principal_context_hash": run.get("principal_context_hash"),
+        "delegated_mandate_hash": run.get("delegated_mandate_hash"),
+        "resource_scope_hash": run.get("resource_scope_hash"),
+        "datasource_id": run.get("datasource_id"),
+    }
+    if revision == GOVERNED_ENFORCE_REVISION:
+        payload.update({
+            "mandate_issuance_hash": run.get("mandate_issuance_hash"),
+            "mandate_issuance_revision": run.get("mandate_issuance_revision"),
+            "governance_revision_snapshot": run.get("governance_revision_snapshot"),
+            "execution_mode": run.get("execution_mode"),
+            "reviewer_principal_id": run.get("reviewer_principal_id"),
+            "authorization_policy_revision": run.get("authorization_policy_revision"),
+            "referenced_tables": sorted(run.get("referenced_tables") or []),
+        })
+    return canonical_hash(payload)
 
 
 def validate_stored_enforcement_context(
@@ -474,6 +717,8 @@ def _failure_for_run(run: dict[str, Any]) -> dict[str, Any] | None:
 
 def project_enforce_query_run(run: dict[str, Any]) -> dict[str, Any]:
     """Project one governed QueryRun through the public Enforce response contract."""
+    if run.get("enforce_schema_version") == 2:
+        return _project_governed_query_run(run)
     if run.get("enforce_schema_version") != ENFORCE_SCHEMA_VERSION:
         raise EnforceContextError("enforcement_context_missing", "QueryRun is not governed", status_code=404)
     public_status = {
@@ -547,4 +792,76 @@ def project_enforce_query_run(run: dict[str, Any]) -> dict[str, Any]:
         validate_contract("delegated_mandate_v1", payload["context"]["delegated_mandate"])
     validate_contract("policy_decision_v1", payload["policy_decision"])
     validate_contract("enforce_query_response_v1", payload)
+    return payload
+
+def _project_governed_query_run(run: dict[str, Any]) -> dict[str, Any]:
+    """Expose stored authority and claim evidence without treating readiness as permission."""
+    status = run["status"]
+    authorization = run.get("authorization_record")
+    candidate = run["candidate_payload"]
+    result = None
+    if status == "completed":
+        result = {
+            "columns": run.get("result_columns") or [],
+            "rows": run.get("result_rows") or [],
+            "row_count": run.get("row_count") or 0,
+            "truncated": bool(run.get("truncated")),
+            "execution_ms": run.get("execution_ms"),
+            "executed_at": run["executed_at"],
+        }
+    payload = {
+        "schema_version": 2,
+        "query_run_id": run["query_run_id"],
+        "task_run_id": run["task_run_id"],
+        "status": status,
+        "decision": {
+            "verdict": run["policy_decision"]["effect"],
+            "review_required": status == "review_required",
+            "execution_authorized": authorization is not None,
+            "execution_mode": run["execution_mode"],
+        },
+        "context": {
+            "principal_context": run["principal_context"],
+            "delegated_mandate": run["delegated_mandate"],
+            "purpose": run["purpose"],
+            "resource_scope": run["resource_scope"],
+        },
+        "candidate": {
+            "input_kind": run["input_kind"],
+            "candidate_revision": run["candidate_revision"],
+            "producer_revision": candidate.get("producer_revision", "external"),
+            "candidate_hash": run["candidate_hash"],
+        },
+        "review": {
+            "sql": run["sql"],
+            "sql_hash": run["sql_hash"],
+            "assurance_report_hash": run["assurance_report_hash"],
+            "enforcement_context_hash": run["enforcement_context_hash"],
+            "expires_at": run["expires_at"],
+        },
+        "policy_decision": run["policy_decision"],
+        "assurance": run["assurance_report"],
+        "lineage": {
+            "candidate_revision": run["candidate_revision"],
+            "candidate_hash": run["candidate_hash"],
+            "assurance_revision": run["assurance_revision"],
+            "assurance_report_hash": run["assurance_report_hash"],
+            "policy_revision": run["policy_revision"],
+            "policy_decision_hash": run["policy_decision_hash"],
+            "registry_revision": run["registry_version"],
+            "enforcement_context_hash": run["enforcement_context_hash"],
+            "mandate_issuance_hash": run["mandate_issuance_hash"],
+            "authorization_policy_revision": run["authorization_policy_revision"],
+            "authorization_hash": run["authorization_hash"],
+        },
+        "result": result,
+        "failure": _failure_for_run(run) if status != "denied" else {
+            "stage": "assurance", "code": "assurance_denied", "retryable": False,
+        },
+        "authorization": authorization,
+    }
+    validate_contract("principal_context_v1", payload["context"]["principal_context"])
+    validate_contract("delegated_mandate_v1", payload["context"]["delegated_mandate"])
+    validate_contract("policy_decision_v1", payload["policy_decision"])
+    validate_contract("enforce_query_response_v2", payload)
     return payload

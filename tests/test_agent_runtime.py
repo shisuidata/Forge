@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 
+TEST_TABLES = ["orders", "dwd_order_detail", "dim_city", "dim_user", "dim_region"]
+
 class FakeMemory:
     def __init__(self):
         self.state = {}
@@ -46,7 +48,7 @@ def isolated_agent(monkeypatch, tmp_path):
     monkeypatch.setattr(
         tenant_mod.tenants,
         "get_allowed_tables_for_user",
-        lambda user_id: None,
+        lambda user_id: TEST_TABLES,
     )
     monkeypatch.setattr(agent_mod.cfg, "FEEDBACK_ENABLED", False)
     monkeypatch.setattr(agent_mod.cfg, "SQL_DIALECT", "sqlite")
@@ -107,6 +109,40 @@ def isolated_agent(monkeypatch, tmp_path):
     monkeypatch.setattr(agent_mod.cfg, "REGISTRY_PATH", registry_path)
     return agent_mod, fake_memory
 
+def test_empty_prepare_scope_never_contacts_model(isolated_agent, monkeypatch):
+    agent_mod, _ = isolated_agent
+    monkeypatch.setattr(agent_mod.llm, "get_model_config", lambda *args: pytest.fail("model contacted"))
+    result = agent_mod.prepare_query("actor", "查询订单", allowed_tables=[])
+    assert result["status"] == "error" and result["error"] == "table_scope_empty"
+    assert result["sql"] is None
+
+def test_unknown_principal_cannot_start_chat_or_write_memory(isolated_agent, monkeypatch):
+    from agent.tenant import tenants
+    from forge.governance import PrincipalAccessError
+
+    agent_mod, fake_memory = isolated_agent
+    def deny(_user_id):
+        raise PrincipalAccessError()
+    monkeypatch.setattr(tenants, "get_allowed_tables_for_user", deny)
+    with pytest.raises(PrincipalAccessError):
+        agent_mod.process("unknown", "查询订单")
+    assert fake_memory.records == []
+
+
+def test_pipeline_rejects_unknown_principal_before_persisting(isolated_agent, monkeypatch):
+    from agent.pipeline import PipelineRunner
+    from agent.tenant import tenants
+    from forge.governance import PrincipalAccessError
+
+    _, fake_memory = isolated_agent
+    runner = PipelineRunner()
+    runner._memory = fake_memory
+    monkeypatch.setattr(tenants, "get_team", lambda _user_id: (_ for _ in ()).throw(PrincipalAccessError()))
+    with pytest.raises(PrincipalAccessError):
+        runner.run("query", "unknown", "查询订单")
+    assert fake_memory.state == {}
+
+
 
 def test_prepare_query_returns_bounded_timeout_without_retrying_provider(
     isolated_agent, monkeypatch
@@ -120,7 +156,7 @@ def test_prepare_query_returns_bounded_timeout_without_retrying_provider(
 
     monkeypatch.setattr(agent_mod.llm, "call", timeout_call)
 
-    result = agent_mod.prepare_query("u-timeout", "查询订单")
+    result = agent_mod.prepare_query("u-timeout", "查询订单", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "timed_out"
     assert result["error"] == "查询准备超时，请稍后重试或缩小问题范围。"
@@ -310,7 +346,7 @@ def test_prepare_query_greeting_requires_input_without_calling_model(
 
     monkeypatch.setattr(agent_mod.llm, "call", unexpected_model_call)
 
-    result = agent_mod.prepare_query("external-agent", greeting)
+    result = agent_mod.prepare_query("external-agent", greeting, allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_clarification"
     assert result["sql"] is None
@@ -330,7 +366,7 @@ def test_prepare_query_reports_missing_llm_without_sql(isolated_agent, monkeypat
         lambda *args, **kwargs: (_ for _ in ()).throw(LLMNotConfiguredError()),
     )
 
-    result = agent_mod.prepare_query("external-agent", "查询订单")
+    result = agent_mod.prepare_query("external-agent", "查询订单", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "error"
     assert result["sql"] is None
@@ -350,7 +386,7 @@ def test_prepare_query_reports_bounded_llm_configuration_error(isolated_agent, m
         ),
     )
 
-    result = agent_mod.prepare_query("external-agent", "查询订单")
+    result = agent_mod.prepare_query("external-agent", "查询订单", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "error"
     assert "LLM 配置错误" in result["error"]
@@ -367,7 +403,7 @@ def test_prepare_query_fails_fast_with_actionable_quota_message(isolated_agent, 
         raise agent_mod.llm.LLMQuotaExceededError("provider account detail")
 
     monkeypatch.setattr(agent_mod.llm, "call", call)
-    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "error"
     assert result["error"] == "模型服务额度已用完，请在额度恢复后重新发起。"
@@ -392,7 +428,7 @@ def test_prepare_query_retries_bounded_tool_contract_violations(isolated_agent, 
 
     monkeypatch.setattr(agent_mod.llm, "call", call)
 
-    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_review"
     assert result["retry_count"] == 2
@@ -415,7 +451,7 @@ def test_prepare_query_allows_one_final_recovery_within_retry_budget(isolated_ag
 
     monkeypatch.setattr(agent_mod.llm, "call", call)
 
-    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_review"
     assert result["retry_count"] == 3
@@ -433,7 +469,7 @@ def test_prepare_query_keeps_short_data_question_valid(isolated_agent, monkeypat
         },
     )
 
-    result = agent_mod.prepare_query("external-agent", "用户数")
+    result = agent_mod.prepare_query("external-agent", "用户数", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_review"
     assert result["sql"] is not None
@@ -460,7 +496,7 @@ def test_prepare_query_does_not_create_pending_execution_state(isolated_agent, m
         },
     )
 
-    result = agent_mod.prepare_query("external-agent", "查询订单 ID")
+    result = agent_mod.prepare_query("external-agent", "查询订单 ID", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_review"
     assert result["sql"] == "SELECT orders.id\nFROM orders"
@@ -494,7 +530,7 @@ def test_prepare_query_reuses_retry_and_dialect_logic(isolated_agent, monkeypatc
 
     monkeypatch.setattr(agent_mod.llm, "call", fake_call)
 
-    result = agent_mod.prepare_query("u-prepare", "查询复购用户", dialect="postgresql")
+    result = agent_mod.prepare_query("u-prepare", "查询复购用户", dialect="postgresql", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_review"
     assert result["dialect"] == "postgresql"
@@ -544,7 +580,7 @@ def test_prepare_query_retry_includes_all_failed_assurance_diagnostics(isolated_
     monkeypatch.setattr(agent_mod.llm, "call", call)
     monkeypatch.setattr(agent_mod, "assure_query", assure)
 
-    result = agent_mod.prepare_query("u-all-diagnostics", "查询订单 ID")
+    result = agent_mod.prepare_query("u-all-diagnostics", "查询订单 ID", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "needs_review"
     retry_text = calls[1][-1]["content"]
@@ -561,7 +597,7 @@ def test_prepare_query_reports_llm_error_without_secret_leak(isolated_agent, mon
 
     monkeypatch.setattr(agent_mod.llm, "call", fail_call)
 
-    result = agent_mod.prepare_query("u-error", "查询订单")
+    result = agent_mod.prepare_query("u-error", "查询订单", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "error"
     assert "upstream unavailable" not in result["error"]
@@ -570,7 +606,7 @@ def test_prepare_query_reports_llm_error_without_secret_leak(isolated_agent, mon
 def test_prepare_query_rejects_unknown_dialect(isolated_agent):
     agent_mod, _ = isolated_agent
 
-    result = agent_mod.prepare_query("u-dialect", "查询订单", dialect="oracle")
+    result = agent_mod.prepare_query("u-dialect", "查询订单", dialect="oracle", allowed_tables=TEST_TABLES)
 
     assert result["status"] == "error"
 

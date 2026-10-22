@@ -52,8 +52,9 @@ class DingTalkPiAdapter:
             payload=payload,
         )
 
-    def wait_for_presentation(self, response: dict[str, Any]) -> dict[str, Any]:
-        return self.client.wait_for_presentation(task_run_id_from_response(response))
+    def wait_for_presentation(self, response: dict[str, Any], *, verified_user_id: str) -> dict[str, Any]:
+        return self.client.wait_for_presentation(task_run_id_from_response(response),
+                                                 external_user_id=verified_user_id)
 
 
 def presentation_to_dingtalk_card(presentation: dict[str, Any]) -> dict[str, Any]:

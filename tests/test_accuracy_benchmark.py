@@ -161,7 +161,7 @@ class FakeService:
 
 @pytest.mark.asyncio
 async def test_benchmark_page_and_start_api_require_explicit_model_call_confirmation(
-    client, monkeypatch: pytest.MonkeyPatch
+    governed_client, monkeypatch: pytest.MonkeyPatch
 ):
     service = FakeService()
     monkeypatch.setattr(benchmark_routes, "_service", lambda: service)
@@ -176,25 +176,25 @@ async def test_benchmark_page_and_start_api_require_explicit_model_call_confirma
         lambda run_id, model: hard_launched.append((run_id, model.model)),
     )
 
-    page = await client.get("/admin/benchmark")
+    page = await governed_client.get("/admin/benchmark")
     assert page.status_code == 200
     assert "SQL 准确率测试台" in page.text
     assert "RAG" in page.text
     assert "子智能体" in page.text
     assert "准确率实验室" in page.text
-    rejected = await client.post("/admin/benchmark/hard-runs", json={})
+    rejected = await governed_client.post("/admin/benchmark/hard-runs", json={})
     assert rejected.status_code == 410
     assert rejected.json()["status"] == "retired"
     assert hard_launched == []
 
-    legacy = await client.post("/admin/benchmark/runs", json={})
+    legacy = await governed_client.post("/admin/benchmark/runs", json={})
     assert legacy.status_code == 410
     assert legacy.json()["status"] == "retired"
 
 
 @pytest.mark.asyncio
 async def test_benchmark_snapshot_api_and_sse_return_same_terminal_projection(
-    client, monkeypatch: pytest.MonkeyPatch
+    governed_client, monkeypatch: pytest.MonkeyPatch
 ):
     run = {
         "schema_version": 1,
@@ -212,7 +212,7 @@ async def test_benchmark_snapshot_api_and_sse_return_same_terminal_projection(
     service = FakeService(run)
     monkeypatch.setattr(benchmark_routes, "_service", lambda: service)
 
-    response = await client.get("/admin/benchmark/runs/abr_terminal")
+    response = await governed_client.get("/admin/benchmark/runs/abr_terminal")
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.json() == run
@@ -227,6 +227,18 @@ async def test_benchmark_snapshot_api_and_sse_return_same_terminal_projection(
     assert json.loads(event.split("data: ", 1)[1]) == run
     with pytest.raises(StopAsyncIteration):
         await anext(stream)
+
+
+@pytest.mark.asyncio
+async def test_benchmark_admin_page_rejects_non_admin_registered_identity(governed_client):
+    from agent.tenant import tenants
+    from forge.governance_credentials import create_credential
+
+    tenants.set_team("benchmark_agent", "fixture_team", principal_type="agent", status="active")
+    _, agent_key = create_credential("benchmark_agent")
+    response = await governed_client.get("/admin/benchmark", headers={"X-API-Key": agent_key})
+    assert response.status_code == 403
+    assert (await governed_client.get("/admin/benchmark", headers={"X-API-Key": "invalid-key"})).status_code == 401
 
 
 @pytest.mark.asyncio

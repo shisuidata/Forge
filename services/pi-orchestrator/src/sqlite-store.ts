@@ -149,6 +149,22 @@ class SqliteTaskStore implements TaskStore {
     return structuredClone(task);
   }
 
+  attachMandate(taskRunId: string, expectedMandateId: string | null, mandateId: string, executionActorId: string): TaskRun {
+    const task = this.get(taskRunId);
+    if (task === undefined) throw new TaskStateError("TaskRun not found");
+    if (!mandateId || !executionActorId) throw new TaskStateError("Mandate and execution actor are required");
+    const current = typeof task.metadata.mandate_id === "string" ? task.metadata.mandate_id : null;
+    if (current === mandateId && task.metadata.execution_actor_id === executionActorId) return task;
+    if (current !== expectedMandateId || task.status === "querying") throw new TaskStateError("Task mandate conflict");
+    const updated: TaskRun = { ...task,
+      metadata: { ...task.metadata, mandate_id: mandateId, execution_actor_id: executionActorId },
+      updated_at: new Date(Math.max(Date.now(), Date.parse(task.updated_at) + 1)).toISOString() };
+    const changedRows = this.database.prepare("UPDATE task_runs SET updated_at = ?, data_json = ? WHERE task_run_id = ? AND data_json = ?")
+      .run(updated.updated_at, JSON.stringify(updated), taskRunId, JSON.stringify(task));
+    if (changed(changedRows) !== 1) throw new TaskStateError("Task mandate conflict");
+    return structuredClone(updated);
+  }
+
   list(options: TaskListOptions): TaskRun[] {
     const predicates = [
       "json_extract(data_json, '$.org_id') = ?",
@@ -179,6 +195,18 @@ class SqliteTaskStore implements TaskStore {
       if (!TASK_STATUS_SET.has(task.status)) throw new Error("Corrupt TaskRun list row: invalid status");
       return structuredClone(task);
     });
+  }
+
+  listExecuting(): TaskRun[] {
+    const rows = this.database.prepare("SELECT data_json FROM task_runs WHERE status = ?")
+      .all("querying") as Array<{ data_json: string }>;
+    return rows.map(row => structuredClone(parseJson<TaskRun>(row.data_json, "Executing TaskRun")));
+  }
+
+  listRecoverableQueries(): TaskRun[] {
+    const rows = this.database.prepare("SELECT data_json FROM task_runs WHERE status IN ('querying','waiting_for_query_approval','ready_for_query')")
+      .all() as Array<{ data_json: string }>;
+    return rows.map(row => structuredClone(parseJson<TaskRun>(row.data_json, "Recoverable TaskRun")));
   }
 
   listChildren(taskRunId: string, limit: number): TaskRun[] {

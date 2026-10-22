@@ -80,9 +80,9 @@ def _remaining_call_budget(deadline: float) -> float:
 
 
 
-def prepare_query(user_id: str, question: str, dialect: str | None = None) -> dict:
+def prepare_query(user_id: str, question: str, dialect: str | None = None, *, allowed_tables: list[str]) -> dict:
     """Public prepare-only surface; model selection always comes from ActiveBinding."""
-    return _prepare_query(user_id, question, dialect=dialect, model_snapshot=None)
+    return _prepare_query(user_id, question, dialect=dialect, model_snapshot=None, allowed_tables=allowed_tables)
 
 
 def _prepare_query(
@@ -91,6 +91,7 @@ def _prepare_query(
     dialect: str | None = None,
     *,
     model_snapshot=None,
+    allowed_tables: list[str],
 ) -> dict:
     """
     Prepare reviewed SQL for external agents without creating executable pending state.
@@ -99,6 +100,9 @@ def _prepare_query(
     review, but must not be able to approve/execute it through Forge's internal
     pending SQL flow.
     """
+    if not isinstance(allowed_tables, list) or any(not isinstance(table, str) for table in allowed_tables):
+        raise ValueError("allowed_tables must be an explicit table list")
+    _allowed_tables = allowed_tables
     payload = {
         "status": "error",
         "question": question,
@@ -114,6 +118,9 @@ def _prepare_query(
         "assurance_report": None,
         "retrieval_trace": None,
     }
+    if not _allowed_tables:
+        payload["error"] = "table_scope_empty"
+        return payload
     try:
         resolution = resolve_dialect(dialect, configured_dialect=cfg.SQL_DIALECT, database_url=cfg.DATABASE_URL)
         resolved_dialect = resolution.resolved
@@ -142,9 +149,6 @@ def _prepare_query(
         except LLMConfigurationError:
             payload["error"] = "LLM 配置错误或当前模型不兼容，请管理员检查 Provider、协议、模型和凭证。"
             return payload
-    from agent.tenant import tenants as _tenants
-    _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
-
     for attempt in range(1 + MAX_RETRIES):
         # prepare-only is Task-scoped: never inherit the legacy user's EMS/WMB.
         # Organization knowledge is injected by llm.call from the Registry.
@@ -329,6 +333,8 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         EMS.record(user) → WMB.build(scene) → LLM → EMS.record(assistant)
         状态变更通过 memory.set_state / clear_state 管理
     """
+    from agent.tenant import tenants as _tenants
+    _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
     # ── 澄清轮次：若有待补充的 intent，将用户回复合并入原始问题后继续 ──────────
     pending_intent = memory.get_state(user_id, "pending_intent")
     if pending_intent is not None:
@@ -366,9 +372,6 @@ def process(user_id: str, user_text: str) -> AgentResponse:
         memory.record(user_id, "assistant", err, action="error")
         return AgentResponse(text=err, action="error")
 
-    # 数据权限：查询该用户所属团队的可见表白名单
-    from agent.tenant import tenants as _tenants
-    _allowed_tables = _tenants.get_allowed_tables_for_user(user_id)
 
     for attempt in range(1 + MAX_RETRIES):
         # 从 WMB 构建基础消息 + 拼接重试上下文 + 上一轮用过的表

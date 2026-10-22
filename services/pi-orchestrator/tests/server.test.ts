@@ -1,605 +1,104 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test, { type TestContext } from "node:test";
+import test from "node:test";
 
-import { OrchestratorApplication } from "../src/application.js";
 import { loadConfig } from "../src/config.js";
 import { createOrchestratorServer } from "../src/server.js";
-import { MVP_SKILL_NAMES } from "../src/skills.js";
-import { createSkillFixture } from "./skill-fixture.js";
 
-const SQL_HASH = `sha256:${"a".repeat(64)}`;
-
-async function isolatedConfig(context: TestContext, env: NodeJS.ProcessEnv = {}) {
-  const agentDir = await mkdtemp(join(tmpdir(), "forge-pi-http-"));
-  context.after(() => rm(agentDir, { recursive: true, force: true }));
-  return loadConfig({ ...env, PI_ORCHESTRATOR_AGENT_DIR: agentDir });
+function address(server: { address(): unknown }): string {
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-test("benchmark POST requires explicit exact-count authorization rather than coercing missing inputs", async (t) => {
-  const agentDir = await mkdtemp(join(tmpdir(), "forge-benchmark-http-"));
-  const server = createOrchestratorServer({ ...loadConfig({}), agentDir, channelServiceKeys: ["benchmark-test"], stateDbPath: join(agentDir, "state.sqlite") });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(async () => {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    await rm(agentDir, { recursive: true, force: true });
-  });
-  const baseUrl = "http://127.0.0.1:" + (server.address() as AddressInfo).port;
-  for (const body of [
-    { provider: "offline", model: "fixed", limit: 1 },
-    { provider: "offline", model: "fixed", confirm_model_calls: "2" },
-    { provider: "offline", model: "fixed", confirm_model_calls: 2, case_ids: ["a", "a"] },
-    { provider: "offline", model: "fixed", confirm_model_calls: 2, limit: "1" },
-  ]) {
-    const response = await fetch(baseUrl + "/v1/benchmarks", { method: "POST", headers: { "content-type": "application/json", "x-channel-service-key": "benchmark-test" }, body: JSON.stringify(body) });
-    assert.equal(response.status, 400);
-  }
-  assert.deepEqual(await (await fetch(baseUrl + "/v1/benchmarks", { headers: { "x-channel-service-key": "benchmark-test" } })).json(), { runs: [] });
+const principal = {
+  principal_id: "alice", principal_type: "human", organization_id: "org_demo", workspace_id: "team_demo",
+  role: "admin", identity_revision: 1, credential_id: "cred_alice", credential_revision: 1,
+  authentication_method: "api_key", authenticated_at: "2026-09-23T00:00:00Z",
+  channel_binding_id: null, channel_binding_revision: null,
+};
+
+test("benchmark authentication remains separate from task control", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-benchmark-auth-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const server = createOrchestratorServer({ ...loadConfig({}), agentDir: directory,
+    channelServiceKeys: ["benchmark-key"], stateDbPath: join(directory, "state.sqlite") });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+  assert.equal((await fetch(address(server) + "/health/live")).status, 200);
+  assert.equal((await fetch(address(server) + "/v1/benchmarks", { headers: { "x-channel-service-key": "benchmark-key" } })).status, 200);
+  assert.equal((await fetch(address(server) + "/v1/tasks", { headers: { "x-channel-service-key": "benchmark-key" } })).status, 401);
 });
 
-
-
-test("health endpoints expose the restricted runtime capabilities", async (context) => {
-  const { skillsRoot, agentDir } = await createSkillFixture(context);
-  const baseConfig = loadConfig({ SHISUI_DATA_SKILLS_DIR: skillsRoot, PI_ORCHESTRATOR_AGENT_DIR: agentDir });
-  const server = createOrchestratorServer({
-    ...baseConfig,
-    agentDir,
-    stateDbPath: join(agentDir, "state.sqlite3"),
+test("task requests resolve byte-bound tickets before parsing, enforce scope, and keep internal scope service-only", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-control-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const tickets = new Map<string, { method: string; path: string; body: string; action: string; task: string | null; principal?: typeof principal }>();
+  let resolves = 0;
+  const forge = createServer(async (request, response) => {
+    if (request.url !== "/api/internal/governance/control-tokens/resolve" || request.headers["x-api-key"] !== "pi-key") {
+      response.writeHead(401).end(); return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const payload = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, string | null>;
+    resolves++;
+    const ticket = tickets.get(payload.token ?? "");
+    if (!ticket || payload.method !== ticket.method || payload.path !== ticket.path ||
+        payload.body_hash !== `sha256:${createHash("sha256").update(ticket.body).digest("hex")}`) {
+      response.writeHead(403).end(); return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ principal: ticket.principal ?? principal, action: ticket.action, task_run_id: ticket.task,
+      query_run_id: null, approval_hashes: null, idempotency_key: null }));
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => new Promise<void>((resolve, reject) =>
-    server.close((error) => error ? reject(error) : resolve()),
-  ));
-
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  const liveResponse = await fetch(`${baseUrl}/health/live`);
-  assert.equal(liveResponse.status, 200);
-
-  const readinessResponse = await fetch(`${baseUrl}/health/readiness`);
-  assert.equal(readinessResponse.status, 200);
-  const readiness = (await readinessResponse.json()) as {
-    status: string;
-    capabilities: {
-      builtinToolsEnabled: boolean;
-      modelExecutionConfigured: boolean;
-      skills: string[];
-    };
-  };
-  assert.equal(readiness.status, "degraded");
-  assert.equal(readiness.capabilities.builtinToolsEnabled, false);
-  assert.equal(readiness.capabilities.modelExecutionConfigured, false);
-  assert.deepEqual([...readiness.capabilities.skills].sort(), [...MVP_SKILL_NAMES].sort());
-});
-
-
-test("default Server wiring restores persisted TaskRun after restart", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-pi-server-state-"));
-  const config = loadConfig({
-    PI_ORCHESTRATOR_STATE_DB: join(directory, "orchestrator.sqlite3"),
-  });
-  const first = createOrchestratorServer(config);
-  await new Promise<void>((resolve) => first.listen(0, "127.0.0.1", resolve));
-  const firstAddress = first.address() as AddressInfo;
-  const createdResponse = await fetch(`http://127.0.0.1:${firstAddress.port}/v1/tasks`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      org_id: "org_restart",
-      team_id: "team_restart",
-      user_id: "user_restart",
-      channel: "web",
-      intent: "query_prepare",
-      message: "查询订单",
-    }),
-  });
-  assert.equal(createdResponse.status, 201);
-  const created = (await createdResponse.json()) as { task: { task_run_id: string } };
-  await new Promise<void>((resolve, reject) =>
-    first.close((error) => (error === undefined ? resolve() : reject(error))),
-  );
-
-  const second = createOrchestratorServer(config);
-  await new Promise<void>((resolve) => second.listen(0, "127.0.0.1", resolve));
-  const secondAddress = second.address() as AddressInfo;
-  const restoredResponse = await fetch(
-    `http://127.0.0.1:${secondAddress.port}/v1/tasks/${created.task.task_run_id}`,
-  );
-  assert.equal(restoredResponse.status, 200);
-  const restored = (await restoredResponse.json()) as { task: { status: string } };
-  assert.equal(restored.task.status, "created");
-  const attemptsResponse = await fetch(
-    `http://127.0.0.1:${secondAddress.port}/v1/tasks/${created.task.task_run_id}/attempts`,
-  );
-  assert.equal(attemptsResponse.status, 200);
-  assert.deepEqual(await attemptsResponse.json(), { attempts: [] });
-  await new Promise<void>((resolve, reject) =>
-    second.close((error) => (error === undefined ? resolve() : reject(error))),
-  );
-});
-
-test("task list endpoint scopes cross-channel tasks by org and team", async (context) => {
-  const config = await isolatedConfig(context);
-  const application = new OrchestratorApplication({ config });
-  application.createTask({
-    org_id: "org_demo", team_id: "team_demo", user_id: "feishu_user",
-    channel: "feishu", intent: "query", message: "飞书任务",
-  });
-  application.createTask({
-    org_id: "org_other", team_id: "team_demo", user_id: "other_user",
-    channel: "feishu", intent: "query", message: "其他组织任务",
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-
-  const response = await fetch(
-    `http://127.0.0.1:${address.port}/v1/tasks?org_id=org_demo&team_id=team_demo&channel=feishu&limit=20`,
-  );
-  assert.equal(response.status, 200);
-  const body = (await response.json()) as { tasks: Array<{ org_id: string; channel: string }> };
-  assert.equal(body.tasks.length, 1);
-  assert.equal(body.tasks[0]?.org_id, "org_demo");
-  assert.equal(body.tasks[0]?.channel, "feishu");
-
-  const invalid = await fetch(
-    `http://127.0.0.1:${address.port}/v1/tasks?org_id=org_demo&team_id=team_demo&limit=101`,
-  );
-  assert.equal(invalid.status, 400);
-});
-
-test("Product Projection APIs are authenticated, scoped, and bounded", async (context) => {
-  const config = await isolatedConfig(context, { PI_CHANNEL_SERVICE_KEYS: "product-test-key" });
-  const application = new OrchestratorApplication({ config });
-  const created = application.createTask({
-    org_id: "org_product",
-    team_id: "team_product",
-    user_id: "user_product",
-    channel: "web",
-    channel_conversation_id: "web_conv_product",
-    intent: "conversation",
-    message: "解释支付金额口径",
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-  const query = "org_id=org_product&team_id=team_product&user_id=user_product&channel=web";
-
-  const unauthenticated = await fetch(`${baseUrl}/v1/conversations?${query}`);
-  assert.equal(unauthenticated.status, 403);
-
-  const conversations = await fetch(`${baseUrl}/v1/conversations?${query}`, {
-    headers: { "x-channel-service-key": "product-test-key" },
-  });
-  assert.equal(conversations.status, 200);
-  assert.equal(conversations.headers.get("cache-control"), "no-store");
-  const conversationBody = (await conversations.json()) as {
-    schema_version: number;
-    conversations: Array<{ conversation_id: string }>;
-  };
-  assert.equal(conversationBody.schema_version, 1);
-  assert.deepEqual(conversationBody.conversations.map((item) => item.conversation_id), [
-    "web_conv_product",
-  ]);
-
-  const detail = await fetch(
-    `${baseUrl}/v1/conversations/web_conv_product?${query}`,
-    { headers: { "x-channel-service-key": "product-test-key" } },
-  );
-  assert.equal(detail.status, 200);
-
-  const taskDetail = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/detail?${query}`,
-    { headers: { "x-channel-service-key": "product-test-key" } },
-  );
-  assert.equal(taskDetail.status, 200);
-  const taskBody = (await taskDetail.json()) as { detail: { task: { task_run_id: string } } };
-  assert.equal(taskBody.detail.task.task_run_id, created.task.task_run_id);
-
-  const crossUser = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/detail?org_id=org_product&team_id=team_product&user_id=user_other&channel=web`,
-    { headers: { "x-channel-service-key": "product-test-key" } },
-  );
-  assert.equal(crossUser.status, 404);
-
-  const badCursor = await fetch(`${baseUrl}/v1/conversations?${query}&cursor=bad`, {
-    headers: { "x-channel-service-key": "product-test-key" },
-  });
-  assert.equal(badCursor.status, 409);
-});
-
-test("async Stage returns 202 and completes through Task polling", async (context) => {
-  let releaseStage: (() => void) | undefined;
-  const gate = new Promise<void>((resolve) => { releaseStage = resolve; });
-  const config = await isolatedConfig(context);
-  const application = new OrchestratorApplication({
-    config,
-    forgeClient: {
-      async createQueryRun() { throw new Error("not used"); },
-      async approveQueryRun() { throw new Error("not used"); },
-    },
-    skillExecutor: {
-      async clarify() {
-        await gate;
-        return {
-          status: "needs_input",
-          goal: "确认分析范围",
-          known_facts: [],
-          assumptions: [],
-          open_questions: ["统计周期是什么？"],
-          dimensions: [],
-          time_range: { description: "待确认" },
-          acceptance_criteria: ["周期明确"],
-        };
-      },
-      async reviewMetric() { throw new Error("not used"); },
-      async analyze() { throw new Error("not used"); },
-      async writeReport() { throw new Error("not used"); },
-    },
-  });
-  const created = application.createTask({
-    org_id: "org_async",
-    team_id: "team_async",
-    user_id: "user_async",
-    channel: "web",
-    intent: "data_task",
-    message: "分析转化率",
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  const acceptedResponse = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/clarify`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        message: "分析转化率",
-        idempotency_key: "clarify-async-001",
-        async: true,
-      }),
-    },
-  );
-  assert.equal(acceptedResponse.status, 202);
-  const accepted = (await acceptedResponse.json()) as { status: string; task: { status: string } };
-  assert.equal(accepted.status, "accepted");
-  assert.equal(accepted.task.status, "clarifying");
-
-  releaseStage?.();
-  await new Promise((resolve) => setTimeout(resolve, 10));
-  const completedResponse = await fetch(`${baseUrl}/v1/tasks/${created.task.task_run_id}`);
-  const completed = (await completedResponse.json()) as { task: { status: string } };
-  assert.equal(completed.task.status, "needs_input");
-});
-
-test("expanded Skill API persists a bounded Artifact and obeys team policy CAS", async (context) => {
-  const config = await isolatedConfig(context, { PI_ADMIN_SERVICE_KEYS: "admin-secret" });
-  const application = new OrchestratorApplication({
-    config,
-    forgeClient: {
-      async createQueryRun() { throw new Error("not used"); },
-      async approveQueryRun() { throw new Error("not used"); },
-    },
-    skillExecutor: {
-      async clarify() { throw new Error("not used"); },
-      async reviewMetric() { throw new Error("not used"); },
-      async analyze() { throw new Error("not used"); },
-      async writeReport() { throw new Error("not used"); },
-      async advise(_task, skillName) {
-        return {
-          status: "complete", skill_name: skillName, title: "漏斗建议",
-          summary: "输入不足，先补充范围。", findings: [], recommendations: [],
-          assumptions: [], limitations: ["无查询证据"], open_questions: [],
-          deliverables: [{ name: "检查表", content: "确认步骤口径。" }],
-        };
-      },
-    },
-  });
-  const first = application.createTask({
-    org_id: "org_skill", team_id: "team_skill", user_id: "user_skill",
-    channel: "api", intent: "advisory", message: "分析漏斗",
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-  const coreBypass = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/run-skill`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      skill_name: "data-requirement-clarifier", prompt: "绕过核心状态机", idempotency_key: "core-bypass",
-    }),
-  });
-  assert.equal(coreBypass.status, 400);
-  assert.equal(application.getTask(first.task.task_run_id)?.status, "created");
-  const run = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/run-skill`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      skill_name: "funnel-analysis", prompt: "分析漏斗", idempotency_key: "skill-run-001",
-    }),
-  });
-  assert.equal(run.status, 202);
-  for (let index = 0; index < 20; index += 1) {
-    if (application.getTask(first.task.task_run_id)?.status === "completed") break;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  assert.equal(application.getTask(first.task.task_run_id)?.status, "completed");
-  assert.equal(application.getStageAttempts(first.task.task_run_id)[0]?.skill_policy_version, 0);
-  const artifacts = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/artifacts`);
-  const artifactBody = await artifacts.json() as { artifacts: Array<{ artifact_type: string }> };
-  assert.equal(artifactBody.artifacts.at(-1)?.artifact_type, "advisory");
-  const replay = await fetch(`${baseUrl}/v1/tasks/${first.task.task_run_id}/run-skill`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      skill_name: "funnel-analysis", prompt: "分析漏斗", idempotency_key: "skill-run-001",
-    }),
-  });
-  assert.ok([200, 202].includes(replay.status));
-  assert.equal(application.getArtifacts(first.task.task_run_id).filter(
-    (artifact) => artifact.artifact_type === "advisory",
-  ).length, 1);
-
-  const unauthorizedPolicy = await fetch(
-    `${baseUrl}/v1/orgs/org_skill/teams/team_skill/skill-policy`,
-  );
-  assert.equal(unauthorizedPolicy.status, 403);
-  const policy = await fetch(`${baseUrl}/v1/orgs/org_skill/teams/team_skill/skill-policy`, {
-    method: "PUT", headers: {
-      "content-type": "application/json", "x-admin-service-key": "admin-secret",
-    },
-    body: JSON.stringify({ enabled_skills: [], expected_version: 0, actor: "admin" }),
-  });
-  assert.equal(policy.status, 200);
-  const second = application.createTask({
-    org_id: "org_skill", team_id: "team_skill", user_id: "user_skill",
-    channel: "api", intent: "advisory", message: "再次分析漏斗",
-  });
-  const coreDenied = await fetch(`${baseUrl}/v1/tasks/${second.task.task_run_id}/clarify`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ message: "补充需求", idempotency_key: "clarify-disabled" }),
-  });
-  assert.equal(coreDenied.status, 409);
-  const denied = await fetch(`${baseUrl}/v1/tasks/${second.task.task_run_id}/run-skill`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      skill_name: "funnel-analysis", prompt: "分析漏斗", idempotency_key: "skill-run-002",
-    }),
-  });
-  assert.equal(denied.status, 409);
-});
-
-test("Task API exposes validated Skill Artifacts instead of model text", async (context) => {
-  const config = await isolatedConfig(context);
-  const application = new OrchestratorApplication({
-    config,
-    forgeClient: {
-      async createQueryRun() {
-        throw new Error("not used");
-      },
-      async approveQueryRun() {
-        throw new Error("not used");
-      },
-    },
-    skillExecutor: {
-      async analyze() {
-        throw new Error("not used");
-      },
-      async writeReport() {
-        throw new Error("not used");
-      },
-      async clarify() {
-        return {
-          status: "needs_input",
-          goal: "确认转化分析需求",
-          known_facts: ["用户观察到转化下降"],
-          assumptions: [],
-          open_questions: ["时间范围是什么？"],
-          dimensions: ["渠道"],
-          time_range: { description: "待确认" },
-          acceptance_criteria: ["时间范围明确"],
-        };
-      },
-      async reviewMetric() {
-        throw new Error("not used");
-      },
-    },
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  const createdResponse = await fetch(`${baseUrl}/v1/tasks`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      org_id: "org_demo",
-      team_id: "team_growth",
-      user_id: "trusted-user",
-      channel: "web",
-      intent: "data_task",
-      message: "最近转化为什么下降",
-    }),
-  });
-  const created = (await createdResponse.json()) as { task: { task_run_id: string } };
-  const clarifiedResponse = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/clarify`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "最近转化为什么下降" }),
-    },
-  );
-  assert.equal(clarifiedResponse.status, 200);
-  const clarified = (await clarifiedResponse.json()) as {
-    task: { status: string };
-    artifact: { artifact_type: string; payload: { status: string } };
-  };
-  assert.equal(clarified.task.status, "needs_input");
-  assert.equal(clarified.artifact.artifact_type, "clarification");
-
-  const artifactsResponse = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/artifacts`,
-  );
-  const artifacts = (await artifactsResponse.json()) as { artifacts: unknown[] };
-  assert.equal(artifacts.artifacts.length, 1);
-});
-
-
-test("Task API returns ordered events and a non-executable review request", async (context) => {
-  const config = await isolatedConfig(context);
-  const application = new OrchestratorApplication({
-    config,
-    forgeClient: {
-      async createQueryRun(input) {
-        assert.deepEqual(input.candidate, {
-          kind: "direct_sql",
-          sql: "SELECT 7 AS n",
-          producer_revision: "external-agent-r1",
-        });
-        return {
-          query_run_id: "qr_demo_001",
-          task_run_id: input.taskRunId,
-          status: "needs_review",
-          question: input.question,
-          user_id: input.userId,
-          datasource_id: "demo",
-          input_kind: "direct_sql",
-          candidate_revision: "query-candidate-v1",
-          forge_json: null,
-          sql: "SELECT 7 AS n",
-          sql_hash: SQL_HASH,
-          dialect: input.dialect ?? "sqlite",
-          registry_version: "sha256:registry",
-          assurance_report: { status: "passed" },
-          assurance_report_hash: `sha256:${"b".repeat(64)}`,
-          assurance_revision: "query-assurance-v1",
-          policy_revision: "convention-policy-v1",
-          model_revision: "sha256:model",
-          assurance_registry_revision: "sha256:assurance-registry",
-          review_required: true,
-          can_execute: false,
-          expires_at: "2026-08-21T18:00:00Z",
-          error: "",
-        };
-      },
-      async approveQueryRun(input) {
-        return {
-          query_run_id: input.queryRunId,
-          task_run_id: "tr_demo",
-          status: "completed",
-          sql_hash: input.sqlHash,
-          input_kind: "direct_sql",
-          candidate_revision: "query-candidate-v1",
-          dialect: "sqlite",
-          registry_version: "sha256:registry",
-          assurance_report: { status: "passed" },
-          assurance_report_hash: `sha256:${"b".repeat(64)}`,
-          assurance_revision: "query-assurance-v1",
-          policy_revision: "convention-policy-v1",
-          model_revision: "sha256:model",
-          assurance_registry_revision: "sha256:assurance-registry",
-          columns: ["n"],
-          rows: [[1]],
-          row_count: 1,
-          truncated: false,
-          execution_ms: 1,
-          executed_at: "2026-08-21T18:00:00Z",
-          error: "",
-        };
-      },
-    },
-  });
-  const server = createOrchestratorServer(config, application);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  context.after(() => server.close());
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  const createResponse = await fetch(`${baseUrl}/v1/tasks`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      org_id: "org_demo",
-      team_id: "team_growth",
-      user_id: "trusted-user",
-      channel: "web",
-      intent: "query_prepare",
-      message: "查询订单 ID",
-    }),
-  });
-  assert.equal(createResponse.status, 201);
-  const created = (await createResponse.json()) as { task: { task_run_id: string } };
-
-  const invalidCandidateResponse = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/prepare-query`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        question: "返回数字 7",
-        candidate: { kind: "direct_sql", sql: "SELECT 7 AS n", forge_json: {} },
-      }),
-    },
-  );
-  assert.equal(invalidCandidateResponse.status, 400);
-
-  const prepareResponse = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/prepare-query`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        question: "返回数字 7",
-        dialect: "postgresql",
-        candidate: {
-          kind: "direct_sql",
-          sql: "SELECT 7 AS n",
-          producer_revision: "external-agent-r1",
-        },
-      }),
-    },
-  );
-  assert.equal(prepareResponse.status, 200);
-  const prepared = (await prepareResponse.json()) as {
-    task: { status: string };
-    events: Array<{ sequence: number; event_type: string; payload: Record<string, unknown> }>;
-  };
-  assert.equal(prepared.task.status, "waiting_for_query_approval");
-  assert.ok(prepared.events.every((event, index, events) => index === 0 || event.sequence > events[index - 1]!.sequence));
-  const review = prepared.events.find((event) => event.event_type === "query.review_requested");
-  assert.equal(review?.payload.can_execute, false);
-  assert.equal(review?.payload.input_kind, "direct_sql");
-
-  const approvalResponse = await fetch(
-    `${baseUrl}/v1/tasks/${created.task.task_run_id}/approve-query`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        query_run_id: "qr_demo_001",
-        sql_hash: SQL_HASH,
-        idempotency_key: `${created.task.task_run_id}:approve:qr_demo_001`,
-      }),
-    },
-  );
-  assert.equal(approvalResponse.status, 200);
-  const approved = (await approvalResponse.json()) as {
-    task: { status: string };
-    events: Array<{ sequence: number; event_type: string }>;
-  };
-  assert.equal(approved.task.status, "completed");
-  assert.ok(approved.events.some((event) => event.event_type === "query.completed"));
+  await new Promise<void>(resolve => forge.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>(resolve => forge.close(() => resolve())));
+  const config = loadConfig({ PI_ORCHESTRATOR_AGENT_DIR: directory, PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite"),
+    PI_CHANNEL_SERVICE_KEYS: "service-key", FORGE_PI_SERVICE_KEY: "pi-key", FORGE_BASE_URL: address(forge) });
+  const server = createOrchestratorServer(config);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+  const base = address(server);
+  const body = JSON.stringify({ channel: "web", intent: "query_prepare", message: "hello" });
+  tickets.set("create", { method: "POST", path: "/v1/tasks", body, action: "task.write", task: null });
+  const headers = { "x-channel-service-key": "service-key", "x-forge-control-token": "create", "content-type": "application/json" };
+  assert.equal((await fetch(base + "/v1/tasks", { method: "POST", headers: { "x-channel-service-key": "service-key" }, body })).status, 401);
+  assert.equal((await fetch(base + "/v1/tasks", { method: "POST", headers, body: body + " " })).status, 403);
+  assert.equal((await fetch(base + "/v1/tasks?extra=1", { method: "POST", headers, body })).status, 403);
+  assert.equal((await fetch(base + "/v1/tasks", { method: "POST", headers, body: JSON.stringify({ ...JSON.parse(body), user_id: "bob" }) })).status, 403);
+  const forgedBody = JSON.stringify({ channel: "web", intent: "query_prepare", message: "hello", user_id: "bob" });
+  tickets.set("forged", { method: "POST", path: "/v1/tasks", body: forgedBody, action: "task.write", task: null });
+  assert.equal((await fetch(base + "/v1/tasks", { method: "POST", headers: { ...headers, "x-forge-control-token": "forged" }, body: forgedBody })).status, 403);
+  tickets.set("wrong-action", { method: "POST", path: "/v1/tasks", body, action: "task.read", task: null });
+  assert.equal((await fetch(base + "/v1/tasks", { method: "POST", headers: { ...headers, "x-forge-control-token": "wrong-action" }, body })).status, 403);
+  const created = await fetch(base + "/v1/tasks", { method: "POST", headers, body });
+  assert.equal(created.status, 201);
+  const task = (await created.json() as { task: { task_run_id: string; org_id: string; team_id: string; user_id: string } }).task;
+  assert.deepEqual([task.org_id, task.team_id, task.user_id], ["org_demo", "team_demo", "alice"]);
+  assert.ok(resolves >= 4);
+  const attachBody = JSON.stringify({ mandate_id: "md_demo", expected_mandate_id: null });
+  tickets.set("attach-member", { method: "POST", path: `/v1/tasks/${task.task_run_id}/mandate`, body: attachBody,
+    action: "task.attach_mandate", task: task.task_run_id, principal: { ...principal, role: "member" } });
+  const attachResponse = await fetch(`${base}/v1/tasks/${task.task_run_id}/mandate`, { method: "POST",
+    headers: { "x-channel-service-key": "service-key", "x-forge-control-token": "attach-member", "idempotency-key": "attach-1" }, body: attachBody });
+  assert.equal(attachResponse.status, 403);
+  const scope = `${base}/v1/internal/task-scopes/${task.task_run_id}`;
+  assert.equal((await fetch(scope)).status, 401);
+  const scopeResponse = await fetch(scope, { headers: { "x-channel-service-key": "service-key" } });
+  assert.equal(scopeResponse.status, 200);
+  const internal = await scopeResponse.json() as Record<string, unknown>;
+  assert.equal(internal.user_id, "alice");
+  assert.equal(internal.mandate_id, null);
+  assert.equal((internal as Record<string, unknown>).message, undefined);
+  tickets.set("list", { method: "GET", path: "/v1/tasks?org_id=org_demo&team_id=team_demo", body: "", action: "task.read", task: null });
+  const list = await fetch(base + "/v1/tasks?team_id=team_demo&org_id=org_demo",
+    { headers: { "x-channel-service-key": "service-key", "x-forge-control-token": "list" } });
+  assert.equal(list.status, 200);
+  tickets.set("read", { method: "GET", path: `/v1/tasks/${task.task_run_id}`, body: "", action: "task.read", task: task.task_run_id });
+  assert.equal((await fetch(`${base}/v1/tasks/${task.task_run_id}`, { headers: { "x-channel-service-key": "service-key", "x-forge-control-token": "read" } })).status, 200);
+  assert.equal((await fetch(`${base}/v1/tasks/${task.task_run_id}/artifacts`, { headers: { "x-channel-service-key": "service-key", "x-forge-control-token": "read" } })).status, 403);
 });

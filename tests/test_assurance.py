@@ -311,6 +311,7 @@ def test_direct_sql_and_forge_json_share_assurance_identity(assurance_registry):
     assert direct_report.input_kind == "direct_sql"
     assert direct_report.sql_hash == forge_report.sql_hash
     assert direct_report.assurance_revision == forge_report.assurance_revision
+    assert direct_report.referenced_tables == forge_report.referenced_tables == ("orders",)
     assert direct_report.policy_revision == forge_report.policy_revision
     assert direct_report.registry_revision == forge_report.registry_revision
     assert direct_report.candidate_revision == forge_report.candidate_revision
@@ -505,6 +506,7 @@ def test_authorized_cte_sources_remain_executable_with_restricted_registry(
     assurance_registry, bound_relation_database, sql, expected,
 ):
     report = assure_direct_sql(sql, dialect="sqlite", allowed_tables=["orders"])
+    assert report.referenced_tables == ("orders",)
     assert bound_relation_database.execute(report.sql).fetchall() == expected
 
 
@@ -552,3 +554,26 @@ def test_custom_registry_owns_field_meaning_without_dataset_profile(tmp_path, mo
     path.write_text(json.dumps(registry))
     with pytest.raises(QueryAssuranceError):
         assure_query({"scan": "dim_user", "select": ["dim_user.user_id"]}, "", dialect="sqlite")
+
+
+@pytest.mark.parametrize("sql, tables", [
+    ("SELECT 1 AS one", ()),
+    ("WITH users AS (SELECT id FROM orders) SELECT id FROM users", ("orders",)),
+    ("SELECT id FROM (WITH users AS (SELECT id FROM orders) SELECT id FROM users) AS d "
+     "UNION ALL SELECT id FROM users", ("orders", "users")),
+    ("SELECT o.id FROM orders AS o WHERE EXISTS "
+     "(SELECT 1 FROM users AS u WHERE u.id = o.user_id)", ("orders", "users")),
+])
+def test_referenced_tables_are_validated_physical_sources(assurance_registry, sql, tables):
+    report = assure_direct_sql(sql, dialect="sqlite")
+    assert report.referenced_tables == tables
+    assert report.to_dict()["referenced_tables"] == tables
+
+
+def test_empty_acl_denies_physical_resources_but_not_constants(assurance_registry):
+    assert assure_direct_sql("SELECT 1", dialect="sqlite", allowed_tables=[]).referenced_tables == ()
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql("WITH picked AS (SELECT id FROM orders) SELECT id FROM picked",
+                          dialect="sqlite", allowed_tables=[])
+    assert caught.value.report.gates[-1].gate == "registry_acl"
+    assert caught.value.report.referenced_tables == ()

@@ -19,13 +19,12 @@ from fastapi.responses import JSONResponse
 
 from agent.contracts.product_projection_semantics import validate_product_projection
 from config import cfg
-from web.auth import require_api_auth
+from web.auth import require_human_principal
 from web.pi_client import pi_request
 from web.routes.reports import get_report_store
 from web.diagnostics import error_response
-router = APIRouter(prefix="/api/product", dependencies=[Depends(require_api_auth)])
+router = APIRouter(prefix="/api/product")
 
-_SCOPE_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 _OBJECT_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
 _SECRET_LINE = re.compile(
     r"(?:\b(?:api[_-]?key|password|secret|authorization)\s*[:=]\s*\S+|bearer\s+\S+|/(?:home|Users|tmp)/|Traceback \(most recent call last\))",
@@ -50,34 +49,11 @@ def _response(content: dict[str, Any], status_code: int = 200) -> JSONResponse:
     )
 
 
-def _configured_scopes() -> list[tuple[str, str]]:
-    scopes: list[tuple[str, str]] = []
-    for raw in cfg.PI_WEB_ADMIN_TASK_SCOPES.split(","):
-        org_id, separator, team_id = raw.strip().partition(":")
-        if (
-            separator
-            and _SCOPE_PATTERN.fullmatch(org_id)
-            and _SCOPE_PATTERN.fullmatch(team_id)
-        ):
-            scopes.append((org_id, team_id))
-    return scopes
-
-
-def _scope(org_id: str | None, team_id: str | None) -> tuple[str, str, str]:
-    scopes = _configured_scopes()
-    if not scopes:
-        raise HTTPException(status_code=503, detail="No valid Product scope is configured")
-    if org_id is None and team_id is None and len(scopes) == 1:
-        selected = scopes[0]
-    elif org_id is None or team_id is None:
-        raise HTTPException(status_code=400, detail="org_id and team_id must be provided together")
-    elif not _SCOPE_PATTERN.fullmatch(org_id) or not _SCOPE_PATTERN.fullmatch(team_id):
-        raise HTTPException(status_code=400, detail="Product scope is invalid")
-    elif (org_id, team_id) not in set(scopes):
+def _scope(org_id: str | None, team_id: str | None, principal) -> tuple[str, str, str]:
+    if (org_id is not None and org_id != principal.organization_id or
+            team_id is not None and team_id != principal.workspace_id):
         raise HTTPException(status_code=404, detail="Product scope not found")
-    else:
-        selected = (org_id, team_id)
-    return selected[0], selected[1], "web_admin"
+    return principal.organization_id, principal.workspace_id, principal.principal_id
 
 
 def _safe_text(value: Any, maximum: int, fallback: str = "") -> str:
@@ -178,10 +154,12 @@ def _require_projection_scope(
     value: dict[str, Any],
     org_id: str,
     team_id: str,
-    user_id: str,
+    user_id: str | None,
     channel: str | None = None,
 ) -> None:
-    expected = {"org_id": org_id, "team_id": team_id, "user_id": user_id}
+    expected = {"org_id": org_id, "team_id": team_id}
+    if user_id is not None:
+        expected["user_id"] = user_id
     if channel is not None:
         expected["channel"] = channel
     scope = value.get("scope")
@@ -196,18 +174,20 @@ def _pi_path(path: str, org_id: str, team_id: str, user_id: str, **query: Any) -
     params = {
         "org_id": org_id,
         "team_id": team_id,
-        "user_id": user_id,
+        **({} if user_id is None else {"user_id": user_id}),
         "channel": "web",
         **{key: value for key, value in query.items() if value is not None},
     }
     return f"{path}?{urlencode(params)}"
 
 
-async def _pi_product_get(path: str) -> tuple[int, dict[str, Any]]:
+async def _pi_product_get(path: str, principal) -> tuple[int, dict[str, Any]]:
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return 503, {"status": "offline", "error": "Pi Orchestrator is not enabled"}
     try:
-        return await pi_request("GET", path)
+        match = re.search(r"/v1/tasks/(tr_[A-Za-z0-9_-]+)(?:/|\?|$)", path)
+        return await pi_request("GET", path, principal=principal, action="task.read",
+                                task_run_id=match.group(1) if match else None)
     except httpx.HTTPError:
         return 502, {"status": "offline", "error": "Pi Orchestrator is unavailable"}
 
@@ -216,12 +196,14 @@ async def _tasks(
     org_id: str,
     team_id: str,
     user_id: str,
+    principal,
     *,
     limit: int = 100,
     status: str | None = None,
 ) -> tuple[bool, list[dict[str, Any]]]:
     code, body = await _pi_product_get(
-        _pi_path("/v1/tasks", org_id, team_id, user_id, limit=limit, status=status)
+        _pi_path("/v1/tasks", org_id, team_id,
+                 user_id if principal.role != "admin" else None, limit=limit, status=status), principal
     )
     raw = body.get("tasks") if isinstance(body, dict) else None
     if code != 200 or not isinstance(raw, list):
@@ -234,7 +216,8 @@ async def _tasks(
                 status_code=502,
                 detail={"code": "upstream_contract_invalid", "resource": "task_list"},
             )
-        _require_projection_scope(summary, org_id, team_id, user_id, "web")
+        _require_projection_scope(summary, org_id, team_id,
+                                  None if principal.role == "admin" else user_id, "web")
         summaries.append(summary)
     return True, summaries
 
@@ -415,10 +398,11 @@ async def list_conversations(
     team_id: str | None = None,
     limit: int = Query(default=20, ge=1, le=50),
     cursor: str | None = None,
+    principal=Depends(require_human_principal),
 ):
-    org_id, team_id, user_id = _scope(org_id, team_id)
+    org_id, team_id, user_id = _scope(org_id, team_id, principal)
     code, body = await _pi_product_get(
-        _pi_path("/v1/conversations", org_id, team_id, user_id, limit=limit, cursor=cursor)
+        _pi_path("/v1/conversations", org_id, team_id, user_id, limit=limit, cursor=cursor), principal
     )
     if code != 200:
         return _response(body, 404 if code == 403 else code if code in {400, 404, 409, 429, 503, 504} else 502)
@@ -437,10 +421,11 @@ async def get_conversation(
     org_id: str | None = None,
     team_id: str | None = None,
     cursor: str | None = None,
+    principal=Depends(require_human_principal),
 ):
     if _OBJECT_PATTERN.fullmatch(conversation_id) is None:
         return _response({"status": "invalid_request", "error": "conversation_id is invalid"}, 400)
-    org_id, team_id, user_id = _scope(org_id, team_id)
+    org_id, team_id, user_id = _scope(org_id, team_id, principal)
     code, body = await _pi_product_get(
         _pi_path(
             f"/v1/conversations/{quote(conversation_id, safe='')}",
@@ -448,7 +433,7 @@ async def get_conversation(
             team_id,
             user_id,
             cursor=cursor,
-        )
+        ), principal
     )
     if code != 200:
         return _response(body, 404 if code == 403 else code if code in {400, 404, 409, 429, 503, 504} else 502)
@@ -464,11 +449,12 @@ async def list_tasks(
     team_id: str | None = None,
     status: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
+    principal=Depends(require_human_principal),
 ):
     if status is not None and status not in _TASK_STATUSES:
         return _response({"status": "invalid_request", "error": "status is invalid"}, 400)
-    org_id, team_id, user_id = _scope(org_id, team_id)
-    available, tasks = await _tasks(org_id, team_id, user_id, limit=limit, status=status)
+    org_id, team_id, user_id = _scope(org_id, team_id, principal)
+    available, tasks = await _tasks(org_id, team_id, user_id, principal, limit=limit, status=status)
     if not available:
         return _response({"status": "offline", "error": "Pi Orchestrator is unavailable"}, 502)
     return _response({
@@ -485,12 +471,23 @@ async def get_task(
     task_run_id: str,
     org_id: str | None = None,
     team_id: str | None = None,
+    principal=Depends(require_human_principal),
 ):
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return _response({"status": "invalid_request", "error": "task_run_id is invalid"}, 400)
-    org_id, team_id, user_id = _scope(org_id, team_id)
+    org_id, team_id, user_id = _scope(org_id, team_id, principal)
+    if principal.role == "admin":
+        task_status, task_body = await _pi_product_get(f"/v1/tasks/{task_run_id}", principal)
+        if task_status != 200:
+            return _response(task_body, 404 if task_status == 403 else task_status)
+        task = task_body.get("task")
+        if not isinstance(task, dict) or (task.get("org_id"), task.get("team_id")) != (org_id, team_id):
+            return _response({"status": "not_found"}, 404)
+        user_id = task.get("user_id")
+        if not isinstance(user_id, str) or not user_id:
+            return _response({"status": "upstream_contract_invalid"}, 502)
     code, body = await _pi_product_get(
-        _pi_path(f"/v1/tasks/{task_run_id}/detail", org_id, team_id, user_id)
+        _pi_path(f"/v1/tasks/{task_run_id}/detail", org_id, team_id, user_id), principal
     )
     if code != 200:
         return _response(body, 404 if code == 403 else code if code in {400, 404, 409, 429, 503, 504} else 502)
@@ -507,10 +504,11 @@ async def list_reports(
     status: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = None,
+    principal=Depends(require_human_principal),
 ):
     if status is not None and status not in _REPORT_STATUSES:
         return _response({"status": "invalid_request", "error": "status is invalid"}, 400)
-    org_id, team_id, user_id = _scope(org_id, team_id)
+    org_id, team_id, user_id = _scope(org_id, team_id, principal)
     try:
         reports, next_cursor = await asyncio.to_thread(
             _list_reports,
@@ -533,17 +531,17 @@ async def list_reports(
 
 
 @router.get("/data-summary")
-async def data_summary(org_id: str | None = None, team_id: str | None = None):
-    org_id, team_id, _ = _scope(org_id, team_id)
+async def data_summary(org_id: str | None = None, team_id: str | None = None, principal=Depends(require_human_principal)):
+    org_id, team_id, _ = _scope(org_id, team_id, principal)
     return _response(await asyncio.to_thread(_registry_summary, org_id, team_id))
 
 
 @router.get("/workspace")
-async def workspace(org_id: str | None = None, team_id: str | None = None):
-    org_id, team_id, user_id = _scope(org_id, team_id)
+async def workspace(org_id: str | None = None, team_id: str | None = None, principal=Depends(require_human_principal)):
+    org_id, team_id, user_id = _scope(org_id, team_id, principal)
     generated_at = datetime.now(timezone.utc).isoformat()
     task_result, report_result, registry = await asyncio.gather(
-        _tasks(org_id, team_id, user_id, limit=100),
+        _tasks(org_id, team_id, user_id, principal, limit=100),
         asyncio.to_thread(_list_reports, org_id, team_id, user_id, limit=20),
         asyncio.to_thread(_registry_summary, org_id, team_id),
         return_exceptions=True,

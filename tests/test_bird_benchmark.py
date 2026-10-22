@@ -380,6 +380,8 @@ def test_explicit_gold_skip_replay_remains_unknown_not_generation_failure(benchm
 @pytest.fixture
 def date_protocol(date_dataset, monkeypatch, tmp_path):
     from config import cfg
+    from agent.tenant import tenants
+    from forge.governance_credentials import create_credential
     root = date_dataset
     cases = [{"question_id": i, "db_id": "sample", "difficulty": "simple",
               "question": "List loan dates", "evidence": "records.loan_date",
@@ -387,11 +389,16 @@ def date_protocol(date_dataset, monkeypatch, tmp_path):
     (root / "mini_dev_sqlite.json").write_text(json.dumps(cases))
     monkeypatch.setattr(bird.hard, "_BIRD_RUNTIME", root)
     monkeypatch.setattr(bird, "PROTOCOL_DIR", tmp_path / "protocols")
-    monkeypatch.setattr(cfg, "PI_SERVICE_API_KEYS", ["test-pi-key"])
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "governance.db"))
+    monkeypatch.setattr(cfg, "PI_EXECUTION_PRINCIPAL_ID", "bird_pi_service")
+    monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+    tenants.create_team("bird_team", organization_id="bird_org")
+    tenants.set_team("bird_pi_service", "bird_team", principal_type="service", status="active")
+    _, service_key = create_credential("bird_pi_service", kind="pi_service")
     paths = [root / "mini_dev_sqlite.json", root / "dev_tables.json", *root.rglob("*.sqlite"), *root.rglob("*.csv")]
     standard = bird._fingerprints(root, paths)
     monkeypatch.setattr(bird, "standard_files", lambda: standard)
-    return {"root": root, "paths": paths, "standard": standard}
+    return {"root": root, "paths": paths, "standard": standard, "headers": {"X-API-Key": service_key}}
 
 
 def date_frozen(mode, max_rows=2):
@@ -421,7 +428,7 @@ async def test_date_treatment_shared_facts_preserve_context_and_execution(client
     assert loan["declared_layouts"] == []
     payload = {"provider": "offline", "model": "fixture", "case_ids": ["md-000"],
                "confirm_model_calls": 2, "protocol_manifest": treatment["manifest"]}
-    headers = {"X-Pi-Service-Key": "test-pi-key"}
+    headers = date_protocol["headers"]
     ready = await client.post("/api/internal/benchmark-v2/protocol", json=payload, headers=headers)
     assert ready.status_code == 200
     context = await client.post("/api/internal/benchmark-v2/context", headers=headers, json={
@@ -490,7 +497,7 @@ async def test_grain_ablation_keeps_business_context_and_scoring_unchanged(clien
     assert original["grain_evidence"]["business_confirmed"] is False
     suffixes = [original[key].removeprefix(omitted[key]) for key in ("forge_instructions", "direct_instructions")]
     assert suffixes[0] == suffixes[1]
-    headers = {"X-Pi-Service-Key": "test-pi-key"}
+    headers = benchmark_api["headers"]
     response = await client.post("/api/internal/benchmark-v2/protocol", headers=headers, json={
         "provider": "offline", "model": "fixture", "case_ids": ["one"], "confirm_model_calls": 2,
         "protocol_manifest": control["manifest"],
@@ -609,7 +616,7 @@ async def test_value_treatment_symmetric_exact_facts_without_scoring_repair(clie
     assert facts["coverage"]["business_authoritative"] is False
     assert facts["coverage"]["scan_complete"] is True
     bird.persist(treatment["manifest"])
-    context = await client.post("/api/internal/benchmark-v2/context", headers={"X-Pi-Service-Key": "test-pi-key"},
+    context = await client.post("/api/internal/benchmark-v2/context", headers=value_protocol["headers"],
                                 json={"case_id": "md-000", "protocol_revision": treatment["protocol_revision"]})
     assert context.status_code == 200
     for key in ("forge_instructions", "direct_instructions"):

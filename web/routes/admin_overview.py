@@ -5,7 +5,7 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from agent import audit
@@ -16,7 +16,9 @@ from web.admin_registry_store import (
     _load_metrics,
     _load_schema,
 )
-from web.pi_projections import _web_admin_task_scopes
+from forge.governance import AuthenticatedPrincipal
+from forge.governance_mandates import get_mandate
+from web.auth import require_admin_principal
 from web.templates import templates
 
 logger = logging.getLogger(__name__)
@@ -46,7 +48,7 @@ async def architecture_atlas():
 # ── Dashboard（概览）──────────────────────────────────────────────────────────
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
+async def dashboard_page(request: Request, actor: AuthenticatedPrincipal = Depends(require_admin_principal)):
     schema = _load_schema()
     tables = schema.get("tables", {})
     metrics = _load_metrics()
@@ -66,7 +68,7 @@ async def dashboard_page(request: Request):
         pass
     health["embedding"] = bool(cfg.EMBED_API_KEY)
 
-    audit_view = await audit.projection(scopes=_web_admin_task_scopes(), limit=5)
+    audit_view = await audit.projection(scopes=[(actor.organization_id, actor.workspace_id)], limit=5)
     today_count = audit_view["today"]
     recent_queries = audit_view["records"]
     governed_runs = []
@@ -75,9 +77,9 @@ async def dashboard_page(request: Request):
         from forge.explain import ExplainError, project_explain_query_run
         from forge.query_runs import list_governed_query_runs
 
-        for run in await list_governed_query_runs(limit=8):
+        for run in await list_governed_query_runs(actor, limit=8):
             try:
-                explanation = project_explain_query_run(run)
+                explanation = project_explain_query_run(run, issued_mandate=get_mandate(actor=actor, mandate_id=run["mandate_id"]))
                 governed_runs.append(
                     {
                         "query_run_id": explanation["query_run_id"],
@@ -146,10 +148,10 @@ async def registry_redirect():
 
 
 @router.get("/audit", response_class=HTMLResponse)
-async def audit_page(request: Request, status: str = "", q: str = "", page: int = 1):
+async def audit_page(request: Request, status: str = "", q: str = "", page: int = 1, actor: AuthenticatedPrincipal = Depends(require_admin_principal)):
     per_page = 50
     page = max(1, page)
-    view = await audit.projection(scopes=_web_admin_task_scopes(), status=status, keyword=q, limit=per_page, offset=(page - 1) * per_page)
+    view = await audit.projection(scopes=[(actor.organization_id, actor.workspace_id)], status=status, keyword=q, limit=per_page, offset=(page - 1) * per_page)
     return templates.TemplateResponse(request, "audit.html", {
         **view, "filter_status": status, "filter_q": q, "page": page,
         "total_pages": max(1, (view["available_total"] + per_page - 1) // per_page),

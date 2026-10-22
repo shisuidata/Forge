@@ -20,7 +20,7 @@
       <div class="conversation-empty" data-conversation-empty>
         <div class="state-symbol">F</div>
         <h3>输入要处理的问题</h3>
-        <p>可以询问指标口径、查询真实数据、继续分析或要求报告。需要执行 SQL 时，Forge 会先等待你的确认。</p>
+        <p>可以询问指标口径、查询真实数据、继续分析或要求报告。数据查询须先由管理员明确授权；非自主表仍需指定审批人确认。</p>
         <div class="conversation-prompts">
           <button class="prompt-chip" type="button" data-prompt="销售额这个指标采用什么业务口径？">解释指标口径</button>
           <button class="prompt-chip" type="button" data-prompt="统计本月各渠道支付金额，并分析主要差异">查询并分析数据</button>
@@ -31,7 +31,7 @@
     <form class="conversation-composer" data-conversation-form>
       <label class="sr-only" for="conversation-input">输入问题</label>
       <textarea id="conversation-input" class="textarea" rows="2" maxlength="20000" placeholder="输入业务问题，或说明需要的交付物…" {% if not pi_enabled %}disabled{% endif %}></textarea>
-      <div class="composer-footer"><p>Enter 发送 · Shift+Enter 换行 · SQL 执行前需要确认</p><button class="button button-primary" type="submit" {% if not pi_enabled %}disabled{% endif %}>发送</button></div>
+      <div class="composer-footer"><p>Enter 发送 · Shift+Enter 换行 · 查询遵循授权范围</p><button class="button button-primary" type="submit" {% if not pi_enabled %}disabled{% endif %}>发送</button></div>
     </form>
   </section>
 
@@ -55,4 +55,4 @@
   </form>
 </dialog>
 {% endblock %}
-{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=7"></script>{% endblock %}
+{% block scripts %}<script type="module" src="/static/product/product-pages.js?v=8"></script>{% endblock %}

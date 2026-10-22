@@ -261,12 +261,9 @@ class PipelineRunner:
             stages=[StageRun(stage=s.name, agent=s.agent) for s in stages],
         )
 
-        # 获取 team_id
-        try:
-            from agent.tenant import tenants
-            run.team_id = tenants.get_team(user_id)
-        except Exception:
-            pass
+        # Resolve the active principal before persisting or running a stage.
+        from agent.tenant import tenants
+        run.team_id = tenants.get_team(user_id)
 
         # 保存 pipeline context 到 EMS state
         self._memory.set_state(user_id, "pipeline_run", run.to_dict())
@@ -276,11 +273,15 @@ class PipelineRunner:
 
     def resume(self, user_id: str) -> PipelineRun | None:
         """从断点恢复 Pipeline（用户 approve 后调用）。"""
+        from agent.tenant import tenants
+        current_team = tenants.get_team(user_id)
         run_data = self._memory.get_state(user_id, "pipeline_run")
         if not run_data:
             return None
 
         run = PipelineRun(**{k: v for k, v in run_data.items() if k != "stages"})
+        if run.user_id != user_id or run.team_id != current_team:
+            return None
         run.stages = [StageRun(**s) for s in run_data.get("stages", [])]
 
         if run.pipeline not in PIPELINES:
@@ -363,24 +364,11 @@ class PipelineRunner:
 
     def _execute_stage(self, stage: Stage, run: PipelineRun, input_artifact: Artifact | None) -> Artifact:
         """执行单个 Stage。"""
-        from agent import agent as agent_module
-
         if stage.agent == "forge_query":
-            # 复用现有 agent.process()
-            resp = agent_module.process(run.user_id, run.question)
-            if resp.action == "sql_review" and resp.sql:
-                return QueryResult(
-                    _stage=stage.name,
-                    sql=resp.sql,
-                    forge_json=resp.forge_json or {},
-                )
-            elif resp.action == "error":
-                raise RuntimeError(resp.text)
-            else:
-                # 文字回复（没有生成 SQL）
-                return Artifact(_stage=stage.name, _type="text_response")
+            # Pipelines have no Mandate or QueryRun claim; they cannot execute SQL.
+            raise RuntimeError("governed_api_v2_required")
 
-        elif stage.agent == "data_analyst":
+        if stage.agent == "data_analyst":
             return self._run_analysis(run, input_artifact)
 
         elif stage.agent == "viz_designer":

@@ -1,11 +1,11 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
 
-import { OrchestratorApplication } from "./application.js";
+import { OrchestratorApplication, type TrustedRequestPrincipal } from "./application.js";
 import { BenchmarkInputError, PiBenchmarkRuntime } from "./benchmark-runtime.js";
-import { parseChannelEvent, type ChannelIdentity } from "./channels/contracts.js";
-import { ChannelIdentityError, ChannelIdentityResolver } from "./channels/identity.js";
+import { parseChannelEvent } from "./channels/contracts.js";
+import { ChannelIdentityError, identityFromTrustedBinding } from "./channels/identity.js";
 import { loadConfig, type OrchestratorConfig } from "./config.js";
 import { FORGE_DIALECTS, type ForgeDialect } from "./forge/client.js";
 import type { QueryCandidateInput } from "./forge/query-run-client.js";
@@ -88,8 +88,83 @@ function parseQueryCandidate(value: unknown): QueryCandidateInput | undefined {
 }
 
 class ChannelAuthenticationError extends Error {}
-class AdminAuthenticationError extends Error {}
 
+class ControlAuthenticationError extends Error { constructor(message: string, readonly statusCode = 403) { super(message); } }
+type ControlAction = "task.read" | "task.write" | "task.attach_mandate" | "query.approve";
+interface ResolvedControl {
+  principal: TrustedRequestPrincipal;
+  action: ControlAction;
+  task_run_id: string | null;
+  query_run_id: string | null;
+  approval_hashes: Record<string, string> | null;
+  idempotency_key: string | null;
+}
+const rawBodies = new WeakMap<IncomingMessage, Buffer>();
+async function readRaw(request: IncomingMessage): Promise<Buffer> {
+  const cached = rawBodies.get(request);
+  if (cached) return cached;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const bytes = Buffer.from(chunk);
+    size += bytes.length;
+    if (size > MAX_BODY_BYTES) throw new RequestError("request body is too large");
+    chunks.push(bytes);
+  }
+  const bytes = Buffer.concat(chunks);
+  rawBodies.set(request, bytes);
+  return bytes;
+}
+function canonicalRequestPath(url: URL): string {
+  const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+  const params = [...url.searchParams.entries()].sort(([ak, av], [bk, bv]) => compare(ak, bk) || compare(av, bv));
+  const query = new URLSearchParams(params).toString();
+  return url.pathname + (query ? "?" + query : "");
+}
+async function resolveRequestControl(request: IncomingMessage, url: URL, config: OrchestratorConfig): Promise<ResolvedControl> {
+  requireChannelAuthentication(request, config.channelServiceKeys);
+  const token = request.headers["x-forge-control-token"];
+  if (typeof token !== "string" || !token || !config.forgePiServiceKey) {
+    throw new ControlAuthenticationError("Missing control credential", 401);
+  }
+  const raw = await readRaw(request);
+  let response: Response;
+  try {
+    response = await fetch(config.forgeBaseUrl + "/api/internal/governance/control-tokens/resolve", {
+      method: "POST",
+      headers: { "X-API-Key": config.forgePiServiceKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ token, method: request.method, path: canonicalRequestPath(url),
+        body_hash: "sha256:" + createHash("sha256").update(raw).digest("hex"),
+        idempotency_key: request.headers["idempotency-key"] ?? null }),
+      signal: AbortSignal.timeout(Math.min(config.forgeTimeoutMs, 10000)),
+    });
+  } catch {
+    throw new ControlAuthenticationError("Control authority unavailable", 503);
+  }
+  if (!response.ok) throw new ControlAuthenticationError("Invalid or expired control token", response.status === 503 ? 503 : 403);
+  const result = await response.json() as ResolvedControl;
+  if (!result || !result.principal || !result.principal.principal_id) throw new ControlAuthenticationError("Invalid control response", 503);
+  return result;
+}
+function assertControl(control: ResolvedControl, action: ControlAction, taskRunId?: string): void {
+  if (control.action !== action || (taskRunId !== undefined && control.task_run_id !== taskRunId)) {
+    throw new ControlAuthenticationError("Control action or task scope mismatch");
+  }
+}
+function assertTaskAccess(application: OrchestratorApplication, principal: TrustedRequestPrincipal, taskId: string) {
+  const task = application.getTask(taskId);
+  if (!task || task.org_id !== principal.organization_id || task.team_id !== principal.workspace_id ||
+      (task.user_id !== principal.principal_id && !(principal.principal_type === "human" && principal.role === "admin"))) {
+    throw new ControlAuthenticationError("Task not found", 404);
+  }
+  return task;
+}
+function assertScope(principal: TrustedRequestPrincipal, orgId: string, teamId: string, userId?: string): void {
+  if (orgId !== principal.organization_id || teamId !== principal.workspace_id ||
+      (userId !== undefined && userId !== principal.principal_id && !(principal.principal_type === "human" && principal.role === "admin"))) {
+    throw new ControlAuthenticationError("Scope not found", 404);
+  }
+}
 function secureEquals(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
@@ -110,19 +185,6 @@ function requireChannelAuthentication(
   }
 }
 
-function requireAdminAuthentication(
-  request: IncomingMessage,
-  configuredKeys: string[],
-): void {
-  const key = request.headers["x-admin-service-key"];
-  if (
-    configuredKeys.length === 0 ||
-    typeof key !== "string" ||
-    !configuredKeys.some((candidate) => secureEquals(candidate, key))
-  ) {
-    throw new AdminAuthenticationError("Invalid admin service credential");
-  }
-}
 
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
@@ -132,16 +194,8 @@ function sendJson(response: ServerResponse, statusCode: number, body: unknown): 
 }
 
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.from(chunk);
-    size += buffer.length;
-    if (size > MAX_BODY_BYTES) throw new RequestError("request body is too large");
-    chunks.push(buffer);
-  }
   try {
-    const value = JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+    const value = JSON.parse((await readRaw(request)).toString("utf8")) as unknown;
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new RequestError("request body must be a JSON object");
     }
@@ -230,12 +284,14 @@ export function createOrchestratorServer(
 ) {
   let state: SqliteOrchestratorState | undefined;
   let reconciliationTimer: NodeJS.Timeout | undefined;
-  const channelIdentities = new ChannelIdentityResolver(config.channelIdentityMapPath);
   if (application === undefined) {
     state = new SqliteOrchestratorState(config.stateDbPath);
     state.reconcileExpiredAttempts();
     reconciliationTimer = setInterval(
-      () => state?.reconcileExpiredAttempts(),
+      () => {
+        state?.reconcileExpiredAttempts();
+        application?.observePendingQueryExecutions();
+      },
       config.reconciliationIntervalMs,
     );
     reconciliationTimer.unref();
@@ -244,6 +300,7 @@ export function createOrchestratorServer(
       state,
     });
   }
+  application.observePendingQueryExecutions();
   const benchmarkRuntime = new PiBenchmarkRuntime(config, application);
   const server = createServer(correlatedHandler(async (request, response) => {
     try {
@@ -267,12 +324,8 @@ export function createOrchestratorServer(
             status: capabilities.modelExecutionConfigured ? "ok" : "degraded",
             capabilities: {
               ...capabilities,
-              channelIngressConfigured:
-                config.channelServiceKeys.length > 0 &&
-                (channelIdentities.size > 0 || config.channelAutoBindFirstFeishu),
-              authorizedChannelIdentities: channelIdentities.size,
-              feishuAutoBindingPending:
-                config.channelAutoBindFirstFeishu && channelIdentities.feishuIdentityCount === 0,
+              channelIngressConfigured: config.channelServiceKeys.length > 0 && !!config.forgePiServiceKey,
+              authorizedChannelIdentities: "forge-governed",
             },
           });
         } catch (error) {
@@ -282,6 +335,27 @@ export function createOrchestratorServer(
           });
         }
         return;
+      }
+      const internalScope = url.pathname.match(/^\/v1\/internal\/task-scopes\/(tr_[A-Za-z0-9_-]+)$/);
+      if (request.method === "GET" && internalScope?.[1]) {
+        requireChannelAuthentication(request, config.channelServiceKeys);
+        const task = application.getTask(internalScope[1]);
+        if (!task) { sendJson(response, 404, { status: "not_found" }); return; }
+        sendJson(response, 200, { task_id: task.task_run_id, org_id: task.org_id, team_id: task.team_id,
+          user_id: task.user_id, mandate_id: task.metadata.mandate_id ?? null,
+          execution_actor_id: task.metadata.execution_actor_id ?? null, status: task.status });
+        return;
+      }
+      let control: ResolvedControl | undefined;
+      if (url.pathname.startsWith("/v1/tasks") || url.pathname.startsWith("/v1/conversations") ||
+          url.pathname === "/v1/channel-events" || /^\/v1\/orgs\/[^/]+\/teams\/[^/]+\/skill-policy$/.test(url.pathname)) {
+        control = await resolveRequestControl(request, url, config);
+        const taskId = /^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)(?:\/|$)/.exec(url.pathname)?.[1];
+        const action: ControlAction = request.method === "GET" ? "task.read"
+          : url.pathname.endsWith("/mandate") ? "task.attach_mandate"
+          : url.pathname.endsWith("/approve-query") ? "query.approve" : "task.write";
+        if (url.pathname !== "/v1/channel-events") assertControl(control, action, taskId);
+        if (taskId && !url.pathname.endsWith("/approve-query") && !url.pathname.endsWith("/query-review")) assertTaskAccess(application, control.principal, taskId);
       }
 
       if (url.pathname === "/v1/benchmarks/models" && request.method === "GET") {
@@ -357,7 +431,7 @@ export function createOrchestratorServer(
       }
 
       if (request.method === "POST" && url.pathname === "/v1/channel-events") {
-        requireChannelAuthentication(request, config.channelServiceKeys);
+        if (!control) throw new ControlAuthenticationError("Missing control token", 401);
         let event: ReturnType<typeof parseChannelEvent>;
         try {
           event = parseChannelEvent(await readJson(request));
@@ -366,30 +440,24 @@ export function createOrchestratorServer(
             error instanceof Error ? error.message : "Invalid ChannelEvent",
           );
         }
-        let identity: ChannelIdentity;
-        try {
-          identity = channelIdentities.resolve(event.channel, event.external_user_id);
-        } catch (error) {
-          if (
-            error instanceof ChannelIdentityError &&
-            config.channelAutoBindFirstFeishu &&
-            event.channel === "feishu" &&
-            event.event_type === "message" &&
-            event.payload.chat_type === "p2p"
-          ) {
-            identity = channelIdentities.bindFirstFeishu(
-              event.external_user_id,
-              config.channelBootstrapIdentity,
-            );
-          } else {
-            throw error;
-          }
+        const channelAction = event.event_type === "action" && event.payload.action === "approve_query" ? "query.approve" : "task.write";
+        assertControl(control, channelAction, event.task_run_id ?? undefined);
+        identityFromTrustedBinding(control.principal, event.channel, event.external_user_id);
+        if (event.task_run_id && channelAction !== "query.approve") assertTaskAccess(application, control.principal, event.task_run_id);
+        if (channelAction === "query.approve" && (!event.task_run_id || control.query_run_id !== event.payload.query_run_id ||
+            control.idempotency_key !== request.headers["idempotency-key"] ||
+            control.approval_hashes?.sql_hash !== event.payload.sql_hash ||
+            control.approval_hashes?.assurance_report_hash !== event.payload.assurance_report_hash ||
+            control.approval_hashes?.enforcement_context_hash !== event.payload.enforcement_context_hash)) {
+          throw new ControlAuthenticationError("Approval scope mismatch");
         }
-        const operation =
-          event.event_type === "message"
-            ? application.ingestChannelMessage(event, identity)
-            : application.ingestChannelAction(event, identity);
+        const operation = application.ingestChannelEvent(event, control.principal, request.headers["x-forge-control-token"] as string);
         const taskRunId = application.getTaskRunIdForChannelEvent(event.channel, event.event_id);
+        if (channelAction === "query.approve") {
+          const result = await operation;
+          sendJson(response, result.duplicate ? 200 : 202, result);
+          return;
+        }
         if (taskRunId === null) return await operation.then(
           (result) => sendJson(response, 200, result),
         );
@@ -408,9 +476,10 @@ export function createOrchestratorServer(
         /^\/v1\/orgs\/([^/]+)\/teams\/([^/]+)\/skill-policy$/,
       );
       if (skillPolicyMatch?.[1] !== undefined && skillPolicyMatch[2] !== undefined) {
-        requireAdminAuthentication(request, config.adminServiceKeys);
+        if (control!.principal.principal_type !== "human" || control!.principal.role !== "admin") throw new ControlAuthenticationError("Admin required");
         const orgId = requireScopeId(skillPolicyMatch[1], "org_id");
         const teamId = requireScopeId(skillPolicyMatch[2], "team_id");
+        assertScope(control!.principal, orgId, teamId);
         if (request.method === "GET") {
           sendJson(response, 200, {
             policy: application.getTeamSkillPolicy(orgId, teamId),
@@ -433,7 +502,7 @@ export function createOrchestratorServer(
             teamId,
             enabledSkills: body.enabled_skills as AuthorizedSkillName[],
             expectedVersion: Number(body.expected_version),
-            actor: requireString(body, "actor"),
+            actor: control!.principal.principal_id,
           });
           sendJson(response, 200, { policy });
           return;
@@ -445,6 +514,7 @@ export function createOrchestratorServer(
         const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
         const userValue = url.searchParams.get("user_id");
         const userId = userValue === null ? undefined : requireScopeId(userValue, "user_id");
+        assertScope(control!.principal, orgId, teamId, userId);
         const channelValue = url.searchParams.get("channel");
         if (channelValue !== null && !CHANNELS.has(channelValue as TaskChannel)) {
           throw new RequestError(`unsupported channel: ${channelValue}`);
@@ -461,7 +531,8 @@ export function createOrchestratorServer(
           orgId,
           teamId,
           limit: limitValue,
-          ...(userId === undefined ? {} : { userId }),
+          ...(control!.principal.principal_type === "human" && control!.principal.role === "admin"
+            ? (userId === undefined ? {} : { userId }) : { userId: control!.principal.principal_id }),
           ...(channelValue === null ? {} : { channel: channelValue as TaskChannel }),
           ...(statusValue === null ? {} : { status: statusValue as TaskStatus }),
         });
@@ -475,6 +546,7 @@ export function createOrchestratorServer(
         const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
         const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
         const userId = requireScopeId(url.searchParams.get("user_id") ?? "", "user_id");
+        assertScope(control!.principal, orgId, teamId, userId);
         const channelValue = url.searchParams.get("channel") ?? "";
         if (!CONVERSATION_CHANNELS.has(channelValue as Exclude<TaskChannel, "api">)) {
           throw new RequestError(`unsupported conversation channel: ${channelValue}`);
@@ -506,6 +578,7 @@ export function createOrchestratorServer(
         const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
         const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
         const userId = requireScopeId(url.searchParams.get("user_id") ?? "", "user_id");
+        assertScope(control!.principal, orgId, teamId, userId);
         const channelValue = url.searchParams.get("channel") ?? "";
         if (!CONVERSATION_CHANNELS.has(channelValue as Exclude<TaskChannel, "api">)) {
           throw new RequestError(`unsupported conversation channel: ${channelValue}`);
@@ -536,10 +609,13 @@ export function createOrchestratorServer(
         if (!CHANNELS.has(channel as TaskChannel)) {
           throw new RequestError(`unsupported channel: ${channel}`);
         }
+        for (const [field, actual] of [["org_id", control!.principal.organization_id], ["team_id", control!.principal.workspace_id], ["user_id", control!.principal.principal_id]] as const) {
+          if (body[field] !== undefined && body[field] !== actual) throw new ControlAuthenticationError("Task identity mismatch");
+        }
         const result = application.createTask({
-          org_id: requireString(body, "org_id"),
-          team_id: requireString(body, "team_id"),
-          user_id: requireString(body, "user_id"),
+          org_id: control!.principal.organization_id,
+          team_id: control!.principal.workspace_id,
+          user_id: control!.principal.principal_id,
           channel: channel as TaskChannel,
           intent: requireString(body, "intent"),
           message: requireString(body, "message"),
@@ -549,7 +625,7 @@ export function createOrchestratorServer(
           ...(typeof body.correlation_id === "string"
             ? { correlation_id: body.correlation_id }
             : {}),
-        });
+        }, control!.principal);
         sendJson(response, 201, result);
         return;
       }
@@ -564,6 +640,14 @@ export function createOrchestratorServer(
         }
         return;
       }
+      const queryReviewMatch = url.pathname.match(/^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/query-review$/);
+      if (request.method === "GET" && queryReviewMatch?.[1]) {
+        if (control!.principal.principal_type !== "human" || !["reviewer", "admin"].includes(control!.principal.role)) throw new ControlAuthenticationError("Reviewer required");
+        const projection = await application.getQueryReviewProjection(queryReviewMatch[1], control!.principal);
+        if (!projection) { sendJson(response, 404, { status: "not_found" }); return; }
+        sendJson(response, 200, { review: projection });
+        return;
+      }
 
       const taskDetailMatch = url.pathname.match(
         /^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/detail$/,
@@ -574,6 +658,7 @@ export function createOrchestratorServer(
         const orgId = requireScopeId(url.searchParams.get("org_id") ?? "", "org_id");
         const teamId = requireScopeId(url.searchParams.get("team_id") ?? "", "team_id");
         const userId = requireScopeId(url.searchParams.get("user_id") ?? "", "user_id");
+        assertScope(control!.principal, orgId, teamId, userId);
         const channelValue = url.searchParams.get("channel") ?? "";
         if (!CHANNELS.has(channelValue as TaskChannel)) {
           throw new RequestError(`unsupported channel: ${channelValue}`);
@@ -599,7 +684,7 @@ export function createOrchestratorServer(
       if (request.method === "GET" && presentationMatch?.[1] !== undefined) {
         requireChannelAuthentication(request, config.channelServiceKeys);
         sendJson(response, 200, {
-          presentation: application.getChannelPresentation(presentationMatch[1]),
+          presentation: application.getChannelPresentation(presentationMatch[1], control!.principal),
         });
         return;
       }
@@ -802,24 +887,46 @@ export function createOrchestratorServer(
         if (result !== undefined) sendJson(response, 200, result);
         return;
       }
+      const mandateMatch = url.pathname.match(/^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/mandate$/);
+      if (request.method === "POST" && mandateMatch?.[1]) {
+        if (control!.principal.principal_type !== "human" || control!.principal.role !== "admin") throw new ControlAuthenticationError("Admin required");
+        if (typeof request.headers["idempotency-key"] !== "string" || !request.headers["idempotency-key"]) throw new RequestError("Idempotency-Key is required");
+        const body = await readJson(request);
+        if (Object.keys(body).some(key => key !== "mandate_id" && key !== "expected_mandate_id") ||
+            (body.expected_mandate_id !== null && typeof body.expected_mandate_id !== "string")) throw new RequestError("Invalid mandate attachment");
+        const result = await application.attachMandate(mandateMatch[1], {
+          mandateId: requireString(body, "mandate_id"), expectedMandateId: body.expected_mandate_id,
+        }, control!.principal);
+        sendJson(response, 200, result);
+        return;
+      }
 
       const approveMatch = url.pathname.match(
         /^\/v1\/tasks\/(tr_[A-Za-z0-9_-]+)\/approve-query$/,
       );
       if (request.method === "POST" && approveMatch?.[1] !== undefined) {
+        const task = application.getTask(approveMatch[1]);
+        if (!task || task.org_id !== control!.principal.organization_id || task.team_id !== control!.principal.workspace_id) throw new ControlAuthenticationError("Task not found", 404);
+        if (control!.principal.principal_type !== "human" || (control!.principal.role !== "reviewer" && control!.principal.role !== "admin")) throw new ControlAuthenticationError("Reviewer required");
         const body = await readJson(request);
-        const result = await maybeRunAsync({
-          response,
-          application,
-          taskRunId: approveMatch[1],
-          respondAsync: body.async === true,
-          operation: application.approveQuery(approveMatch[1], {
-            queryRunId: requireString(body, "query_run_id"),
-            sqlHash: requireString(body, "sql_hash"),
-            idempotencyKey: requireString(body, "idempotency_key"),
-          }),
-        });
-        if (result !== undefined) sendJson(response, 200, result);
+        if (Object.keys(body).some(key => !["query_run_id", "sql_hash", "assurance_report_hash", "enforcement_context_hash", "idempotency_key"].includes(key)))
+          throw new RequestError("Unsupported approval field");
+        const queryRunId = requireString(body, "query_run_id");
+        const sqlHash = requireString(body, "sql_hash");
+        const assuranceReportHash = requireString(body, "assurance_report_hash");
+        const enforcementContextHash = requireString(body, "enforcement_context_hash");
+        const idempotencyKey = request.headers["idempotency-key"];
+        if (typeof idempotencyKey !== "string" || !idempotencyKey ||
+            (body.idempotency_key !== undefined && body.idempotency_key !== idempotencyKey) ||
+            control!.query_run_id !== queryRunId || control!.idempotency_key !== idempotencyKey ||
+            control!.approval_hashes?.sql_hash !== sqlHash ||
+            control!.approval_hashes?.assurance_report_hash !== assuranceReportHash ||
+            control!.approval_hashes?.enforcement_context_hash !== enforcementContextHash) throw new ControlAuthenticationError("Approval scope mismatch");
+        const result = await application.approveQuery(approveMatch[1], {
+          queryRunId, sqlHash, assuranceReportHash, enforcementContextHash, idempotencyKey,
+          controlToken: request.headers["x-forge-control-token"] as string,
+        }, control!.principal);
+        sendJson(response, result.result.status === "completed" ? 200 : 202, result);
         return;
       }
 
@@ -864,11 +971,11 @@ export function createOrchestratorServer(
     } catch (error) {
       if (error instanceof RequestError || error instanceof BenchmarkInputError) {
         sendJson(response, 400, { status: "invalid_request", error: error.message });
-      } else if (
-        error instanceof ChannelAuthenticationError ||
-        error instanceof AdminAuthenticationError ||
-        error instanceof ChannelIdentityError
-      ) {
+      } else if (error instanceof ControlAuthenticationError) {
+        sendJson(response, error.statusCode, { status: error.statusCode === 404 ? "not_found" : "forbidden", error: error.message });
+      } else if (error instanceof ChannelAuthenticationError) {
+        sendJson(response, 401, { status: "unauthorized", error: error.message });
+      } else if (error instanceof ChannelIdentityError) {
         sendJson(response, 403, { status: "forbidden", error: error.message });
       } else if (error instanceof SkillPolicyConflictError) {
         sendJson(response, 409, { status: "conflict", error: error.message });

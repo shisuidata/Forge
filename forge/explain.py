@@ -6,6 +6,7 @@ import hmac
 import json
 from pathlib import Path
 from typing import Any
+from datetime import datetime, timezone
 
 from jsonschema import ValidationError
 from sqlglot import exp, parse_one
@@ -170,14 +171,13 @@ def build_result_record(run: dict[str, Any]) -> dict[str, Any] | None:
         "columns": run.get("result_columns") or [],
         "rows": run.get("result_rows") or [],
         "row_count": run.get("row_count") or 0,
-        "truncated": bool(run.get("truncated")),
         "execution_ms": run.get("execution_ms"),
-        "executed_at": run.get("updated_at"),
+        "truncated": bool(run.get("truncated")),
+        "executed_at": run.get("executed_at") if run.get("enforce_schema_version") == 2 else run.get("updated_at"),
     }
 
-
 def _validate_hash_anchors(run: dict[str, Any]) -> tuple[list[str], list[str]]:
-    if run.get("enforce_schema_version") != ENFORCE_SCHEMA_VERSION:
+    if run.get("enforce_schema_version") not in {ENFORCE_SCHEMA_VERSION, 2}:
         raise ExplainError(
             "explain_query_run_not_found",
             "Governed QueryRun not found",
@@ -195,6 +195,14 @@ def _validate_hash_anchors(run: dict[str, Any]) -> tuple[list[str], list[str]]:
         raise ExplainError(
             "candidate_evidence_drift", "Persisted candidate hash does not match"
         )
+    if run.get("enforce_schema_version") == 2:
+        for field in ("principal_context", "delegated_mandate"):
+            value = run.get(field)
+            if not isinstance(value, dict) or not _same_hash(canonical_hash(value), run.get(f"{field}_hash")):
+                raise ExplainError("mandate_evidence_drift", "Persisted governance context does not match")
+        if not _same_hash(canonical_hash(sorted(run.get("resource_scope") or [], key=canonical_hash)),
+                          run.get("resource_scope_hash")):
+            raise ExplainError("source_context_drift", "Persisted resource scope does not match")
 
     sql = run.get("sql")
     if sql is not None and not _same_hash(_sql_hash(sql), run.get("sql_hash")):
@@ -218,18 +226,14 @@ def _validate_hash_anchors(run: dict[str, Any]) -> tuple[list[str], list[str]]:
     try:
         validate_contract("policy_decision_v1", policy)
     except (ValidationError, TypeError) as exc:
-        raise ExplainError(
-            "policy_evidence_drift", "Persisted Policy evidence is invalid"
-        ) from exc
+        raise ExplainError("policy_evidence_drift", "Persisted Policy evidence is invalid") from exc
     if not _same_hash(canonical_hash(policy), run.get("policy_decision_hash")):
         raise ExplainError("policy_evidence_drift", "Persisted Policy hash does not match")
-    if not _same_hash(
-        build_enforcement_context_hash(run), run.get("enforcement_context_hash")
-    ):
-        raise ExplainError(
-            "enforcement_context_drift",
-            "Persisted enforcement context hash does not match",
-        )
+    context_record = run if run.get("enforce_schema_version") == 1 else {
+        **run, "referenced_tables": (assurance or {}).get("referenced_tables", []),
+    }
+    if not _same_hash(build_enforcement_context_hash(context_record), run.get("enforcement_context_hash")):
+        raise ExplainError("enforcement_context_drift", "Persisted enforcement context hash does not match")
 
     verified = ["candidate", "policy", "enforcement_context"]
     if sql is not None:
@@ -241,6 +245,8 @@ def _validate_hash_anchors(run: dict[str, Any]) -> tuple[list[str], list[str]]:
     explain_context = run.get("explain_context")
     explain_context_hash = run.get("explain_context_hash")
     if explain_context is None and explain_context_hash is None:
+        if run.get("enforce_schema_version") == 2:
+            raise ExplainError("source_context_drift", "Governed source context anchor is missing")
         unverified.append("source_context")
     elif not isinstance(explain_context, dict) or not _same_hash(
         canonical_hash(explain_context), explain_context_hash
@@ -252,28 +258,33 @@ def _validate_hash_anchors(run: dict[str, Any]) -> tuple[list[str], list[str]]:
         if (
             explain_context.get("registry_revision") != run.get("registry_version")
             or explain_context.get("datasource_id") != run.get("datasource_id")
-            or canonical_hash(explain_context.get("resource_scope"))
+            or canonical_hash(sorted(explain_context.get("resource_scope") or [], key=canonical_hash))
             != run.get("resource_scope_hash")
         ):
-            raise ExplainError(
-                "source_context_drift", "Persisted source context bindings do not match"
-            )
+            raise ExplainError("source_context_drift", "Persisted source context bindings do not match")
         verified.append("source_context")
 
     approval = build_approval_record(run)
-    if approval is not None:
+    if run.get("enforce_schema_version") == 2:
+        if run.get("execution_mode") == "autonomous" and (approval is not None or run.get("approval_hash") is not None):
+            raise ExplainError("approval_evidence_drift", "Autonomous execution cannot carry human approval")
+        if run.get("execution_mode") == "human_review" and run.get("authorization_record") is not None:
+            if not approval or not _same_hash(run.get("approval_hash"), run.get("authorization_hash")):
+                raise ExplainError("approval_evidence_drift", "Human approval is not bound to authorization")
+            verified.append("approval")
+    elif approval is not None:
         if run.get("approval_hash") is None:
             unverified.append("approval")
         elif not _same_hash(canonical_hash(approval), run.get("approval_hash")):
-            raise ExplainError(
-                "approval_evidence_drift", "Persisted approval hash does not match"
-            )
+            raise ExplainError("approval_evidence_drift", "Persisted approval hash does not match")
         else:
             verified.append("approval")
 
     result = build_result_record(run)
     if result is not None:
         if run.get("result_hash") is None:
+            if run.get("enforce_schema_version") == 2:
+                raise ExplainError("result_evidence_drift", "Governed result anchor is missing")
             unverified.append("result")
         elif not _same_hash(canonical_hash(result), run.get("result_hash")):
             raise ExplainError(
@@ -321,6 +332,11 @@ def _limitations(
             "description": "The datasource is queried live; this QueryRun does not capture a database snapshot or transaction revision.",
         },
     ]
+    if run.get("enforce_schema_version") == 2:
+        limitations.append({
+            "code": "authorization_is_not_semantic_correctness", "severity": "warning",
+            "description": "Authorization permits this bounded execution; it does not prove the SQL answers the question.",
+        })
     if explain_context.get("extraction_status") != "complete":
         limitations.append(
             {
@@ -366,11 +382,90 @@ def _limitations(
         )
     return limitations
 
+def _verify_governed_evidence(run: dict[str, Any], issued: dict[str, Any]) -> dict | None:
+    issuance = {key: issued[key] for key in (
+        "schema_version", "mandate_id", "issuance_revision", "issuer_principal_id",
+        "delegated_mandate", "policy",
+    )}
+    if (not _same_hash(canonical_hash(issuance), issued.get("issuance_hash"))
+            or not _same_hash(issued.get("issuance_hash"), run.get("mandate_issuance_hash"))
+            or issued["mandate_id"] != run.get("mandate_id")
+            or issued["issuance_revision"] != run.get("mandate_issuance_revision")
+            or issuance["delegated_mandate"] != run.get("delegated_mandate")):
+        raise ExplainError("mandate_evidence_drift", "Issued mandate differs from the prepared run")
+    if (issued["issuer_principal_id"] != run["delegated_mandate"]["delegator_principal"]["principal_id"]
+            or issued["policy"]["reviewer_principal_id"] != run.get("reviewer_principal_id")
+            or issued["policy"]["revision"] != run.get("authorization_policy_revision")
+            or run["principal_context"]["actor_principal"] != run["delegated_mandate"]["delegate_principal"]
+            or run["principal_context"]["accountable_principal"] != run["delegated_mandate"]["accountable_principal"]
+            or run["task_run_id"] != run["delegated_mandate"]["task_run_id"]):
+        raise ExplainError("mandate_evidence_drift", "Mandate identities or scope differ")
+    mode = run.get("execution_mode")
+    expected_authority = (issued["issuer_principal_id"] if mode == "autonomous"
+                          else run["reviewer_principal_id"])
+    decision = run["policy_decision"]
+    if (mode not in {"autonomous", "human_review", None}
+            or decision["decision_authority"] != {"principal_id": expected_authority, "principal_type": "human"}
+            or decision["effect"] != ({"autonomous": "allow", "human_review": "conditional", None: "deny"}[mode])
+            or decision["mandate_id"] != run["mandate_id"]
+            or decision["subject_principal_id"] != run["principal_context"]["actor_principal"]["principal_id"]):
+        raise ExplainError("policy_evidence_drift", "Policy authority or execution mode differs")
+    authorization = run.get("authorization_record")
+    if authorization is None:
+        if (run.get("authorization_hash") is not None or run.get("execution_claim_id") is not None
+                or run.get("approval_hash") is not None or run.get("approved_at") is not None
+                or run.get("approver_user_id") is not None or run.get("result_hash") is not None
+                or run["status"] in {"executing", "completed"}):
+            raise ExplainError("authorization_evidence_drift", "Execution has no authorization anchor")
+    else:
+        expected_kind = "mandate" if run["execution_mode"] == "autonomous" else "human_approval"
+        expected_authorizer = (run["principal_context"]["actor_principal"]["principal_id"]
+                               if expected_kind == "mandate" else run["reviewer_principal_id"])
+        expected = {
+            "schema_version": 1, "kind": expected_kind,
+            "action": "execute" if expected_kind == "mandate" else "approve",
+            "actor_principal_id": run["principal_context"]["actor_principal"]["principal_id"],
+            "authorizing_principal_id": expected_authorizer,
+            "issuer_principal_id": issued["issuer_principal_id"],
+            "accountable_principal_id": run["user_id"],
+            "reviewer_principal_id": None if expected_kind == "mandate" else run["reviewer_principal_id"],
+            "mandate_id": run["mandate_id"], "mandate_issuance_revision": run["mandate_issuance_revision"],
+            "mandate_issuance_hash": run["mandate_issuance_hash"],
+            "authorization_policy_revision": run["authorization_policy_revision"],
+            "sql_hash": run["sql_hash"], "assurance_report_hash": run["assurance_report_hash"],
+            "enforcement_context_hash": run["enforcement_context_hash"],
+            "execution_claim_id": run["execution_claim_id"],
+        }
+        if (not isinstance(authorization, dict)
+                or not _same_hash(canonical_hash(authorization), run.get("authorization_hash"))
+                or any(authorization.get(key) != value for key, value in expected.items())
+                or not authorization.get("authorized_at")
+                or not (authorization.get("credential_id") or authorization.get("channel_binding_id"))
+                or (expected_kind == "human_approval" and (run.get("approver_user_id") != expected_authorizer
+                    or run.get("approved_at") != authorization["authorized_at"]))):
+            raise ExplainError("authorization_evidence_drift", "Authorization record is not bound to claim")
+    return authorization
 
-def project_explain_query_run(run: dict[str, Any]) -> dict[str, Any]:
+def project_explain_query_run(run: dict[str, Any], *, issued_mandate: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build and validate a deterministic public explanation from one QueryRun."""
     verified, unverified = _validate_hash_anchors(run)
-    enforce_projection = project_enforce_query_run(run)
+    governed = run.get("enforce_schema_version") == 2
+    authorization = None
+    if governed:
+        if issued_mandate is None:
+            raise ExplainError("mandate_evidence_drift", "Authoritative issuance is required")
+        authorization = _verify_governed_evidence(run, issued_mandate)
+        verified.append("mandate")
+        if authorization is not None:
+            verified.append("authorization")
+        status = "review_required" if run["status"] == "needs_review" else run["status"]
+        failure = ({"stage": "execution", "code": "execution_failed", "retryable": True}
+                   if status == "failed" and authorization else
+                   {"stage": "enforce", "code": "preparation_failed", "retryable": False}
+                   if status in {"failed", "denied"} else None)
+        enforce_projection = {"status": status, "failure": failure, "result": build_result_record(run)}
+    else:
+        enforce_projection = project_enforce_query_run(run)
     explain_context = run.get("explain_context")
     if not isinstance(explain_context, dict):
         physical_tables, _, unresolved, extraction_status = _extract_sql_references(
@@ -420,6 +515,12 @@ def project_explain_query_run(run: dict[str, Any]) -> dict[str, Any]:
         for kind, summary, content_hash in optional_evidence
         if content_hash
     )
+    if governed:
+        evidence.append(_evidence_item(run["query_run_id"], "mandate",
+            "The original issued mandate is independently hash-bound.", run["mandate_issuance_hash"]))
+        if authorization is not None:
+            evidence.append(_evidence_item(run["query_run_id"], "authorization",
+                "The execution claim records the actual authorizing principal.", run["authorization_hash"]))
 
     principal = run["principal_context"]
     mandate = run.get("delegated_mandate")
@@ -480,6 +581,17 @@ def project_explain_query_run(run: dict[str, Any]) -> dict[str, Any]:
         "limitations": _limitations(run, enforce_projection, explain_context, unverified),
         "generated_at": run["updated_at"],
     }
+    if governed:
+        payload["schema_version"] = 2
+        payload["governance"].update({
+            "issuer_principal": {"principal_id": issued_mandate["issuer_principal_id"], "principal_type": "human"},
+            "authorization": authorization,
+        })
+        payload["lineage"].update({
+            "explain_revision": "explain-query-v2",
+            "mandate_issuance_hash": run["mandate_issuance_hash"],
+            "authorization_hash": run.get("authorization_hash"),
+        })
     explanation_hash = canonical_hash(payload)
     payload["integrity"] = {
         "status": "partial" if unverified else "verified",
@@ -487,8 +599,13 @@ def project_explain_query_run(run: dict[str, Any]) -> dict[str, Any]:
         "verified_hashes": verified,
         "unverified_components": unverified,
     }
+    if governed:
+        payload["governance"]["current_authorization"] = {
+            "status": issued_mandate["status"],
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
     try:
-        validate_contract("explain_query_response_v1", payload)
+        validate_contract("explain_query_response_v2" if governed else "explain_query_response_v1", payload)
     except ValidationError as exc:
         raise ExplainError(
             "explain_projection_invalid",

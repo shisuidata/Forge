@@ -12,10 +12,10 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from config import cfg
-from web.auth import require_api_auth
+from web.auth import require_human_principal, require_admin_principal
 from web.diagnostics import error_response
 from web.pi_client import pi_request as _pi_request
 from web.pi_projections import (
@@ -26,8 +26,6 @@ from web.pi_projections import (
     _pi_stage_payload,
     _valid_web_event_id,
     _web_action_event_id,
-    _web_admin_can_observe,
-    _web_admin_task_scopes,
 )
 
 router = APIRouter()
@@ -57,6 +55,7 @@ class PiPrepareQueryRequest(BaseModel):
     dialect: Optional[str] = None
     idempotency_key: Optional[str] = None
     run_async: bool = False
+    candidate: dict | None = None
 
 
 class PiSkillStageRequest(BaseModel):
@@ -95,31 +94,42 @@ class PiResumeAnalysisRequest(BaseModel):
 
 
 class PiApproveQueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query_run_id: str
     sql_hash: str
+    assurance_report_hash: str
+    enforcement_context_hash: str
     idempotency_key: str
     run_async: bool = False
 
 
-async def _pi_scoped_task_get(task_run_id: str, suffix: str = "") -> tuple[int, dict]:
+class PiMandateAttachRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mandate_id: str
+    expected_mandate_id: str | None
+
+
+async def _pi_scoped_task_get(task_run_id: str, principal, suffix: str = "") -> tuple[int, dict]:
     from web.diagnostics import error_body, upstream_error
-    task_status, task_data = await _pi_request("GET", f"/v1/tasks/{task_run_id}")
+    task_status, task_data = await _pi_request("GET", f"/v1/tasks/{task_run_id}", principal=principal, action="task.read", task_run_id=task_run_id)
     if task_status != 200:
         return upstream_error(task_status, task_data)
     task = task_data.get("task")
     if not isinstance(task, dict):
         return 502, error_body(502, "upstream_contract_invalid")
-    if not _web_admin_can_observe(task):
+    if (task.get("org_id"), task.get("team_id")) != (principal.organization_id, principal.workspace_id) or (task.get("user_id") != principal.principal_id and principal.role != "admin"):
         return 404, error_body(404)
     if not suffix:
         return task_status, task_data
-    return await _pi_request("GET", f"/v1/tasks/{task_run_id}/{suffix}")
+    return await _pi_request("GET", f"/v1/tasks/{task_run_id}/{suffix}", principal=principal, action="task.read", task_run_id=task_run_id)
 
 
 @router.post("/api/pi/chat/messages", response_class=JSONResponse)
 async def api_pi_web_chat_message(
     req: PiWebChatMessageRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     """Submit one authenticated Web message through the shared ChannelEvent ingress."""
     if not cfg.PI_ORCHESTRATOR_ENABLED:
@@ -136,12 +146,13 @@ async def api_pi_web_chat_message(
             "event_id": req.message_id,
             "channel": "web",
             "event_type": "message",
-            "external_user_id": "web_admin",
+            "external_user_id": principal.principal_id,
             "conversation_id": req.conversation_id,
             "message_id": req.message_id,
             "task_run_id": None,
             "payload": {"text": message, "chat_type": "web"},
         },
+        principal=principal, action="task.write",
     )
     return JSONResponse(data, status_code=status)
 
@@ -152,19 +163,19 @@ async def api_pi_web_chat_message(
 )
 async def api_pi_web_chat_presentation(
     task_run_id: str,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
-    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task_status, task_data = await _pi_scoped_task_get(task_run_id, principal)
     task = task_data.get("task") if isinstance(task_data, dict) else None
     if task_status != 200:
         return error_response(task_status, task_data.get("code"))
-    if task.get("channel") != "web" or task.get("user_id") != "web_admin":
+    if task.get("channel") != "web" or task.get("user_id") != principal.principal_id:
         return error_response(404)
-    status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}/presentation")
+    status, data = await _pi_request("GET", f"/v1/tasks/{task_run_id}/presentation", principal=principal, action="task.read", task_run_id=task_run_id)
     return JSONResponse(data, status_code=status)
 
 
@@ -175,7 +186,7 @@ async def api_pi_web_chat_presentation(
 async def api_pi_web_chat_task_flow(
     task_run_id: str,
     request: Request,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     """Return a minimal read-only Plan/Event/Attempt projection for Web chat."""
     if not cfg.PI_ORCHESTRATOR_ENABLED:
@@ -186,16 +197,16 @@ async def api_pi_web_chat_task_flow(
     if not raw_after.isdigit() or len(raw_after) > 12:
         return error_response(400, 'invalid_request')
     after = int(raw_after)
-    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task_status, task_data = await _pi_scoped_task_get(task_run_id, principal)
     task = task_data.get("task") if isinstance(task_data, dict) else None
     if task_status != 200:
         return error_response(task_status, task_data.get("code"))
-    if task.get("channel") != "web" or task.get("user_id") != "web_admin":
+    if task.get("channel") != "web" or task.get("user_id") != principal.principal_id:
         return error_response(404)
     event_result, artifact_result, attempt_result = await asyncio.gather(
-        _pi_request("GET", f"/v1/tasks/{task_run_id}/events?after={after}"),
-        _pi_request("GET", f"/v1/tasks/{task_run_id}/artifacts"),
-        _pi_request("GET", f"/v1/tasks/{task_run_id}/attempts"),
+        _pi_request("GET", f"/v1/tasks/{task_run_id}/events?after={after}", principal=principal, action="task.read", task_run_id=task_run_id),
+        _pi_request("GET", f"/v1/tasks/{task_run_id}/artifacts", principal=principal, action="task.read", task_run_id=task_run_id),
+        _pi_request("GET", f"/v1/tasks/{task_run_id}/attempts", principal=principal, action="task.read", task_run_id=task_run_id),
     )
     if any(status != 200 for status, _ in (event_result, artifact_result, attempt_result)):
         return error_response(502, 'upstream_unavailable')
@@ -224,7 +235,7 @@ async def api_pi_web_chat_task_flow(
 async def api_pi_web_chat_action(
     task_run_id: str,
     req: PiWebChatActionRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     """Forward only presentation-declared Web actions through shared ChannelEvent handling."""
     if not cfg.PI_ORCHESTRATOR_ENABLED:
@@ -232,21 +243,24 @@ async def api_pi_web_chat_action(
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     allowed_actions = {
-        "provide_input", "approve_query", "cancel_task", "request_supplement",
+        "provide_input", "cancel_task", "request_supplement",
         "analyze", "render_report", "confirm_memory",
     }
+    if req.action == "approve_query":
+        return error_response(410, "governed_api_v2_required")
     if req.action not in allowed_actions:
         return error_response(400, 'invalid_request')
     if not _valid_web_event_id(req.conversation_id) or not _valid_web_event_id(req.message_id):
         return error_response(400, 'invalid_request')
-    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task_status, task_data = await _pi_scoped_task_get(task_run_id, principal)
     task = task_data.get("task") if isinstance(task_data, dict) else None
     if task_status != 200:
         return error_response(task_status, task_data.get("code"))
-    if task.get("channel") != "web" or task.get("user_id") != "web_admin":
+    if task.get("channel") != "web" or task.get("user_id") != principal.principal_id:
         return error_response(404)
     presentation_status, presentation_data = await _pi_request(
-        "GET", f"/v1/tasks/{task_run_id}/presentation"
+        "GET", f"/v1/tasks/{task_run_id}/presentation",
+        principal=principal, action="task.read", task_run_id=task_run_id,
     )
     if presentation_status != 200:
         return error_response(presentation_status, presentation_data.get("code"))
@@ -299,12 +313,13 @@ async def api_pi_web_chat_action(
             "event_id": event_id,
             "channel": "web",
             "event_type": "action",
-            "external_user_id": "web_admin",
+            "external_user_id": principal.principal_id,
             "conversation_id": task_conversation_id,
             "message_id": action_message_id,
             "task_run_id": task_run_id,
             "payload": {"action": req.action, **req.payload},
         },
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -314,9 +329,9 @@ async def api_pi_list_tasks(
     channel: str | None = None,
     status: str | None = None,
     limit: int = 50,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
-    """List the authenticated admin team's cross-channel TaskRuns."""
+    """List only tasks visible to this authenticated principal."""
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     allowed_channels = {"web", "feishu", "dingtalk", "api"}
@@ -332,9 +347,7 @@ async def api_pi_list_tasks(
         return error_response(400, 'invalid_request')
     if limit < 1 or limit > 100:
         return error_response(400, 'invalid_request')
-    scopes = _web_admin_task_scopes()
-    if not scopes:
-        return error_response(503, 'misconfigured')
+    scopes = [(principal.organization_id, principal.workspace_id)]
     tasks_by_id: dict[str, dict] = {}
     for org_id, team_id in scopes:
         query = {
@@ -344,14 +357,14 @@ async def api_pi_list_tasks(
             **({} if channel is None else {"channel": channel}),
             **({} if status is None else {"status": status}),
         }
-        upstream_status, data = await _pi_request("GET", f"/v1/tasks?{urlencode(query)}")
+        upstream_status, data = await _pi_request("GET", f"/v1/tasks?{urlencode(query)}", principal=principal, action="task.read")
         if upstream_status != 200:
             return JSONResponse(data, status_code=upstream_status)
         for task in data.get("tasks", []):
             if isinstance(task, dict) and isinstance(task.get("task_run_id"), str):
                 tasks_by_id[task["task_run_id"]] = task
     tasks = sorted(
-        tasks_by_id.values(),
+        (task for task in tasks_by_id.values() if principal.role == "admin" or task.get("user_id") == principal.principal_id),
         key=lambda task: (str(task.get("updated_at", "")), str(task.get("task_run_id", ""))),
         reverse=True,
     )[:limit]
@@ -359,7 +372,7 @@ async def api_pi_list_tasks(
 
 
 @router.post("/api/pi/tasks", response_class=JSONResponse)
-async def api_pi_create_task(req: PiTaskCreateRequest, _auth=Depends(require_api_auth)):
+async def api_pi_create_task(req: PiTaskCreateRequest, principal=Depends(require_human_principal)):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     status, data = await _pi_request(
@@ -367,15 +380,14 @@ async def api_pi_create_task(req: PiTaskCreateRequest, _auth=Depends(require_api
         "/v1/tasks",
         {
             "message": req.message,
-            # Integration Spike 只有管理员 Web 渠道；不信任浏览器提交身份。
-            # 正式 org/team/user 映射在 Phase 2 身份层完成。
-            "user_id": "web_admin",
-            "org_id": "org_default",
-            "team_id": "team_default",
+            "user_id": principal.principal_id,
+            "org_id": principal.organization_id,
+            "team_id": principal.workspace_id,
             "intent": req.intent,
             "channel": "web",
             "channel_conversation_id": req.channel_conversation_id,
         },
+        principal=principal, action="task.write",
     )
     return JSONResponse(data, status_code=status)
 
@@ -387,7 +399,7 @@ async def api_pi_create_task(req: PiTaskCreateRequest, _auth=Depends(require_api
 async def api_pi_prepare_query(
     task_run_id: str,
     req: PiPrepareQueryRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
@@ -397,6 +409,7 @@ async def api_pi_prepare_query(
         "POST",
         f"/v1/tasks/{task_run_id}/prepare-query",
         _pi_stage_payload(req),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -408,14 +421,15 @@ async def api_pi_prepare_query(
 async def api_pi_clarify_task(
     task_run_id: str,
     req: PiSkillStageRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/clarify", _pi_stage_payload(req)
+        "POST", f"/v1/tasks/{task_run_id}/clarify", _pi_stage_payload(req),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -427,14 +441,15 @@ async def api_pi_clarify_task(
 async def api_pi_review_metric(
     task_run_id: str,
     req: PiSkillStageRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/review-metric", _pi_stage_payload(req)
+        "POST", f"/v1/tasks/{task_run_id}/review-metric", _pi_stage_payload(req),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -442,13 +457,13 @@ async def api_pi_review_metric(
 @router.get("/api/pi/tasks/{task_run_id}", response_class=JSONResponse)
 async def api_pi_task(
     task_run_id: str,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
-    upstream_status, data = await _pi_scoped_task_get(task_run_id)
+    upstream_status, data = await _pi_scoped_task_get(task_run_id, principal)
     return JSONResponse(data, status_code=upstream_status)
 
 
@@ -458,13 +473,13 @@ async def api_pi_task(
 )
 async def api_pi_task_attempts(
     task_run_id: str,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
-    upstream_status, data = await _pi_scoped_task_get(task_run_id, "attempts")
+    upstream_status, data = await _pi_scoped_task_get(task_run_id, principal, "attempts")
     return JSONResponse(data, status_code=upstream_status)
 
 
@@ -474,13 +489,13 @@ async def api_pi_task_attempts(
 )
 async def api_pi_task_artifacts(
     task_run_id: str,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
-    upstream_status, data = await _pi_scoped_task_get(task_run_id, "artifacts")
+    upstream_status, data = await _pi_scoped_task_get(task_run_id, principal, "artifacts")
     return JSONResponse(data, status_code=upstream_status)
 
 
@@ -491,14 +506,15 @@ async def api_pi_task_artifacts(
 async def api_pi_create_supplement(
     task_run_id: str,
     req: PiSupplementRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/supplements", req.model_dump()
+        "POST", f"/v1/tasks/{task_run_id}/supplements", req.model_dump(),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -510,14 +526,15 @@ async def api_pi_create_supplement(
 async def api_pi_resume_analysis(
     task_run_id: str,
     req: PiResumeAnalysisRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/resume-analysis", _pi_stage_payload(req)
+        "POST", f"/v1/tasks/{task_run_id}/resume-analysis", _pi_stage_payload(req),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -529,14 +546,15 @@ async def api_pi_resume_analysis(
 async def api_pi_run_skill(
     task_run_id: str,
     req: PiAdvisorySkillRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/run-skill", req.model_dump(exclude_none=True)
+        "POST", f"/v1/tasks/{task_run_id}/run-skill", req.model_dump(exclude_none=True),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -548,14 +566,15 @@ async def api_pi_run_skill(
 async def api_pi_analyze_task(
     task_run_id: str,
     req: PiAnalyzeRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/analyze", _pi_stage_payload(req)
+        "POST", f"/v1/tasks/{task_run_id}/analyze", _pi_stage_payload(req),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -567,14 +586,15 @@ async def api_pi_analyze_task(
 async def api_pi_render_report(
     task_run_id: str,
     req: PiRenderReportRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
     status, data = await _pi_request(
-        "POST", f"/v1/tasks/{task_run_id}/render-report", _pi_stage_payload(req)
+        "POST", f"/v1/tasks/{task_run_id}/render-report", _pi_stage_payload(req),
+        principal=principal, action="task.write", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=status)
 
@@ -586,7 +606,7 @@ async def api_pi_render_report(
 async def api_pi_approve_query(
     task_run_id: str,
     req: PiApproveQueryRequest,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
@@ -596,7 +616,7 @@ async def api_pi_approve_query(
         "POST",
         f"/v1/tasks/{task_run_id}/approve-query",
         _pi_stage_payload(req),
-    )
+     principal=principal, action="query.approve", task_run_id=task_run_id, query_run_id=req.query_run_id, approval_hashes={"sql_hash":req.sql_hash,"assurance_report_hash":req.assurance_report_hash,"enforcement_context_hash":req.enforcement_context_hash}, idempotency_key=req.idempotency_key, )
     return JSONResponse(data, status_code=status)
 
 
@@ -604,17 +624,54 @@ async def api_pi_approve_query(
 async def api_pi_task_events(
     task_run_id: str,
     after: int = 0,
-    _auth=Depends(require_api_auth),
+    principal=Depends(require_human_principal),
 ):
     if not cfg.PI_ORCHESTRATOR_ENABLED:
         return _pi_disabled_response()
     if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
         return error_response(400, 'invalid_request')
-    task_status, task_data = await _pi_scoped_task_get(task_run_id)
+    task_status, task_data = await _pi_scoped_task_get(task_run_id, principal)
     if task_status != 200:
         return JSONResponse(task_data, status_code=task_status)
     upstream_status, data = await _pi_request(
         "GET",
         f"/v1/tasks/{task_run_id}/events?after={max(after, 0)}",
+        principal=principal, action="task.read", task_run_id=task_run_id,
     )
     return JSONResponse(data, status_code=upstream_status)
+
+
+@router.post("/api/pi/tasks/{task_run_id}/mandate", response_class=JSONResponse)
+async def api_pi_attach_mandate(
+    task_run_id: str, req: PiMandateAttachRequest, request: Request,
+    principal=Depends(require_admin_principal),
+):
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
+        return error_response(400, "invalid_request")
+    key = request.headers.get("Idempotency-Key")
+    if not key:
+        return error_response(400, "idempotency_key_required")
+    status, data = await _pi_request(
+        "POST", f"/v1/tasks/{task_run_id}/mandate", req.model_dump(),
+        principal=principal, action="task.attach_mandate",
+        task_run_id=task_run_id, idempotency_key=key,
+    )
+    return JSONResponse(data, status_code=status)
+
+
+@router.get("/api/pi/tasks/{task_run_id}/query-review", response_class=JSONResponse)
+async def api_pi_query_review(task_run_id: str, principal=Depends(require_human_principal)):
+    """Named reviewer sees only the SQL/Assurance review projection, not Task details."""
+    if not cfg.PI_ORCHESTRATOR_ENABLED:
+        return _pi_disabled_response()
+    if re.fullmatch(r"tr_[A-Za-z0-9_-]+", task_run_id) is None:
+        return error_response(404)
+    if principal.role not in {"reviewer", "admin"}:
+        return error_response(404)
+    status, data = await _pi_request(
+        "GET", f"/v1/tasks/{task_run_id}/query-review",
+        principal=principal, action="task.read", task_run_id=task_run_id,
+    )
+    return JSONResponse(data, status_code=status)

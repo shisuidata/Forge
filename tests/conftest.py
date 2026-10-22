@@ -2,9 +2,9 @@
 Forge 测试共享 fixtures。
 
 提供：
-    - app:          禁用认证的 FastAPI 应用实例
-    - client:       httpx.AsyncClient，连接到测试应用
-    - auth_client:  附带有效 session cookie 的 httpx.AsyncClient
+    - app:          isolated FastAPI app with no legacy authentication bypass
+    - client:       unauthenticated httpx.AsyncClient for rejection checks
+    - governed_client: isolated registered admin API key client
 """
 from __future__ import annotations
 
@@ -15,14 +15,14 @@ from httpx import ASGITransport, AsyncClient
 
 @pytest.fixture(scope="session")
 def app():
-    """创建 FastAPI 应用实例，禁用认证。"""
+    """Create the shared FastAPI app; governance endpoints still require credentials."""
     from config import cfg
     # 直接覆盖已加载的 config 属性
     cfg.AUTH_ENABLED = False
     cfg.LLM_API_KEY = ""
     cfg.EMBED_API_KEY = ""
     cfg.DATABASE_URL = "sqlite:///:memory:"
-    cfg.LEGACY_AGENT_API_ENABLED = True
+    cfg.LEGACY_AGENT_API_ENABLED = False
 
     from main import app as _app
     return _app
@@ -30,25 +30,26 @@ def app():
 
 @pytest_asyncio.fixture
 async def client(app):
-    """无认证的 httpx.AsyncClient。"""
+    """Unauthenticated httpx.AsyncClient."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
 
 
 @pytest_asyncio.fixture
-async def auth_client(app):
-    """附带有效 session cookie 的 httpx.AsyncClient（用于认证启用的测试场景）。"""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        resp = await c.post(
-            "/login",
-            data={"password": "test", "next": "/chat"},
-            follow_redirects=False,
-        )
-        if "set-cookie" in resp.headers:
-            cookie_str = resp.headers["set-cookie"]
-            name, _, rest = cookie_str.partition("=")
-            value = rest.split(";")[0]
-            c.cookies.set(name.strip(), value.strip())
-        yield c
+async def governed_client(app, monkeypatch, tmp_path):
+    """Registered synthetic principal for public API tests that require authentication."""
+    from config import cfg
+    from agent.tenant import tenants
+    from forge.governance_credentials import create_credential
+
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "governance.db"))
+    monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+    tenants.create_team("fixture_team", organization_id="fixture_org")
+    tenants.set_team("fixture_admin", "fixture_team", role="admin", principal_type="human", status="active")
+    tenants.set_allowed_tables("fixture_team", ["orders", "users", "dim_user", "numbers", "secrets"])
+    _, token = create_credential("fixture_admin")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test",
+                           headers={"X-API-Key": token}) as scoped:
+        yield scoped

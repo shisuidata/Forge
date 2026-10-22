@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 export type TaskEventType =
   | "task.created"
+  | "task.mandate_attached"
   | "task.status_changed"
   | "plan.created"
   | "plan.revised"
@@ -10,11 +11,12 @@ export type TaskEventType =
   | "memory.proposed"
   | "memory.confirmed"
   | "channel.response_created"
+  | "query.authorization_required"
   | "query.review_requested"
   | "query.clarification_requested"
   | "query.prepare_failed"
   | "query.prepare_timed_out"
-  | "query.approval_submitted"
+  | "query.execution_authorized"
   | "query.completed"
   | "query.execution_failed"
   | "artifact.created"

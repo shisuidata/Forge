@@ -16,6 +16,10 @@ const clarification = {
 const unused = async (): Promise<never> => { throw new Error("Unexpected external call"); };
 const taskInput = { org_id: "synthetic_org", team_id: "synthetic_team", user_id: "synthetic_user",
   channel: "web" as const, channel_conversation_id: "synthetic_conversation", intent: "data_task", message: "分析订单变化" };
+const principal = { principal_id: "synthetic_user", principal_type: "human" as const, organization_id: "synthetic_org",
+  workspace_id: "synthetic_team", role: "member" as const, identity_revision: 1,
+  credential_id: "cr_synthetic", credential_revision: 1, authentication_method: "api_key",
+  authenticated_at: new Date().toISOString(), channel_binding_id: null, channel_binding_revision: null };
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -25,7 +29,7 @@ function deferred<T>() {
 function application(state: OrchestratorState, clarify: StructuredSkillExecutionPort["clarify"], timeout = 25, skills: Partial<StructuredSkillExecutionPort> = {}) {
   return new OrchestratorApplication({ state,
     config: loadConfig({ FORGE_REQUEST_TIMEOUT_MS: "1", PI_STAGE_TIMEOUT_MS: String(timeout), PI_STAGE_LEASE_MS: "500" }),
-    forgeClient: { createQueryRun: unused, approveQueryRun: unused },
+    forgeClient: { createQueryRun: unused, approveQueryRun: unused, executeQueryRun: unused, getQueryRun: unused, getMandate: unused },
     skillExecutor: { clarify, reviewMetric: unused, analyze: unused, writeReport: unused, ...skills },
   });
 }
@@ -48,7 +52,7 @@ for (const [name, createState] of [
     const started = deferred<void>();
     let calls = 0;
     const app = application(state, async () => { started.resolve(); return ++calls === 1 ? late.promise : clarification; });
-    const task = app.createTask(taskInput).task;
+    const task = app.createTask(taskInput, principal).task;
     // The executor ignores abort: the Application, not the cooperative fake, must bound its wait.
     const timedOut = assert.rejects(app.clarifyRequirement(task.task_run_id, { message: "first" }));
     await started.promise;
@@ -78,7 +82,7 @@ for (const [name, createState] of [
       const late = deferred<typeof clarification>();
       const started = deferred<AbortSignal>();
       const app = application(state, async (_task, _message, signal) => { started.resolve(signal!); return late.promise; }, 100);
-      const task = app.createTask(taskInput).task;
+      const task = app.createTask(taskInput, principal).task;
       runningPlan(state, task.task_run_id);
       const pending = app.clarifyRequirement(task.task_run_id, { message: "run" });
       const rejected = assert.rejects(pending);
@@ -103,7 +107,7 @@ for (const [name, createState] of [
     const state = createState();
     if (state instanceof SqliteOrchestratorState) context.after(() => state.close());
     const app = application(state, unused);
-    const task = app.createTask(taskInput).task;
+    const task = app.createTask(taskInput, principal).task;
     state.transactions.run(() => {
       state.events.append(task.task_run_id, "skill.started", {});
       assert.throws(() => state.transactions.run(() => {
@@ -132,7 +136,7 @@ for (const [name, createState] of [
     const started = deferred<void>();
     let calls = 0;
     const app = application(state, async () => { calls++; started.resolve(); return late.promise; });
-    const task = app.createTask(taskInput).task;
+    const task = app.createTask(taskInput, principal).task;
     const pending = assert.rejects(app.clarifyRequirement(task.task_run_id, { message: "race" }));
     await started.promise;
     context.mock.timers.tick(25);
@@ -143,7 +147,7 @@ for (const [name, createState] of [
     assert.equal(app.getTask(task.task_run_id)?.status, "cancelled");
     assert.equal(app.getStageAttempts(task.task_run_id)[0]?.status, "interrupted");
     assert.deepEqual(app.getArtifacts(task.task_run_id), []);
-    const undispatched = app.createTask(taskInput).task;
+    const undispatched = app.createTask(taskInput, principal).task;
     await assert.rejects(app.clarifyRequirement(undispatched.task_run_id, { message: "aborted before dispatch" }, AbortSignal.abort()));
     assert.equal(calls, 1);
     assert.equal(app.getTask(undispatched.task_run_id)?.status, "created");
@@ -157,8 +161,8 @@ for (const [name, createState] of [
     if (state instanceof SqliteOrchestratorState) context.after(() => state.close());
     const started = deferred<void>();
     const app = application(state, unused, 100, { analyze: async () => { started.resolve(); throw new Error("Synthetic analysis failure"); } });
-    const parent = app.createTask(taskInput).task;
-    const child = app.createTask({ ...taskInput, parent_task_run_id: parent.task_run_id, intent: "analysis_supplement_query" }).task;
+    const parent = app.createTask(taskInput, principal).task;
+    const child = app.createTask({ ...taskInput, parent_task_run_id: parent.task_run_id, intent: "analysis_supplement_query" }, principal).task;
     state.tasks.transition({ taskRunId: parent.task_run_id, expectedStatus: "created", status: "incomplete", currentStage: "analysis_incomplete" });
     state.tasks.transition({ taskRunId: child.task_run_id, expectedStatus: "created", status: "completed", currentStage: "query_complete" });
     for (const task of [parent, child]) state.artifacts.create({ artifactType: "query_result", taskRunId: task.task_run_id, producer: "forge", payload: {
@@ -185,7 +189,7 @@ for (const [name, createState] of [
     const state = createState();
     if (state instanceof SqliteOrchestratorState) context.after(() => state.close());
     const app = application(state, async () => clarification);
-    const task = app.createTask(taskInput).task;
+    const task = app.createTask(taskInput, principal).task;
     state.tasks.transition({ taskRunId: task.task_run_id, expectedStatus: "created", status: "clarifying", currentStage: "requirement_clarification" });
     runningPlan(state, task.task_run_id);
     state.attempts.start({ taskRunId: task.task_run_id, stage: "requirement_clarification", runningStatus: "clarifying", retryStatus: "created", idempotencyKey: "old-owner", leaseMs: 1 });

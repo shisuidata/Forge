@@ -5,7 +5,7 @@ import { SqliteOrchestratorState } from "./sqlite-store.js";
 import { currentRequestId } from "./request-context.js";
 
 import type { ChannelEventStore } from "./channels/event-store.js";
-import type { ChannelEventInput, ChannelIdentity, ChannelPresentation } from "./channels/contracts.js";
+import type { ChannelEventInput, ChannelPresentation } from "./channels/contracts.js";
 import { renderChannelPresentation } from "./channels/renderer.js";
 import { routeChannelMessage } from "./channels/intent.js";
 import {
@@ -22,7 +22,7 @@ import {
   type ArtifactStore,
 } from "./artifacts.js";
 import { computePiModelRevision, type OrchestratorConfig } from "./config.js";
-import type { ForgeDialect } from "./forge/client.js";
+import { ForgeClientError, type ForgeDialect } from "./forge/client.js";
 import {
   ProductProjectionService,
   type ConversationListProjection,
@@ -70,47 +70,32 @@ export interface CreateDataTaskInput extends CreateTaskInput {
   message: string;
 }
 
+export interface TrustedRequestPrincipal {
+  principal_id: string;
+  principal_type: "human" | "agent" | "service";
+  organization_id: string;
+  workspace_id: string;
+  role: "admin" | "reviewer" | "member";
+  identity_revision: number;
+  credential_id: string | null;
+  credential_revision: number | null;
+  authentication_method: string;
+  authenticated_at: string;
+  channel_binding_id: string | null;
+  channel_binding_revision: number | null;
+}
+
 export interface ForgeQueryRunPort {
-  searchContext?(
-    input: { orgId: string; teamId: string; userId: string; question: string; limit?: number },
-    signal?: AbortSignal,
-  ): Promise<ContextSearchResult>;
-  createQueryRun(
-    input: {
-      taskRunId: string;
-      orgId: string;
-      teamId: string;
-      userId: string;
-      question: string;
-      dialect?: ForgeDialect;
-      candidate?: QueryCandidateInput;
-      idempotencyKey: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<QueryRunReview>;
-  approveQueryRun(
-    input: {
-      queryRunId: string;
-      approverUserId: string;
-      sqlHash: string;
-      assuranceReportHash: string;
-      idempotencyKey: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<QueryRunResult>;
-  cancelQueryRun?(
-    input: { queryRunId: string; userId: string },
-    signal?: AbortSignal,
-  ): Promise<QueryRunReview>;
-  createReport?(
-    input: Record<string, unknown>,
-    idempotencyKey: string,
-    signal?: AbortSignal,
-  ): Promise<ReportPublication>;
-  getReport?(reportId: string, signal?: AbortSignal): Promise<ReportPublication>;
-  writeMemory?(
-    input: Record<string, unknown>, signal?: AbortSignal,
-  ): Promise<Record<string, unknown>>;
+  searchContext?(input: { taskRunId: string; question: string; limit?: number }, signal?: AbortSignal): Promise<ContextSearchResult>;
+  createQueryRun(input: { taskRunId: string; mandateId: string; purpose: string; question: string; dialect?: ForgeDialect; candidate?: QueryCandidateInput; idempotencyKey: string }, signal?: AbortSignal): Promise<QueryRunReview>;
+  getQueryRun(queryRunId: string, signal?: AbortSignal): Promise<QueryRunReview>;
+  executeQueryRun(input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string }, signal?: AbortSignal): Promise<QueryRunReview>;
+  approveQueryRun(input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string; controlToken: string }, signal?: AbortSignal): Promise<QueryRunReview>;
+  getMandate(mandateId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  cancelQueryRun?(input: { queryRunId: string }, signal?: AbortSignal): Promise<QueryRunReview>;
+  createReport?(input: Record<string, unknown>, idempotencyKey: string, signal?: AbortSignal): Promise<ReportPublication>;
+  getReport?(reportId: string, taskRunId: string, signal?: AbortSignal): Promise<ReportPublication>;
+  writeMemory?(input: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>>;
 }
 
 export class OrchestratorApplication {
@@ -123,6 +108,8 @@ export class OrchestratorApplication {
   readonly #attempts: StageAttemptStore;
   readonly state: OrchestratorState;
   readonly #activeStages = new Map<string, { controller: AbortController; dispose: () => void }>();
+  readonly #activeQueryObservers = new Set<string>();
+  readonly #recoveringQueryRuns = new Set<string>();
   readonly #stageTimeoutMs: number;
   readonly #stageLeaseMs: number;
   readonly #channelEvents: ChannelEventStore;
@@ -169,7 +156,14 @@ export class OrchestratorApplication {
       });
   }
 
-  createTask(input: CreateDataTaskInput): { task: TaskRun; events: TaskEvent[] } {
+  createTask(input: CreateDataTaskInput, principal: TrustedRequestPrincipal): { task: TaskRun; events: TaskEvent[] } {
+    if (principal.organization_id !== input.org_id || principal.workspace_id !== input.team_id ||
+      principal.principal_id !== input.user_id || principal.principal_type !== "human")
+      throw new TaskStateError("Task requester does not match authenticated principal");
+    if (input.parent_task_run_id && (input.metadata?.mandate_id || input.metadata?.execution_actor_id))
+      throw new TaskStateError("Child TaskRun cannot inherit parent mandate");
+    if (input.metadata?.mandate_id || input.metadata?.execution_actor_id)
+      throw new TaskStateError("Task creation cannot grant execution authority");
     if (input.message.trim().length === 0) {
       throw new TaskStateError("message must not be empty");
     }
@@ -201,6 +195,52 @@ export class OrchestratorApplication {
       });
       return { task, events: this.#events.list(task.task_run_id) };
     });
+  }
+
+  async attachMandate(taskRunId: string, input: { mandateId: string; expectedMandateId: string | null }, principal: TrustedRequestPrincipal): Promise<TaskRun> {
+    const task = this.#tasks.get(taskRunId);
+    if (!task) throw new TaskStateError("TaskRun not found");
+    if (principal.principal_type !== "human" || principal.role !== "admin" ||
+      principal.organization_id !== task.org_id || principal.workspace_id !== task.team_id)
+      throw new TaskStateError("Only task-scope admin can attach mandate");
+    if (!this.#config.executionPrincipalId) throw new TaskStateError("Pi execution principal is not registered");
+    const mandate = await this.#forge.getMandate(input.mandateId);
+    const delegated = mandate.delegated_mandate as Record<string, unknown> | undefined;
+    const delegate = delegated?.delegate_principal as Record<string, unknown> | undefined;
+    const accountable = delegated?.accountable_principal as Record<string, unknown> | undefined;
+    if (mandate.status !== "active" || delegated?.task_run_id !== taskRunId ||
+      delegated.organization_id !== task.org_id || delegated.workspace_id !== task.team_id ||
+      delegate?.principal_id !== this.#config.executionPrincipalId || accountable?.principal_id !== task.user_id)
+      throw new TaskStateError("Mandate does not authorize this TaskRun and execution actor");
+    const previous = typeof task.metadata.mandate_id === "string" ? task.metadata.mandate_id : null;
+    if (previous && previous !== input.mandateId) {
+      const old = await this.#forge.getMandate(previous);
+      if (old.status === "active") throw new TaskStateError("Old mandate must be revoked before replacement");
+      if (task.status === "querying") throw new TaskStateError("Cannot replace mandate while query is executing");
+    }
+    const attached = this.#transactions.run(() => {
+      const current = this.#tasks.get(taskRunId);
+      if (!current) throw new TaskStateError("TaskRun not found");
+      const old = typeof current.metadata.mandate_id === "string" ? current.metadata.mandate_id : null;
+      const next = this.#tasks.attachMandate(taskRunId, input.expectedMandateId, input.mandateId,
+        this.#config.executionPrincipalId!);
+      if (old !== input.mandateId) this.#events.append(taskRunId, "task.mandate_attached", {
+        mandate_id: input.mandateId, execution_actor_id: this.#config.executionPrincipalId,
+      });
+      return next;
+    });
+    if (attached.status === "needs_input" && attached.current_stage === "query_authorization") {
+      const pending = [...this.#events.list(taskRunId)].reverse()
+        .find(event => event.event_type === "query.authorization_required");
+      if (pending && typeof pending.payload.question === "string") {
+        await this.prepareQuery(taskRunId, {
+          question: pending.payload.question, dialect: pending.payload.dialect as ForgeDialect,
+          ...(pending.payload.candidate ? { candidate: pending.payload.candidate as QueryCandidateInput } : {}),
+          ...(typeof pending.payload.command_key === "string" ? { idempotencyKey: pending.payload.command_key } : {}),
+        });
+      }
+    }
+    return this.#tasks.get(taskRunId)!;
   }
 
   transitionBenchmarkTask(input: {
@@ -269,6 +309,45 @@ export class OrchestratorApplication {
     taskRunId: string;
   }): TaskDetailProjectionV1 | undefined {
     return this.#productProjections.getTaskDetail(input);
+  }
+
+  getQueryReviewProjection(taskRunId: string, principal: TrustedRequestPrincipal): {
+    task_run_id: string; query_run_id: string; sql: string; sql_hash: string;
+    assurance_report_hash: string; enforcement_context_hash: string;
+    assurance_report: unknown; mandate_id: string | null;
+  } | undefined {
+    const task = this.#tasks.get(taskRunId);
+    if (!task || task.status !== "waiting_for_query_approval" || principal.principal_type !== "human" ||
+      principal.organization_id !== task.org_id || principal.workspace_id !== task.team_id) return undefined;
+    const review = [...this.#events.list(taskRunId)].reverse()
+      .find(event => event.event_type === "query.review_requested" && event.payload.review_required === true);
+    if (!review || review.payload.reviewer_principal_id !== principal.principal_id ||
+      typeof review.payload.query_run_id !== "string" || typeof review.payload.sql !== "string" ||
+      typeof review.payload.sql_hash !== "string" ||
+      typeof review.payload.assurance_report_hash !== "string" ||
+      typeof review.payload.enforcement_context_hash !== "string") return undefined;
+    return {
+      task_run_id: taskRunId, query_run_id: review.payload.query_run_id,
+      sql: review.payload.sql, sql_hash: review.payload.sql_hash,
+      assurance_report_hash: review.payload.assurance_report_hash,
+      enforcement_context_hash: review.payload.enforcement_context_hash,
+      assurance_report: review.payload.assurance_report,
+      mandate_id: typeof task.metadata.mandate_id === "string" ? task.metadata.mandate_id : null,
+    };
+  }
+
+  #channelReviewResponse(task: TaskRun, principal: TrustedRequestPrincipal, duplicate: boolean): {
+    task: TaskRun; presentation: ChannelPresentation; duplicate: boolean;
+  } {
+    const review = this.getQueryReviewProjection(task.task_run_id, principal);
+    if (!review) throw new TaskStateError("Reviewer cannot access this query");
+    return { task: { ...task, metadata: { mandate_id: review.mandate_id } }, duplicate,
+      presentation: { kind: "query_review", task_run_id: task.task_run_id,
+        title: "查询审核", markdown: "查询审核已提交，执行状态请稍后回读。",
+        fields: [{ label: "SQL", value: review.sql },
+          { label: "SQL hash", value: review.sql_hash },
+          { label: "Assurance hash", value: review.assurance_report_hash }],
+        table: null, actions: [], source_event_sequence: 0, source_artifact_ids: [] } };
   }
 
   getEvents(taskRunId: string, afterSequence = 0): TaskEvent[] {
@@ -424,21 +503,33 @@ export class OrchestratorApplication {
     return this.#channelEvents.get(channel, eventId)?.task_run_id ?? null;
   }
 
-  getChannelPresentation(taskRunId: string): ChannelPresentation {
+  getChannelPresentation(taskRunId: string, principal?: TrustedRequestPrincipal): ChannelPresentation {
     const task = this.#tasks.get(taskRunId);
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
-    return renderChannelPresentation({
-      task,
-      events: this.#events.list(taskRunId),
-      artifacts: this.#artifacts.list(taskRunId),
-    });
+    const events = this.#events.list(taskRunId);
+    const presentation = renderChannelPresentation({ task, events, artifacts: this.#artifacts.list(taskRunId) });
+    if (presentation.kind !== "query_review") return presentation;
+    const review = [...events].reverse().find(event => event.event_type === "query.review_requested");
+    return principal?.principal_id === review?.payload.reviewer_principal_id ? presentation : {
+      ...presentation, actions: presentation.actions.filter(action => action.type !== "approve_query"),
+    };
+  }
+
+  async ingestChannelEvent(event: ChannelEventInput, principal: TrustedRequestPrincipal,
+    controlToken?: string, signal?: AbortSignal): Promise<{ task: TaskRun; presentation: ChannelPresentation; duplicate: boolean }> {
+    if (event.event_type === "message") return this.ingestChannelMessage(event, principal, signal);
+    return this.ingestChannelAction(event, principal, controlToken, signal);
   }
 
   async ingestChannelMessage(
     event: ChannelEventInput,
-    identity: ChannelIdentity,
+    principal: TrustedRequestPrincipal,
     signal?: AbortSignal,
   ): Promise<{ task: TaskRun; presentation: ChannelPresentation; duplicate: boolean }> {
+    if (principal.principal_type !== "human" ||
+      (event.channel === "web" ? (!principal.credential_id || event.external_user_id !== principal.principal_id) :
+        principal.channel_binding_id === null))
+      throw new TaskStateError("Authenticated channel human required");
     if (event.event_type !== "message") {
       throw new TaskStateError(`Unsupported ChannelEvent type: ${event.event_type}`);
     }
@@ -452,9 +543,9 @@ export class OrchestratorApplication {
       const claim = this.#channelEvents.claim(event);
       if (!claim.created) return { record: claim.record, task: undefined };
       const created = this.createTask({
-        org_id: identity.org_id,
-        team_id: identity.team_id,
-        user_id: identity.user_id,
+        org_id: principal.organization_id,
+        team_id: principal.workspace_id,
+        user_id: principal.principal_id,
         channel: event.channel,
         channel_conversation_id: event.conversation_id,
         intent: route.kind === "query"
@@ -469,7 +560,7 @@ export class OrchestratorApplication {
           channel_message_id: event.message_id,
           external_user_id: event.external_user_id,
         },
-      });
+      }, principal);
       const plan = this.#artifacts.create({
         artifactType: "execution_plan",
         taskRunId: created.task.task_run_id,
@@ -494,7 +585,7 @@ export class OrchestratorApplication {
       if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
       return {
         task,
-        presentation: this.getChannelPresentation(task.task_run_id),
+        presentation: this.getChannelPresentation(task.task_run_id, principal),
         duplicate: true,
       };
     }
@@ -508,7 +599,7 @@ export class OrchestratorApplication {
       );
       return {
         task: completed,
-        presentation: this.getChannelPresentation(completed.task_run_id),
+        presentation: this.getChannelPresentation(completed.task_run_id, principal),
         duplicate: false,
       };
     }
@@ -523,7 +614,7 @@ export class OrchestratorApplication {
       });
       return {
         task: waiting,
-        presentation: this.getChannelPresentation(waiting.task_run_id),
+        presentation: this.getChannelPresentation(waiting.task_run_id, principal),
         duplicate: false,
       };
     }
@@ -536,7 +627,7 @@ export class OrchestratorApplication {
           "需要确认 Registry 变更",
           "请提供指标或业务规则的完整定义。我会先生成 Registry Draft 和差异，确认后才会发布。",
         );
-        return { task: completed, presentation: this.getChannelPresentation(completed.task_run_id), duplicate: false };
+        return { task: completed, presentation: this.getChannelPresentation(completed.task_run_id, principal), duplicate: false };
       }
       const forgetting = /(?:忘记|删除.*记忆|清除.*记忆)/i.test(text);
       const memoryValue = text
@@ -549,7 +640,7 @@ export class OrchestratorApplication {
           });
           return this.#transition(claimed.task!, "needs_input", "memory_clarification");
         });
-        return { task: waiting, presentation: this.getChannelPresentation(waiting.task_run_id), duplicate: false };
+        return { task: waiting, presentation: this.getChannelPresentation(waiting.task_run_id, principal), duplicate: false };
       }
       const category = /(?:默认|偏好|习惯)/.test(memoryValue) ? "user_profile" : "confirmed_fact";
       const memoryKey = `channel_${createHash("sha256").update(memoryValue).digest("hex").slice(0, 24)}`;
@@ -568,16 +659,14 @@ export class OrchestratorApplication {
         });
         return this.#transition(claimed.task!, "waiting_for_action_approval", "memory_approval");
       });
-      return { task: waiting, presentation: this.getChannelPresentation(waiting.task_run_id), duplicate: false };
+      return { task: waiting, presentation: this.getChannelPresentation(waiting.task_run_id, principal), duplicate: false };
     }
 
     if (route.kind === "knowledge") {
       const context = this.#forge.searchContext === undefined
         ? undefined
         : await this.#forge.searchContext({
-            orgId: claimed.task.org_id,
-            teamId: claimed.task.team_id,
-            userId: claimed.task.user_id,
+            taskRunId: claimed.task.task_run_id,
             question: text.trim(),
             limit: 8,
           }, signal);
@@ -590,7 +679,7 @@ export class OrchestratorApplication {
         );
         return {
           task: completed,
-          presentation: this.getChannelPresentation(completed.task_run_id),
+          presentation: this.getChannelPresentation(completed.task_run_id, principal),
           duplicate: false,
         };
       }
@@ -614,7 +703,7 @@ export class OrchestratorApplication {
       );
       return {
         task: advised.task,
-        presentation: this.getChannelPresentation(advised.task.task_run_id),
+        presentation: this.getChannelPresentation(advised.task.task_run_id, principal),
         duplicate: false,
       };
     }
@@ -633,16 +722,21 @@ export class OrchestratorApplication {
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${claimed.task.task_run_id}`);
     return {
       task,
-      presentation: this.getChannelPresentation(task.task_run_id),
+      presentation: this.getChannelPresentation(task.task_run_id, principal),
       duplicate: false,
     };
   }
 
   async ingestChannelAction(
     event: ChannelEventInput,
-    identity: ChannelIdentity,
+    principal: TrustedRequestPrincipal,
+    controlToken?: string,
     signal?: AbortSignal,
   ): Promise<{ task: TaskRun; presentation: ChannelPresentation; duplicate: boolean }> {
+    if (principal.principal_type !== "human" ||
+      (event.channel === "web" ? (!principal.credential_id || event.external_user_id !== principal.principal_id) :
+        principal.channel_binding_id === null))
+      throw new TaskStateError("Authenticated channel human required");
     if (event.event_type !== "action" || event.task_run_id === null) {
       throw new TaskStateError("Channel action requires task_run_id");
     }
@@ -650,12 +744,12 @@ export class OrchestratorApplication {
     if (task === undefined) throw new TaskStateError(`TaskRun not found: ${event.task_run_id}`);
     if (
       task.channel !== event.channel ||
-      task.channel_conversation_id !== event.conversation_id ||
-      task.org_id !== identity.org_id ||
-      task.team_id !== identity.team_id ||
-      task.user_id !== identity.user_id
+      (event.payload.action !== "approve_query" && task.channel_conversation_id !== event.conversation_id) ||
+      task.org_id !== principal.organization_id ||
+      task.team_id !== principal.workspace_id ||
+      (event.payload.action !== "approve_query" && task.user_id !== principal.principal_id)
     ) {
-      throw new TaskStateError("Channel action identity does not own this TaskRun");
+      throw new TaskStateError("Channel action cannot access this TaskRun");
     }
     const actionType = event.payload.action;
     if (![
@@ -678,6 +772,9 @@ export class OrchestratorApplication {
     const assuranceReportHash = actionType === "approve_query"
       ? this.#channelPayloadString(event, "assurance_report_hash")
       : undefined;
+    const enforcementContextHash = actionType === "approve_query"
+      ? this.#channelPayloadString(event, "enforcement_context_hash")
+      : undefined;
     const inputText = actionType === "provide_input"
       ? this.#channelPayloadString(event, "text")
       : undefined;
@@ -699,43 +796,26 @@ export class OrchestratorApplication {
       const recordedTask = claim.record.task_run_id === null
         ? task
         : this.#tasks.get(claim.record.task_run_id) ?? task;
+      if (actionType === "approve_query" && recordedTask.user_id !== principal.principal_id)
+        return this.#channelReviewResponse(recordedTask, principal, true);
       return {
         task: recordedTask,
-        presentation: this.getChannelPresentation(recordedTask.task_run_id),
+        presentation: this.getChannelPresentation(recordedTask.task_run_id, principal),
         duplicate: true,
       };
     }
 
     try {
       let responseTask = task;
-      if (
-      actionType === "approve_query" &&
-      queryRunId !== undefined &&
-      sqlHash !== undefined &&
-      assuranceReportHash !== undefined
-    ) {
-      await this.approveQuery(
-        task.task_run_id,
-        {
-          queryRunId,
-          sqlHash,
-          assuranceReportHash,
-          idempotencyKey: `${event.channel}:${event.event_id}:approve`,
-        },
-        signal,
-      );
-      if (task.parent_task_run_id !== null) {
-        const resumed = await this.resumeAnalysisWithSupplement(
-          task.parent_task_run_id,
-          {
-            childTaskRunId: task.task_run_id,
-            idempotencyKey: `${event.channel}:${event.event_id}:resume-parent-analysis`,
-          },
-          signal,
-        );
-        responseTask = resumed.task;
-      }
-    } else if (actionType === "analyze") {
+      if (actionType === "approve_query" && queryRunId && sqlHash && assuranceReportHash &&
+        enforcementContextHash && controlToken) {
+        await this.approveQuery(task.task_run_id, {
+          queryRunId, sqlHash, assuranceReportHash, enforcementContextHash,
+          idempotencyKey: event.channel + ":" + event.event_id + ":approve", controlToken,
+        }, principal, signal);
+      } else if (actionType === "approve_query") {
+        throw new TaskStateError("Channel approval requires exact hashes and fresh control token");
+      } else if (actionType === "analyze") {
       const analyzed = await this.analyzeTask(
         task.task_run_id,
         { idempotencyKey: `${event.channel}:${event.event_id}:analysis` },
@@ -776,9 +856,7 @@ export class OrchestratorApplication {
         .find((candidate) => candidate.event_type === "memory.proposed");
       if (proposal === undefined) throw new TaskStateError("Memory proposal not found");
       await this.#forge.writeMemory({
-        org_id: task.org_id,
-        team_id: task.team_id,
-        user_id: task.user_id,
+        task_run_id: task.task_run_id,
         operation: proposal.payload.operation,
         category: proposal.payload.category,
         key: proposal.payload.key,
@@ -829,11 +907,13 @@ export class OrchestratorApplication {
       : responseTask;
     if (updated === undefined) throw new TaskStateError(`TaskRun not found: ${task.task_run_id}`);
     this.#channelEvents.complete(event.channel, event.event_id, updated.task_run_id);
-      return {
-        task: updated,
-        presentation: this.getChannelPresentation(updated.task_run_id),
-        duplicate: false,
-      };
+    if (actionType === "approve_query" && updated.user_id !== principal.principal_id)
+      return this.#channelReviewResponse(updated, principal, false);
+    return {
+      task: updated,
+      presentation: this.getChannelPresentation(updated.task_run_id, principal),
+      duplicate: false,
+    };
     } catch (error) {
       this.#channelEvents.fail(
         event.channel,
@@ -864,7 +944,7 @@ export class OrchestratorApplication {
         throw new TaskStateError("Reviewable QueryRun cannot be cancelled safely");
       }
       await this.#forge.cancelQueryRun(
-        { queryRunId, userId: task.user_id },
+        { queryRunId },
         signal,
       );
     }
@@ -1050,296 +1130,264 @@ export class OrchestratorApplication {
 
   async prepareQuery(
     taskRunId: string,
-    input: {
-      question: string;
-      dialect?: ForgeDialect;
-      candidate?: QueryCandidateInput;
-      idempotencyKey?: string;
-    },
+    input: { question: string; dialect?: ForgeDialect; candidate?: QueryCandidateInput; idempotencyKey?: string },
     signal?: AbortSignal,
-  ): Promise<{ task: TaskRun; result: QueryRunReview; events: TaskEvent[] }> {
-    let task = this.#tasks.get(taskRunId);
-    if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
-    if (input.question.trim().length === 0) {
-      throw new TaskStateError("question must not be empty");
-    }
-
+  ): Promise<{ task: TaskRun; result: QueryRunReview | null; events: TaskEvent[] }> {
+    const loaded = this.#tasks.get(taskRunId);
+    if (!loaded) throw new TaskStateError("TaskRun not found");
+    let task: TaskRun = loaded;
+    if (!input.question.trim()) throw new TaskStateError("question must not be empty");
     const commandKey = this.#commandKey(taskRunId, "query_prepare", input.idempotencyKey);
     const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["prepareQuery"]>>>(taskRunId, commandKey);
-    if (replay !== undefined) return replay;
-    if (task.status === "created" || task.status === "needs_input") {
-      task = this.#transition(task, "ready_for_query", "query_prepare");
-    } else if (task.status !== "ready_for_query") {
-      throw new TaskStateError(`TaskRun cannot prepare a query from status: ${task.status}`);
+    if (replay) return replay;
+    const mandateId = task.metadata.mandate_id;
+    if (typeof mandateId !== "string" || !mandateId) {
+      return this.#transactions.run(() => {
+        if (task.status !== "created" && task.status !== "ready_for_query" && task.status !== "needs_input")
+          throw new TaskStateError("Task cannot request authorization from current status");
+        this.#events.append(taskRunId, "query.authorization_required", {
+          question: input.question, dialect: input.dialect ?? "auto", candidate: input.candidate ?? null,
+          command_key: input.idempotencyKey ?? null,
+        });
+        task = task.status === "needs_input" && task.current_stage === "query_authorization"
+          ? task : this.#transition(task, "needs_input", "query_authorization");
+        return { task, result: null, events: this.#events.list(taskRunId) };
+      });
     }
-
-    let stageTask: TaskRun = task;
-
+    if (task.metadata.execution_actor_id !== this.#config.executionPrincipalId)
+      throw new TaskStateError("Task execution actor does not match registered Pi principal");
+    if (task.status === "created" || task.status === "needs_input") task = this.#transition(task, "ready_for_query", "query_prepare");
+    if (task.status !== "ready_for_query") throw new TaskStateError("Task cannot prepare query from current status");
     let attempt!: StageAttempt;
-    this.#transactions.run(() => {
-      attempt = this.#startAttempt(
-        stageTask,
-        "query_prepare",
-        "ready_for_query",
-        commandKey,
-      );
-    });
-    const stageExecution = this.#stageSignal(attempt, signal);
+    this.#transactions.run(() => { attempt = this.#startAttempt(task, "query_prepare", "ready_for_query", commandKey); });
+    const stage = this.#stageSignal(attempt, signal);
     let result: QueryRunReview;
+    let reviewerPrincipalId: string;
     try {
-      result = await stageExecution.wait(() => this.#forge.createQueryRun({
-        taskRunId: stageTask.task_run_id,
-        orgId: stageTask.org_id,
-        teamId: stageTask.team_id,
-        userId: stageTask.user_id,
-        question: input.question,
-        idempotencyKey: commandKey,
-        ...(input.dialect === undefined ? {} : { dialect: input.dialect }),
-        ...(input.candidate === undefined ? {} : { candidate: input.candidate }),
-      },
-      stageExecution.signal,));
-      if (stageExecution.timedOut()) throw new Error("Query preparation Stage timed out");
+      const mandate = await stage.wait(() => this.#forge.getMandate(mandateId, stage.signal));
+      const delegated = mandate.delegated_mandate as Record<string, unknown>;
+      if (mandate.status !== "active" || delegated.task_run_id !== taskRunId ||
+        delegated.organization_id !== task.org_id || delegated.workspace_id !== task.team_id)
+        throw new TaskStateError("Mandate no longer authorizes task scope");
+      reviewerPrincipalId = String((mandate.policy as Record<string, unknown>).reviewer_principal_id);
+      result = await stage.wait(() => this.#forge.createQueryRun({
+        taskRunId, mandateId, purpose: String(delegated.purpose), question: input.question,
+        idempotencyKey: commandKey, ...(input.dialect ? { dialect: input.dialect } : {}),
+        ...(input.candidate ? { candidate: input.candidate } : {}),
+      }, stage.signal));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown Forge error";
+      const message = error instanceof Error ? error.message : "Forge preparation failed";
+      const clarification = error instanceof ForgeClientError && error.code === "candidate_needs_clarification";
       this.#transactions.run(() => {
         if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
-        if (stageExecution.timedOut() || stageExecution.interrupted()) {
-          this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
-          stageTask = this.#transition(stageTask, "ready_for_query", "query_prepare_retry");
-        } else {
-          this.#finishAttempt(attempt, "failed", message);
-          stageTask = this.#transition(stageTask, "failed", "query_prepare");
-        }
-        this.#events.append(taskRunId, "query.prepare_failed", {
-          timed_out: stageExecution.timedOut(),
-          error: message,
-        });
+        this.#finishAttempt(attempt, stage.timedOut() ? "timed_out" : clarification ? "succeeded" : "failed", message);
+        task = this.#transition(task, clarification ? "needs_input" : stage.timedOut() ? "ready_for_query" : "failed",
+          clarification ? "requirement_clarification" : "query_prepare_retry");
+        this.#events.append(taskRunId, clarification ? "query.clarification_requested" : "query.prepare_failed",
+          clarification ? { prompt: message } : { error: message });
       });
-      throw new TaskStateError(
-        `Query preparation failed for ${stageTask.task_run_id}: ${message}`,
-        { cause: error },
-      );
+      if (clarification) return { task, result: null, events: this.#events.list(taskRunId) };
+      throw new TaskStateError("Query preparation failed", { cause: error });
     }
-
-    let finalizedTask = stageTask;
-    return this.#commitStage(attempt, () => {
-      if (result.status === "needs_review") {
-        finalizedTask = this.#transition(finalizedTask, "waiting_for_query_approval", "query_review");
+    const committed = this.#commitStage(attempt, () => {
+      if (result.status === "review_required" || result.status === "ready") {
+        const review = result.review;
+        if (!review.sql_hash || !review.assurance_report_hash || !review.enforcement_context_hash)
+          throw new TaskStateError("Forge did not provide claim hashes");
         this.#events.append(taskRunId, "query.review_requested", {
-          query_run_id: result.query_run_id,
-          sql: result.sql,
-          sql_hash: result.sql_hash,
-          input_kind: result.input_kind,
-          candidate_revision: result.candidate_revision,
-          forge_json: result.forge_json,
-          dialect: result.dialect,
-          registry_version: result.registry_version,
-          assurance_report: result.assurance_report,
-          assurance_report_hash: result.assurance_report_hash,
-          assurance_revision: result.assurance_revision,
-          policy_revision: result.policy_revision,
-          model_revision: result.model_revision,
-          assurance_registry_revision: result.assurance_registry_revision,
-          expires_at: result.expires_at,
-          review_required: true,
+          query_run_id: result.query_run_id, sql: review.sql, sql_hash: review.sql_hash,
+          dialect: input.dialect ?? "sqlite", registry_version: result.lineage.registry_revision,
+          input_kind: result.candidate.input_kind, candidate_revision: result.candidate.candidate_revision,
+          assurance_report_hash: review.assurance_report_hash,
+          enforcement_context_hash: review.enforcement_context_hash,
+          assurance_report: result.assurance, reviewer_principal_id:
+            reviewerPrincipalId,
+          expires_at: review.expires_at, review_required: result.status === "review_required",
           can_execute: false,
         });
-      } else if (result.status === "needs_clarification") {
-        finalizedTask = this.#transition(finalizedTask, "needs_input", "requirement_clarification");
-        this.#events.append(taskRunId, "query.clarification_requested", {
-          prompt: result.error,
-        });
-      } else if (result.status === "timed_out") {
-        finalizedTask = this.#transition(finalizedTask, "ready_for_query", "query_prepare_retry");
-        this.#events.append(taskRunId, "query.prepare_timed_out", {
-          error: result.error || "查询准备超时，请重试。",
-          retryable: true,
-        });
+        task = this.#transition(task, result.status === "ready" ? "ready_for_query" : "waiting_for_query_approval",
+          result.status === "ready" ? "query_execution" : "query_review");
       } else {
-        finalizedTask = this.#transition(finalizedTask, "failed", "query_prepare");
-        this.#events.append(taskRunId, "query.prepare_failed", {
-          error: result.error || "Forge could not prepare the query",
+        task = this.#transition(task, "failed", "query_prepare");
+        this.#events.append(taskRunId, "query.prepare_failed", { error: result.failure?.code ?? "query_denied" });
+      }
+      this.#finishAttempt(attempt, result.status === "ready" || result.status === "review_required" ? "succeeded" : "failed",
+        result.failure?.code, { result });
+      return { task, result, events: this.#events.list(taskRunId) };
+    });
+    if (result.status === "ready") await this.startQueryExecution(taskRunId, {
+      queryRunId: result.query_run_id, sqlHash: result.review.sql_hash!,
+      assuranceReportHash: result.review.assurance_report_hash!,
+      enforcementContextHash: result.review.enforcement_context_hash!,
+      idempotencyKey: commandKey + ":execute",
+    }, "execute", signal);
+    return { ...committed, task: this.#tasks.get(taskRunId)!, events: this.#events.list(taskRunId) };
+  }
+
+  async approveQuery(taskRunId: string, input: {
+    queryRunId: string; sqlHash: string; assuranceReportHash: string;
+    enforcementContextHash: string; idempotencyKey: string; controlToken: string;
+  }, principal: TrustedRequestPrincipal, signal?: AbortSignal): Promise<{
+    task: TaskRun; result: QueryRunReview; events: TaskEvent[];
+  }> {
+    const task = this.#tasks.get(taskRunId);
+    if (!task) throw new TaskStateError("TaskRun not found");
+    if (principal.principal_type !== "human" || !["reviewer", "admin"].includes(principal.role) ||
+      principal.organization_id !== task.org_id || principal.workspace_id !== task.team_id)
+      throw new TaskStateError("Reviewer not authorized for task");
+    if (task.status !== "waiting_for_query_approval") throw new TaskStateError("Task is not awaiting review");
+    return this.startQueryExecution(taskRunId, input, "approve", signal, principal);
+  }
+
+  async startQueryExecution(taskRunId: string, input: {
+    queryRunId: string; sqlHash: string; assuranceReportHash: string;
+    enforcementContextHash: string; idempotencyKey: string; controlToken?: string;
+  }, action: "execute" | "approve", signal?: AbortSignal, principal?: TrustedRequestPrincipal): Promise<{
+    task: TaskRun; result: QueryRunReview; events: TaskEvent[];
+  }> {
+    const task = this.#tasks.get(taskRunId);
+    if (!task) throw new TaskStateError("TaskRun not found");
+    const review = [...this.#events.list(taskRunId)].reverse().find(event => event.event_type === "query.review_requested");
+    if (review?.payload.query_run_id !== input.queryRunId || review.payload.sql_hash !== input.sqlHash ||
+      review.payload.assurance_report_hash !== input.assuranceReportHash ||
+      review.payload.enforcement_context_hash !== input.enforcementContextHash)
+      throw new TaskStateError("Claim hashes do not match TaskRun review");
+    if (action === "approve" && (task.status !== "waiting_for_query_approval" || !input.controlToken ||
+      principal?.principal_id !== review.payload.reviewer_principal_id))
+      throw new TaskStateError("Specified reviewer and control token required");
+    if (action === "execute" && (task.status !== "ready_for_query" || review.payload.review_required !== false))
+      throw new TaskStateError("Query is not autonomous-ready");
+    const claimInput = { queryRunId: input.queryRunId, sqlHash: input.sqlHash,
+      assuranceReportHash: input.assuranceReportHash, enforcementContextHash: input.enforcementContextHash,
+      idempotencyKey: input.idempotencyKey };
+    // The remote claim commits before any local approval or execution event and before the HTTP 202.
+    const claimed = action === "approve"
+      ? await this.#forge.approveQueryRun({ ...claimInput, controlToken: input.controlToken! }, signal)
+      : await this.#forge.executeQueryRun(claimInput, signal);
+    if (claimed.status !== "executing" && claimed.status !== "completed")
+      throw new TaskStateError("Forge did not commit execution authorization");
+    const running = this.#transactions.run(() => {
+      const current = this.#tasks.get(taskRunId);
+      if (!current) throw new TaskStateError("TaskRun not found");
+      if (current.status === "querying") return current;
+      if (current.status !== task.status) throw new TaskStateError("Task changed during execution claim");
+      const next = this.#transition(current, "querying", "query_execution");
+      this.#events.append(taskRunId, "query.execution_authorized", {
+        query_run_id: input.queryRunId, execution_mode: action === "approve" ? "human_review" : "autonomous",
+        authorization_hash: claimed.lineage.authorization_hash,
+        reviewer_principal_id: action === "approve" ? principal!.principal_id : null,
+      });
+      return next;
+    });
+    // Observation carries no human ticket and never submits a second claim.
+    this.#observeQueryRun(taskRunId, input.queryRunId);
+    return { task: running, result: claimed, events: this.#events.list(taskRunId) };
+  }
+
+  async finishQueryExecution(taskRunId: string, queryRunId: string): Promise<{
+    task: TaskRun; result: QueryRunResult; artifact: Artifact; events: TaskEvent[];
+  }> {
+    const deadline = Date.now() + this.#config.stageLeaseMs;
+    let run: QueryRunReview;
+    do {
+      run = await this.#forge.getQueryRun(queryRunId);
+      if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") break;
+      if (run.status !== "executing") throw new TaskStateError("Unclaimed QueryRun cannot be observed as executing");
+      await delay(500);
+    } while (Date.now() < deadline);
+    if (run.status !== "completed" || !run.result) {
+      if (run.status === "failed" || run.status === "cancelled") {
+        this.#transactions.run(() => {
+          const current = this.#tasks.get(taskRunId);
+          if (current?.status !== "querying") return;
+          this.#transition(current, "failed", "query_execution");
+          this.#events.append(taskRunId, "query.execution_failed", { query_run_id: queryRunId, error: run.failure?.code ?? run.status });
         });
       }
-
-      this.#finishAttempt(
-        attempt,
-        result.status === "timed_out"
-          ? "timed_out"
-          : result.status === "needs_review" || result.status === "needs_clarification"
-            ? "succeeded"
-            : "failed",
-        result.error,
-        { result },
-      );
-      return { task: finalizedTask, result, events: this.#events.list(taskRunId) };
+      throw new TaskStateError("QueryRun result not yet available; observe same run later");
+    }
+    const result: QueryRunResult = {
+      query_run_id: run.query_run_id, task_run_id: run.task_run_id, status: "completed",
+      sql_hash: run.review.sql_hash!, input_kind: run.candidate.input_kind,
+      candidate_revision: run.candidate.candidate_revision, dialect: "sqlite",
+      registry_version: run.lineage.registry_revision,
+      assurance_report_hash: run.review.assurance_report_hash!,
+      assurance_revision: run.lineage.assurance_revision!, policy_revision: run.lineage.policy_revision,
+      model_revision: null, assurance_registry_revision: null,
+      columns: run.result.columns, rows: run.result.rows, row_count: run.result.row_count,
+      truncated: run.result.truncated, execution_ms: run.result.execution_ms,
+      executed_at: run.result.executed_at, error: "",
+    };
+    return this.#transactions.run(() => {
+      let current = this.#tasks.get(taskRunId);
+      if (!current) throw new TaskStateError("TaskRun not found");
+      const existing = this.#artifacts.latest(taskRunId, "query_result");
+      if (current.status !== "querying") {
+        if (existing?.payload.query_run_id === queryRunId)
+          return { task: current, result, artifact: existing, events: this.#events.list(taskRunId) };
+        throw new TaskStateError("Task changed while observing QueryRun");
+      }
+      const artifact = this.#artifacts.create({ artifactType: "query_result", taskRunId, producer: "forge", payload: {
+        query_run_id: result.query_run_id, sql_hash: result.sql_hash, columns: result.columns,
+        rows: result.rows, row_count: result.row_count, truncated: result.truncated,
+        dialect: result.dialect, registry_version: result.registry_version,
+        assurance_report_hash: result.assurance_report_hash, assurance_revision: result.assurance_revision,
+        policy_revision: result.policy_revision,
+        execution_ms: result.execution_ms, executed_at: result.executed_at,
+      } });
+      this.#events.append(taskRunId, "artifact.created", { artifact_id: artifact.artifact_id,
+        artifact_type: artifact.artifact_type, schema_version: artifact.schema_version });
+      const chartPayload = buildChartPayload(artifact as Artifact<QueryResultPayload>);
+      if (chartPayload) {
+        const chart = this.#artifacts.create({ artifactType: "chart", taskRunId, producer: "pi-chart-builder", payload: chartPayload });
+        this.#events.append(taskRunId, "artifact.created", { artifact_id: chart.artifact_id,
+          artifact_type: chart.artifact_type, schema_version: chart.schema_version });
+        this.#advanceExecutionPlan(taskRunId, { chart: "completed" });
+      } else this.#advanceExecutionPlan(taskRunId, { chart: "skipped" });
+      const continueToAnalysis = current.intent !== "query_prepare" && current.intent !== "analysis_supplement_query";
+      current = this.#transition(current, continueToAnalysis ? "ready_for_analysis" : "completed",
+        continueToAnalysis ? "analysis_prepare" : "query_complete");
+      this.#events.append(taskRunId, "query.completed", { ...result, artifact_id: artifact.artifact_id });
+      this.#advanceExecutionPlan(taskRunId, { query: "completed" });
+      return { task: current, result, artifact, events: this.#events.list(taskRunId) };
     });
   }
 
-  async approveQuery(
-    taskRunId: string,
-    input: {
-      queryRunId: string;
-      sqlHash: string;
-      assuranceReportHash?: string;
-      idempotencyKey: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<{
-    task: TaskRun;
-    result: QueryRunResult;
-    artifact: Artifact;
-    events: TaskEvent[];
-  }> {
-    let task = this.#tasks.get(taskRunId);
-    if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
-    const review = [...this.#events.list(taskRunId)]
-      .reverse()
-      .find((event) => event.event_type === "query.review_requested");
-    const assuranceReportHash = review?.payload.assurance_report_hash;
-    if (
-      review?.payload.query_run_id !== input.queryRunId ||
-      review.payload.sql_hash !== input.sqlHash ||
-      typeof assuranceReportHash !== "string" ||
-      (input.assuranceReportHash !== undefined &&
-        input.assuranceReportHash !== assuranceReportHash)
-    ) {
-      throw new TaskStateError("Approval does not match the TaskRun review request");
-    }
-    const commandKey = this.#commandKey(taskRunId, "query_execution", input.idempotencyKey);
-    const replay = this.#replayStage<Awaited<ReturnType<OrchestratorApplication["approveQuery"]>>>(taskRunId, commandKey);
-    if (replay !== undefined) return replay;
-    if (task.status !== "waiting_for_query_approval") {
-      throw new TaskStateError(`TaskRun cannot approve a query from status: ${task.status}`);
-    }
+  #observeQueryRun(taskRunId: string, queryRunId: string): void {
+    if (this.#activeQueryObservers.has(taskRunId)) return;
+    this.#activeQueryObservers.add(taskRunId);
+    void this.finishQueryExecution(taskRunId, queryRunId)
+      .catch(() => undefined)
+      .finally(() => this.#activeQueryObservers.delete(taskRunId));
+  }
 
-    let attempt!: StageAttempt;
-    let executionTask: TaskRun = task;
-    if (executionTask.status === "waiting_for_query_approval") {
-      let approvalTask: TaskRun = executionTask;
-      executionTask = this.#transactions.run(() => {
-        approvalTask = this.#transition(approvalTask, "querying", "query_execution");
-        this.#events.append(taskRunId, "query.approval_submitted", {
-          query_run_id: input.queryRunId,
-          sql_hash: input.sqlHash,
-          assurance_report_hash: assuranceReportHash,
-          approver_user_id: approvalTask.user_id,
-        });
-        attempt = this.#startAttempt(
-          approvalTask,
-          "query_execution",
-          "waiting_for_query_approval",
-          input.idempotencyKey,
-        );
-        return approvalTask;
-      });
-    }
-
-    const stageExecution = this.#stageSignal(attempt, signal);
-    let result: QueryRunResult;
-    try {
-      result = await stageExecution.wait(() => this.#forge.approveQueryRun({
-        queryRunId: input.queryRunId,
-        approverUserId: executionTask.user_id,
-        sqlHash: input.sqlHash,
-        assuranceReportHash,
-        idempotencyKey: input.idempotencyKey,
-      },
-      stageExecution.signal,));
-      if (stageExecution.timedOut()) throw new Error("Query execution Stage timed out");
-    } catch (error) {
-      if (executionTask.status === "querying") {
-        const message = error instanceof Error ? error.message : "unknown Forge error";
-        this.#transactions.run(() => {
-          if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
-          if (stageExecution.timedOut() || stageExecution.interrupted()) {
-            this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
-            executionTask = this.#transition(
-              executionTask,
-              "waiting_for_query_approval",
-              "query_retry",
-            );
-          } else {
-            this.#finishAttempt(attempt, "failed", message);
-            executionTask = this.#transition(executionTask, "failed", "query_execution");
-          }
-          this.#events.append(taskRunId, "query.execution_failed", {
-            query_run_id: input.queryRunId,
-            timed_out: stageExecution.timedOut(),
-            error: message,
-          });
-        });
+  observePendingQueryExecutions(): void {
+    for (const task of this.#tasks.listRecoverableQueries()) {
+      const event = [...this.#events.list(task.task_run_id)].reverse()
+        .find(item => item.event_type === "query.review_requested");
+      if (typeof event?.payload.query_run_id !== "string" || this.#recoveringQueryRuns.has(task.task_run_id)) continue;
+      if (task.status === "querying") {
+        this.#observeQueryRun(task.task_run_id, event.payload.query_run_id);
+        continue;
       }
-      throw new TaskStateError(`Query execution failed for ${taskRunId}`, { cause: error });
-    }
-
-    let artifact = this.#artifacts.latest(taskRunId, "query_result");
-    if (executionTask.status === "querying") {
-      this.#commitStage(attempt, () => {
-        artifact = this.#artifacts.create({
-          artifactType: "query_result",
-          taskRunId,
-          producer: "forge",
-          payload: {
-            query_run_id: result.query_run_id,
-            sql_hash: result.sql_hash,
-            columns: result.columns,
-            rows: result.rows,
-            row_count: result.row_count,
-            truncated: result.truncated,
-            dialect: result.dialect,
-            registry_version: result.registry_version,
-            assurance_report_hash: result.assurance_report_hash,
-            assurance_revision: result.assurance_revision,
-            policy_revision: result.policy_revision,
-            model_revision: result.model_revision,
-            assurance_registry_revision: result.assurance_registry_revision,
-            execution_ms: result.execution_ms,
-            executed_at: result.executed_at,
-          },
-        });
-        this.#events.append(taskRunId, "artifact.created", {
-          artifact_id: artifact.artifact_id,
-          artifact_type: artifact.artifact_type,
-          schema_version: artifact.schema_version,
-        });
-        const chartPayload = buildChartPayload(artifact as Artifact<QueryResultPayload>);
-        if (chartPayload !== undefined) {
-          const chart = this.#artifacts.create({
-            artifactType: "chart",
-            taskRunId,
-            producer: "pi-chart-builder",
-            payload: chartPayload,
+      // Crash after Forge claim but before local commit: recover by GET, never by a new approval/execute POST.
+      this.#recoveringQueryRuns.add(task.task_run_id);
+      void this.#forge.getQueryRun(event.payload.query_run_id).then(run => {
+        if ((run.status !== "executing" && run.status !== "completed") || !run.decision.execution_authorized) return;
+        this.#transactions.run(() => {
+          const current = this.#tasks.get(task.task_run_id);
+          if (!current || current.status !== task.status) return;
+          this.#transition(current, "querying", "query_execution");
+          this.#events.append(task.task_run_id, "query.execution_authorized", {
+            query_run_id: run.query_run_id, authorization_hash: run.lineage.authorization_hash,
+            execution_mode: run.decision.execution_mode,
+            reviewer_principal_id: run.authorization?.reviewer_principal_id ?? null,
           });
-          this.#events.append(taskRunId, "artifact.created", {
-            artifact_id: chart.artifact_id,
-            artifact_type: chart.artifact_type,
-            schema_version: chart.schema_version,
-          });
-          this.#advanceExecutionPlan(taskRunId, { chart: "completed" });
-        } else {
-          this.#advanceExecutionPlan(taskRunId, { chart: "skipped" });
-        }
-        const continueToAnalysis =
-          executionTask.intent !== "query_prepare" &&
-          executionTask.intent !== "analysis_supplement_query";
-        executionTask = this.#transition(
-          executionTask,
-          continueToAnalysis ? "ready_for_analysis" : "completed",
-          continueToAnalysis ? "analysis_prepare" : "query_complete",
-        );
-        this.#events.append(taskRunId, "query.completed", {
-          ...result,
-          artifact_id: artifact.artifact_id,
         });
-        this.#advanceExecutionPlan(taskRunId, { query: "completed" });
-        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: artifact.artifact_id, result });
-      });
+        if (this.#tasks.get(task.task_run_id)?.status === "querying")
+          this.#observeQueryRun(task.task_run_id, run.query_run_id);
+      }).catch(() => undefined).finally(() => this.#recoveringQueryRuns.delete(task.task_run_id));
     }
-    if (artifact === undefined) {
-      throw new TaskStateError(`QueryResultArtifact not found for ${taskRunId}`);
-    }
-    return { task: executionTask, result, artifact, events: this.#events.list(taskRunId) };
   }
 
   createSupplementTask(
@@ -1871,9 +1919,6 @@ export class OrchestratorApplication {
       let publication = await stageExecution.wait(() => createReport.call(this.#forge, {
         report_id: assembled.reportBundlePayload.report_id,
         task_run_id: taskRunId,
-        org_id: stageTask.org_id,
-        team_id: stageTask.team_id,
-        user_id: stageTask.user_id,
         revision: assembled.reportBundlePayload.revision,
         bundle_hash: assembled.reportBundlePayload.bundle_hash,
         title: payload.title,
@@ -1886,7 +1931,7 @@ export class OrchestratorApplication {
       while (publication.status === "publishing") {
         if (stageExecution.timedOut()) throw new Error("Report publication Stage timed out");
         await stageExecution.wait(() => delay(500, undefined, { signal: stageExecution.signal }));
-        publication = await stageExecution.wait(() => getReport.call(this.#forge, publication.report_id, stageExecution.signal));
+        publication = await stageExecution.wait(() => getReport.call(this.#forge, publication.report_id, taskRunId, stageExecution.signal));
       }
       if (publication.status !== "published") throw new Error("Report publication failed");
       const completedReport = this.#commitStage(attempt, () => {
@@ -2149,9 +2194,7 @@ export class OrchestratorApplication {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString();
     try {
       await this.#forge.writeMemory({
-        org_id: task.org_id,
-        team_id: task.team_id,
-        user_id: task.user_id,
+        task_run_id: task.task_run_id,
         operation: "upsert",
         category: "session_summary",
         key: `task_${task.task_run_id.slice(3)}`,

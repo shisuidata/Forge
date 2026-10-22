@@ -29,13 +29,13 @@ def _bounded_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)[:_MAX_CONTENT]
 
 
-def _registry_documents() -> list[dict[str, Any]]:
+def _registry_documents(allowed_tables: list[str]) -> list[dict[str, Any]]:
     documents: list[dict[str, Any]] = []
     schema = _load(cfg.REGISTRY_PATH)
     tables = schema.get("tables", {}) if isinstance(schema, dict) else {}
     if isinstance(tables, dict):
         for table_name, table in tables.items():
-            if not isinstance(table_name, str) or not isinstance(table, dict):
+            if not isinstance(table_name, str) or not isinstance(table, dict) or table_name not in allowed_tables:
                 continue
             columns = table.get("columns", {})
             column_text = []
@@ -50,37 +50,14 @@ def _registry_documents() -> list[dict[str, Any]]:
             documents.append({"source_type": "schema", "title": table_name, "content": content,
                               "verification_level": "verified", "scope": "organization", "priority": 4})
 
-    for source_type, path in (
-        ("metric", cfg.METRICS_PATH),
-        ("disambiguation", cfg.DISAMBIGUATIONS_PATH),
-        ("convention", cfg.CONVENTIONS_PATH),
-        ("business_context", cfg.BUSINESS_CONTEXT_PATH),
-    ):
-        data = _load(path)
-        if not isinstance(data, dict):
-            continue
-        for key, value in data.items():
-            if not isinstance(key, str):
-                continue
-            label = value.get("label") if isinstance(value, dict) else None
-            title = f"{key} · {label}" if isinstance(label, str) and label else key
-            documents.append({
-                "source_type": source_type,
-                "title": title,
-                "content": _bounded_json(value),
-                "verification_level": "verified", "scope": "organization", "priority": 4,
-            })
     return documents[:_MAX_DOCUMENTS]
 
 
 def _memory_documents(user_id: str, team_id: str) -> list[dict[str, Any]]:
-    try:
-        from agent.memory.smp import SemanticMemoryPool
-        items = SemanticMemoryPool().query(
-            user_id=user_id, team_id=team_id, limit=50, include_shadowed=True
-        )
-    except Exception:
-        return []
+    from agent.memory.smp import SemanticMemoryPool
+    items = SemanticMemoryPool().query(
+        user_id=user_id, team_id=team_id, limit=50, include_shadowed=True
+    )
     documents = []
     for item in items:
         documents.append({
@@ -125,9 +102,10 @@ def search_context(
     user_id: str,
     team_id: str,
     limit: int = 8,
+    allowed_tables: list[str],
 ) -> dict[str, Any]:
     bounded_limit = max(1, min(limit, 12))
-    documents = _registry_documents() + _memory_documents(user_id, team_id)
+    documents = _registry_documents(allowed_tables) + _memory_documents(user_id, team_id)
     ranked = sorted(
         ((score, index, document) for index, document in enumerate(documents)
          if (score := _score(question, document)) > 0),

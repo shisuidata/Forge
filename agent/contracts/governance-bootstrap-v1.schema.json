@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/governance-bootstrap-v1.schema.json",
+  "title": "GovernanceBootstrapV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "teams", "principals", "channel_bindings"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "teams": {
+      "type": "array", "minItems": 1, "maxItems": 128,
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["team_id", "organization_id", "display_name", "allowed_tables"],
+        "properties": {
+          "team_id": {"$ref": "#/$defs/id"}, "organization_id": {"$ref": "#/$defs/id"},
+          "display_name": {"type": "string", "maxLength": 256},
+          "allowed_tables": {"$ref": "#/$defs/tables"}
+        }}
+    },
+    "principals": {
+      "type": "array", "minItems": 1, "maxItems": 1024,
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["principal_id", "team_id", "display_name", "principal_type", "role", "status"],
+        "properties": {
+          "principal_id": {"$ref": "#/$defs/id"}, "team_id": {"$ref": "#/$defs/id"},
+          "display_name": {"type": "string", "maxLength": 256},
+          "principal_type": {"enum": ["human", "agent", "service"]},
+          "role": {"enum": ["admin", "reviewer", "member"]},
+          "status": {"enum": ["active", "disabled"]}
+        }}
+    },
+    "channel_bindings": {
+      "type": "array", "maxItems": 1024,
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["channel", "external_user_id", "principal_id"],
+        "properties": {
+          "channel": {"enum": ["web", "feishu", "dingtalk"]},
+          "external_user_id": {"$ref": "#/$defs/id"},
+          "principal_id": {"$ref": "#/$defs/id"}
+        }}
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "tables": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}}
+  }
+}

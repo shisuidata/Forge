@@ -14,7 +14,7 @@ from web.diagnostics import RequestCorrelationMiddleware
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("upstream_status, payload, expected, code", [
-    (200, {"task": {"channel": "web", "user_id": "web_admin", "org_id": "org_default", "team_id": "team_default"}}, 200, None),
+    (200, {"task": {"channel": "web", "user_id": "fixture_admin", "org_id": "fixture_org", "team_id": "fixture_team"}}, 200, None),
     (200, {}, 502, "upstream_contract_invalid"),
     (403, {"error": "secret scope"}, 404, "not_found"),
     (404, {"error": "secret scope"}, 404, "not_found"),
@@ -22,7 +22,7 @@ from web.diagnostics import RequestCorrelationMiddleware
     (503, {"error": "secret exception"}, 503, "upstream_unavailable"),
     (200, "invalid-json", 502, "upstream_contract_invalid"),
 ])
-async def test_task_error_boundary_preserves_failure_class_without_private_details(monkeypatch, upstream_status, payload, expected, code):
+async def test_task_error_boundary_preserves_failure_class_without_private_details(governed_client, monkeypatch, upstream_status, payload, expected, code):
     from config import cfg
     from web import pi_client
     from web.router import chat_router
@@ -37,12 +37,11 @@ async def test_task_error_boundary_preserves_failure_class_without_private_detai
     client_type = httpx.AsyncClient
     monkeypatch.setattr(pi_client.httpx, "AsyncClient", lambda **kwargs: client_type(**kwargs, transport=httpx.MockTransport(upstream)))
     monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
-    monkeypatch.setattr(cfg, "PI_WEB_ADMIN_TASK_SCOPES", "org_default:team_default")
-    monkeypatch.setattr(cfg, "AUTH_ENABLED", False)
+    monkeypatch.setattr(cfg, "PI_CHANNEL_SERVICE_KEY", "synthetic-channel-key")
     app = FastAPI()
     app.add_middleware(RequestCorrelationMiddleware)
     app.include_router(chat_router)
-    async with client_type(transport=httpx.ASGITransport(app), base_url="http://synthetic") as client:
+    async with client_type(transport=httpx.ASGITransport(app), base_url="http://synthetic", headers={"X-API-Key": governed_client.headers["X-API-Key"]}) as client:
         response = await client.get("/api/pi/chat/tasks/tr_probe/presentation", headers={"X-Request-ID": "req_probe"})
     assert response.status_code == expected
     assert response.headers["X-Request-ID"] == "req_probe"
@@ -62,9 +61,11 @@ def test_unknown_delivery_redelivers_presentation_without_resubmitting_task(tmp_
         def submit_message(self, **kwargs):
             calls["submit"] += 1
             return {"task": {"task_run_id": "tr_synthetic"}}
-        def wait_for_presentation(self, task_run_id):
+        def wait_for_presentation(self, task_run_id, *, external_user_id):
+            assert external_user_id == "private_recipient"
             return presentation
-        def get_presentation(self, task_run_id):
+        def get_presentation(self, task_run_id, *, external_user_id):
+            assert external_user_id == "private_recipient"
             calls["read"] += 1
             return presentation
     def send(*args, **kwargs):
@@ -118,28 +119,27 @@ def test_usage_missing_is_not_reported_as_zero():
 
 
 @pytest.mark.asyncio
-async def test_delivery_receipts_hide_scope_and_do_not_expose_recipients(tmp_path, monkeypatch):
+async def test_delivery_receipts_hide_scope_and_do_not_expose_recipients(governed_client, tmp_path, monkeypatch):
     from config import cfg
     from web.routes import deliveries
     store = DeliveryReceiptStore(tmp_path / "delivery.db")
     receipt = store.create(task_run_id="tr_hidden", command_id="cmd_original", target_id="private_recipient", conversation_id="private_conversation")
     monkeypatch.setattr(deliveries, "get_delivery_store", lambda: store)
-    monkeypatch.setattr(cfg, "AUTH_ENABLED", False)
-    monkeypatch.setattr(cfg, "PI_WEB_ADMIN_TASK_SCOPES", "org:team")
-    scope = {"org_id": "other", "team_id": "team"}
-    async def upstream(*args):
+    scope = {"org_id": "other", "team_id": "fixture_team", "user_id": "fixture_admin"}
+    async def upstream(*args, **kwargs):
+        assert kwargs["principal"].principal_id == "fixture_admin" and kwargs["action"] == "task.read"
         return 200, {"task": {"channel": "feishu", **scope}}
     monkeypatch.setattr(deliveries, "pi_request", upstream)
     app = FastAPI()
     app.add_middleware(RequestCorrelationMiddleware)
     app.include_router(deliveries.router)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://synthetic") as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://synthetic", headers={"X-API-Key": governed_client.headers["X-API-Key"]}) as client:
         hidden = await client.get("/api/pi/tasks/tr_hidden/deliveries")
         denied = await client.post("/api/pi/deliveries/" + receipt["delivery_id"] + "/retry")
         assert hidden.status_code == denied.status_code == 404
         assert "other" not in hidden.text and "private_" not in denied.text
         assert store.get(receipt["delivery_id"])["attempts"] == 0
-        scope["org_id"] = "org"
+        scope["org_id"] = "fixture_org"
         visible = await client.get("/api/pi/tasks/tr_hidden/deliveries")
         assert visible.json()["deliveries"][0]["delivery_id"] == receipt["delivery_id"]
         assert "private_" not in visible.text

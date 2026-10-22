@@ -31,19 +31,25 @@ from __future__ import annotations
 
 import hmac
 
+from agent.tenant import TenantStore
+from forge.governance import PrincipalAccessError
+from forge.governance_credentials import authenticate_credential, create_session
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from config import cfg
 from web.auth import (
-    require_web_auth,
-    set_session_cookie,
+    require_admin_principal,
+    require_human_principal,
+    set_governance_session_cookie,
+    csrf_token_for_session,
     clear_session_cookie,
 )
 from web.templates import templates
 from web.routes.enforce import router as enforce_router
 from web.routes.explain import router as explain_router
-from web.routes.query_runs import router as query_runs_router
+from web.routes.governance import router as governance_router
+from web.routes.query_runs import router as query_runs_router, candidate_router, internal_governance_router
 from web.routes.evaluate import router as evaluate_router
 from web.routes.context import router as context_router
 from web.routes.reports import router as reports_router
@@ -69,6 +75,9 @@ from web.routes.admin_memory import router as admin_memory_router
 # Chat / API 路由 — 挂载在根级别
 chat_router = APIRouter()
 chat_router.include_router(query_runs_router)
+chat_router.include_router(governance_router)
+chat_router.include_router(candidate_router)
+chat_router.include_router(internal_governance_router)
 chat_router.include_router(evaluate_router)
 chat_router.include_router(context_router)
 chat_router.include_router(enforce_router)
@@ -84,7 +93,7 @@ chat_router.include_router(legacy_agent_router)
 chat_router.include_router(workspace_api_router)
 chat_router.include_router(admin_ai_router)
 # Admin 路由 — 挂载在 /admin 前缀下（全部路由需要 Web 登录验证）
-router = APIRouter(dependencies=[Depends(require_web_auth)])
+router = APIRouter(dependencies=[Depends(require_admin_principal)])
 router.include_router(settings_router)
 router.include_router(registry_studio_router)
 router.include_router(accuracy_benchmark_router)
@@ -115,25 +124,47 @@ async def login_page(request: Request, next: str = "/chat"):
 @chat_router.post("/login", response_class=HTMLResponse)
 async def login_submit(
     request: Request,
-    password: str = Form(...),
+    password: str = Form(default=""),
+    api_key: str = Form(default=""),
     next: str = Form(default="/chat"),
 ):
-    expected = cfg.AUTH_ADMIN_PASSWORD
-    # auth disabled 时任意密码均可通过；auth enabled 时必须配置并匹配密码
-    if not cfg.AUTH_ENABLED or (expected and hmac.compare_digest(password, expected)):
+    principal_id = None
+    parent_credential_id = None
+    if cfg.AUTH_ENABLED and bool(password) != bool(api_key):
+        if api_key:
+            principal = authenticate_credential(api_key, kind="api_key")
+            if principal is not None and principal.principal_type == "human":
+                principal_id = principal.principal_id
+                parent_credential_id = principal.credential_id
+        elif (cfg.AUTH_ADMIN_PASSWORD and cfg.AUTH_ADMIN_PRINCIPAL_ID
+              and hmac.compare_digest(password, cfg.AUTH_ADMIN_PASSWORD)):
+            try:
+                admin = TenantStore().get_principal(cfg.AUTH_ADMIN_PRINCIPAL_ID)
+                if admin["principal_type"] == "human" and admin["role"] == "admin":
+                    principal_id = admin["principal_id"]
+            except PrincipalAccessError:
+                pass
+    if principal_id is not None:
+        _, token = create_session(principal_id, parent_credential_id=parent_credential_id)
         response = RedirectResponse(url=_safe_next_path(next), status_code=303)
-        set_session_cookie(response, "admin")
+        set_governance_session_cookie(response, token)
         return response
     return templates.TemplateResponse(
-        request,
-        "login.html",
-        {"error": "密码错误，请重试", "next": next},
-        status_code=401,
+        request, "login.html", {"error": "凭证无效，请重试", "next": next}, status_code=401,
     )
 
 
-@chat_router.get("/logout")
-async def logout():
-    response = RedirectResponse(url="/login", status_code=302)
+@chat_router.get("/api/auth/csrf")
+async def session_csrf(request: Request, principal=Depends(require_human_principal)):
+    token = request.cookies.get("forge_session", "")
+    if not token:
+        return JSONResponse({"detail": "session_required"}, status_code=401)
+    return JSONResponse({"csrf_token": csrf_token_for_session(token)}, headers={"Cache-Control": "no-store"})
+
+
+@chat_router.post("/logout")
+async def logout(request: Request, principal=Depends(require_human_principal)):
+    response = RedirectResponse(url="/login", status_code=303)
     clear_session_cookie(response)
     return response
+

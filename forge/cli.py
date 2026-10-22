@@ -53,10 +53,27 @@ Forge 命令行入口。
 import argparse
 import json
 import os
+import sqlite3
+import secrets
 import sys
+import time
 from pathlib import Path
+from urllib.parse import quote
 
 from .compiler import compile_query
+
+
+def _api_headers(args: argparse.Namespace, *, json_content: bool = False) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if json_content:
+        headers["Content-Type"] = "application/json"
+    key = os.environ.get(args.api_key_env, "")
+    if key:
+        headers["X-API-Key"] = key
+    elif args.api_key_env != "FORGE_API_KEY":
+        print(f"API key environment variable is empty: {args.api_key_env}", file=sys.stderr)
+        raise SystemExit(2)
+    return headers
 
 def _read_json_input(path: str) -> dict:
     try:
@@ -159,57 +176,62 @@ def _cmd_evaluate(args: argparse.Namespace) -> None:
 def _cmd_enforce(args: argparse.Namespace) -> None:
     import httpx
 
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
-    if args.api_key:
-        headers["X-API-Key"] = args.api_key
+    headers = _api_headers(args, json_content=True)
     base_url = args.url.rstrip("/")
-
-    payload: dict | None
+    run_id = args.run_id or args.execute or args.approve
+    run_url = f"{base_url}/api/v2/enforce/query-runs/{quote(run_id, safe='')}" if run_id else ""
+    if args.input and args.input_path:
+        print("specify input once, either positionally or with --input", file=sys.stderr)
+        raise SystemExit(2)
+    input_path = args.input_path or args.input
     if args.run_id:
-        if args.input or args.idempotency_key:
+        if input_path or args.idempotency_key:
             print("--run-id cannot be combined with input or --idempotency-key", file=sys.stderr)
             raise SystemExit(2)
-        endpoint = f"{base_url}/api/v1/enforce/query-runs/{args.run_id}"
-        payload = None
-    elif args.approve:
-        if not args.input:
-            print("--approve requires an approval JSON path", file=sys.stderr)
-            raise SystemExit(2)
-        if not args.idempotency_key:
-            print("--approve requires --idempotency-key", file=sys.stderr)
-            raise SystemExit(2)
-        endpoint = f"{base_url}/api/v1/enforce/query-runs/{args.approve}/approve"
-        payload = _read_json_input(args.input)
-        headers["Idempotency-Key"] = args.idempotency_key
+        endpoint, payload = run_url, None
     else:
-        if not args.input:
-            print("enforce requires a request JSON path", file=sys.stderr)
+        if not input_path or not args.idempotency_key:
+            print("enforce create/execute/approve requires input and --idempotency-key", file=sys.stderr)
             raise SystemExit(2)
-        if not args.idempotency_key:
-            print("enforce requires --idempotency-key", file=sys.stderr)
+        endpoint = (f"{run_url}/{'execute' if args.execute else 'approve'}"
+                    if run_id else f"{base_url}/api/v2/enforce/query-runs")
+        payload = _read_json_input(input_path)
+        if run_id and (set(payload) != {"schema_version", "sql_hash", "assurance_report_hash", "enforcement_context_hash"}
+                       or payload.get("schema_version") != 2):
+            print("action input must contain schema_version=2 and exactly the three hashes", file=sys.stderr)
             raise SystemExit(2)
-        endpoint = f"{base_url}/api/v1/enforce/query-runs"
-        payload = _read_json_input(args.input)
         headers["Idempotency-Key"] = args.idempotency_key
 
+    deadline = time.monotonic() + args.timeout
     try:
-        if payload is None:
-            response = httpx.get(endpoint, headers=headers, timeout=args.timeout)
-        else:
-            response = httpx.post(
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=args.timeout,
-            )
+        response = (httpx.get(endpoint, headers=headers, timeout=args.timeout) if payload is None
+                    else httpx.post(endpoint, json=payload, headers=headers, timeout=args.timeout))
         body = response.json()
+        if not isinstance(body, dict):
+            raise ValueError("Enforce response must be a JSON object")
+        if run_id and not args.run_id and response.status_code == 202 and not response.is_error:
+            while body.get("status") not in {"completed", "failed", "cancelled", "expired", "denied"}:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    print(f"query_run_id={run_id}: result unknown; read this run to check status", file=sys.stderr)
+                    raise SystemExit(2)
+                time.sleep(min(0.5, remaining))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    print(f"query_run_id={run_id}: result unknown; read this run to check status", file=sys.stderr)
+                    raise SystemExit(2)
+                response = httpx.get(run_url, headers=headers, timeout=remaining)
+                body = response.json()
+                if not isinstance(body, dict):
+                    raise ValueError("Enforce response must be a JSON object")
+                if response.is_error:
+                    break
     except (httpx.HTTPError, ValueError) as exc:
-        print(f"Enforce request failed: {exc}", file=sys.stderr)
+        if run_id and not args.run_id:
+            print(f"query_run_id={run_id}: result unknown; read this run to check status ({exc})", file=sys.stderr)
+        else:
+            print(f"Enforce request failed: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
-
-    if not isinstance(body, dict):
-        print("Enforce response must be a JSON object", file=sys.stderr)
-        raise SystemExit(2)
     output = json.dumps(body, ensure_ascii=False, indent=2)
     if response.is_error or body.get("status") == "error":
         print(output, file=sys.stderr)
@@ -222,12 +244,8 @@ def _cmd_enforce(args: argparse.Namespace) -> None:
 def _cmd_explain(args: argparse.Namespace) -> None:
     import httpx
 
-    headers = {"Accept": "application/json"}
-    if args.api_key:
-        headers["X-API-Key"] = args.api_key
-    endpoint = (
-        f"{args.url.rstrip('/')}/api/v1/explain/query-runs/{args.query_run_id}"
-    )
+    headers = _api_headers(args)
+    endpoint = f"{args.url.rstrip('/')}/api/v2/explain/query-runs/{quote(args.query_run_id, safe='')}"
     try:
         response = httpx.get(endpoint, headers=headers, timeout=args.timeout)
         body = response.json()
@@ -242,6 +260,40 @@ def _cmd_explain(args: argparse.Namespace) -> None:
         print(output, file=sys.stderr)
         raise SystemExit(1)
     print(output)
+
+
+def _cmd_governance_mandate(args: argparse.Namespace) -> None:
+    import httpx
+
+    base_url = args.url.rstrip("/") + "/api/v2/governance/mandates"
+    headers = _api_headers(args, json_content=True)
+    command = args.mandate_command
+    if command == "issue":
+        endpoint, payload = base_url, _read_json_input(args.input)
+    else:
+        endpoint = f"{base_url}/{quote(args.id, safe='')}"
+        payload = None if command == "get" else {"expected_state_revision": args.revision, "reason": args.reason}
+        if command == "revoke":
+            endpoint += "/revoke"
+    if command == "issue":
+        if not args.idempotency_key:
+            print("mandate issue requires --idempotency-key", file=sys.stderr)
+            raise SystemExit(2)
+        headers["Idempotency-Key"] = args.idempotency_key
+    try:
+        response = (httpx.get(endpoint, headers=headers, timeout=args.timeout) if payload is None
+                    else httpx.post(endpoint, json=payload, headers=headers, timeout=args.timeout))
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"Mandate request failed: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    if not isinstance(body, dict):
+        print("Mandate response must be a JSON object", file=sys.stderr)
+        raise SystemExit(2)
+    print(json.dumps(body, ensure_ascii=False, indent=2), file=sys.stderr if response.is_error else sys.stdout)
+    if response.is_error:
+        raise SystemExit(1)
+
 
 
 def _cmd_quickstart(args: argparse.Namespace) -> None:
@@ -278,6 +330,11 @@ def _cmd_quickstart(args: argparse.Namespace) -> None:
     def hold_dashboard(summary: dict, base_url: str) -> None:
         present(summary)
         print(f"Dashboard: {base_url}/admin/dashboard")
+        files = summary.get("credential_files") or {}
+        for role in ("admin", "reviewer"):
+            if files.get(role):
+                print(f"{role} login API key file (0600): {files[role]}")
+        print(f"Login: {base_url}/login — use the admin key in the local file; no key is printed.")
         try:
             input("Press Enter to stop the isolated demo server. ")
         except EOFError:
@@ -289,6 +346,7 @@ def _cmd_quickstart(args: argparse.Namespace) -> None:
             workdir=Path(args.workdir) if args.workdir else None,
             auto_approve=args.yes,
             progress=progress,
+            agent_mode=args.agent,
             hold_open=hold_dashboard if args.serve else None,
         )
     except KeyboardInterrupt:
@@ -499,6 +557,52 @@ def main() -> None:
     """CLI 入口函数，由 pyproject.toml 的 [project.scripts] 注册为 forge 命令。"""
     parser = argparse.ArgumentParser(prog="forge", description="Forge DSL compiler & config")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    governance = subparsers.add_parser("governance", help="Explicit offline governance operations")
+    governance_sub = governance.add_subparsers(dest="governance_command", required=True)
+    migration = governance_sub.add_parser("migrate", help="Reconcile legacy memory SQLite into QueryRun governance")
+    migration.add_argument("--source-memory-db", required=True)
+    migration.add_argument("--identity-manifest", required=True)
+    migration_mode = migration.add_mutually_exclusive_group(required=True)
+    migration_mode.add_argument("--dry-run", action="store_true")
+    migration_mode.add_argument("--apply", action="store_true")
+    boot = governance_sub.add_parser("bootstrap", help="Initialize an empty governance store from an explicit manifest")
+    boot.add_argument("--input", required=True)
+    channel = governance_sub.add_parser("channel", help="Explicitly bind or revoke a verified channel identity")
+    channel_sub = channel.add_subparsers(dest="channel_command", required=True)
+    channel_bind = channel_sub.add_parser("bind")
+    channel_bind.add_argument("--channel", choices=("feishu", "dingtalk"), required=True)
+    channel_bind.add_argument("--external-user-id", required=True)
+    channel_bind.add_argument("--principal", required=True)
+    channel_revoke = channel_sub.add_parser("revoke")
+    channel_revoke.add_argument("--channel", choices=("feishu", "dingtalk"), required=True)
+    channel_revoke.add_argument("--external-user-id", required=True)
+    credential = governance_sub.add_parser("credential", help="Manage database-backed principal credentials")
+    credential_sub = credential.add_subparsers(dest="credential_command", required=True)
+    credential_create = credential_sub.add_parser("create")
+    credential_create.add_argument("--principal", required=True)
+    credential_create.add_argument("--kind", choices=("api_key", "pi_service"), required=True)
+    credential_create.add_argument("--out", required=True)
+    credential_bind = credential_sub.add_parser("bind")
+    credential_bind.add_argument("--principal", required=True)
+    credential_bind.add_argument("--kind", choices=("api_key", "pi_service"), required=True)
+    credential_bind.add_argument("--key-env", required=True)
+    credential_revoke = credential_sub.add_parser("revoke")
+    credential_revoke.add_argument("--id", required=True)
+    mandate = governance_sub.add_parser("mandate", help="Issue, read, or revoke a governed mandate")
+    mandate_sub = mandate.add_subparsers(dest="mandate_command", required=True)
+    mandate_issue = mandate_sub.add_parser("issue", allow_abbrev=False)
+    mandate_issue.add_argument("--input", required=True, help="Mandate issue JSON path or - for stdin")
+    mandate_get = mandate_sub.add_parser("get", allow_abbrev=False)
+    mandate_get.add_argument("--id", required=True)
+    mandate_revoke = mandate_sub.add_parser("revoke", allow_abbrev=False)
+    mandate_revoke.add_argument("--id", required=True)
+    mandate_revoke.add_argument("--revision", type=int, required=True)
+    mandate_revoke.add_argument("--reason", required=True)
+    for command in (mandate_issue, mandate_get, mandate_revoke):
+        command.add_argument("--url", default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"))
+        command.add_argument("--api-key-env", default="FORGE_API_KEY", help="Environment variable containing the API key")
+        command.add_argument("--timeout", type=float, default=30.0)
+    mandate_issue.add_argument("--idempotency-key", required=True)
 
     # ── compile 子命令 ────────────────────────────────────────────────────────
     compile_parser = subparsers.add_parser("compile", help="Compile Forge JSON to SQL")
@@ -564,66 +668,24 @@ def main() -> None:
         help="HTTP timeout in seconds (default: 30)",
     )
     # ── enforce subcommand ────────────────────────────────────────────────────
-    enforce_parser = subparsers.add_parser(
-        "enforce",
-        help="Prepare, review, and execute a governed query candidate",
-    )
-    enforce_parser.add_argument(
-        "input",
-        nargs="?",
-        help="Enforce request or approval JSON path, or - to read from stdin",
-    )
+    enforce_parser = subparsers.add_parser("enforce", help="Prepare or execute a governed QueryRun", allow_abbrev=False)
+    enforce_parser.add_argument("input", nargs="?", help="Request or action JSON path, or - for stdin")
+    enforce_parser.add_argument("--input", dest="input_path", help="Request or action JSON path, or - for stdin")
     enforce_mode = enforce_parser.add_mutually_exclusive_group()
     enforce_mode.add_argument("--run-id", help="Read a governed QueryRun")
-    enforce_mode.add_argument(
-        "--approve",
-        metavar="QUERY_RUN_ID",
-        help="Approve and execute a QueryRun",
-    )
-    enforce_parser.add_argument(
-        "--idempotency-key",
-        default=os.environ.get("FORGE_IDEMPOTENCY_KEY", ""),
-        help="Required for create and approve operations",
-    )
-    enforce_parser.add_argument(
-        "--url",
-        default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"),
-        help="Forge server base URL",
-    )
-    enforce_parser.add_argument(
-        "--api-key",
-        default=os.environ.get("FORGE_API_KEY", ""),
-        help="Forge API or reviewer key",
-    )
-    enforce_parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="HTTP timeout in seconds (default: 30)",
-    )
+    enforce_mode.add_argument("--execute", metavar="QUERY_RUN_ID", help="Execute an autonomous QueryRun")
+    enforce_mode.add_argument("--approve", metavar="QUERY_RUN_ID", help="Approve a reviewed QueryRun")
+    enforce_parser.add_argument("--idempotency-key", default="", help="Required for create and actions")
+    enforce_parser.add_argument("--url", default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"))
+    enforce_parser.add_argument("--api-key-env", default="FORGE_API_KEY", help="Environment variable containing the API key")
+    enforce_parser.add_argument("--timeout", type=float, default=30.0, help="HTTP and polling deadline in seconds")
 
     # ── explain subcommand ────────────────────────────────────────────────────
-    explain_parser = subparsers.add_parser(
-        "explain",
-        help="Read Evidence, lineage, and limitations for a governed QueryRun",
-    )
-    explain_parser.add_argument("query_run_id", help="Governed QueryRun ID")
-    explain_parser.add_argument(
-        "--url",
-        default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"),
-        help="Forge server base URL",
-    )
-    explain_parser.add_argument(
-        "--api-key",
-        default=os.environ.get("FORGE_API_KEY", ""),
-        help="Forge API key",
-    )
-    explain_parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="HTTP timeout in seconds (default: 30)",
-    )
+    explain_parser = subparsers.add_parser("explain", help="Read governed QueryRun Evidence", allow_abbrev=False)
+    explain_parser.add_argument("query_run_id")
+    explain_parser.add_argument("--url", default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"))
+    explain_parser.add_argument("--api-key-env", default="FORGE_API_KEY", help="Environment variable containing the API key")
+    explain_parser.add_argument("--timeout", type=float, default=30.0)
 
     # ── quickstart subcommand ─────────────────────────────────────────────────
     quickstart_parser = subparsers.add_parser(
@@ -634,6 +696,10 @@ def main() -> None:
         "--yes",
         action="store_true",
         help="Approve synthetic local demo SQL without prompting",
+    )
+    quickstart_parser.add_argument(
+        "--agent", action="store_true",
+        help="Demonstrate bounded table autonomy, human review, and revocation on synthetic data",
     )
     quickstart_parser.add_argument(
         "--json",
@@ -812,7 +878,53 @@ def main() -> None:
         _cmd_explain(args)
     elif args.command == "quickstart":
         _cmd_quickstart(args)
-
+    elif args.command == "governance":
+        if args.governance_command == "mandate":
+            _cmd_governance_mandate(args)
+            return
+        from .governance import GovernanceError, bind_channel, bootstrap, revoke_channel
+        from .governance_migrate import MigrationError, migrate
+        try:
+            if args.governance_command == "migrate":
+                result = migrate(source_memory_db=args.source_memory_db,
+                                 identity_manifest=args.identity_manifest, apply=args.apply)
+            elif args.governance_command == "bootstrap":
+                bootstrap(_read_json_input(args.input))
+                result = {"status": "bootstrapped"}
+            elif args.governance_command == "channel" and args.channel_command == "bind":
+                bind_channel(args.channel, args.external_user_id, args.principal)
+                result = {"status": "bound"}
+            elif args.governance_command == "credential":
+                from .governance_credentials import bind_credential, revoke_credential
+                if args.credential_command == "create":
+                    token = secrets.token_urlsafe(32)
+                    descriptor = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    try:
+                        with os.fdopen(descriptor, "w", encoding="utf-8") as destination:
+                            destination.write(token + "\n")
+                        credential_id = bind_credential(args.principal, args.kind, token)
+                    except BaseException:
+                        os.unlink(args.out)
+                        raise
+                    print(credential_id)
+                    return
+                if args.credential_command == "bind":
+                    token = os.environ.get(args.key_env)
+                    if not token:
+                        raise GovernanceError("credential_environment_missing", 422)
+                    credential_id = bind_credential(args.principal, args.kind, token)
+                else:
+                    revoke_credential(args.id)
+                    credential_id = args.id
+                print(credential_id)
+                return
+            else:
+                revoke_channel(args.channel, args.external_user_id)
+                result = {"status": "revoked"}
+        except (MigrationError, GovernanceError, OSError, ValueError, sqlite3.Error) as exc:
+            print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+            raise SystemExit(1) from exc
+        print(json.dumps(result, ensure_ascii=False, indent=2))
     # ── sync 处理 ────────────────────────────────────────────────────────────
     elif args.command == "sync":
         from config import cfg

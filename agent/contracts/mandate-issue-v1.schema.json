@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/mandate-issue-v1.schema.json",
+  "title": "MandateIssueV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_run_id", "delegate_principal_id", "accountable_principal_id", "reviewer_principal_id", "purpose", "datasource_id", "allowed_tables", "autonomous_tables", "expires_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "task_run_id": {"type": "string", "pattern": "^tr_[A-Za-z0-9_-]+$", "maxLength": 128},
+    "delegate_principal_id": {"$ref": "#/$defs/principalId"},
+    "accountable_principal_id": {"$ref": "#/$defs/principalId"},
+    "reviewer_principal_id": {"$ref": "#/$defs/principalId"},
+    "purpose": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "datasource_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "allowed_tables": {"$ref": "#/$defs/tables"},
+    "autonomous_tables": {"$ref": "#/$defs/tables"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "principalId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "tables": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}}
+  }
+}

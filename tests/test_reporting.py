@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 
 from forge.reporting import ReportStore
 
@@ -285,35 +286,47 @@ async def test_business_share_is_expiring_revocable_and_cannot_open_technical_re
 
 
 @pytest.mark.asyncio
-async def test_report_api_requires_pi_auth_and_serves_authenticated_outputs(client, monkeypatch, tmp_path):
+async def test_report_api_requires_pi_auth_and_serves_authenticated_outputs(governed_client, monkeypatch, tmp_path):
     import web.routes.reports as reports
+    from agent.tenant import tenants
+    from config import cfg
+    from forge.governance_credentials import create_credential
 
     store = ReportStore(str(tmp_path / "reports.db"), str(tmp_path / "artifacts"))
-    reports.get_report_store.cache_clear()
     monkeypatch.setattr(reports, "get_report_store", lambda: store)
+    tenants.set_team("user_demo", "fixture_team", principal_type="human", status="active")
+    tenants.set_team("pi_reporting", "fixture_team", principal_type="service", status="active")
+    monkeypatch.setattr(cfg, "PI_EXECUTION_PRINCIPAL_ID", "pi_reporting")
+    _, service_key = create_credential("pi_reporting", kind="pi_service")
+    service_headers = {"X-API-Key": service_key}
 
-    unauthorized = await client.post("/api/internal/reports", json=_source())
-    assert unauthorized.status_code == 401
+    async def scope(task_run_id):
+        if task_run_id != "tr_demo001":
+            raise HTTPException(status_code=404, detail="task_not_found")
+        return {"task_id": task_run_id, "org_id": "fixture_org", "team_id": "fixture_team", "user_id": "user_demo"}
 
-    from config import cfg
-    old_keys = cfg.PI_SERVICE_API_KEYS
-    cfg.PI_SERVICE_API_KEYS = ["pi-secret"]
-    try:
-        created = await client.post(
-            "/api/internal/reports",
-            json=_source(),
-            headers={"X-Pi-Service-Key": "pi-secret"},
-        )
-        assert created.status_code == 202
-        status = await client.get(
-            "/api/internal/reports/rp_demo001",
-            headers={"X-Pi-Service-Key": "pi-secret"},
-        )
-        assert status.json()["report"]["status"] == "published"
-        page = await client.get("/reports/rp_demo001")
-        assert page.status_code == 200
-        assert "地区销售额分析" in page.text
-        pptx = await client.get("/reports/rp_demo001/download/pptx")
-        assert pptx.status_code == 200
-    finally:
-        cfg.PI_SERVICE_API_KEYS = old_keys
+    monkeypatch.setattr(reports, "task_scope", scope)
+    anonymous = await governed_client.post("/api/internal/reports", json={"task_run_id": "tr_demo001"}, headers={"X-API-Key": "unbound"})
+    assert anonymous.status_code == 401
+    assert (await governed_client.get("/api/internal/reports/rp_demo001", params={"task_run_id": "tr_demo001"})).status_code == 401
+    assert (await governed_client.post("/api/internal/reports", json={**_source(), "org_id": "fixture_org", "team_id": "fixture_team", "task_run_id": "tr_demo001"}, headers=service_headers)).status_code == 422
+
+    from forge.query_runs import _ensure_schema
+    from forge.governance import connect_governance
+    await _ensure_schema()
+    source = {k: v for k, v in _source().items() if k not in {"org_id", "team_id", "user_id"}}
+    source["query_result"] = {**source["query_result"], "query_run_id": "qr_report_demo",
+                              "sql_hash": "sha256:" + "a" * 64, "row_count": 2, "truncated": False}
+    with connect_governance() as conn:
+        conn.execute("INSERT INTO query_runs (query_run_id,task_run_id,org_id,team_id,user_id,datasource_id,question,status,dialect,registry_version,expires_at,sql_hash,result_columns,result_rows,row_count,truncated,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     ("qr_report_demo", "tr_demo001", "fixture_org", "fixture_team", "user_demo", "default", "regions", "completed", "sqlite", "v1", "2030-01-01T00:00:00Z", source["query_result"]["sql_hash"], json.dumps(source["query_result"]["columns"]), json.dumps(source["query_result"]["rows"], ensure_ascii=False), 2, 0, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"))
+        conn.commit()
+    created = await governed_client.post("/api/internal/reports", json=source, headers=service_headers)
+    assert created.status_code == 202
+    assert created.json()["report"]["status"] == "publishing"
+    found = await governed_client.get("/api/internal/reports/rp_demo001", params={"task_run_id": "tr_demo001"}, headers=service_headers)
+    assert found.status_code == 200
+    assert found.json()["report"]["status"] == "published"
+    assert (await governed_client.get("/api/internal/reports/rp_demo001", params={"task_run_id": "tr_other"}, headers=service_headers)).status_code == 404
+    assert (await governed_client.get("/reports/rp_demo001")).status_code == 200
+    assert (await governed_client.get("/reports/rp_demo001", headers={"X-API-Key": "unbound"})).status_code == 401

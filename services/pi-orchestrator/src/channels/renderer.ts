@@ -175,6 +175,8 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
     const assuranceReportHash = typeof review?.payload.assurance_report_hash === "string"
       ? review.payload.assurance_report_hash
       : "";
+    const enforcementContextHash = typeof review?.payload.enforcement_context_hash === "string"
+      ? review.payload.enforcement_context_hash : "";
     return {
       ...common,
       kind: "query_review",
@@ -185,7 +187,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
       fields: [],
       table: null,
       actions:
-        queryRunId.length > 0 && sqlHash.length > 0 && assuranceReportHash.length > 0
+        queryRunId.length > 0 && sqlHash.length > 0 && assuranceReportHash.length > 0 && enforcementContextHash.length > 0
           ? [
               action(
                 input.task.task_run_id,
@@ -195,6 +197,7 @@ export function renderChannelPresentation(input: ChannelRenderInput): ChannelPre
                   query_run_id: queryRunId,
                   sql_hash: sqlHash,
                   assurance_report_hash: assuranceReportHash,
+                  enforcement_context_hash: enforcementContextHash,
                 },
                 "primary",
               ),

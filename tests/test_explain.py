@@ -1,6 +1,7 @@
-"""Public Explain API and CLI evidence contract tests."""
+"""Evidence projection and authenticated Explain access for governed QueryRuns."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 import sqlite3
@@ -10,7 +11,12 @@ import httpx
 import pytest
 
 from agent.contracts import validate_contract
+from agent.tenant import TenantStore
 from forge.cli import main as cli_main
+from forge.enforce import build_enforcement_context_hash
+from forge.governance_credentials import authenticate_credential, create_credential
+from forge.governance_mandates import issue_mandate, revoke_mandate
+from forge.query_runs import create_governed_query_run, execute_authorized_query_run, get_query_run
 
 
 @pytest.fixture
@@ -18,451 +24,228 @@ def explain_env(tmp_path, monkeypatch):
     from config import cfg
     import forge.executor as executor
 
-    registry = tmp_path / "schema.registry.json"
-    registry.write_text(
-        json.dumps(
-            {
-                "tables": {
-                    "numbers": {
-                        "description": "Synthetic numbers",
-                        "columns": {
-                            "n": {"description": "Synthetic integer"}
-                        },
-                    },
-                    "secrets": {
-                        "description": "Restricted values",
-                        "columns": {"value": {"description": "Restricted value"}},
-                    },
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"tables": {
+        "numbers": {"columns": {"n": {"type": "integer"}}},
+        "secrets": {"columns": {"value": {"type": "text"}}},
+    }}), encoding="utf-8")
     database = tmp_path / "data.db"
     with sqlite3.connect(database) as connection:
         connection.execute("CREATE TABLE numbers (n INTEGER)")
         connection.executemany("INSERT INTO numbers VALUES (?)", [(1,), (2,), (3,)])
         connection.execute("CREATE TABLE secrets (value TEXT)")
-        connection.execute("INSERT INTO secrets VALUES ('hidden')")
-
-    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "query_runs.db"))
+        connection.execute("INSERT INTO secrets VALUES ('private')")
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "runs.db"))
     monkeypatch.setattr(cfg, "REGISTRY_PATH", registry)
     monkeypatch.setattr(cfg, "DATABASE_URL", f"sqlite:///{database}")
     monkeypatch.setattr(cfg, "DATABASE_READONLY_CONFIRMED", True)
     monkeypatch.setattr(cfg, "EXECUTION_ENABLED", True)
     monkeypatch.setattr(cfg, "EXECUTION_MAX_ROWS", 2)
     monkeypatch.setattr(cfg, "EXECUTION_TIMEOUT_SECONDS", 5)
-    monkeypatch.setattr(cfg, "QUERY_RUN_REVIEW_TTL_SECONDS", 900)
     monkeypatch.setattr(cfg, "DATASOURCE_ID", "demo")
-    monkeypatch.setattr(cfg, "AUTH_ENABLED", False)
-    monkeypatch.setattr(cfg, "AUTH_API_KEYS", [])
-    monkeypatch.setattr(cfg, "ENFORCE_REVIEWER_API_KEYS", [])
-    monkeypatch.setattr(executor, "_engine", None)
-    return tmp_path
-
-
-def _resource() -> dict:
-    return {
-        "schema_version": 1,
-        "resource_type": "datasource",
-        "resource_id": "demo",
-        "organization_id": "org_demo",
-        "workspace_id": "ws_demo",
-        "parent_resource_id": "ws_demo",
-        "resource_revision": None,
-    }
-
-
-def _principal() -> dict:
-    now = datetime.now(timezone.utc)
-    return {
-        "schema_version": 1,
-        "principal_context_id": "pc_explain_001",
-        "actor_principal": {
-            "principal_id": "human_1",
-            "principal_type": "human",
-        },
-        "accountable_principal": {
-            "principal_id": "human_1",
-            "principal_type": "human",
-        },
-        "organization_id": "org_demo",
-        "workspace_id": "ws_demo",
-        "authentication_context": {
-            "method": "local",
-            "assurance_level": "single_factor",
-            "authenticated_at": (now - timedelta(minutes=2)).isoformat(),
-            "session_id_hash": None,
-        },
-        "delegation_chain": [],
-        "issued_at": (now - timedelta(minutes=1)).isoformat(),
-        "expires_at": (now + timedelta(minutes=15)).isoformat(),
-    }
-
-
-def _request(*, task_run_id: str, sql: str) -> dict:
-    return {
-        "schema_version": 1,
-        "task_run_id": task_run_id,
-        "purpose": "Read synthetic numbers for Explain verification",
-        "question": "List synthetic numbers",
-        "principal_context": _principal(),
-        "delegated_mandate": None,
-        "resource_scope": [_resource()],
-        "candidate": {
-            "kind": "direct_sql",
-            "sql": sql,
-            "producer_revision": "external-agent-r1",
-        },
-        "dialect": "sqlite",
-    }
-
-
-def _approval(review: dict) -> dict:
-    return {
-        "schema_version": 1,
-        "approver_principal": {
-            "principal_id": "human_1",
-            "principal_type": "human",
-        },
-        "sql_hash": review["review"]["sql_hash"],
-        "assurance_report_hash": review["review"]["assurance_report_hash"],
-        "enforcement_context_hash": review["review"]["enforcement_context_hash"],
-    }
-
-
-async def _create(client, suffix: str, *, approve: bool = False) -> dict:
-    review_response = await client.post(
-        "/api/v1/enforce/query-runs",
-        headers={"Idempotency-Key": f"create-explain-{suffix}"},
-        json=_request(
-            task_run_id=f"tr_explain_{suffix}",
-            sql="SELECT numbers.n FROM numbers ORDER BY numbers.n",
-        ),
-    )
-    assert review_response.status_code == 200
-    review = review_response.json()
-    if not approve:
-        return review
-    approved = await client.post(
-        f"/api/v1/enforce/query-runs/{review['query_run_id']}/approve",
-        headers={"Idempotency-Key": f"approve-explain-{suffix}"},
-        json=_approval(review),
-    )
-    assert approved.status_code == 200
-    return approved.json()
-
-
-@pytest.mark.asyncio
-async def test_explain_completed_run_projects_evidence_lineage_and_limits(
-    client, explain_env
-):
-    completed = await _create(client, "complete", approve=True)
-
-    response = await client.get(
-        f"/api/v1/explain/query-runs/{completed['query_run_id']}"
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    validate_contract("explain_query_response_v1", body)
-    assert body["status"] == "completed"
-    assert body["statement"]["actual_sql"] == (
-        "SELECT numbers.n FROM numbers ORDER BY numbers.n"
-    )
-    assert body["statement"]["result"]["rows"] == [[1], [2]]
-    assert body["statement"]["result"]["truncated"] is True
-    assert body["sources"]["physical_tables"] == ["numbers"]
-    assert body["semantics"]["bindings"] == [
-        {
-            "binding_type": "table",
-            "identifier": "numbers",
-            "description": "Synthetic numbers",
-            "registry_revision": body["sources"]["registry_revision"],
-        },
-        {
-            "binding_type": "column",
-            "identifier": "numbers.n",
-            "description": "Synthetic integer",
-            "registry_revision": body["sources"]["registry_revision"],
-        },
-    ]
-    assert body["integrity"]["status"] == "verified"
-    assert set(body["integrity"]["verified_hashes"]) == {
-        "candidate",
-        "sql",
-        "assurance",
-        "policy",
-        "enforcement_context",
-        "source_context",
-        "approval",
-        "result",
-    }
-    assert {item["evidence_type"] for item in body["evidence"]} == {
-        "candidate",
-        "query",
-        "assurance",
-        "policy",
-        "source",
-        "approval",
-        "result",
-    }
-    assert {item["code"] for item in body["limitations"]} == {
-        "semantic_correctness_unproven",
-        "live_data_no_snapshot",
-        "result_truncated",
-    }
-
-
-@pytest.mark.asyncio
-async def test_explain_review_required_is_verified_and_explicitly_incomplete(
-    client, explain_env
-):
-    review = await _create(client, "review")
-
-    response = await client.get(f"/api/v1/explain/query-runs/{review['query_run_id']}")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "review_required"
-    assert body["statement"]["result"] is None
-    assert body["governance"]["approval"] is None
-    assert body["integrity"] == {
-        "status": "verified",
-        "explanation_hash": body["integrity"]["explanation_hash"],
-        "verified_hashes": [
-            "candidate",
-            "policy",
-            "enforcement_context",
-            "sql",
-            "assurance",
-            "source_context",
-        ],
-        "unverified_components": [],
-    }
-    assert "execution_not_completed" in {
-        item["code"] for item in body["limitations"]
-    }
-
-
-@pytest.mark.asyncio
-async def test_explain_denied_run_preserves_bounded_failure_and_candidate(
-    client, explain_env
-):
-    denied_response = await client.post(
-        "/api/v1/enforce/query-runs",
-        headers={"Idempotency-Key": "create-explain-denied"},
-        json=_request(
-            task_run_id="tr_explain_denied",
-            sql="DELETE FROM numbers",
-        ),
-    )
-    assert denied_response.status_code == 200
-    denied = denied_response.json()
-
-    response = await client.get(
-        f"/api/v1/explain/query-runs/{denied['query_run_id']}"
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    validate_contract("explain_query_response_v1", body)
-    assert body["status"] == "denied"
-    assert body["statement"]["actual_sql"] is None
-    assert body["statement"]["result"] is None
-    assert body["statement"]["failure"]["code"] == "readonly_violation"
-    assert body["semantics"]["candidate"]["sql"] == "DELETE FROM numbers"
-    assert body["integrity"]["status"] == "verified"
-    assert {item["code"] for item in body["limitations"]} >= {
-        "semantic_correctness_unproven",
-        "live_data_no_snapshot",
-        "semantic_binding_partial",
-        "execution_not_completed",
-    }
-@pytest.mark.asyncio
-async def test_explain_uses_persisted_source_context_after_registry_changes(
-    client, explain_env
-):
-    completed = await _create(client, "registry-history", approve=True)
-    registry = explain_env / "schema.registry.json"
-    registry.write_text(
-        json.dumps(
-            {
-                "tables": {
-                    "numbers": {
-                        "description": "Changed current description",
-                        "columns": {"n": {"description": "Changed current column"}},
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    response = await client.get(
-        f"/api/v1/explain/query-runs/{completed['query_run_id']}"
-    )
-
-    assert response.status_code == 200
-    descriptions = {
-        item["identifier"]: item["description"]
-        for item in response.json()["semantics"]["bindings"]
-    }
-    assert descriptions == {
-        "numbers": "Synthetic numbers",
-        "numbers.n": "Synthetic integer",
-    }
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("assignment", "expected_code"),
-    [
-        ("explain_context = '{}'", "source_context_drift"),
-        ("result_rows = '[[99]]'", "result_evidence_drift"),
-        ("approver_user_id = 'tampered'", "approval_evidence_drift"),
-    ],
-)
-async def test_explain_fails_closed_on_persisted_evidence_drift(
-    client, explain_env, assignment, expected_code
-):
-    completed = await _create(client, expected_code, approve=True)
-    with sqlite3.connect(explain_env / "query_runs.db") as connection:
-        connection.execute(
-            f"UPDATE query_runs SET {assignment} WHERE query_run_id = ?",
-            (completed["query_run_id"],),
-        )
-
-    response = await client.get(
-        f"/api/v1/explain/query-runs/{completed['query_run_id']}"
-    )
-
-    assert response.status_code == 409
-    assert response.json() == {
-        "schema_version": 1,
-        "status": "error",
-        "failure": {
-            "stage": "explain",
-            "code": expected_code,
-            "retryable": False,
-        },
-    }
-
-
-@pytest.mark.asyncio
-async def test_explain_marks_legacy_unanchored_components_partial(client, explain_env):
-    completed = await _create(client, "legacy", approve=True)
-    with sqlite3.connect(explain_env / "query_runs.db") as connection:
-        connection.execute(
-            """
-            UPDATE query_runs
-            SET explain_context = NULL, explain_context_hash = NULL,
-                approval_hash = NULL, result_hash = NULL
-            WHERE query_run_id = ?
-            """,
-            (completed["query_run_id"],),
-        )
-
-    response = await client.get(
-        f"/api/v1/explain/query-runs/{completed['query_run_id']}"
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["integrity"]["status"] == "partial"
-    assert body["integrity"]["unverified_components"] == [
-        "source_context",
-        "approval",
-        "result",
-    ]
-    assert {
-        "source_context_unanchored",
-        "approval_unanchored",
-        "result_unanchored",
-    } <= {item["code"] for item in body["limitations"]}
-
-
-@pytest.mark.asyncio
-async def test_explain_is_bound_to_creator_credential(client, explain_env, monkeypatch):
-    from config import cfg
-
     monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
-    monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["creator-key"])
-    monkeypatch.setattr(cfg, "ENFORCE_REVIEWER_API_KEYS", ["reviewer-key"])
-    review_response = await client.post(
-        "/api/v1/enforce/query-runs",
-        headers={
-            "X-API-Key": "creator-key",
-            "Idempotency-Key": "create-explain-credential",
-        },
-        json=_request(
-            task_run_id="tr_explain_credential",
-            sql="SELECT numbers.n FROM numbers",
-        ),
-    )
-    review = review_response.json()
-
-    creator = await client.get(
-        f"/api/v1/explain/query-runs/{review['query_run_id']}",
-        headers={"X-API-Key": "creator-key"},
-    )
-    reviewer = await client.get(
-        f"/api/v1/explain/query-runs/{review['query_run_id']}",
-        headers={"X-API-Key": "reviewer-key"},
-    )
-
-    assert creator.status_code == 200
-    assert reviewer.status_code == 403
-    assert reviewer.json()["failure"]["code"] == "query_run_access_denied"
+    monkeypatch.setattr(executor, "_engine", None)
+    store = TenantStore()
+    store.create_team("workspace", organization_id="org")
+    store.set_allowed_tables("workspace", ["numbers", "secrets"])
+    for name, kind, role in (("admin", "human", "admin"), ("reviewer", "human", "reviewer"),
+                             ("agent", "agent", "member"), ("other", "agent", "member")):
+        store.set_team(name, "workspace", role=role, principal_type=kind, status="active")
+    tokens = {name: create_credential(name)[1] for name in ("admin", "reviewer", "agent", "other")}
+    actors = {name: authenticate_credential(token) for name, token in tokens.items()}
+    mandate = issue_mandate(actor=actors["admin"], request={
+        "schema_version": 1, "task_run_id": "tr_evidence", "delegate_principal_id": "agent",
+        "accountable_principal_id": "admin", "reviewer_principal_id": "reviewer",
+        "purpose": "Read synthetic data", "datasource_id": "demo",
+        "allowed_tables": ["numbers", "secrets"], "autonomous_tables": ["numbers"],
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    }, idempotency_key="issue-evidence")
+    return {"tokens": tokens, "actors": actors, "mandate": mandate, "path": tmp_path}
 
 
-def test_explain_cli_reads_public_projection(monkeypatch, capsys):
-    response = httpx.Response(
-        200,
-        json={"schema_version": 1, "status": "review_required"},
-        request=httpx.Request("GET", "http://forge.test"),
+async def _prepare(env, sql, key):
+    return await create_governed_query_run(
+        actor=env["actors"]["agent"], mandate_id=env["mandate"]["mandate_id"],
+        task_run_id="tr_evidence", purpose="Read synthetic data", question="List values",
+        dialect="sqlite", candidate={"kind": "direct_sql", "sql": sql,
+                                      "producer_revision": "external-agent-r1"},
+        idempotency_key=key,
     )
-    captured: dict = {}
+
+
+def _hashes(run):
+    return {field: run[field] for field in (
+        "sql_hash", "assurance_report_hash", "enforcement_context_hash",
+    )}
+
+
+async def _finished(run_id):
+    for _ in range(100):
+        run = await get_query_run(run_id)
+        if run["status"] != "executing":
+            return run
+        await asyncio.sleep(.01)
+    pytest.fail("governed SQL did not reach a terminal state")
+
+
+@pytest.mark.asyncio
+async def test_autonomous_explain_records_mandate_and_actual_claim(client, explain_env):
+    env = explain_env
+    prepared = await _prepare(env, "SELECT n FROM numbers ORDER BY n", "autonomous")
+    assert prepared["status"] == "ready"
+    response = await client.get(f"/api/v2/explain/query-runs/{prepared['query_run_id']}",
+                                headers={"X-API-Key": env["tokens"]["agent"]})
+    assert response.status_code == 200, response.text
+    assert response.json()["governance"]["authorization"] is None
+    await execute_authorized_query_run(query_run_id=prepared["query_run_id"],
+                                       actor=env["actors"]["agent"], action="execute",
+                                       hashes=_hashes(prepared), idempotency_key="execute-evidence")
+    finished = await _finished(prepared["query_run_id"])
+    assert finished["status"] == "completed", finished.get("error")
+    response = await client.get(f"/api/v2/explain/query-runs/{prepared['query_run_id']}",
+                                headers={"X-API-Key": env["tokens"]["agent"]})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    validate_contract("explain_query_response_v2", body)
+    assert body["integrity"]["status"] == "verified"
+    assert {"mandate", "authorization"} <= set(body["integrity"]["verified_hashes"])
+    assert body["governance"]["approval"] is None
+    assert body["governance"]["issuer_principal"]["principal_id"] == "admin"
+    assert body["governance"]["authorization"]["authorizing_principal_id"] == "agent"
+    assert body["lineage"]["authorization_hash"] == finished["authorization_hash"]
+    assert {"mandate", "authorization"} <= {e["evidence_type"] for e in body["evidence"]}
+    assert {"authorization_is_not_semantic_correctness", "semantic_correctness_unproven",
+            "live_data_no_snapshot"} <= {limit["code"] for limit in body["limitations"]}
+
+
+@pytest.mark.asyncio
+async def test_human_review_explain_names_the_designated_reviewer(client, explain_env):
+    env = explain_env
+    prepared = await _prepare(env, "SELECT value FROM secrets", "human-review")
+    assert prepared["status"] == "review_required"
+    await execute_authorized_query_run(query_run_id=prepared["query_run_id"],
+                                       actor=env["actors"]["reviewer"], action="approve",
+                                       hashes=_hashes(prepared), idempotency_key="approve-evidence")
+    finished = await _finished(prepared["query_run_id"])
+    assert finished["status"] == "completed", finished.get("error")
+    response = await client.get(f"/api/v2/explain/query-runs/{prepared['query_run_id']}",
+                                headers={"X-API-Key": env["tokens"]["reviewer"]})
+    assert response.status_code == 200, response.text
+    evidence = response.json()
+    assert evidence["integrity"]["status"] == "verified"
+    assert evidence["governance"]["approval"]["approver_principal"]["principal_id"] == "reviewer"
+    assert evidence["governance"]["authorization"]["actor_principal_id"] == "agent"
+    assert evidence["governance"]["authorization"]["authorizing_principal_id"] == "reviewer"
+    assert {"approval", "mandate", "authorization"} <= {item["evidence_type"] for item in evidence["evidence"]}
+
+@pytest.mark.asyncio
+async def test_historical_hash_stable_after_revocation_and_access_scoped(client, explain_env):
+    env = explain_env
+    prepared = await _prepare(env, "SELECT n FROM numbers", "revocable")
+    path = f"/api/v2/explain/query-runs/{prepared['query_run_id']}"
+    headers = {"X-API-Key": env["tokens"]["admin"]}
+    before = await client.get(path, headers=headers)
+    assert before.status_code == 200, before.text
+    revoked = revoke_mandate(actor=env["actors"]["admin"],
+                             mandate_id=env["mandate"]["mandate_id"],
+                             expected_state_revision=1, reason="synthetic test")
+    assert revoked["status"] == "revoked"
+    after = await client.get(path, headers=headers)
+    assert after.status_code == 200, after.text
+    assert after.json()["integrity"]["explanation_hash"] == before.json()["integrity"]["explanation_hash"]
+    assert after.json()["governance"]["current_authorization"]["status"] == "revoked"
+    assert (await client.get(path, headers={"X-API-Key": env["tokens"]["agent"]})).status_code == 404
+    assert (await client.get(path, headers={"X-API-Key": env["tokens"]["other"]})).status_code == 404
+    assert (await client.get("/api/v1/explain/query-runs/" + prepared["query_run_id"], headers=headers)).status_code == 404
+    assert (await client.get(path, headers={"X-API-Key": "unbound-old-key"})).status_code == 401
+    denied = await client.get("/api/v1/explain/query-runs/" + prepared["query_run_id"],
+                              headers={"X-API-Key": env["tokens"]["agent"]})
+    assert denied.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_explain_store_unavailable_is_not_reported_as_missing(client, explain_env, monkeypatch):
+    import web.routes.explain as route
+
+    async def unavailable(_query_run_id):
+        raise sqlite3.OperationalError("synthetic database outage")
+
+    monkeypatch.setattr(route, "get_query_run", unavailable)
+    response = await client.get("/api/v2/explain/query-runs/qr_" + "0" * 32,
+                                headers={"X-API-Key": explain_env["tokens"]["admin"]})
+    assert response.status_code == 503
+    assert response.json()["failure"]["code"] == "governance_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_historical_v1_is_admin_only_and_still_checks_original_hashes(client, explain_env):
+    from forge.governance import connect_governance
+
+    env = explain_env
+    prepared = await _prepare(env, "SELECT value FROM secrets", "historical")
+    historical = {**prepared, "enforce_schema_version": 1, "status": "needs_review"}
+    historical_hash = build_enforcement_context_hash(historical)
+    with connect_governance() as connection:
+        connection.execute("UPDATE query_runs SET enforce_schema_version=1,status='needs_review',"
+                           "enforcement_context_hash=? WHERE query_run_id=?",
+                           (historical_hash, prepared["query_run_id"]))
+        connection.commit()
+    path = "/api/v1/explain/query-runs/" + prepared["query_run_id"]
+    response = await client.get(path, headers={"X-API-Key": env["tokens"]["admin"]})
+    assert response.status_code == 200, response.text
+    assert response.json()["schema_version"] == 1
+    assert response.json()["integrity"]["status"] == "verified"
+    assert (await client.get(path, headers={"X-API-Key": env["tokens"]["agent"]})).status_code == 403
+    with connect_governance() as connection:
+        connection.execute("UPDATE query_runs SET candidate_hash=? WHERE query_run_id=?",
+                           ("sha256:" + "0" * 64, prepared["query_run_id"]))
+        connection.commit()
+    tampered = await client.get(path, headers={"X-API-Key": env["tokens"]["admin"]})
+    assert tampered.status_code == 409
+    assert tampered.json()["failure"]["code"] == "candidate_evidence_drift"
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,expected", [
+    ("authorization_record", "authorization_evidence_drift"),
+    ("mandate_issuance_hash", "enforcement_context_drift"),
+    ("result_hash", "result_evidence_drift"),
+])
+async def test_explain_fails_closed_on_tampered_anchors(client, explain_env, field, expected):
+    from forge.governance import connect_governance
+    env = explain_env
+    prepared = await _prepare(env, "SELECT n FROM numbers", field)
+    await execute_authorized_query_run(query_run_id=prepared["query_run_id"],
+                                       actor=env["actors"]["agent"], action="execute",
+                                       hashes=_hashes(prepared), idempotency_key="execute-" + field)
+    await _finished(prepared["query_run_id"])
+    with connect_governance() as connection:
+        if field == "authorization_record":
+            connection.execute("UPDATE query_runs SET authorization_record=? WHERE query_run_id=?",
+                               ('{}', prepared["query_run_id"]))
+        else:
+            connection.execute(f"UPDATE query_runs SET {field}=? WHERE query_run_id=?",
+                               ("sha256:" + "0" * 64, prepared["query_run_id"]))
+        connection.commit()
+    response = await client.get(f"/api/v2/explain/query-runs/{prepared['query_run_id']}",
+                                headers={"X-API-Key": env["tokens"]["admin"]})
+    assert response.status_code == 409, response.text
+    assert response.json()["failure"]["code"] == expected
+
+
+def test_explain_cli_reads_v2_projection_without_literal_key(monkeypatch, capsys):
+    response = httpx.Response(200, json={"schema_version": 2, "status": "review_required"},
+                              request=httpx.Request("GET", "http://forge.test"))
+    captured = {}
 
     def fake_get(url, *, headers, timeout):
-        captured.update({"url": url, "headers": headers, "timeout": timeout})
+        captured.update(url=url, headers=headers, timeout=timeout)
         return response
 
     monkeypatch.setattr(httpx, "get", fake_get)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "forge",
-            "explain",
-            "qr_" + "a" * 32,
-            "--url",
-            "http://forge.test/",
-            "--api-key",
-            "creator-key",
-        ],
-    )
-
+    monkeypatch.setenv("EXPLAIN_TEST_KEY", "synthetic-key")
+    monkeypatch.setattr(sys, "argv", ["forge", "explain", "qr_" + "a" * 32,
+                                  "--url", "http://forge.test/", "--api-key-env", "EXPLAIN_TEST_KEY"])
     cli_main()
-
-    assert captured == {
-        "url": "http://forge.test/api/v1/explain/query-runs/qr_" + "a" * 32,
-        "headers": {"Accept": "application/json", "X-API-Key": "creator-key"},
-        "timeout": 30.0,
-    }
+    assert captured["url"] == "http://forge.test/api/v2/explain/query-runs/qr_" + "a" * 32
+    assert captured["headers"] == {"Accept": "application/json", "X-API-Key": "synthetic-key"}
     assert json.loads(capsys.readouterr().out)["status"] == "review_required"
-@pytest.mark.asyncio
-async def test_dashboard_projects_recent_queryrun_without_copying_state(
-    client, explain_env
-):
-    completed = await _create(client, "dashboard", approve=True)
-
-    response = await client.get("/admin/dashboard")
-
-    assert response.status_code == 200
-    html = response.text
-    assert "data-trust-runtime-path" in html
-    assert "Evaluate → Enforce → Explain" in html
-    assert "data-governed-run-list" in html
-    assert completed["query_run_id"] in html
-    assert "verified · 7 refs" in html

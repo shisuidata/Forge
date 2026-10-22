@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.shisuidata.com/contracts/issued-mandate-v1.schema.json",
+  "title": "IssuedMandateV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mandate_id",
+    "issuance_revision",
+    "issuance_hash",
+    "issuer_principal_id",
+    "delegated_mandate",
+    "policy",
+    "status",
+    "state_revision",
+    "revoked_at",
+    "revoked_by"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "mandate_id": {
+      "type": "string",
+      "pattern": "^md_[A-Za-z0-9_-]+$"
+    },
+    "issuance_revision": {
+      "const": 1
+    },
+    "issuance_hash": {
+      "$ref": "#/$defs/hash"
+    },
+    "issuer_principal_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "delegated_mandate": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://forge.local/contracts/delegated-mandate-v1.schema.json",
+      "title": "DelegatedMandate v1",
+      "description": "A versioned, task-, purpose-, audience-, capability-, and resource-bounded delegation to a service or agent. v1 does not permit recursive delegation and never carries credentials.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "mandate_id",
+        "revision",
+        "delegate_principal",
+        "delegator_principal",
+        "accountable_principal",
+        "organization_id",
+        "workspace_id",
+        "purpose",
+        "task_run_id",
+        "audience",
+        "capabilities",
+        "resource_scope",
+        "budget_ref",
+        "approval_policy_ref",
+        "can_delegate",
+        "status",
+        "issued_at",
+        "expires_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "mandate_id": {
+          "type": "string",
+          "pattern": "^md_[A-Za-z0-9_-]+$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "delegate_principal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "principal_id",
+            "principal_type"
+          ],
+          "properties": {
+            "principal_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "principal_type": {
+              "enum": [
+                "service",
+                "agent"
+              ]
+            }
+          }
+        },
+        "delegator_principal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "principal_id",
+            "principal_type"
+          ],
+          "properties": {
+            "principal_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "principal_type": {
+              "enum": [
+                "human",
+                "team",
+                "organization"
+              ]
+            }
+          }
+        },
+        "accountable_principal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "principal_id",
+            "principal_type"
+          ],
+          "properties": {
+            "principal_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "principal_type": {
+              "enum": [
+                "human",
+                "team",
+                "organization"
+              ]
+            }
+          }
+        },
+        "organization_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "task_run_id": {
+          "type": "string",
+          "pattern": "^tr_[A-Za-z0-9_-]+$"
+        },
+        "audience": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"
+          }
+        },
+        "resource_scope": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schema_version",
+              "resource_type",
+              "resource_id",
+              "organization_id",
+              "workspace_id",
+              "parent_resource_id",
+              "resource_revision"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "resource_type": {
+                "enum": [
+                  "organization",
+                  "workspace",
+                  "datasource",
+                  "registry",
+                  "schema",
+                  "table",
+                  "column",
+                  "query_result",
+                  "report",
+                  "export",
+                  "model",
+                  "skill",
+                  "audit"
+                ]
+              },
+              "resource_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "organization_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "workspace_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "parent_resource_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "resource_revision": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          }
+        },
+        "budget_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "approval_policy_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "can_delegate": {
+          "const": false
+        },
+        "status": {
+          "enum": [
+            "active",
+            "revoked",
+            "expired"
+          ]
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "reviewer_principal_id",
+        "allowed_tables",
+        "autonomous_tables"
+      ],
+      "properties": {
+        "revision": {
+          "const": "bounded-agent-policy-v1"
+        },
+        "reviewer_principal_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "allowed_tables": {
+          "$ref": "#/$defs/tables"
+        },
+        "autonomous_tables": {
+          "$ref": "#/$defs/tables"
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "active",
+        "revoked",
+        "expired"
+      ]
+    },
+    "state_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "revoked_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "revoked_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 256
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "tables": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}

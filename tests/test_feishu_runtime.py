@@ -7,6 +7,10 @@ import pytest
 from web.feishu_runtime import FeishuRuntimeStatus, FeishuRuntimeSupervisor
 
 
+@pytest.fixture
+def client(governed_client):
+    return governed_client
+
 class _FakeProcess:
     def __init__(self) -> None:
         self.running = True
@@ -33,8 +37,9 @@ def test_feishu_action_clears_actions_before_delivering_terminal_presentation(tm
         def submit_action(self, **kwargs):
             return {"status": "accepted", "task": {"task_run_id": "tr_demo"}}
 
-        def wait_for_presentation(self, task_run_id):
+        def wait_for_presentation(self, task_run_id, *, external_user_id):
             assert task_run_id == "tr_demo"
+            assert external_user_id == "ou_demo"
             return {
                 "kind": "analysis", "title": "分析完成", "markdown": "已完成",
                 "fields": [], "table": None, "actions": [],

@@ -228,7 +228,9 @@ function planProjection(artifact: Artifact | undefined): TaskDetailProjectionV1[
 
 function reviewProjection(events: TaskEvent[]): TaskDetailProjectionV1["review_request"] {
   const review = latestEvent(events, "query.review_requested");
-  if (review === undefined) return null;
+  if (review === undefined || review.payload.review_required === false ||
+    events.some(event => event.sequence > review.sequence && event.event_type === "query.execution_authorized" &&
+      event.payload.query_run_id === review.payload.query_run_id)) return null;
   const payload = review.payload;
   const sql = typeof payload.sql === "string" ? payload.sql : "";
   const queryRunId = typeof payload.query_run_id === "string" ? payload.query_run_id : "";
@@ -260,15 +262,20 @@ function reviewProjection(events: TaskEvent[]): TaskDetailProjectionV1["review_r
   };
 }
 
-function activityTitle(eventType: string): string {
+function activityTitle(event: TaskEvent): string {
+  if (event.event_type === "query.review_requested" && event.payload.review_required === false) return "策略授权查询已准备";
+  if (event.event_type === "query.execution_authorized")
+    return event.payload.execution_mode === "autonomous" ? "策略授权执行" : "指定审核人已授权执行";
   const titles: Record<string, string> = {
     "task.created": "任务已创建",
+    "task.mandate_attached": "查询授权已绑定",
     "task.status_changed": "任务状态已更新",
     "plan.created": "执行计划已创建",
     "plan.revised": "执行计划已修订",
     "query.review_requested": "等待查询审批",
     "query.clarification_requested": "需要补充信息",
-    "query.approval_submitted": "查询审批已提交",
+    "query.authorization_required": "等待管理员授权",
+    "query.execution_authorized": "查询执行已授权",
     "query.completed": "只读查询已完成",
     "query.execution_failed": "查询未完成",
     "query.prepare_failed": "查询准备未完成",
@@ -282,12 +289,13 @@ function activityTitle(eventType: string): string {
     "stage.attempt_timed_out": "阶段超时",
     "stage.attempt_interrupted": "阶段已中断",
   };
-  return titles[eventType] ?? "任务活动已更新";
+  return titles[event.event_type] ?? "任务活动已更新";
 }
 
 function activityState(event: TaskEvent): TaskDetailProjectionV1["activity"][number]["state"] {
   if (event.event_type.includes("failed") || event.event_type.includes("timed_out")) return "failed";
-  if (event.event_type === "query.review_requested") return "waiting_decision";
+  if (event.event_type === "query.authorization_required") return "waiting_decision";
+  if (event.event_type === "query.review_requested" && event.payload.review_required !== false) return "waiting_decision";
   if (event.event_type === "query.clarification_requested") return "needs_input";
   if (event.event_type.endsWith("started")) return "running";
   return "ready";
@@ -582,8 +590,9 @@ export class ProductProjectionService {
       activity: events.slice(-TASK_ACTIVITY_LIMIT).map((event) => ({
         sequence: event.sequence,
         event_type: event.event_type,
-        title: activityTitle(event.event_type),
-        detail: null,
+        title: activityTitle(event),
+        detail: event.event_type === "query.execution_authorized"
+          ? (event.payload.execution_mode === "autonomous" ? "autonomous" : "human_review") : null,
         state: activityState(event),
         created_at: event.created_at,
       })),

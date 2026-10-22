@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Callable
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from web.templates import templates
 
@@ -21,10 +21,12 @@ from forge.hard_accuracy_benchmark import (
     HardBenchmarkError,
     get_hard_benchmark_service,
 )
-from web.pi_client import pi_request
+from web.pi_client import pi_benchmark_request
+from web.auth import require_admin_principal
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/benchmark", tags=["accuracy-benchmark"])
+router = APIRouter(prefix="/benchmark", tags=["accuracy-benchmark"],
+                   dependencies=[Depends(require_admin_principal)])
 _benchmark_tasks: set[asyncio.Task] = set()
 _TERMINAL = {"completed", "failed", "interrupted"}
 
@@ -97,7 +99,7 @@ async def benchmark_page(request: Request):
 
 
 async def _pi_json(method: str, path: str, payload: dict[str, Any] | None = None):
-    status, data = await pi_request(method, path, payload)
+    status, data = await pi_benchmark_request(method, path, payload)
     return JSONResponse(data, status_code=status, headers={"Cache-Control": "no-store"})
 
 

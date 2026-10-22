@@ -1,7 +1,7 @@
 """Thin Pi channel client and Feishu renderer.
 
-This module never calls Forge Agent, Executor, Registry, or database code. It only
-forwards authenticated ChannelEvents to Pi and renders ChannelPresentation.
+The platform callback adapter supplies verified external IDs. Each request resolves its
+live Forge binding and signs the exact bytes before Pi receives it.
 """
 from __future__ import annotations
 
@@ -35,13 +35,10 @@ def stable_channel_action_event_id(
 
 
 class PiChannelClient:
-    def __init__(
-        self,
-        base_url: str | None = None,
-        service_key: str | None = None,
-        timeout_seconds: float = 15,
-        channel: str = "feishu",
-    ) -> None:
+    """Only verified platform callbacks may supply an external user ID."""
+
+    def __init__(self, base_url: str | None = None, service_key: str | None = None,
+                 timeout_seconds: float = 15, channel: str = "feishu") -> None:
         self.base_url = (base_url or cfg.PI_ORCHESTRATOR_URL).rstrip("/")
         self.service_key = service_key or cfg.PI_CHANNEL_SERVICE_KEY
         self.timeout_seconds = timeout_seconds
@@ -51,87 +48,83 @@ class PiChannelClient:
         if not self.service_key:
             raise PiChannelError("PI_CHANNEL_SERVICE_KEY is not configured")
 
-    def submit_message(
-        self,
-        *,
-        event_id: str,
-        external_user_id: str,
-        conversation_id: str,
-        message_id: str,
-        text: str,
-        chat_type: str | None = None,
-    ) -> dict[str, Any]:
+    def submit_message(self, *, event_id: str, external_user_id: str,
+                       conversation_id: str, message_id: str, text: str,
+                       chat_type: str | None = None) -> dict[str, Any]:
         return self._submit({
-            "event_id": event_id,
-            "channel": self.channel,
-            "event_type": "message",
-            "external_user_id": external_user_id,
-            "conversation_id": conversation_id,
-            "message_id": message_id,
-            "task_run_id": None,
-            "payload": {
-                "text": text,
-                **({"chat_type": chat_type} if chat_type else {}),
-            },
+            "event_id": event_id, "channel": self.channel, "event_type": "message",
+            "external_user_id": external_user_id, "conversation_id": conversation_id,
+            "message_id": message_id, "task_run_id": None,
+            "payload": {"text": text, **({"chat_type": chat_type} if chat_type else {})},
         })
 
-    def submit_action(
-        self,
-        *,
-        event_id: str,
-        external_user_id: str,
-        conversation_id: str,
-        message_id: str,
-        task_run_id: str,
-        action: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
+    def submit_action(self, *, event_id: str, external_user_id: str,
+                      conversation_id: str, message_id: str, task_run_id: str,
+                      action: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._submit({
-            "event_id": event_id,
-            "channel": self.channel,
-            "event_type": "action",
-            "external_user_id": external_user_id,
-            "conversation_id": conversation_id,
-            "message_id": message_id,
-            "task_run_id": task_run_id,
+            "event_id": event_id, "channel": self.channel, "event_type": "action",
+            "external_user_id": external_user_id, "conversation_id": conversation_id,
+            "message_id": message_id, "task_run_id": task_run_id,
             "payload": {"action": action, **payload},
         })
 
-    def get_presentation(self, task_run_id: str) -> dict[str, Any]:
-        return self._request("GET", f"/v1/tasks/{task_run_id}/presentation")["presentation"]
+    def get_presentation(self, task_run_id: str, *, external_user_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/v1/tasks/{task_run_id}/presentation",
+                             external_user_id=external_user_id, task_run_id=task_run_id)["presentation"]
 
-    def wait_for_presentation(
-        self,
-        task_run_id: str,
-        *,
-        timeout_seconds: float = 360,
-        interval_seconds: float = 0.8,
-    ) -> dict[str, Any]:
+    def wait_for_presentation(self, task_run_id: str, *, external_user_id: str,
+                              timeout_seconds: float = 360,
+                              interval_seconds: float = 0.8) -> dict[str, Any]:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
-            presentation = self.get_presentation(task_run_id)
+            presentation = self.get_presentation(task_run_id, external_user_id=external_user_id)
             if presentation.get("kind") != "progress":
                 return presentation
             time.sleep(interval_seconds)
         raise PiChannelError("Pi Task polling timed out")
 
     def _submit(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._request("POST", "/v1/channel-events", payload)
+        return self._request("POST", "/v1/channel-events", payload,
+                             external_user_id=payload["external_user_id"],
+                             task_run_id=payload["task_run_id"])
 
-    def _request(
-        self,
-        method: str,
-        path: str,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    def _request(self, method: str, path: str, payload: dict[str, Any] | None = None,
+                 *, external_user_id: str, task_run_id: str | None = None) -> dict[str, Any]:
+        from forge.governance import issue_control_token
+        from forge.governance_credentials import authenticate_channel
+        principal = authenticate_channel(self.channel, external_user_id)
+        if principal is None:
+            raise PiChannelError("channel_identity_unbound")
+        event = payload or {}
+        action_name = event.get("payload", {}).get("action") if event.get("event_type") == "action" else None
+        action = ("query.approve" if action_name == "approve_query" else
+                  "task.read" if method == "GET" else "task.write")
+        hashes = None
+        key = None
+        query_run_id = None
+        if action == "query.approve":
+            details = event["payload"]
+            query_run_id = details.get("query_run_id")
+            hashes = {name: details.get(name) for name in
+                      ("sql_hash", "assurance_report_hash", "enforcement_context_hash")}
+            key = event["event_id"]
+            if not query_run_id or not all(hashes.values()):
+                raise PiChannelError("approval_scope_required")
+        body = (json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":")).encode("utf-8") if payload is not None else b"")
+        token = issue_control_token(principal, method, path, body, action,
+                                    task_run_id=task_run_id, query_run_id=query_run_id,
+                                    approval_hashes=hashes, idempotency_key=key)
+        headers = {"X-Channel-Service-Key": self.service_key,
+                   "X-Forge-Control-Token": token,
+                   "X-Request-ID": current_request_id()}
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+        if key is not None:
+            headers["Idempotency-Key"] = key
         try:
-            response = httpx.request(
-                method,
-                f"{self.base_url}{path}",
-                headers={"X-Channel-Service-Key": self.service_key, "X-Request-ID": current_request_id()},
-                json=payload,
-                timeout=self.timeout_seconds,
-            )
+            response = httpx.request(method, f"{self.base_url}{path}", headers=headers,
+                                     content=body, timeout=self.timeout_seconds)
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise PiChannelError("Pi Orchestrator is unavailable") from exc

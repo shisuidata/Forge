@@ -1,13 +1,28 @@
 import { announce, productStateLabel, usageStatusLabel } from "./product-shell.js?v=3";
 
 const page = document.querySelector('[data-product-page]');
+let csrfPromise;
+
+async function csrfToken() {
+  csrfPromise ||= fetch('/api/auth/csrf', { credentials: 'same-origin', cache: 'no-store' })
+    .then(async (response) => {
+      if (!response.ok) throw new Error('无法获取会话安全令牌，请重新登录');
+      const body = await response.json();
+      if (typeof body.csrf_token !== 'string') throw new Error('会话安全令牌无效');
+      return body.csrf_token;
+    }).catch((error) => { csrfPromise = null; throw error; });
+  return csrfPromise;
+}
 
 async function api(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = { 'content-type': 'application/json', ...(options.headers || {}) };
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRF-Token'] = await csrfToken();
   let response;
   try {
     response = await fetch(url, {
-      cache: 'no-store', credentials: 'same-origin', ...options,
-      headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+      cache: 'no-store', credentials: 'same-origin', mode: 'same-origin', ...options,
+      headers,
     });
   } catch {
     const error = new Error('连接中断，无法确认服务是否已接收。');
@@ -25,7 +40,7 @@ async function api(url, options = {}) {
     throw error;
   }
   if (!response.ok) {
-    const error = new Error(body?.error || body?.detail?.code || '请求失败');
+    const error = new Error(body?.error || body?.code || body?.detail?.code || '请求失败');
     error.status = response.status;
     error.code = body?.code || body?.detail?.code;
     error.requestId = body?.request_id || response.headers.get('X-Request-ID');
@@ -295,24 +310,166 @@ async function loadConversationList() {
   } catch (error) { renderError(list, error, loadConversationList); }
 }
 
-function actionButton(action, task, review, refresh) {
-  const disabled = action.availability !== "enabled";
+function actionButton(action, task, refresh) {
+  const disabled = action.availability !== 'enabled' || action.action_type === 'approve_query';
   const button = node('button', {
     class: action.action_type === 'cancel_task' ? 'button button-danger' : 'button button-primary',
     type: 'button', text: action.label, disabled,
-    title: disabled ? (action.reason_code || "当前操作不可用") : "",
+    title: disabled ? (action.reason_code || '当前操作不可用') : '',
   });
-  if (!disabled) button.addEventListener('click', async () => {
-    let currentReview = review;
-    if (action.action_type === 'approve_query' && !currentReview) {
-      try { currentReview = (await api(`/api/product/tasks/${encodeURIComponent(task.task_run_id)}`)).detail.review_request; }
-      catch (error) { announce(`审核材料不可用：${error.message}`); return; }
-    }
-    openActionDialog(action, task, currentReview, refresh);
-  });
+  if (!disabled) button.addEventListener('click', () => openActionDialog(action, task, refresh));
   return button;
 }
 
+
+let governanceContext;
+const pendingMandates = new Map();
+
+function mandateFacts(mandate) {
+  const delegated = mandate.delegated_mandate;
+  const facts = [
+    ['授权 ID', mandate.mandate_id], ['状态', { active: '有效', expired: '已到期', revoked: '已撤销' }[mandate.status] || mandate.status],
+    ['到期', formatDate(delegated.expires_at)], ['执行者', delegated.delegate_principal.principal_id],
+    ['签发人', mandate.issuer_principal_id], ['责任人', delegated.accountable_principal.principal_id],
+    ['指定审批人', mandate.policy.reviewer_principal_id],
+    ['查询总范围', mandate.policy.allowed_tables.join('、')],
+    ['自主查询', mandate.policy.autonomous_tables.join('、') || '无；所有查询需人工审核'],
+  ];
+  return node('dl', { class: 'mandate-facts' }, facts.map(([label, value]) =>
+    node('div', {}, [node('dt', { text: label }), node('dd', { text: value || '—' })])));
+}
+
+function mandateForm(task, options, refresh) {
+  const form = node('form', { class: 'mandate-form' });
+  const tableRows = node('div', { class: 'mandate-table-list' });
+  for (const table of options.tables || []) {
+    const total = node('input', { type: 'checkbox', value: table, 'aria-label': `${table} 总范围` });
+    const auto = node('input', { type: 'checkbox', value: table, 'aria-label': `${table} 自主查询`, disabled: true });
+    total.addEventListener('change', () => { auto.disabled = !total.checked; if (!total.checked) auto.checked = false; });
+    tableRows.append(node('div', { class: 'mandate-table-row' }, [
+      node('span', { class: 'mandate-table-name', text: table }),
+      node('label', {}, [total, '总范围']), node('label', {}, [auto, '自主']),
+    ]));
+  }
+  const humans = options.humans || [];
+  const choice = (role) => node('select', { class: 'select', required: true }, [
+    node('option', { value: '', text: '选择人员' }),
+    ...humans.filter((person) => role === 'accountable' || ['admin', 'reviewer'].includes(person.role))
+      .map((person) => node('option', { value: person.principal_id, text: `${person.display_name || person.principal_id} · ${person.principal_id}` })),
+  ]);
+  const accountable = choice('accountable');
+  accountable.value = task.user_id || '';
+  const reviewer = choice('reviewer');
+  const hours = node('input', { class: 'input', type: 'number', min: '1', max: '24', step: '1', value: '1', required: true });
+  const purpose = node('input', { class: 'input', type: 'text', maxlength: '1000', required: true, value: '任务查询' });
+  const message = node('p', { class: 'mandate-feedback', role: 'status', 'aria-live': 'polite' });
+  const submit = node('button', { class: 'button button-primary', type: 'submit', text: '签发并绑定授权' });
+  form.append(
+    node('p', { class: 'muted-copy', text: `执行者 ${options.execution_actor_id} · 数据源 ${options.datasource_id}。总范围外直接拒绝；总范围内但非自主表由指定审批人确认。` }),
+    node('div', { class: 'mandate-table-head' }, [node('strong', { text: '数据表' }), node('span', { text: '权限' })]),
+    tableRows,
+    node('div', { class: 'mandate-fields' }, [
+      node('label', {}, ['责任人', accountable]), node('label', {}, ['指定审批人', reviewer]),
+      node('label', {}, ['有效期（小时，最多 24）', hours]), node('label', {}, ['用途', purpose]),
+    ]), submit, message,
+  );
+  const pendingKey = 'forge.pending.mandate.' + task.task_run_id;
+  let pending = pendingMandates.get(task.task_run_id);
+  try { pending ||= JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); } catch { /* Storage may be disabled. */ }
+  async function attach(mandateId) {
+    await api(`/api/pi/tasks/${encodeURIComponent(task.task_run_id)}/mandate`, {
+      method: 'POST', headers: { 'Idempotency-Key': `attach:${mandateId}` },
+      body: JSON.stringify({ mandate_id: mandateId, expected_mandate_id: task.metadata?.mandate_id || null }),
+    });
+    pendingMandates.delete(task.task_run_id);
+    try { sessionStorage.removeItem(pendingKey); } catch { /* Storage may be disabled. */ }
+    await refresh();
+  }
+  if (pending?.mandate_id) {
+    submit.textContent = `重试绑定 ${pending.mandate_id}`;
+    message.textContent = '签发已成功但绑定尚未确认；重试只绑定同一授权，不会重新签发。';
+  }
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const allowed = [...tableRows.querySelectorAll('.mandate-table-row')]
+      .filter((row) => row.querySelector('input:first-child').checked).map((row) => row.querySelector('input:first-child').value);
+    const autonomous = [...tableRows.querySelectorAll('.mandate-table-row')]
+      .filter((row) => row.querySelectorAll('input')[1].checked).map((row) => row.querySelectorAll('input')[1].value);
+    if (!pending?.mandate_id && !allowed.length) { message.textContent = '至少选择一张总范围数据表。'; return; }
+    submit.disabled = true;
+    message.textContent = '正在确认授权…';
+    try {
+      if (!pending?.mandate_id) {
+        const request = { schema_version: 1, task_run_id: task.task_run_id,
+          delegate_principal_id: options.execution_actor_id, accountable_principal_id: accountable.value,
+          reviewer_principal_id: reviewer.value, purpose: purpose.value.trim(), datasource_id: options.datasource_id,
+          allowed_tables: allowed, autonomous_tables: autonomous,
+          expires_at: new Date(Date.now() + Number(hours.value) * 3600000).toISOString() };
+        pending ||= { request, idempotency_key: `web-mandate:${task.task_run_id}:${randomToken()}` };
+        pendingMandates.set(task.task_run_id, pending);
+        try { sessionStorage.setItem(pendingKey, JSON.stringify(pending)); } catch { /* Storage may be disabled. */ }
+        const issued = await api('/api/v2/governance/mandates', {
+          method: 'POST', headers: { 'Idempotency-Key': pending.idempotency_key },
+          body: JSON.stringify(pending.request),
+        });
+        pending.mandate_id = issued.mandate_id;
+        try { sessionStorage.setItem(pendingKey, JSON.stringify(pending)); } catch { /* Storage may be disabled. */ }
+        submit.textContent = `重试绑定 ${issued.mandate_id}`;
+      }
+      await attach(pending.mandate_id);
+      announce('授权已绑定');
+    } catch (error) {
+      if (pending?.mandate_id === undefined && error.deliveryUnknown !== true) {
+        pending = null;
+        pendingMandates.delete(task.task_run_id);
+        try { sessionStorage.removeItem(pendingKey); } catch { /* Storage may be disabled. */ }
+      }
+      message.textContent = `${pending?.mandate_id ? `授权 ${pending.mandate_id} 已签发，但绑定失败；` : error.deliveryUnknown ? '签发结果未知；重试将沿用同一请求键。' : '签发失败；'}${diagnosticMessage(error)}`;
+      submit.disabled = false;
+    }
+  });
+  return form;
+}
+
+async function renderMandate(container, task, refresh) {
+  try {
+    const context = await (governanceContext ||= api('/api/v2/governance/ui-context'));
+    const id = task.metadata?.mandate_id;
+    if (id) {
+      const pendingKey = 'forge.pending.mandate.' + task.task_run_id;
+      let pending = pendingMandates.get(task.task_run_id);
+      try { pending ||= JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); } catch { /* Storage may be disabled. */ }
+      if (pending?.mandate_id === id) {
+        pendingMandates.delete(task.task_run_id);
+        try { sessionStorage.removeItem(pendingKey); } catch { /* Storage may be disabled. */ }
+      }
+    }
+    const mandate = id ? await api(`/api/v2/governance/mandates/${encodeURIComponent(id)}`) : null;
+    const content = [];
+    if (!mandate) content.push(notice('等待管理员授权', '任务创建不会自动授权数据查询；管理员需要指定表范围、自主范围和审批人。', 'waiting_decision'));
+    else {
+      content.push(mandateFacts(mandate, task));
+      if (mandate.status === 'active' && context?.role === 'admin') {
+        const revoke = node('button', { class: 'button button-danger', type: 'button', text: '撤销未执行授权' });
+        revoke.addEventListener('click', async () => {
+          if (!window.confirm('撤销只阻止尚未 claim 的查询，不会取消已经发出的 SQL。确认撤销？')) return;
+          revoke.disabled = true;
+          try {
+            await api(`/api/v2/governance/mandates/${encodeURIComponent(id)}/revoke`, {
+              method: 'POST', body: JSON.stringify({ expected_state_revision: mandate.state_revision, reason: '管理员在任务工作台撤销' }),
+            });
+            await refresh();
+          } catch (error) { announce(diagnosticMessage(error)); revoke.disabled = false; }
+        });
+        content.push(revoke, node('p', { class: 'muted-copy', text: '撤销不会终止已 claim 或已经发出的 SQL。' }));
+      }
+    }
+    if (context?.role === 'admin' && (!mandate || mandate.status !== 'active'))
+      content.push(mandateForm(task, context, refresh));
+    container.replaceChildren(...content);
+  } catch (error) { governanceContext = null; renderError(container, error, () => renderMandate(container, task, refresh)); }
+}
 function taskPanelProjectionFingerprint(detail) {
   const task = detail.task ?? {};
   return JSON.stringify({
@@ -330,7 +487,7 @@ function taskPanelProjectionFingerprint(detail) {
       artifact.state, artifact.evidence_refs?.length ?? 0,
     ]) ?? [],
     activity: detail.activity?.map((item) => [
-      item.sequence, item.title, item.state, item.created_at,
+      item.sequence, item.title, item.state, item.created_at, item.detail,
     ]) ?? [],
     review: detail.review_request
       ? [
@@ -371,6 +528,8 @@ function renderConversationTaskPanel(detail) {
     node('h3', { text: task.title || '数据任务' }),
     node('p', { text: steps.length ? `计划进度 ${completedSteps}/${steps.length}` : '尚未生成执行计划' }),
     node('a', { class: 'button', href: `/tasks/${task.task_run_id}`, text: '打开任务详情' }),
+    detail.activity?.some((item) => item.event_type === "query.execution_authorized" && item.detail === "autonomous")
+      ? node('p', { class: 'muted-copy', text: '策略授权执行 · 无逐次人工审批' }) : null,
   ]);
 
   const plan = node('section', { class: 'task-panel-section' }, [
@@ -385,12 +544,12 @@ function renderConversationTaskPanel(detail) {
       : stateBox('尚无计划', '任务仍在建立目标、范围或交付物。'),
   ]);
 
-  const actions = Array.isArray(detail.actions) ? detail.actions : [];
+  const actions = Array.isArray(detail.actions) ? detail.actions.filter((action) => action.action_type !== 'approve_query') : [];
   const actionSection = node('section', { class: 'task-panel-section' }, [
     node('header', {}, [node('h3', { text: '下一步' }), node('span', { text: actions.length ? `${actions.length} 项` : '无需操作' })]),
     actions.length
       ? node('div', { class: 'task-panel-actions' }, actions.map((action) =>
-        actionButton(action, task, detail.review_request, () => selectConversation(chatConversation))))
+        actionButton(action, task, () => selectConversation(chatConversation))))
       : node('p', { class: 'muted-copy', text: '当前任务会继续推进，或在需要输入和确认时提供操作。' }),
   ]);
 
@@ -418,7 +577,11 @@ function renderConversationTaskPanel(detail) {
       : node('p', { class: 'muted-copy', text: '尚无任务活动。' }),
   ]);
 
-  taskPanelBody.replaceChildren(summary, plan, actionSection, artifactSection, activitySection, attemptList(detail.attempts));
+  const mandateSection = node('section', { class: 'task-panel-section' }, [
+    node('header', {}, [node('h3', { text: '查询授权' })]),
+    node('div', { 'data-panel-mandate': '' }, [node('p', { class: 'muted-copy', text: '正在读取授权…' })]),
+  ]);
+  taskPanelBody.replaceChildren(summary, plan, mandateSection, actionSection, artifactSection, activitySection, attemptList(detail.attempts));
 }
 
 async function loadConversationTask(taskId) {
@@ -433,13 +596,26 @@ async function loadConversationTask(taskId) {
     taskPanelBody?.replaceChildren(stateBox('正在读取任务状态', '从 Product Projection 获取最新计划、操作和活动。'));
   }
   try {
-    const body = await api(`/api/product/tasks/${encodeURIComponent(taskId)}`);
+    const [body, taskData, verifiedReview] = await Promise.all([
+      api(`/api/product/tasks/${encodeURIComponent(taskId)}`),
+      api(`/api/pi/tasks/${encodeURIComponent(taskId)}`), loadAuthorizedReview(taskId),
+    ]);
     if (epoch !== taskPanelEpoch) return;
-    const fingerprint = taskPanelProjectionFingerprint(body.detail);
+    const fingerprint = JSON.stringify([
+      taskPanelProjectionFingerprint(body.detail), taskData.task.metadata?.mandate_id,
+      verifiedReview?.query_run_id, verifiedReview?.enforcement_context_hash,
+    ]);
     taskPanel?.removeAttribute('data-refresh');
     if (renderedTaskId === taskId && renderedTaskFingerprint === fingerprint) return;
     const scrollTop = changingTask ? 0 : (taskPanelBody?.scrollTop ?? 0);
     renderConversationTaskPanel(body.detail);
+    const mandateContainer = taskPanelBody.querySelector('[data-panel-mandate]');
+    await renderMandate(mandateContainer, taskData.task, () => {
+      renderedTaskFingerprint = null;
+      return loadConversationTask(taskId);
+    });
+    if (verifiedReview && epoch === taskPanelEpoch)
+      mandateContainer.append(reviewCard(taskId, verifiedReview, () => loadConversationTask(taskId)));
     renderedTaskId = taskId;
     renderedTaskFingerprint = fingerprint;
     if (taskPanelBody instanceof HTMLElement) taskPanelBody.scrollTop = scrollTop;
@@ -477,7 +653,7 @@ function renderConversation(data) {
   const entries = data.entries.map((entry) => {
     const presentation = node('div', { class: 'conversation-presentation' });
     renderPresentation(presentation, entry.presentation);
-    const actions = node('div', { class: 'message-actions' }, entry.actions.map((action) => actionButton(action, entry.task, null, resumeConversationPolling)));
+    const actions = node('div', { class: 'message-actions' }, entry.actions.filter((action) => action.action_type !== 'approve_query').map((action) => actionButton(action, entry.task, resumeConversationPolling)));
     return node('article', { class: 'conversation-entry' }, [
       node('div', { class: 'user-message' }, [entry.user_message.text, node('time', { text: formatDate(entry.user_message.created_at) })]),
       node('div', { class: 'forge-message' }, [
@@ -617,6 +793,84 @@ function setupChat() {
   });
 }
 
+
+async function loadAuthorizedReview(taskId) {
+  try {
+    const data = await api(`/api/pi/tasks/${encodeURIComponent(taskId)}/query-review`);
+    return data.review && { ...data.review, can_approve: true };
+  } catch (error) {
+    if (error.status === 403 || error.status === 404) return null;
+    throw error;
+  }
+}
+
+function reviewFacts(review) {
+  return node('dl', { class: 'review-facts' }, [
+    ['QueryRun', review.query_run_id], ['SQL hash', review.sql_hash],
+    ['Assurance hash', review.assurance_report_hash], ['Enforcement hash', review.enforcement_context_hash],
+    ...(review.expires_at ? [['有效期', formatDate(review.expires_at)]] : []),
+  ].map(([label, value]) => node('div', { class: 'review-fact' }, [node('dt', { text: label }), node('dd', { text: value || '—' })])));
+}
+
+async function approveReview(taskId, review, refresh) {
+  if (!review?.can_approve || ![review.sql_hash, review.assurance_report_hash, review.enforcement_context_hash]
+    .every((hash) => /^sha256:[a-f0-9]{64}$/.test(hash))) {
+    announce('审核材料缺少精确哈希，无法批准'); return;
+  }
+  if (!window.confirm(`确认只读执行 QueryRun ${review.query_run_id}？请先核对页面所示 SQL 与三个 hash。`)) return;
+  const keyName = `forge.pending.approval.${review.query_run_id}`;
+  let idempotencyKey;
+  try { idempotencyKey = sessionStorage.getItem(keyName); } catch { /* Storage may be disabled. */ }
+  idempotencyKey ||= `review:${review.query_run_id}:${randomToken()}`;
+  try { sessionStorage.setItem(keyName, idempotencyKey); } catch { /* Storage may be disabled. */ }
+  try {
+    await api(`/api/pi/tasks/${encodeURIComponent(taskId)}/approve-query`, {
+      method: 'POST', body: JSON.stringify({ query_run_id: review.query_run_id, sql_hash: review.sql_hash,
+        assurance_report_hash: review.assurance_report_hash, enforcement_context_hash: review.enforcement_context_hash,
+        idempotency_key: idempotencyKey }),
+    });
+    try { sessionStorage.removeItem(keyName); } catch { /* Storage may be disabled. */ }
+    announce('审批已由 Forge 授权 claim，查询执行中');
+    await refresh();
+    window.setTimeout(refresh, 1600);
+  } catch (error) {
+    announce(`${error.deliveryUnknown ? '授权结果未知，请回读同一 QueryRun；重试沿用原执行键：' : '审批被拒绝：'}${diagnosticMessage(error)}`);
+  }
+}
+
+function reviewCard(taskId, review, refresh, mandate = null) {
+  const button = node('button', { class: 'button button-primary', type: 'button', text: '确认精确 SQL 并审批', disabled: !review.can_approve });
+  button.addEventListener('click', () => approveReview(taskId, review, refresh));
+  return node('div', { class: 'review-card' }, [
+    node('p', { class: 'muted-copy', text: `任务 ${taskId} · ${review.question || '只读数据查询'}` }),
+    ...(mandate ? [mandateFacts(mandate)] : []),
+    node('pre', { class: 'code-block', text: review.sql }), reviewFacts(review),
+    node('details', { class: 'review-assurance' }, [
+      node('summary', { text: '查看 Assurance 校验报告' }),
+      node('pre', { class: 'code-block', text: JSON.stringify(review.assurance_report || {}, null, 2) }),
+    ]),
+    node('p', { class: 'muted-copy', text: '指定审批人确认仅授予这一次 SQL 与校验对象；执行前仍会重新校验权限。' }), button,
+  ]);
+}
+
+async function loadReviews() {
+  const panel = page.querySelector('[data-review-inbox]');
+  if (!panel) return;
+  try {
+    const { reviews } = await api('/api/v2/governance/reviews');
+    panel.hidden = reviews.length === 0;
+    if (!reviews.length) return;
+    const cards = await Promise.all(reviews.map(async (item) => {
+      const [review, mandate] = await Promise.all([
+        loadAuthorizedReview(item.task_run_id),
+        api(`/api/v2/governance/mandates/${encodeURIComponent(item.mandate_id)}`),
+      ]);
+      return review ? reviewCard(item.task_run_id, { ...review, question: item.question }, loadReviews, mandate) : null;
+    }));
+    panel.querySelector('[data-review-list]').replaceChildren(...cards.filter(Boolean));
+    panel.hidden = cards.some(Boolean) === false;
+  } catch (error) { panel.hidden = false; renderError(panel.querySelector('[data-review-list]'), error, loadReviews); }
+}
 async function loadTasks() {
   const list = page.querySelector('[data-task-list]');
   const filter = page.querySelector('[data-task-status-filter]');
@@ -640,13 +894,15 @@ function planStepBadge(status) {
   return node('span', { class: 'status', 'data-state': state, text: label });
 }
 
-function renderTaskDetail(detail) {
+function renderTaskDetail(detail, verifiedReview) {
   const hero = page.querySelector('[data-task-hero]');
   hero.querySelector('h2').textContent = detail.task.title;
   hero.querySelector('.status').replaceWith(badge(detail.task.display_state));
   const notices = page.querySelector('[data-page-notices]');
   notices.replaceChildren();
   if (detail.projection_meta.availability !== 'ready') notices.append(notice('任务信息部分可用', detail.projection_meta.unavailable_reasons.join('、')));
+  if (detail.activity?.some((item) => item.event_type === "query.execution_authorized" && item.detail === "autonomous"))
+    notices.append(notice('策略授权执行', '本次查询由已签发授权与自主表策略许可，不是人工逐次审批。', 'ready'));
 
   const planBody = page.querySelector('[data-task-plan] .panel-body');
   if (!detail.plan) planBody.replaceChildren(stateBox('尚无执行计划', '该任务当前没有可投影的计划。'));
@@ -662,22 +918,12 @@ function renderTaskDetail(detail) {
   const reviewPanel = page.querySelector('[data-task-review]');
   if (detail.review_request) {
     reviewPanel.hidden = false;
-    const review = detail.review_request;
-    const facts = node('dl', { class: 'review-facts' }, [
-      ['Query', review.query_run_id], ['方言', review.dialect], ['有效期', formatDate(review.expires_at)], ['只读', review.read_only ? '是' : '否'],
-    ].map(([label, value]) => node('div', { class: 'review-fact' }, [node('dt', { text: label }), node('dd', { text: value })])));
-    const approve = detail.actions.find((action) => action.action_type === 'approve_query');
-    const primary = approve
-      ? node('div', { class: 'review-primary-action' }, [
-        node('p', { text: '确认后才会发起只读执行；取消任务或离开不会执行 SQL。' }),
-        actionButton(approve, detail.task, review, loadTaskDetail),
-      ])
-      : notice('审核已结束', '当前没有可执行的 SQL 审核操作；以下内容仅供追溯。', 'ready');
+    const review = verifiedReview || detail.review_request;
+    const primary = verifiedReview
+      ? reviewCard(detail.task.task_run_id, verifiedReview, loadTaskDetail)
+      : notice('等待指定审批人', '此处仅显示任务查询材料；只有指定审批人可在待我审核中提交三个精确 hash。', 'waiting_decision');
     page.querySelector('[data-task-review-body]').replaceChildren(
-      facts,
-      node('pre', { class: 'code-block', text: review.sql }),
-      notice('审批边界', '执行前会重新核对 SQL、安全校验结果和 Registry 版本。', 'waiting_decision'),
-      primary,
+      reviewFacts(review), node('pre', { class: 'code-block', text: review.sql }), primary,
     );
   } else reviewPanel.hidden = true;
 
@@ -691,7 +937,7 @@ function renderTaskDetail(detail) {
 
   const actionContainer = page.querySelector('[data-task-actions] .panel-body');
   if (!detail.actions.length) actionContainer.replaceChildren(stateBox('当前无需操作', '任务会在需要补充或确认时提供操作。'));
-  else actionContainer.replaceChildren(node('div', { class: 'action-stack' }, detail.actions.map((action) => actionButton(action, detail.task, detail.review_request, loadTaskDetail))));
+  else actionContainer.replaceChildren(node('div', { class: 'action-stack' }, detail.actions.filter((action) => action.action_type !== 'approve_query').map((action) => actionButton(action, detail.task, loadTaskDetail))));
 
   const relations = page.querySelector('[data-task-relations] .panel-body');
   const links = [];
@@ -735,18 +981,51 @@ async function loadTaskDeliveries(task) {
 }
 
 
+let reviewerOnlySeen = false;
+
+function renderScopedReview(taskId, review) {
+  reviewerOnlySeen = true;
+  const hero = page.querySelector('[data-task-hero]');
+  hero.querySelector('h2').textContent = review ? '待我审核的查询' : '查询审核已结束';
+  hero.querySelector('.status').replaceWith(node('span', { class: 'status', text: review ? '待我审核' : '已结束' }));
+  page.querySelector('.task-detail-grid').classList.remove('main-aside');
+  page.querySelector('.task-side').hidden = true;
+  for (const selector of ['[data-task-plan]', '[data-task-mandate]', '[data-task-presentation]',
+    '[data-task-artifacts]', '[data-task-deliveries]', '[data-task-actions]',
+    '[data-task-relations]', '[data-task-activity]']) page.querySelector(selector).hidden = true;
+  const panel = page.querySelector('[data-task-review]');
+  panel.hidden = !review;
+  if (review) page.querySelector('[data-task-review-body]').replaceChildren(reviewCard(taskId, review, loadTaskDetail));
+  page.querySelector('[data-page-notices]').replaceChildren(notice('仅限本次审核',
+    review ? '只展示待审核 SQL 与精确哈希，不开放任务的其他内容。' : '审核材料已不可用，任务结果由责任人查看。'));
+}
+
 async function loadTaskDetail() {
   const taskId = page.dataset.taskId;
   try {
-    const detail = (await api(`/api/product/tasks/${encodeURIComponent(taskId)}`)).detail;
-    renderTaskDetail(detail);
+    const [productResult, taskResult, reviewResult] = await Promise.allSettled([
+      api(`/api/product/tasks/${encodeURIComponent(taskId)}`),
+      api(`/api/pi/tasks/${encodeURIComponent(taskId)}`), loadAuthorizedReview(taskId),
+    ]);
+    const review = reviewResult.status === 'fulfilled' ? reviewResult.value : null;
+    if (productResult.status === 'rejected' && productResult.reason.status === 404 &&
+      reviewResult.status === 'fulfilled' && (review || reviewerOnlySeen)) {
+      renderScopedReview(taskId, review);
+      return;
+    }
+    if (productResult.status === 'rejected') throw productResult.reason;
+    if (taskResult.status === 'rejected') throw taskResult.reason;
+    if (reviewResult.status === 'rejected') throw reviewResult.reason;
+    const detail = productResult.value.detail;
+    renderTaskDetail(detail, review);
+    await renderMandate(page.querySelector('[data-task-mandate] .panel-body'), taskResult.value.task, loadTaskDetail);
     await loadTaskDeliveries(detail.task);
     announce("任务详情已更新");
   }
   catch (error) { renderError(page.querySelector('[data-task-plan] .panel-body'), error, loadTaskDetail); }
 }
 
-function openActionDialog(action, task, review, refresh) {
+function openActionDialog(action, task, refresh) {
   const dialog = document.querySelector('[data-action-dialog]');
   const form = dialog?.querySelector('[data-action-form]');
   if (!(dialog instanceof HTMLDialogElement) || !(form instanceof HTMLFormElement)) return;
@@ -758,11 +1037,9 @@ function openActionDialog(action, task, review, refresh) {
   const requiresInput = action.action_type === 'provide_input';
   inputWrap.hidden = !requiresInput;
   input.value = '';
-  copy.textContent = action.action_type === 'approve_query'
-    ? '将批准当前页面展示的精确 SQL 和安全校验对象，并以只读方式执行。'
-    : action.action_type === 'cancel_task'
-      ? '取消后不会自动重放已停止的阶段。'
-      : '确认后将通过当前 Task 的 typed action 推进。';
+  copy.textContent = action.action_type === 'cancel_task'
+    ? '取消后不会自动重放已停止的阶段。'
+    : '确认后将通过当前 Task 的 typed action 推进。';
   dialog.returnValue = '';
   const onClose = async () => {
     dialog.removeEventListener('close', onClose);
@@ -771,11 +1048,6 @@ function openActionDialog(action, task, review, refresh) {
     if (requiresInput) {
       if (!input.value.trim()) { announce('补充信息不能为空'); return; }
       payload.text = input.value.trim();
-    }
-    if (action.action_type === 'approve_query' && review) {
-      payload.query_run_id = review.query_run_id;
-      payload.sql_hash = review.sql_hash;
-      payload.assurance_report_hash = review.assurance_report_hash;
     }
     const key = "action:" + task.task_run_id + ":" + action.action_type;
     const body = { action: action.action_type, conversation_id: task.conversation_id, payload };
@@ -847,9 +1119,9 @@ if (page) {
   if (type === 'workspace') { setupRefresh(loadWorkspace); loadWorkspace(); }
   if (type === 'chat') setupChat();
   if (type === 'tasks') {
-    setupRefresh(loadTasks);
+    setupRefresh(() => { loadTasks(); loadReviews(); });
     page.querySelector('[data-task-status-filter]')?.addEventListener('change', loadTasks);
-    loadTasks();
+    loadTasks(); loadReviews();
   }
   if (type === 'task-detail') loadTaskDetail();
   if (type === 'reports') {

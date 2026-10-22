@@ -11,7 +11,7 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
-from jsonschema import FormatChecker
+from jsonschema import FormatChecker, ValidationError
 from jsonschema.validators import validator_for
 from .artifact_semantics import (
     STRUCTURED_ARTIFACT_CONTRACTS, structured_artifact_format_checker, validate_artifact_semantics,
@@ -46,6 +46,13 @@ _CONTRACT_FILES = {
     "enforce_query_approval_v1": "enforce-query-approval-v1.schema.json",
     "enforce_query_response_v1": "enforce-query-response-v1.schema.json",
     "explain_query_response_v1": "explain-query-response-v1.schema.json",
+    "mandate_issue_v1": "mandate-issue-v1.schema.json",
+    "issued_mandate_v1": "issued-mandate-v1.schema.json",
+    "governance_bootstrap_v1": "governance-bootstrap-v1.schema.json",
+    "enforce_query_request_v2": "enforce-query-request-v2.schema.json",
+    "enforce_query_action_v2": "enforce-query-action-v2.schema.json",
+    "enforce_query_response_v2": "enforce-query-response-v2.schema.json",
+    "explain_query_response_v2": "explain-query-response-v2.schema.json",
     "product_projection_v1": "product-projection-v1.schema.json",
 }
 
@@ -90,3 +97,23 @@ def validate_contract(name: str, instance: Any) -> None:
     _compiled_validator(name).validate(instance)
     if name in STRUCTURED_ARTIFACT_CONTRACTS:
         validate_artifact_semantics(name, instance)
+    if name in {"mandate_issue_v1", "issued_mandate_v1"}:
+        policy = instance if name == "mandate_issue_v1" else instance["policy"]
+        allowed = policy["allowed_tables"]
+        if not allowed or not set(policy["autonomous_tables"]).issubset(allowed):
+            raise ValidationError("autonomous_tables must be a subset of nonempty allowed_tables")
+    if name == "governance_bootstrap_v1":
+        teams = {team["team_id"]: team for team in instance["teams"]}
+        principals = {p["principal_id"]: p for p in instance["principals"]}
+        bindings = {(b["channel"], b["external_user_id"]) for b in instance["channel_bindings"]}
+        if (len(teams) != len(instance["teams"]) or
+                len(principals) != len(instance["principals"]) or
+                len(bindings) != len(instance["channel_bindings"])):
+            raise ValidationError("governance manifest contains duplicate identifiers")
+        for principal in instance["principals"]:
+            if principal["team_id"] not in teams:
+                raise ValidationError("principal references unknown team")
+            if principal["principal_type"] != "human" and principal["role"] != "member":
+                raise ValidationError("only human principals can be admin or reviewer")
+        if any(binding["principal_id"] not in principals for binding in instance["channel_bindings"]):
+            raise ValidationError("channel binding references unknown principal")

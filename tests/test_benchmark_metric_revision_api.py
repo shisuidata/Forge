@@ -12,6 +12,8 @@ from forge.benchmark_v2 import RESULT_COMPARATOR_REVISION
 @pytest.fixture
 def benchmark_api(tmp_path, monkeypatch):
     from config import cfg
+    from agent.tenant import tenants
+    from forge.governance_credentials import create_credential
     from forge import bird_benchmark as bird
     from web.routes import benchmark_v2 as routes
     from forge import benchmark_service as service
@@ -36,8 +38,15 @@ def benchmark_api(tmp_path, monkeypatch):
     (root / "mini_dev_sqlite.json").write_text(json.dumps(suite["cases"]))
     (root / "dev_tables.json").write_text(json.dumps(structure))
     standard = bird._fingerprints(root, [root / "mini_dev_sqlite.json", root / "dev_tables.json", database])
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "governance.db"))
+    monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
+    monkeypatch.setattr(cfg, "PI_EXECUTION_PRINCIPAL_ID", "benchmark_pi_service")
+    tenants.create_team("benchmark_team", organization_id="benchmark_org")
+    tenants.set_team("benchmark_pi_service", "benchmark_team", principal_type="service", status="active")
+    tenants.set_team("benchmark_admin", "benchmark_team", principal_type="human", role="admin", status="active")
+    service_credential_id, service_key = create_credential("benchmark_pi_service", kind="pi_service")
+    _, admin_key = create_credential("benchmark_admin")
     monkeypatch.setattr(bird, "standard_files", lambda: standard)
-    monkeypatch.setattr(cfg, "PI_SERVICE_API_KEYS", ["test-pi-key"])
     monkeypatch.setattr(routes, "_suite", lambda: suite)
     monkeypatch.setattr(bird.hard, "load_suite", lambda _: suite)
     monkeypatch.setattr(bird.hard, "_BIRD_RUNTIME", root)
@@ -46,7 +55,9 @@ def benchmark_api(tmp_path, monkeypatch):
     monkeypatch.setattr(bird, "PROTOCOL_DIR", tmp_path / "protocols")
     monkeypatch.setattr(service, "structure_projection", lambda value: value)
     monkeypatch.setattr(service, "_database_path", lambda _: database)
-    return {"headers": {"X-Pi-Service-Key": "test-pi-key"}, "suite": suite, "database": database, "standard": standard}
+    return {"headers": {"X-API-Key": service_key}, "admin_key": admin_key,
+            "service_key": service_key, "service_credential_id": service_credential_id,
+            "suite": suite, "database": database, "standard": standard}
 
 
 async def preflight(client, fixture):
@@ -56,6 +67,17 @@ async def preflight(client, fixture):
     assert response.status_code == 200, response.text
     return response.json()
 
+
+@pytest.mark.asyncio
+async def test_internal_benchmark_requires_live_registered_pi_service(client, benchmark_api):
+    path = "/api/internal/benchmark-v2/suite"
+    assert (await client.get(path, headers=benchmark_api["headers"])).status_code == 200
+    assert (await client.get(path, headers={"X-API-Key": benchmark_api["admin_key"]})).status_code == 401
+    assert (await client.get(path, headers={"X-Pi-Service-Key": "legacy-pi-key"})).status_code == 401
+    assert (await client.get(path, headers={"X-API-Key": "unregistered-key"})).status_code == 401
+    from forge.governance_credentials import revoke_credential
+    revoke_credential(benchmark_api["service_credential_id"])
+    assert (await client.get(path, headers=benchmark_api["headers"])).status_code == 401
 
 @pytest.mark.asyncio
 async def test_evaluate_rejects_missing_or_stale_revision_before_execution(client, benchmark_api, monkeypatch):

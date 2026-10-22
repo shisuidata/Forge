@@ -6,10 +6,18 @@ from web.dingtalk_pi import DingTalkPiAdapter, presentation_to_dingtalk_card
 from web.pi_channel import PiChannelClient
 
 
-def test_dingtalk_submits_to_authenticated_channel_ingress():
+def test_dingtalk_submits_to_authenticated_channel_ingress(tmp_path, monkeypatch):
     import json
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from config import cfg
+    from agent.tenant import tenants
+    from forge.governance import bind_channel
+    monkeypatch.setattr(cfg, "QUERY_RUN_DB_PATH", str(tmp_path / "governance.db"))
+    tenants.create_team("team_ding", organization_id="org_ding")
+    tenants.set_team("ding_user", "team_ding", principal_type="human", status="active")
+    bind_channel("dingtalk", "ding_user", "ding_user")
 
     class Ingress(BaseHTTPRequestHandler):
         def log_message(self, *args):

@@ -39,9 +39,9 @@ def report(report_id: str = "rp_product_001") -> dict:
     return {
         "report_id": report_id,
         "task_run_id": "tr_product_001",
-        "org_id": "org_demo",
-        "team_id": "team_demo",
-        "user_id": "web_admin",
+        "org_id": "fixture_org",
+        "team_id": "fixture_team",
+        "user_id": "fixture_admin",
         "revision": 1,
         "bundle_hash": "sha256:" + "a" * 64,
         "title": "渠道支付金额分析",
@@ -60,7 +60,6 @@ def report(report_id: str = "rp_product_001") -> dict:
 
 @pytest.fixture(autouse=True)
 def product_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    monkeypatch.setattr(cfg, "PI_WEB_ADMIN_TASK_SCOPES", "org_demo:team_demo")
     monkeypatch.setattr(cfg, "PI_ORCHESTRATOR_ENABLED", True)
     schema = tmp_path / "schema.json"
     metrics = tmp_path / "metrics.yaml"
@@ -73,12 +72,12 @@ def product_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_product_bff_requires_auth_when_auth_is_enabled(client, monkeypatch):
     monkeypatch.setattr(cfg, "AUTH_ENABLED", True)
-    monkeypatch.setattr(cfg, "AUTH_API_KEYS", ["product-key"])
     assert (await client.get("/api/product/workspace")).status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_product_report_list_is_scoped_versioned_and_cursor_bounded(client, monkeypatch):
+async def test_product_report_list_is_scoped_versioned_and_cursor_bounded(governed_client, monkeypatch):
+    client = governed_client
     rows = [report("rp_product_002"), report("rp_product_001")]
     rows[1]["updated_at"] = "2026-08-25T08:01:00+00:00"
     monkeypatch.setattr(product, "get_report_store", lambda: FakeReportStore(rows))
@@ -100,33 +99,34 @@ async def test_product_report_list_is_scoped_versioned_and_cursor_bounded(client
     assert second.status_code == 200
     assert [item["report_id"] for item in second.json()["reports"]] == ["rp_product_001"]
     assert (await client.get(
-        "/api/product/reports?org_id=org_other&team_id=team_demo"
+        "/api/product/reports?org_id=org_other&team_id=fixture_team"
     )).status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_product_conversation_and_task_bff_validate_and_minimize_upstream(client, monkeypatch):
+async def test_product_conversation_and_task_bff_validate_and_minimize_upstream(governed_client, monkeypatch):
+    client = governed_client
     fixtures = json.loads(
         Path("agent/contracts/product-projection-fixtures.v1.json").read_text(encoding="utf-8")
     )
     summary = deepcopy(fixtures["valid"]["conversation_summary_v1"][0]["value"])
     summary["scope"] = {
-        "org_id": "org_demo",
-        "team_id": "team_demo",
-        "user_id": "web_admin",
+        "org_id": "fixture_org",
+        "team_id": "fixture_team",
+        "user_id": "fixture_admin",
         "channel": "web",
     }
 
-    async def fake_pi(method: str, path: str, payload=None):
-        assert method == "GET"
+    async def fake_pi(method: str, path: str, payload=None, *, principal, action, task_run_id=None):
+        assert method == "GET" and principal.principal_id == "fixture_admin" and action == "task.read"
         if path.startswith("/v1/conversations"):
             return 200, {"schema_version": 1, "conversations": [summary], "next_cursor": None}
         if path.startswith("/v1/tasks"):
             return 200, {"tasks": [{
                 "task_run_id": "tr_product_001",
-                "org_id": "org_demo",
-                "team_id": "team_demo",
-                "user_id": "web_admin",
+                "org_id": "fixture_org",
+                "team_id": "fixture_team",
+                "user_id": "fixture_admin",
                 "channel": "web",
                 "channel_conversation_id": "web_conv_product",
                 "intent": "query",
@@ -154,7 +154,7 @@ async def test_product_conversation_and_task_bff_validate_and_minimize_upstream(
     invalid = deepcopy(summary)
     invalid["api_key"] = "must-fail"
 
-    async def invalid_pi(method: str, path: str, payload=None):
+    async def invalid_pi(method: str, path: str, payload=None, **kwargs):
         return 200, {"schema_version": 1, "conversations": [invalid], "next_cursor": None}
 
     monkeypatch.setattr(product, "pi_request", invalid_pi)
@@ -165,7 +165,7 @@ async def test_product_conversation_and_task_bff_validate_and_minimize_upstream(
     wrong_scope = deepcopy(summary)
     wrong_scope["scope"]["org_id"] = "org_other"
 
-    async def wrong_scope_pi(method: str, path: str, payload=None):
+    async def wrong_scope_pi(method: str, path: str, payload=None, **kwargs):
         return 200, {"schema_version": 1, "conversations": [wrong_scope], "next_cursor": None}
 
     monkeypatch.setattr(product, "pi_request", wrong_scope_pi)
@@ -175,10 +175,11 @@ async def test_product_conversation_and_task_bff_validate_and_minimize_upstream(
 
 
 @pytest.mark.asyncio
-async def test_workspace_degrades_when_pi_is_offline_without_hiding_reports(client, monkeypatch):
+async def test_workspace_degrades_when_pi_is_offline_without_hiding_reports(governed_client, monkeypatch):
+    client = governed_client
     monkeypatch.setattr(product, "get_report_store", lambda: FakeReportStore([report()]))
 
-    async def offline_pi(method: str, path: str, payload=None):
+    async def offline_pi(method: str, path: str, payload=None, **kwargs):
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(product, "pi_request", offline_pi)
@@ -194,7 +195,8 @@ async def test_workspace_degrades_when_pi_is_offline_without_hiding_reports(clie
 
 
 @pytest.mark.asyncio
-async def test_data_summary_returns_partial_instead_of_fabricating_counts(client, monkeypatch, tmp_path):
+async def test_data_summary_returns_partial_instead_of_fabricating_counts(governed_client, monkeypatch, tmp_path):
+    client = governed_client
     monkeypatch.setattr(cfg, "REGISTRY_PATH", tmp_path / "missing-schema.json")
     response = await client.get("/api/product/data-summary")
     assert response.status_code == 200

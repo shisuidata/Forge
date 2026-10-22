@@ -122,124 +122,75 @@ test("Forge client preserves bounded HTTP failure information", async (context) 
 });
 
 
-test("Forge context client validates bounded evidence and forwards Pi identity", async (context) => {
-  const evidenceRef = `ctx_${"a".repeat(24)}`;
-  const mock = await startMockForge(context, {
-    response: {
-      status: "ok", question: "销售额口径", bounded: true,
-      evidence: [{ evidence_ref: evidenceRef, source_type: "metric", title: "销售额",
-        content: "默认使用订单支付金额", score: 9, verification_level: "verified",
-        scope: "organization", source_revision: `sha256:${"c".repeat(64)}`,
-        updated_at: null, expires_at: null }],
-      evidence_count: 1, context_revision: `sha256:${"b".repeat(64)}`,
-    },
+test("governed Forge client submits candidate with mandate only, no caller-supplied identity", async (context) => {
+  const seen: Array<{ path: string; body: Record<string, unknown>; key: string | undefined }> = [];
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+    seen.push({ path: request.url ?? "", body, key: request.headers["x-api-key"] as string | undefined });
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ schema_version: 2, query_run_id: "qr_demo", task_run_id: "tr_demo",
+      status: "review_required", decision: { execution_mode: "human_review", execution_authorized: false },
+      candidate: { input_kind: "direct_sql" }, lineage: { registry_revision: "registry" },
+      review: { sql: "SELECT 7", sql_hash: "sha256:" + "a".repeat(64),
+        assurance_report_hash: "sha256:" + "b".repeat(64), enforcement_context_hash: "sha256:" + "c".repeat(64), expires_at: "2099-01-01T00:00:00Z" } }));
   });
-  const client = new ForgeQueryRunClient({
-    baseUrl: mock.baseUrl, serviceKey: "pi-service-secret", timeoutMs: 2_000,
-  });
-
-  const result = await client.searchContext({
-    orgId: "org_demo", teamId: "team_demo", userId: "trusted-user", question: "销售额口径",
-  });
-
-  assert.equal(result.evidence[0]?.evidence_ref, evidenceRef);
-  assert.equal(mock.received().piServiceKey, "pi-service-secret");
-  assert.equal(mock.received().body?.user_id, "trusted-user");
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => server.close());
+  const address = server.address() as AddressInfo;
+  const client = new ForgeQueryRunClient({ baseUrl: "http://127.0.0.1:" + address.port, serviceKey: "pi-service", timeoutMs: 2_000 });
+  const prepared = await client.createQueryRun({ taskRunId: "tr_demo", mandateId: "md_demo", purpose: "bounded",
+    question: "Seven", dialect: "sqlite", candidate: { kind: "direct_sql", sql: "SELECT 7" }, idempotencyKey: "prepare-key" });
+  assert.equal(prepared.status, "review_required");
+  assert.deepEqual(seen, [{ path: "/api/v2/enforce/query-runs", key: "pi-service", body: {
+    schema_version: 2, mandate_id: "md_demo", task_run_id: "tr_demo", purpose: "bounded", question: "Seven",
+    dialect: "sqlite", candidate: { kind: "direct_sql", sql: "SELECT 7" },
+  } }]);
 });
 
-test("Forge memory client forwards only authenticated controlled writes", async (context) => {
-  const mock = await startMockForge(context, {
-    response: { status: "confirmed", scope: "user", category: "session_summary", key: "task_demo" },
-  });
-  const client = new ForgeQueryRunClient({ baseUrl: mock.baseUrl, serviceKey: "pi-service-secret", timeoutMs: 2_000 });
-  const result = await client.writeMemory({
-    org_id: "org", team_id: "team", user_id: "user", operation: "upsert",
-    category: "session_summary", key: "task_demo", value: { summary: "done" },
-  });
-  assert.equal(result.scope, "user");
-  assert.equal(mock.received().piServiceKey, "pi-service-secret");
+test("Pi query tool can only use injected mandate and never exposes identity or approval", async () => {
+  const calls: Record<string, unknown>[] = [];
+  const client = { async createQueryRun(input: Record<string, unknown>) {
+    calls.push(input);
+    return { query_run_id: "qr_demo", task_run_id: "tr_demo", status: "review_required",
+      review: { sql: "SELECT 7", sql_hash: "hash", assurance_report_hash: "assurance",
+        enforcement_context_hash: "context", expires_at: "2099-01-01T00:00:00Z" },
+      lineage: { registry_revision: "registry" }, decision: { review_required: true, execution_mode: "human_review" },
+      failure: null };
+  } } as unknown as ForgeQueryRunClient;
+  const tool = createForgePrepareQueryTool({ client, task: { taskRunId: "tr_demo", mandateId: "md_demo", purpose: "bounded" } });
+  const result = await tool.execute("tool-call", { question: "Seven", dialect: "sqlite" }, undefined, undefined, {} as ExtensionContext);
+  assert.equal(calls[0]?.mandateId, "md_demo");
+  assert.equal(calls[0]?.taskRunId, "tr_demo");
+  assert.equal("userId" in calls[0]!, false);
+  assert.equal("orgId" in calls[0]!, false);
+  assert.match(result.content[0]?.type === "text" ? result.content[0].text : "", /qr_demo/);
 });
 
-test("Forge report client accepts only bounded publication metadata", async (context) => {
-  const mock = await startMockForge(context, {
-    response: {
-      status: "accepted",
-      report: {
-        report_id: "rp_demo001", task_run_id: "tr_demo001", revision: 1,
-        bundle_hash: `sha256:${"a".repeat(64)}`, title: "分析报告", status: "published",
-        pdf_status: "ready", pptx_status: "ready",
-        internal_url: "https://forge.test/reports/rp_demo001",
-        technical_url: "https://forge.test/reports/rp_demo001/technical",
-        pdf_url: "https://forge.test/reports/rp_demo001/download/pdf",
-        pptx_url: "https://forge.test/reports/rp_demo001/download/pptx",
-        created_at: "2026-08-21T17:00:00Z", updated_at: "2026-08-21T17:00:01Z",
-      },
-    },
+test("candidate-free request first generates candidate, then prepares only through public v2", async (context) => {
+  const paths: string[] = [];
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+    paths.push(request.url ?? "");
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(request.url === "/api/internal/query-candidates"
+      ? { candidate: { kind: "direct_sql", sql: "SELECT 7" } }
+      : { schema_version: 2, query_run_id: "qr_demo", task_run_id: "tr_demo", status: "ready",
+        decision: { execution_mode: "autonomous", execution_authorized: false },
+        candidate: { input_kind: "direct_sql" }, lineage: { registry_revision: "registry" },
+        review: { sql_hash: "sha256:" + "a".repeat(64), assurance_report_hash: "sha256:" + "b".repeat(64),
+          enforcement_context_hash: "sha256:" + "c".repeat(64) } }));
+    if (request.url === "/api/v2/enforce/query-runs") assert.deepEqual(body.candidate, { kind: "direct_sql", sql: "SELECT 7" });
   });
-  const client = new ForgeQueryRunClient({
-    baseUrl: mock.baseUrl, serviceKey: "pi-service-secret", timeoutMs: 2_000,
-  });
-  const result = await client.createReport({
-    report_id: "rp_demo001", task_run_id: "tr_demo001", bundle_hash: `sha256:${"a".repeat(64)}`,
-  }, "report-idempotency");
-  assert.equal(result.status, "published");
-  assert.equal(result.pdf_url, "https://forge.test/reports/rp_demo001/download/pdf");
-  assert.equal(mock.received().piServiceKey, "pi-service-secret");
-});
-
-test("Pi tool creates a persisted QueryRun with identity from TaskRun", async (context) => {
-  const mock = await startMockForge(context, {
-    response: {
-      query_run_id: "qr_demo_001",
-      task_run_id: "tr_demo",
-      status: "needs_review",
-      question: "查询订单 ID",
-      user_id: "trusted-user",
-      datasource_id: "demo",
-      input_kind: "forge_json",
-      candidate_revision: "query-candidate-v1",
-      forge_json: { scan: "orders", select: ["orders.id"] },
-      sql: "SELECT orders.id FROM orders",
-      sql_hash: "sha256:reviewed",
-      dialect: "postgresql",
-      registry_version: "sha256:registry",
-      assurance_report: { status: "passed" },
-      assurance_report_hash: `sha256:${"b".repeat(64)}`,
-      assurance_revision: "query-assurance-v1",
-      policy_revision: "convention-policy-v1",
-      model_revision: "sha256:model",
-      assurance_registry_revision: "sha256:assurance-registry",
-      review_required: true,
-      can_execute: false,
-      expires_at: "2026-08-21T18:00:00Z",
-      error: "",
-    },
-  });
-  const client = new ForgeQueryRunClient({
-    baseUrl: mock.baseUrl,
-    serviceKey: "pi-service-secret",
-    timeoutMs: 2_000,
-  });
-  const tool = createForgePrepareQueryTool({
-    client,
-    task: {
-      taskRunId: "tr_demo",
-      orgId: "org_demo",
-      teamId: "team_growth",
-      userId: "trusted-user",
-    },
-  });
-
-  const result = await tool.execute(
-    "tool_call_1",
-    { question: "查询订单 ID", dialect: "postgresql" },
-    undefined,
-    undefined,
-    {} as ExtensionContext,
-  );
-
-  assert.equal(tool.name, "forge_prepare_query");
-  assert.equal(mock.received().body?.user_id, "trusted-user");
-  assert.equal(mock.received().body?.task_run_id, "tr_demo");
-  assert.match(result.content[0]?.type === "text" ? result.content[0].text : "", /qr_demo_001/);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => server.close());
+  const client = new ForgeQueryRunClient({ baseUrl: "http://127.0.0.1:" + (server.address() as AddressInfo).port,
+    serviceKey: "pi-service", timeoutMs: 2_000 });
+  const prepared = await client.createQueryRun({ taskRunId: "tr_demo", mandateId: "md_demo", purpose: "bounded",
+    question: "Seven", idempotencyKey: "prepare" });
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(paths, ["/api/internal/query-candidates", "/api/v2/enforce/query-runs"]);
 });

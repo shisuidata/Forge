@@ -75,110 +75,86 @@ test("SQLite stores recover TaskRun lineage, ordered events, and Artifacts after
   reopened.close();
 });
 
-test("a new Application instance resumes a persisted SQL approval wait", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "forge-pi-application-"));
+test("restart observes committed QueryRun without issuing another approval or execution", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-observe-"));
   const databasePath = join(directory, "orchestrator.sqlite3");
+  const first = new SqliteOrchestratorState(databasePath);
+  const task = first.tasks.create({ ...taskInput, intent: "query_prepare" });
+  first.tasks.transition({ taskRunId: task.task_run_id, expectedStatus: "created", status: "querying", currentStage: "query_execution" });
+  first.events.append(task.task_run_id, "query.review_requested", { query_run_id: "qr_restart" });
+  first.events.append(task.task_run_id, "query.execution_authorized", { query_run_id: "qr_restart", execution_mode: "human_review" });
+  first.close();
+  let observed = 0;
   const forgeClient: ForgeQueryRunPort = {
-    async createQueryRun(input) {
+    async createQueryRun() { throw new Error("prepare must not repeat"); },
+    async getMandate() { throw new Error("mandate must not be reattached"); },
+    async approveQueryRun() { throw new Error("human approval must not repeat"); },
+    async executeQueryRun() { throw new Error("autonomous claim must not repeat"); },
+    async getQueryRun(queryRunId) {
+      observed += 1;
       return {
-        query_run_id: "qr_restart_001",
-        task_run_id: input.taskRunId,
-        status: "needs_review",
-        question: input.question,
-        user_id: input.userId,
-        datasource_id: "demo",
-        input_kind: "forge_json",
-        candidate_revision: "query-candidate-v1",
-        forge_json: {},
-        sql: "SELECT 1",
-        sql_hash: `sha256:${"a".repeat(64)}`,
-        dialect: "postgresql",
-        registry_version: "v1",
-        assurance_report: { status: "passed" },
-        assurance_report_hash: `sha256:${"b".repeat(64)}`,
-        assurance_revision: "query-assurance-v1",
-        policy_revision: "convention-policy-v1",
-        model_revision: "sha256:model",
-        assurance_registry_revision: "sha256:assurance-registry",
-        review_required: true,
-        can_execute: false,
-        expires_at: "2099-01-01T00:00:00Z",
-        error: "",
-      };
-    },
-    async approveQueryRun(input) {
-      return {
-        query_run_id: input.queryRunId,
-        task_run_id: "tr_restart",
-        status: "completed",
-        sql_hash: input.sqlHash,
-        input_kind: "forge_json",
-        candidate_revision: "query-candidate-v1",
-        dialect: "postgresql",
-        registry_version: "v1",
-        assurance_report: { status: "passed" },
-        assurance_report_hash: `sha256:${"b".repeat(64)}`,
-        assurance_revision: "query-assurance-v1",
-        policy_revision: "convention-policy-v1",
-        model_revision: "sha256:model",
-        assurance_registry_revision: "sha256:assurance-registry",
-        columns: ["n"],
-        rows: [[1]],
-        row_count: 1,
-        truncated: false,
-        execution_ms: 1,
-        executed_at: "2026-08-21T17:00:00Z",
-        error: "",
+        schema_version: 2, query_run_id: queryRunId, task_run_id: task.task_run_id, status: "completed",
+        decision: { verdict: "allow", review_required: false, execution_authorized: true, execution_mode: "human_review" },
+        context: { principal_context: {}, delegated_mandate: {}, purpose: "review", resource_scope: [] },
+        candidate: { input_kind: "direct_sql", candidate_revision: "query-candidate-v1", producer_revision: "test", candidate_hash: "sha256:" + "a".repeat(64) },
+        review: { sql: "SELECT 1 AS n", sql_hash: "sha256:" + "a".repeat(64),
+          assurance_report_hash: "sha256:" + "b".repeat(64), enforcement_context_hash: "sha256:" + "c".repeat(64), expires_at: "2099-01-01T00:00:00Z" },
+        assurance: {}, lineage: { assurance_revision: "v2", policy_revision: "v1", registry_revision: "registry",
+          assurance_report_hash: "sha256:" + "b".repeat(64), enforcement_context_hash: "sha256:" + "c".repeat(64) },
+        result: { columns: ["n"], rows: [[1]], row_count: 1, truncated: false, execution_ms: 1,
+          executed_at: new Date().toISOString() }, failure: null, authorization: { kind: "human_approval" },
       };
     },
   };
-  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: databasePath });
-  const firstState = new SqliteOrchestratorState(databasePath);
-  const firstApplication = new OrchestratorApplication({
-    config,
-    state: firstState,
-    forgeClient,
-  });
-  const created = firstApplication.createTask({
-    ...taskInput,
-    message: "查询订单",
-  });
-  await firstApplication.prepareQuery(created.task.task_run_id, {
-    question: "查询订单",
-    dialect: "postgresql",
-  });
-  firstState.close();
+  const second = new SqliteOrchestratorState(databasePath);
+  const application = new OrchestratorApplication({ config: loadConfig({ PI_EXECUTION_PRINCIPAL_ID: "pi_service" }), state: second, forgeClient });
+  application.observePendingQueryExecutions();
+  const completed = await application.finishQueryExecution(task.task_run_id, "qr_restart");
+  assert.equal(completed.task.status, "completed");
+  assert.deepEqual(completed.artifact.payload.rows, [[1]]);
+  assert.ok(observed >= 1);
+  assert.equal(second.artifacts.list(task.task_run_id).filter(artifact => artifact.artifact_type === "query_result").length, 1);
+  second.close();
+});
 
-  const secondState = new SqliteOrchestratorState(databasePath);
-  const secondApplication = new OrchestratorApplication({
-    config,
-    state: secondState,
-    forgeClient,
-  });
-  assert.equal(
-    secondApplication.getTask(created.task.task_run_id)?.status,
-    "waiting_for_query_approval",
-  );
-  assert.ok(
-    secondApplication
-      .getEvents(created.task.task_run_id)
-      .some((event) => event.event_type === "query.review_requested"),
-  );
-  const approved = await secondApplication.approveQuery(created.task.task_run_id, {
-    queryRunId: "qr_restart_001",
-    sqlHash: `sha256:${"a".repeat(64)}`,
-    idempotencyKey: "approve-restart-001",
-  });
-  assert.equal(approved.task.status, "ready_for_analysis");
-  const attempts = secondState.attempts.list(created.task.task_run_id);
-  assert.deepEqual(
-    attempts.map((attempt) => [attempt.stage, attempt.status]),
-    [
-      ["query_prepare", "succeeded"],
-      ["query_execution", "succeeded"],
-    ],
-  );
-  secondState.close();
+test("crash between Forge claim and local event recovers by GET without approving again", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-ambiguous-"));
+  const databasePath = join(directory, "orchestrator.sqlite3");
+  const first = new SqliteOrchestratorState(databasePath);
+  const task = first.tasks.create(taskInput);
+  first.tasks.transition({ taskRunId: task.task_run_id, expectedStatus: "created", status: "waiting_for_query_approval", currentStage: "query_review" });
+  first.events.append(task.task_run_id, "query.review_requested", { query_run_id: "qr_ambiguous", review_required: true });
+  first.close();
+  const second = new SqliteOrchestratorState(databasePath);
+  let reads = 0;
+  const application = new OrchestratorApplication({ config: loadConfig({ PI_EXECUTION_PRINCIPAL_ID: "pi_service" }), state: second,
+    forgeClient: {
+      async createQueryRun() { throw new Error("prepare must not repeat"); },
+      async getMandate() { throw new Error("mandate must not be reissued"); },
+      async approveQueryRun() { throw new Error("approval must not repeat"); },
+      async executeQueryRun() { throw new Error("execution must not repeat"); },
+      async getQueryRun(queryRunId) {
+        reads += 1;
+        return { schema_version: 2, query_run_id: queryRunId, task_run_id: task.task_run_id, status: "completed",
+          decision: { verdict: "allow", review_required: false, execution_authorized: true, execution_mode: "human_review" },
+          context: { principal_context: {}, delegated_mandate: {}, purpose: "bounded", resource_scope: [] },
+          candidate: { input_kind: "direct_sql", candidate_revision: "query-candidate-v1", producer_revision: "test", candidate_hash: "sha256:" + "a".repeat(64) },
+          review: { sql: "SELECT 1 AS n", sql_hash: "sha256:" + "a".repeat(64), assurance_report_hash: "sha256:" + "b".repeat(64),
+            enforcement_context_hash: "sha256:" + "c".repeat(64), expires_at: "2099-01-01T00:00:00Z" },
+          assurance: {}, lineage: { assurance_revision: "v2", policy_revision: "v1", registry_revision: "registry",
+            assurance_report_hash: "sha256:" + "b".repeat(64), enforcement_context_hash: "sha256:" + "c".repeat(64) },
+          result: { columns: ["n"], rows: [[1]], row_count: 1, truncated: false, execution_ms: 1,
+            executed_at: new Date().toISOString() }, failure: null, authorization: { reviewer_principal_id: "bob" },
+        };
+      },
+    } });
+  application.observePendingQueryExecutions();
+  for (let attempt = 0; attempt < 50 && application.getTask(task.task_run_id)?.status !== "ready_for_analysis"; attempt += 1)
+    await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(application.getTask(task.task_run_id)?.status, "ready_for_analysis");
+  assert.ok(reads >= 1);
+  assert.equal(second.events.list(task.task_run_id).filter(event => event.event_type === "query.execution_authorized").length, 1);
+  second.close();
 });
 
 test("SQLite Task transitions preserve cross-connection compare-and-set semantics", async () => {
@@ -213,6 +189,22 @@ test("SQLite Task transitions preserve cross-connection compare-and-set semantic
   );
   first.close();
   second.close();
+});
+
+test("SQLite mandate attachment survives restart and rejects stale cross-connection CAS", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-pi-mandate-cas-"));
+  const databasePath = join(directory, "orchestrator.sqlite3");
+  const first = new SqliteOrchestratorState(databasePath);
+  const second = new SqliteOrchestratorState(databasePath);
+  const task = first.tasks.create(taskInput);
+  first.transactions.run(() => first.tasks.attachMandate(task.task_run_id, null, "md_first", "pi_service"));
+  assert.throws(() => second.tasks.attachMandate(task.task_run_id, null, "md_other", "pi_service"), TaskStateError);
+  assert.equal(second.tasks.get(task.task_run_id)?.metadata.mandate_id, "md_first");
+  first.close();
+  second.close();
+  const reopened = new SqliteOrchestratorState(databasePath);
+  assert.equal(reopened.tasks.get(task.task_run_id)?.metadata.execution_actor_id, "pi_service");
+  reopened.close();
 });
 
 test("expired StageAttempt is reconciled once without replaying the Stage", async () => {

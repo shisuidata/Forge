@@ -6,17 +6,19 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from agent.tenant import tenants
+from forge.governance import AuthenticatedPrincipal
 from forge.evaluate import evaluate_query_candidate
 from forge.evaluation_runs import (
     EvaluationRunNotFound,
     EvaluationRunStore,
     create_evaluation_run,
 )
-from web.auth import require_api_auth
+from web.auth import require_runtime_principal
 
 router = APIRouter(
     prefix="/api/v1",
-    dependencies=[Depends(require_api_auth)],
+    dependencies=[Depends(require_runtime_principal)],
     tags=["Evaluate"],
 )
 
@@ -107,9 +109,12 @@ class EvaluateResponseV1(BaseModel):
 
 
 @router.post("/evaluate", response_model=EvaluateResponseV1)
-def evaluate(req: EvaluateRequestV1) -> dict[str, Any]:
-    """Evaluate without executing SQL or bypassing the QueryRun approval path."""
-    return evaluate_query_candidate(req.model_dump())
+def evaluate(req: EvaluateRequestV1, actor: AuthenticatedPrincipal = Depends(require_runtime_principal)) -> dict[str, Any]:
+    """Evaluate a candidate within the authenticated team ACL; never execute SQL."""
+    allowed = set(tenants.get_allowed_tables_for_user(actor.principal_id))
+    payload = req.model_dump()
+    payload["allowed_tables"] = sorted(allowed.intersection(req.allowed_tables) if req.allowed_tables is not None else allowed)
+    return evaluate_query_candidate(payload)
 
 
 class DatasetRevisionV1(BaseModel):
@@ -275,7 +280,7 @@ def _evaluation_store() -> EvaluationRunStore:
 
 
 @router.post("/evaluation-runs", response_model=EvaluationRunManifestV1)
-def create_run(req: EvaluationRunRequestV1) -> dict[str, Any]:
+def create_run(req: EvaluationRunRequestV1, actor: AuthenticatedPrincipal = Depends(require_runtime_principal)) -> dict[str, Any]:
     store = _evaluation_store()
     try:
         suite = (
@@ -283,6 +288,10 @@ def create_run(req: EvaluationRunRequestV1) -> dict[str, Any]:
             if req.suite is not None
             else store.get_suite(req.suite_revision or "")
         )
+        allowed = set(tenants.get_allowed_tables_for_user(actor.principal_id))
+        for case in suite["cases"]:
+            narrowed = case.get("allowed_tables")
+            case["allowed_tables"] = sorted(allowed.intersection(narrowed) if narrowed is not None else allowed)
         return create_evaluation_run(
             store,
             suite,
