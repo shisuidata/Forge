@@ -47,6 +47,10 @@
 - [`commercial-readiness.md`](commercial-readiness.md)、[`commercialization-plan.md`](commercialization-plan.md)：商业化参考，不覆盖当前 R0 开源采用门禁。
 
 
+## 项目评估
+
+- [Forge 全面项目评估（2026-10-04）](archive/engineering/project-assessment-2026-10-04.md)：当前本地工作区的产品、架构、安全、恢复、交付与采用评估；包含隔离运行证据、发布阻断和未验证边界。评估建议不是新的实施授权，不替代当前状态与唯一主动计划。
+
 ## 历史计划与证据归档
 
 归档只按文档角色和已完成／已替代状态划分，不按日期机械搬移；以下材料用于溯源，不是当前待办：
