@@ -7,6 +7,9 @@ from pathlib import Path
 COURSE_DIR = Path("docs/architecture-course")
 WEBSITE_DIR = Path("website/src/content/docs/course")
 IMAGE_LINK = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+HISTORY_NOTICE = re.compile(r"\A:::caution\[历史说明[^\]]*\]\n.*?\n:::\n", re.DOTALL)
+SITE_COURSE_LINK = re.compile(r"\]\(/course/([\w-]+)/\)")
+SOURCE_COURSE_URL = "https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/"
 
 
 def _body(text: str) -> str:
@@ -18,6 +21,12 @@ def _body(text: str) -> str:
     return body.strip() if separator else text.strip()
 
 
+def _mirror_body(text: str) -> str:
+    """Undo the website-only history notice and site-relative course links."""
+    body = HISTORY_NOTICE.sub("", _body(text), count=1).strip()
+    return SITE_COURSE_LINK.sub(rf"]({SOURCE_COURSE_URL}\1.md)", body)
+
+
 def test_course_and_website_bodies_match():
     source_files = sorted(COURSE_DIR.glob("*.md"))
     assert source_files, "architecture course is missing"
@@ -27,7 +36,7 @@ def test_course_and_website_bodies_match():
     }
     for source in source_files:
         mirror = WEBSITE_DIR / source.name
-        assert _body(source.read_text(encoding="utf-8")) == _body(
+        assert _body(source.read_text(encoding="utf-8")) == _mirror_body(
             mirror.read_text(encoding="utf-8")
         ), f"course mirror drifted: {source.name}"
 

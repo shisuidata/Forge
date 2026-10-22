@@ -59,3 +59,6 @@ services/pi-orchestrator/**/*.sqlite3-shm
 /registry/data/.forge/
 /tests/datasets/large/database.db
 /website/.vscode/
+
+# Local setuptools build output; wheels are produced with uv build.
+/build/
