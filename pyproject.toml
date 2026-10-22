@@ -56,7 +56,7 @@ py-modules = ["config", "main", "diagnostics"]
 [tool.setuptools.package-data]
 "agent.contracts" = ["*.json"]
 "forge" = ["schema.json", "templates/poc/*", "templates/poc/registry/*"]
-"web" = ["templates/**/*.html", "templates/*.html", "static/*.js", "static/*.css", "static/product/*.js", "static/product/*.css"]
+"web" = ["templates/**/*.html", "templates/*.html", "static/*.js", "static/*.css", "static/product/*.js", "static/product/*.css", "static/vendor/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

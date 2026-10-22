@@ -40,3 +40,11 @@ def test_tasks_and_registry_headers_describe_the_page_function():
     registry = (TEMPLATES / "registry_studio.html").read_text()
     assert "创建任务、查看跨渠道状态" in tasks
     assert "查看 Canonical Schema 的表格、DDL、ER 和 JSON 投影" in registry
+
+
+def test_templates_load_no_external_scripts_or_stylesheets():
+    import re
+
+    external = re.compile(r'<(?:script|link)\b[^>]*(?:src|href)="(?:https?:)?//')
+    offenders = [path.name for path in sorted(TEMPLATES.rglob("*.html")) if external.search(path.read_text())]
+    assert offenders == []

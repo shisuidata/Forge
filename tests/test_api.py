@@ -742,6 +742,26 @@ class TestDashboard:
         assert "管理指标" in resp.text
 
 
+    async def test_dashboard_shows_current_contract_entrypoints(self, client: AsyncClient):
+        text = (await client.get("/admin/dashboard")).text
+        assert "POST /api/v2/enforce/query-runs" in text
+        assert "GET /api/v2/explain/query-runs/{id}" in text
+        assert "/api/v1/enforce" not in text and "/api/v1/explain" not in text
+
+
+class TestOfflineWebAssets:
+    async def test_pages_render_from_bundled_assets_without_external_network(self, client: AsyncClient):
+        import re
+
+        for path in ("/login", "/admin/dashboard"):
+            resp = await client.get(path)
+            assert resp.status_code == 200
+            assert re.findall(r'<(?:script|link)\b[^>]*(?:src|href)="(?:https?:)?//', resp.text) == [], path
+            assert "/static/vendor/tailwind.css" in resp.text
+        for asset, marker in (("/static/vendor/tailwind.css", ".bg-gray-950"), ("/static/vendor/marked.umd.js", "marked v18")):
+            resp = await client.get(asset)
+            assert resp.status_code == 200 and marker in resp.text, asset
+
 # ── Audit 分页 ───────────────────────────────────────────────────────────────
 
 class TestAuditPagination:

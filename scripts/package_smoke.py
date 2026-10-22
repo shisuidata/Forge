@@ -18,14 +18,16 @@ def main():
         else:
             with tarfile.open(archive) as bundle:
                 names = [name.partition("/")[2] for name in bundle.getnames()]
-        for required in ("forge/schema.json", "forge/templates/poc/registry/schema.registry.json", "web/templates/product_base.html", "web/static/product/product-pages.js"):
+        for required in ("forge/schema.json", "forge/templates/poc/registry/schema.registry.json", "web/templates/product_base.html",
+                         "web/static/product/product-pages.js", "web/static/vendor/tailwind.css", "web/static/vendor/marked.umd.js"):
             assert required in names, (archive.name, required)
         assert not any("/charts/" in name or name.endswith((".db", ".sqlite", "/forge.yaml", "/.env")) for name in names)
 
     import forge
     from forge.compiler import compile_query
     assert "SELECT" in compile_query({"scan": "numbers", "select": ["numbers.n"]})
-    for package, name in (("forge", "schema.json"), ("web", "templates/product_base.html"), ("web", "static/product/product-pages.js")):
+    for package, name in (("forge", "schema.json"), ("web", "templates/product_base.html"), ("web", "static/product/product-pages.js"),
+                          ("web", "static/vendor/tailwind.css"), ("web", "static/vendor/marked.umd.js")):
         assert files(package).joinpath(name).is_file(), name
     environment = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "LANG", "HOME") if key in os.environ}
     environment["FORGE_DISABLE_DOTENV"] = "true"
