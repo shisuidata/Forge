@@ -7,7 +7,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from agent.tenant import TenantStore
-from forge.governance import AuthenticatedPrincipal, GovernanceError, connect_governance
+from forge.governance import GovernanceError, connect_governance
+from forge.governance_credentials import authenticate_credential, create_credential, revoke_credential
 from forge.governance_mandates import get_mandate, issue_mandate, revoke_mandate
 
 
@@ -30,13 +31,12 @@ def scope(tmp_path, monkeypatch):
     store.set_allowed_tables("w", ["numbers", "secrets"])
     store.set_allowed_tables("other", ["numbers"])
 
+    keys = {}
+
     def actor(name):
-        p = store.get_principal(name)
-        return AuthenticatedPrincipal(principal_id=name, principal_type=p["principal_type"],
-                                      organization_id=p["organization_id"], workspace_id=p["workspace_id"],
-                                      role=p["role"], identity_revision=p["identity_revision"],
-                                      credential_id=None, credential_revision=None,
-                                      authentication_method="test", authenticated_at=datetime.now(timezone.utc).isoformat())
+        if name not in keys:
+            keys[name] = create_credential(name)[1]
+        return authenticate_credential(keys[name])
 
     def request(**changes):
         return {"schema_version": 1, "task_run_id": "tr_synthetic", "delegate_principal_id": "agent",
@@ -69,6 +69,24 @@ def test_issue_replay_revoke_and_history(scope):
     with connect_governance() as conn:
         assert conn.execute("SELECT COUNT(*) FROM governance_events WHERE event_type='mandate.revoked'").fetchone()[0] == 1
 
+
+
+def test_mandate_changes_recheck_credential_in_the_commit_transaction(scope):
+    _, actor, request = scope
+    admin = actor("admin")
+    issued = issue_mandate(actor=admin, request=request(), idempotency_key="before-revoke")
+    revoke_credential(admin.credential_id)
+    with pytest.raises(GovernanceError, match="credential_revoked") as denied:
+        issue_mandate(actor=admin, request={**request(), "task_run_id": "tr_after"},
+                      idempotency_key="after-revoke")
+    assert denied.value.status_code == 401
+    with pytest.raises(GovernanceError, match="credential_revoked"):
+        revoke_mandate(actor=admin, mandate_id=issued["mandate_id"], expected_state_revision=1, reason="stop")
+    with pytest.raises(GovernanceError, match="credential_revoked"):
+        get_mandate(actor=admin, mandate_id=issued["mandate_id"])
+    with connect_governance() as conn:
+        rows = conn.execute("SELECT task_run_id,status FROM issued_mandates").fetchall()
+    assert [tuple(row) for row in rows] == [("tr_synthetic", "active")]
 
 def test_bounds_role_scope_and_acl(scope):
     store, actor, request = scope

@@ -15,6 +15,7 @@ from forge.governance import (
     AuthenticatedPrincipal, GovernanceError, append_event, canonical_hash,
     connect_governance, ensure_governance_schema, governance_transaction,
 )
+from forge.governance_credentials import validate_channel_binding, validate_credential_binding
 
 POLICY_REVISION = "bounded-agent-policy-v1"
 
@@ -46,6 +47,16 @@ def _principal(conn: Any, principal_id: str) -> Any:
 
 def _actor(conn: Any, actor: AuthenticatedPrincipal) -> Any:
     row = _principal(conn, actor.principal_id)
+    # Recheck the presented credential inside this transaction so a revocation
+    # committed after authentication also blocks this commit.
+    if actor.credential_id is not None:
+        bound = validate_credential_binding(conn, actor.credential_id, actor.credential_revision, actor.principal_id)
+    elif actor.channel_binding_id is not None:
+        bound = validate_channel_binding(conn, actor.channel_binding_id, actor.channel_binding_revision, actor.principal_id)
+    else:
+        bound = False
+    if not bound:
+        raise GovernanceError("credential_revoked", 401)
     if (row["identity_revision"] != actor.identity_revision or
             row["organization_id"] != actor.organization_id or
             row["workspace_id"] != actor.workspace_id or

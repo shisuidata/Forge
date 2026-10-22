@@ -33,7 +33,7 @@ import hmac
 
 from agent.tenant import TenantStore
 from forge.governance import PrincipalAccessError
-from forge.governance_credentials import authenticate_credential, create_session
+from forge.governance_credentials import authenticate_credential, create_session, revoke_credential
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -164,6 +164,9 @@ async def session_csrf(request: Request, principal=Depends(require_human_princip
 
 @chat_router.post("/logout")
 async def logout(request: Request, principal=Depends(require_human_principal)):
+    # Revoke the server-side session; clearing the cookie alone leaves copied tokens valid.
+    if principal.authentication_method == "session":
+        revoke_credential(principal.credential_id)
     response = RedirectResponse(url="/login", status_code=303)
     clear_session_cookie(response)
     return response

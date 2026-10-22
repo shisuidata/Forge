@@ -167,9 +167,13 @@ class TestAuth:
         login = await client.post("/login", data={"password": "test"}, follow_redirects=False)
         assert login.status_code == 303
         client.headers.pop("X-API-Key")
+        token = client.cookies["forge_session"]
         csrf = (await client.get("/api/auth/csrf")).json()["csrf_token"]
         resp = await client.post("/logout", headers={"Origin": "http://test", "X-CSRF-Token": csrf}, follow_redirects=False)
         assert resp.status_code == 303
+        assert (await client.get("/api/auth/csrf")).status_code == 401
+        # A copied session token must stop working, not only the browser cookie.
+        client.cookies.set("forge_session", token)
         assert (await client.get("/api/auth/csrf")).status_code == 401
 
 

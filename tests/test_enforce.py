@@ -52,7 +52,7 @@ def enforce_env(tmp_path, monkeypatch):
 @pytest.fixture
 def governed_env(enforce_env):
     from agent.tenant import tenants
-    from forge.governance import AuthenticatedPrincipal
+    from forge.governance_credentials import authenticate_credential, create_credential
     from forge.governance_mandates import issue_mandate
 
     tenants.create_team("ws_demo", organization_id="org_demo")
@@ -62,16 +62,8 @@ def governed_env(enforce_env):
                              ("other", "agent", "member")):
         tenants.set_team(name, "ws_demo", principal_type=kind, role=role, status="active")
 
-    def principal(name, kind, role):
-        return AuthenticatedPrincipal(
-            principal_id=name, principal_type=kind, organization_id="org_demo",
-            workspace_id="ws_demo", role=role, identity_revision=1,
-            credential_id="cred_" + name, credential_revision=1,
-            authentication_method="service_key", authenticated_at=datetime.now(timezone.utc).isoformat(),
-        )
-
-    issuer = principal("issuer", "human", "admin")
-    worker = principal("worker", "agent", "member")
+    issuer = authenticate_credential(create_credential("issuer")[1])
+    worker = authenticate_credential(create_credential("worker")[1])
     mandate = issue_mandate(actor=issuer, idempotency_key="governed-policy-issue", request={
         "schema_version": 1, "task_run_id": "tr_governed", "delegate_principal_id": "worker",
         "accountable_principal_id": "accountable", "reviewer_principal_id": "reviewer",
@@ -139,10 +131,13 @@ def test_governed_policy_constant_and_hash_binding(governed_env):
 def test_governed_policy_rejects_wrong_scope_revocation_and_acl(governed_env):
     from dataclasses import replace
     from forge.enforce import EnforceContextError
+    from forge.governance_credentials import authenticate_credential, create_credential
     from forge.governance_mandates import revoke_mandate
 
     actor, issuer, mandate, tenants = governed_env
-    for changes, code in (({"actor": replace(actor, principal_id="other")}, "mandate_not_found"),
+    other = authenticate_credential(create_credential("other")[1])
+    for changes, code in (({"actor": other}, "mandate_not_found"),
+                          ({"actor": replace(actor, principal_id="other")}, "credential_revoked"),
                           ({"task_run_id": "other_task"}, "mandate_task_mismatch"),
                           ({"purpose": "Other purpose"}, "mandate_purpose_mismatch")):
         with pytest.raises(EnforceContextError) as exc:
