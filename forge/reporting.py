@@ -299,15 +299,24 @@ class ReportStore:
             if existing:
                 if existing["bundle_hash"] != source["bundle_hash"]:
                     raise ValueError("task already published with a different bundle")
-                return self._row(existing)
-            conn.execute(
-                "INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'publishing', 'pending', 'pending', NULL, ?, ?)",
-                (source["report_id"], source["task_run_id"], source["org_id"], source["team_id"], source["user_id"],
-                 int(source.get("revision") or 1), source["bundle_hash"], source["title"], now, now),
-            )
-            report_dir = self.artifact_dir / source["report_id"] / f"v{int(source.get('revision') or 1)}"
-            _atomic_write(report_dir / "source.json", _canonical(source).encode())
-        return self.get(source["report_id"])
+                if existing["status"] != "failed":
+                    return self._row(existing)
+                # Resending the identical bundle is the explicit retry; the build reuses the stored source.json.
+                conn.execute(
+                    "UPDATE reports SET status='publishing', pdf_status='pending', pptx_status='pending', error=NULL, updated_at=? WHERE report_id=?",
+                    (now, existing["report_id"]),
+                )
+                report_id = existing["report_id"]
+            else:
+                conn.execute(
+                    "INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'publishing', 'pending', 'pending', NULL, ?, ?)",
+                    (source["report_id"], source["task_run_id"], source["org_id"], source["team_id"], source["user_id"],
+                     int(source.get("revision") or 1), source["bundle_hash"], source["title"], now, now),
+                )
+                report_dir = self.artifact_dir / source["report_id"] / f"v{int(source.get('revision') or 1)}"
+                _atomic_write(report_dir / "source.json", _canonical(source).encode())
+                report_id = source["report_id"]
+        return self.get(report_id)
 
     def _attempt(self, report_id: str, stage: str, operation):
         attempt_id, started = f"rpa_{uuid4().hex}", _now()

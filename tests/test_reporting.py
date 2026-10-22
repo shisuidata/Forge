@@ -244,6 +244,20 @@ def test_report_store_restart_marks_running_attempt_interrupted_without_replay(t
     assert report == ("failed",)
 
 
+
+def test_resending_the_same_bundle_explicitly_retries_an_interrupted_publication(tmp_path: Path):
+    db = tmp_path / "reports.db"
+    ReportStore(str(db), str(tmp_path / "artifacts")).create(_source())
+    restarted = ReportStore(str(db), str(tmp_path / "artifacts"))
+    assert restarted.get("rp_demo001")["status"] == "failed"
+    changed = _source()
+    changed["bundle_hash"] = "sha256:" + "b" * 64
+    with pytest.raises(ValueError, match="different bundle"):
+        restarted.create(changed)
+    retried = restarted.create(_source())
+    assert retried["status"] == "publishing" and retried["error"] is None
+    assert restarted.build("rp_demo001")["status"] == "published"
+
 def test_report_store_rejects_hidden_reasoning(tmp_path: Path):
     store = ReportStore(str(tmp_path / "reports.db"), str(tmp_path / "artifacts"))
     source = _source()

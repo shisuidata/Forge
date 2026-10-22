@@ -15,7 +15,7 @@ import {
   type PlanCapability,
   type PlanStepStatus,
 } from "./planning.js";
-import { buildChartPayload, bundleHash, type TechnicalReportPayload } from "./report-artifacts.js";
+import { buildChartPayload, bundleHash, type ReportBundlePayload, type TechnicalReportPayload } from "./report-artifacts.js";
 import { attemptModelStage, resolveStageModelBinding } from "./model-bindings.js";
 import {
   type Artifact,
@@ -46,6 +46,7 @@ import type {
   AdvisoryPayload,
   AnalysisPayload,
   QueryResultPayload,
+  RenderedOutputPayload,
 } from "./structured-artifact-tools.js";
 import {
   AUTHORIZED_SKILL_NAMES,
@@ -1814,17 +1815,8 @@ export class OrchestratorApplication {
     if (analysis === undefined) {
       throw new TaskStateError(`AnalysisArtifact not found for ${taskRunId}`);
     }
-    const queryResultForMethod = this.#artifacts.latest(taskRunId, "query_result") as
-      | Artifact<QueryResultPayload>
-      | undefined;
-    const methodSummary = analysis.payload.method_summary ?? {
-      objective: typeof task.metadata.original_message === "string"
-        ? task.metadata.original_message
-        : "解释当前查询结果",
-      dimensions: queryResultForMethod?.payload.columns.slice(0, 3) ?? [],
-      comparison_baseline: "当前已审批查询结果内部对比",
-      approach_steps: ["核验结果字段与范围", "比较主要维度", "提炼证据绑定结论"],
-    };
+    // A bundle persisted by an interrupted attempt is the only report for this task: never regenerate it.
+    const pendingBundle = this.#unpublishedReportBundle(taskRunId);
     let attempt!: StageAttempt;
     let stageTask: TaskRun = task;
     stageTask = this.#transactions.run(() => {
@@ -1839,147 +1831,133 @@ export class OrchestratorApplication {
       return running;
     });
     const stageExecution = this.#stageSignal(attempt, signal);
+    let bundle = pendingBundle;
     try {
-      const payload = await stageExecution.wait(() => this.#skills.writeReport(stageTask,
-      { audience: input.audience, analysis },
-      stageExecution.signal,
-      attempt.model_revision,));
-      if (stageExecution.timedOut()) throw new Error("Report Stage timed out");
-      const analysisStatements = new Set(
-        analysis.payload.findings.map((finding) => finding.statement),
-      );
-      const analysisEvidenceRefs = new Set([
-        ...analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
-        ...analysis.payload.hypotheses.flatMap(
-          (hypothesis) => hypothesis.evidence_refs,
-        ),
-      ]);
-      if (!payload.source_artifact_ids.includes(analysis.artifact_id)) {
-        throw new Error("Report source does not include AnalysisArtifact");
-      }
-      if (
-        payload.key_findings.some(
-          (finding) => !analysisStatements.has(finding.statement),
-        ) ||
-        payload.key_findings
-          .flatMap((finding) => finding.evidence_refs)
-          .some((reference) => !analysisEvidenceRefs.has(reference))
-      ) {
-        throw new Error("Report introduced findings outside AnalysisArtifact");
-      }
-      const assembled = this.#commitStage(attempt, () => {
-        const artifact = this.#artifacts.create({
-          artifactType: "rendered_output",
-          taskRunId,
-          producer: "skill:data-analysis-report-writer",
-          payload,
-        });
-        this.#events.append(taskRunId, "artifact.created", {
-          artifact_id: artifact.artifact_id,
-          artifact_type: artifact.artifact_type,
-          schema_version: artifact.schema_version,
-        });
-        const queryResult = this.#artifacts.latest(taskRunId, "query_result") as
-          | Artifact<QueryResultPayload>
-          | undefined;
-        const reportEvents = this.#events.list(taskRunId);
-        const review = [...reportEvents].reverse().find((event) => event.event_type === "query.review_requested");
-        const queryCompleted = [...reportEvents].reverse().find((event) => event.event_type === "query.completed");
-        if (queryResult === undefined || review === undefined) {
-          throw new Error("Report publication requires QueryResult and approved SQL lineage");
+      if (bundle === undefined) {
+        const payload = await stageExecution.wait(() => this.#skills.writeReport(stageTask,
+        { audience: input.audience, analysis },
+        stageExecution.signal,
+        attempt.model_revision,));
+        if (stageExecution.timedOut()) throw new Error("Report Stage timed out");
+        const analysisStatements = new Set(
+          analysis.payload.findings.map((finding) => finding.statement),
+        );
+        const analysisEvidenceRefs = new Set([
+          ...analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
+          ...analysis.payload.hypotheses.flatMap(
+            (hypothesis) => hypothesis.evidence_refs,
+          ),
+        ]);
+        if (!payload.source_artifact_ids.includes(analysis.artifact_id)) {
+          throw new Error("Report source does not include AnalysisArtifact");
         }
-        const technicalPayload: TechnicalReportPayload = {
-          title: `${payload.title} · 技术报告`,
-          sql: typeof review.payload.sql === "string" ? review.payload.sql : "",
-          query_run_id: queryResult.payload.query_run_id,
-          sql_hash: queryResult.payload.sql_hash,
-          approval: { approved: true, approved_at: queryCompleted?.created_at ?? null },
-          execution: {
-            executed_at: queryResult.payload.executed_at,
-            execution_ms: queryResult.payload.execution_ms,
-            row_count: queryResult.payload.row_count,
-            truncated: queryResult.payload.truncated,
-          },
-          lineage: Object.fromEntries(Object.entries({
-            registry_version: queryResult.payload.registry_version,
-            assurance_report_hash: queryResult.payload.assurance_report_hash,
-            assurance_revision: queryResult.payload.assurance_revision,
-            policy_revision: queryResult.payload.policy_revision,
-            model_revision: queryResult.payload.model_revision,
-            assurance_registry_revision: queryResult.payload.assurance_registry_revision,
-          }).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
-          decision_log: methodSummary.approach_steps.map((step) => ({
-            stage: "analysis",
-            decision: step,
-            rationale: methodSummary.comparison_baseline,
-            evidence_refs: analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
-          })),
-          source_artifact_ids: [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id],
-        };
-        const technical = this.#artifacts.create({
-          artifactType: "technical_report",
-          taskRunId,
-          producer: "pi-report-builder",
-          payload: technicalPayload,
-        });
-        const charts = this.#artifacts.list(taskRunId).filter((candidate) => candidate.artifact_type === "chart");
-        const reportId = `rp_${bundleHash({ task_run_id: taskRunId }).slice("sha256:".length, "sha256:".length + 32)}`;
-        const sourceArtifactIds = [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id, technical.artifact_id, ...charts.map((chart) => chart.artifact_id)];
-        const reportBundlePayload = {
-          report_id: reportId,
-          revision: 1,
-          title: payload.title,
-          business_artifact_id: artifact.artifact_id,
-          technical_artifact_id: technical.artifact_id,
-          chart_artifact_ids: charts.map((chart) => chart.artifact_id),
-          source_artifact_ids: sourceArtifactIds,
-          bundle_hash: bundleHash({
-            report_id: reportId,
-            business_report: payload,
-            analysis: analysis.payload,
-            query_result_hash: queryResult.payload.sql_hash,
-            charts: charts.map((chart) => chart.payload),
-            technical_report: technicalPayload,
-          }),
-        };
-        const bundle = this.#artifacts.create({
-          artifactType: "report_bundle",
-          taskRunId,
-          producer: "pi-report-builder",
-          payload: reportBundlePayload,
-        });
-        for (const created of [technical, bundle]) {
-          this.#events.append(taskRunId, "artifact.created", {
-            artifact_id: created.artifact_id,
-            artifact_type: created.artifact_type,
-            schema_version: created.schema_version,
+        if (
+          payload.key_findings.some(
+            (finding) => !analysisStatements.has(finding.statement),
+          ) ||
+          payload.key_findings
+            .flatMap((finding) => finding.evidence_refs)
+            .some((reference) => !analysisEvidenceRefs.has(reference))
+        ) {
+          throw new Error("Report introduced findings outside AnalysisArtifact");
+        }
+        bundle = this.#commitStage(attempt, () => {
+          const artifact = this.#artifacts.create({
+            artifactType: "rendered_output",
+            taskRunId,
+            producer: "skill:data-analysis-report-writer",
+            payload,
           });
-        }
-        return { artifact, queryResult, technical, technicalPayload, charts, bundle, reportBundlePayload };
-      });
-      const createReport = this.#forge.createReport;
-      const getReport = this.#forge.getReport;
-      if (createReport === undefined || getReport === undefined) {
-        throw new Error("Forge Report Service is not configured");
+          this.#events.append(taskRunId, "artifact.created", {
+            artifact_id: artifact.artifact_id,
+            artifact_type: artifact.artifact_type,
+            schema_version: artifact.schema_version,
+          });
+          const queryResult = this.#artifacts.latest(taskRunId, "query_result") as
+            | Artifact<QueryResultPayload>
+            | undefined;
+          const reportEvents = this.#events.list(taskRunId);
+          const review = [...reportEvents].reverse().find((event) => event.event_type === "query.review_requested");
+          const queryCompleted = [...reportEvents].reverse().find((event) => event.event_type === "query.completed");
+          if (queryResult === undefined || review === undefined) {
+            throw new Error("Report publication requires QueryResult and approved SQL lineage");
+          }
+          const methodSummary = this.#reportMethodSummary(stageTask, analysis, queryResult);
+          const technicalPayload: TechnicalReportPayload = {
+            title: `${payload.title} · 技术报告`,
+            sql: typeof review.payload.sql === "string" ? review.payload.sql : "",
+            query_run_id: queryResult.payload.query_run_id,
+            sql_hash: queryResult.payload.sql_hash,
+            approval: { approved: true, approved_at: queryCompleted?.created_at ?? null },
+            execution: {
+              executed_at: queryResult.payload.executed_at,
+              execution_ms: queryResult.payload.execution_ms,
+              row_count: queryResult.payload.row_count,
+              truncated: queryResult.payload.truncated,
+            },
+            lineage: Object.fromEntries(Object.entries({
+              registry_version: queryResult.payload.registry_version,
+              assurance_report_hash: queryResult.payload.assurance_report_hash,
+              assurance_revision: queryResult.payload.assurance_revision,
+              policy_revision: queryResult.payload.policy_revision,
+              model_revision: queryResult.payload.model_revision,
+              assurance_registry_revision: queryResult.payload.assurance_registry_revision,
+            }).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
+            decision_log: methodSummary.approach_steps.map((step) => ({
+              stage: "analysis",
+              decision: step,
+              rationale: methodSummary.comparison_baseline,
+              evidence_refs: analysis.payload.findings.flatMap((finding) => finding.evidence_refs),
+            })),
+            source_artifact_ids: [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id],
+          };
+          const technical = this.#artifacts.create({
+            artifactType: "technical_report",
+            taskRunId,
+            producer: "pi-report-builder",
+            payload: technicalPayload,
+          });
+          const charts = this.#artifacts.list(taskRunId).filter((candidate) => candidate.artifact_type === "chart");
+          const reportId = `rp_${bundleHash({ task_run_id: taskRunId }).slice("sha256:".length, "sha256:".length + 32)}`;
+          const sourceArtifactIds = [queryResult.artifact_id, analysis.artifact_id, artifact.artifact_id, technical.artifact_id, ...charts.map((chart) => chart.artifact_id)];
+          const reportBundlePayload = {
+            report_id: reportId,
+            revision: 1,
+            title: payload.title,
+            business_artifact_id: artifact.artifact_id,
+            technical_artifact_id: technical.artifact_id,
+            chart_artifact_ids: charts.map((chart) => chart.artifact_id),
+            source_artifact_ids: sourceArtifactIds,
+            bundle_hash: bundleHash({
+              report_id: reportId,
+              business_report: payload,
+              analysis: analysis.payload,
+              query_result_hash: queryResult.payload.sql_hash,
+              charts: charts.map((chart) => chart.payload),
+              technical_report: technicalPayload,
+            }),
+          };
+          const created = this.#artifacts.create({
+            artifactType: "report_bundle",
+            taskRunId,
+            producer: "pi-report-builder",
+            payload: reportBundlePayload,
+          });
+          for (const item of [technical, created]) {
+            this.#events.append(taskRunId, "artifact.created", {
+              artifact_id: item.artifact_id,
+              artifact_type: item.artifact_type,
+              schema_version: item.schema_version,
+            });
+          }
+          return created as Artifact<ReportBundlePayload>;
+        });
       }
-      let publication = await stageExecution.wait(() => createReport.call(this.#forge, {
-        report_id: assembled.reportBundlePayload.report_id,
-        task_run_id: taskRunId,
-        revision: assembled.reportBundlePayload.revision,
-        bundle_hash: assembled.reportBundlePayload.bundle_hash,
-        title: payload.title,
-        business_report: payload,
-        analysis: { ...analysis.payload, method_summary: methodSummary },
-        query_result: assembled.queryResult.payload,
-        charts: assembled.charts.map((chart) => chart.payload),
-        technical_report: assembled.technicalPayload,
-      }, input.idempotencyKey ?? `${taskRunId}:publish:${assembled.bundle.artifact_id}`, stageExecution.signal));
-      while (publication.status === "publishing") {
-        if (stageExecution.timedOut()) throw new Error("Report publication Stage timed out");
-        await stageExecution.wait(() => delay(500, undefined, { signal: stageExecution.signal }));
-        publication = await stageExecution.wait(() => getReport.call(this.#forge, publication.report_id, taskRunId, stageExecution.signal));
-      }
+      const request = this.#reportPublishRequest(stageTask, bundle);
+      const publication = await this.#publishReport(taskRunId, request, `${taskRunId}:publish:${bundle.artifact_id}`,
+        pendingBundle !== undefined, stageExecution);
       if (publication.status !== "published") throw new Error("Report publication failed");
+      const business = this.#bundleArtifact<RenderedOutputPayload>(taskRunId, bundle.payload.business_artifact_id, "rendered_output");
       const completedReport = this.#commitStage(attempt, () => {
         const publicationArtifact = this.#artifacts.create({
           artifactType: "publication",
@@ -2004,27 +1982,30 @@ export class OrchestratorApplication {
         });
         const finalizedTask = this.#transition(stageTask, "completed", "report_complete");
         this.#events.append(taskRunId, "report.completed", {
-          artifact_id: assembled.artifact.artifact_id,
+          artifact_id: business.artifact_id,
           publication_artifact_id: publicationArtifact.artifact_id,
           report_id: publication.report_id,
-          status: payload.status,
+          status: business.payload.status,
         });
         this.#advanceExecutionPlan(taskRunId, { report: "completed" });
-        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: assembled.artifact.artifact_id });
-        return { task: finalizedTask, artifact: assembled.artifact, events: this.#events.list(taskRunId) };
+        this.#finishAttempt(attempt, "succeeded", undefined, { artifact_id: business.artifact_id });
+        return { task: finalizedTask, artifact: business, events: this.#events.list(taskRunId) };
       });
       await this.#persistSessionSummary(
         completedReport.task,
-        String(payload.executive_summary ?? payload.title),
-        assembled.artifact.artifact_id,
+        String(business.payload.executive_summary ?? business.payload.title),
+        business.artifact_id,
         signal,
       );
       return completedReport;
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown Skill error";
+      // Transport loss or a Forge 5xx leaves the publication outcome unknown; the next attempt asks Forge first.
+      const publicationUncertain = bundle !== undefined && error instanceof ForgeClientError &&
+        (error.statusCode === undefined || error.statusCode >= 500);
       this.#transactions.run(() => {
         if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
-        if (stageExecution.timedOut() || stageExecution.interrupted()) {
+        if (stageExecution.timedOut() || stageExecution.interrupted() || publicationUncertain) {
           this.#finishAttempt(attempt, stageExecution.timedOut() ? "timed_out" : "interrupted", message);
           stageTask = this.#transition(stageTask, "ready_for_report", "report_retry");
         } else {
@@ -2034,6 +2015,7 @@ export class OrchestratorApplication {
         this.#events.append(taskRunId, "skill.execution_failed", {
           skill: "data-analysis-report-writer",
           timed_out: stageExecution.timedOut(),
+          publication_uncertain: publicationUncertain,
           error: message,
         });
       });
@@ -2041,6 +2023,87 @@ export class OrchestratorApplication {
         cause: error,
       });
     }
+  }
+
+  #unpublishedReportBundle(taskRunId: string): Artifact<ReportBundlePayload> | undefined {
+    const bundle = this.#artifacts.latest(taskRunId, "report_bundle") as Artifact<ReportBundlePayload> | undefined;
+    if (bundle === undefined) return undefined;
+    const published = this.#artifacts.list(taskRunId).some((item) =>
+      item.artifact_type === "publication" && item.payload.bundle_hash === bundle.payload.bundle_hash);
+    return published ? undefined : bundle;
+  }
+
+  #bundleArtifact<T extends Record<string, unknown>>(taskRunId: string, artifactId: string, type: Artifact["artifact_type"]): Artifact<T> {
+    const artifact = this.#artifacts.list(taskRunId).find((item) => item.artifact_id === artifactId);
+    if (artifact?.artifact_type !== type) throw new TaskStateError(`Report bundle ${type} Artifact is missing`);
+    return artifact as Artifact<T>;
+  }
+
+  #reportMethodSummary(task: TaskRun, analysis: Artifact<AnalysisPayload>, queryResult: Artifact<QueryResultPayload> | undefined) {
+    return analysis.payload.method_summary ?? {
+      objective: typeof task.metadata.original_message === "string"
+        ? task.metadata.original_message
+        : "解释当前查询结果",
+      dimensions: queryResult?.payload.columns.slice(0, 3) ?? [],
+      comparison_baseline: "当前已审批查询结果内部对比",
+      approach_steps: ["核验结果字段与范围", "比较主要维度", "提炼证据绑定结论"],
+    };
+  }
+
+  /** Rebuilds the publish request from the persisted bundle, so first publish and recovery send identical content. */
+  #reportPublishRequest(task: TaskRun, bundle: Artifact<ReportBundlePayload>): Record<string, unknown> {
+    const [queryResultId, analysisId] = bundle.payload.source_artifact_ids;
+    const queryResult = this.#bundleArtifact<QueryResultPayload>(task.task_run_id, String(queryResultId), "query_result");
+    const analysis = this.#bundleArtifact<AnalysisPayload>(task.task_run_id, String(analysisId), "analysis");
+    const business = this.#bundleArtifact<RenderedOutputPayload>(task.task_run_id, bundle.payload.business_artifact_id, "rendered_output");
+    const technical = this.#bundleArtifact<TechnicalReportPayload>(task.task_run_id, bundle.payload.technical_artifact_id, "technical_report");
+    return {
+      report_id: bundle.payload.report_id,
+      task_run_id: task.task_run_id,
+      revision: bundle.payload.revision,
+      bundle_hash: bundle.payload.bundle_hash,
+      title: business.payload.title,
+      business_report: business.payload,
+      analysis: { ...analysis.payload, method_summary: this.#reportMethodSummary(task, analysis, queryResult) },
+      query_result: queryResult.payload,
+      charts: bundle.payload.chart_artifact_ids.map((id) => this.#bundleArtifact(task.task_run_id, id, "chart").payload),
+      technical_report: technical.payload,
+    };
+  }
+
+  /** Recovery asks Forge first and resends the same bundle only when Forge has no successful publication. */
+  async #publishReport(
+    taskRunId: string,
+    request: Record<string, unknown>,
+    idempotencyKey: string,
+    recovering: boolean,
+    stageExecution: { signal: AbortSignal; timedOut(): boolean; wait<T>(operation: () => Promise<T>): Promise<T> },
+  ): Promise<ReportPublication> {
+    const createReport = this.#forge.createReport;
+    const getReport = this.#forge.getReport;
+    if (createReport === undefined || getReport === undefined) {
+      throw new Error("Forge Report Service is not configured");
+    }
+    const reportId = String(request.report_id);
+    let publication: ReportPublication | undefined;
+    if (recovering) {
+      try {
+        publication = await stageExecution.wait(() => getReport.call(this.#forge, reportId, taskRunId, stageExecution.signal));
+      } catch (error) {
+        if (!(error instanceof ForgeClientError && error.statusCode === 404)) throw error;
+      }
+      if (publication !== undefined && publication.bundle_hash !== request.bundle_hash)
+        throw new Error("Forge holds a different report bundle for this task");
+    }
+    if (publication === undefined || publication.status === "failed") {
+      publication = await stageExecution.wait(() => createReport.call(this.#forge, request, idempotencyKey, stageExecution.signal));
+    }
+    while (publication.status === "publishing") {
+      if (stageExecution.timedOut()) throw new Error("Report publication Stage timed out");
+      await stageExecution.wait(() => delay(500, undefined, { signal: stageExecution.signal }));
+      publication = await stageExecution.wait(() => getReport.call(this.#forge, reportId, taskRunId, stageExecution.signal));
+    }
+    return publication;
   }
 
   #channelPayloadString(event: ChannelEventInput, field: string): string {
