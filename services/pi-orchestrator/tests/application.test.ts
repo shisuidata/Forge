@@ -53,7 +53,7 @@ function fixture(mode: "autonomous" | "human_review") {
     channel: "web", intent: "query_prepare", message: "Seven" }, principal("alice", "admin")).task;
   runId = task.task_run_id;
   mandate.delegated_mandate.task_run_id = runId;
-  return { application, task, calls, state };
+  return { application, task, calls, state, forge };
 }
 
 const candidate = { kind: "direct_sql" as const, sql: "SELECT 7 AS n" };
@@ -72,6 +72,27 @@ test("unmandated query saves the exact candidate and resumes only after admin at
   assert.equal(application.getEvents(task.task_run_id).filter(event => event.event_type === "task.mandate_attached").length, 1);
   await application.attachMandate(task.task_run_id, { mandateId: "md_demo", expectedMandateId: null }, principal("alice", "admin"));
   assert.equal(application.getEvents(task.task_run_id).filter(event => event.event_type === "task.mandate_attached").length, 1);
+});
+
+test("caller abort during query prepare is a retryable interruption like other Stages", async () => {
+  const { application, task, calls, forge } = fixture("human_review");
+  await application.attachMandate(task.task_run_id, { mandateId: "md_demo", expectedMandateId: null }, principal("alice", "admin"));
+  const controller = new AbortController();
+  const createQueryRun = forge.createQueryRun;
+  forge.createQueryRun = async () => {
+    calls.push("prepare:hung");
+    controller.abort(new Error("Synthetic caller disconnected"));
+    return new Promise<never>(() => undefined);
+  };
+  await assert.rejects(application.prepareQuery(task.task_run_id,
+    { question: "Seven", candidate, idempotencyKey: "prepare-aborted" }, controller.signal));
+  assert.equal(application.getTask(task.task_run_id)?.status, "ready_for_query");
+  assert.equal(application.getTask(task.task_run_id)?.current_stage, "query_prepare_retry");
+  assert.equal(application.getStageAttempts(task.task_run_id).at(-1)?.status, "interrupted");
+  forge.createQueryRun = createQueryRun;
+  const retried = await application.prepareQuery(task.task_run_id,
+    { question: "Seven", candidate, idempotencyKey: "prepare-retry" });
+  assert.equal(retried.task.status, "waiting_for_query_approval");
 });
 
 test("autonomous query claims before response and shares result Artifact without human approval event", async () => {

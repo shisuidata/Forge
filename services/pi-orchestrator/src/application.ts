@@ -1194,13 +1194,16 @@ export class OrchestratorApplication {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Forge preparation failed";
       const clarification = error instanceof ForgeClientError && error.code === "candidate_needs_clarification";
+      // Like other Stages, deadline and caller interruption stay retryable; only Forge failures are terminal.
+      const retryable = stage.timedOut() || stage.interrupted();
       this.#transactions.run(() => {
         if (!this.#ownsAttempt(attempt)) { this.#releaseAttempt(attempt); return; }
-        this.#finishAttempt(attempt, stage.timedOut() ? "timed_out" : clarification ? "succeeded" : "failed", message);
-        task = this.#transition(task, clarification ? "needs_input" : stage.timedOut() ? "ready_for_query" : "failed",
+        this.#finishAttempt(attempt, stage.timedOut() ? "timed_out" : stage.interrupted() ? "interrupted"
+          : clarification ? "succeeded" : "failed", message);
+        task = this.#transition(task, clarification ? "needs_input" : retryable ? "ready_for_query" : "failed",
           clarification ? "requirement_clarification" : "query_prepare_retry");
         this.#events.append(taskRunId, clarification ? "query.clarification_requested" : "query.prepare_failed",
-          clarification ? { prompt: message } : { error: message });
+          clarification ? { prompt: message } : { error: message, timed_out: stage.timedOut(), interrupted: stage.interrupted() });
       });
       if (clarification) return { task, result: null, events: this.#events.list(taskRunId) };
       throw new TaskStateError("Query preparation failed", { cause: error });
