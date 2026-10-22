@@ -5,7 +5,7 @@ description: Forge 的四个核心信念与诚实的自我审视
 
 ## 当前立场：约束候选，不许诺答案
 
-Forge 的产品边界是 **Evaluate → Enforce → Explain**：Direct SQL 与 Forge JSON 都是待验证的候选格式。生成约束、确定性编译、运行时控制与证据各自承担责任，任何一层通过都不等于业务答案正确或生产安全认证。公开源码与本地未发布 v2 候选的差异见[架构设计](/reference/architecture/)，尚未关闭的发布阻断见[验证边界](/reference/benchmarks/)。
+Forge 的产品边界是 **Evaluate → Enforce → Explain**：Direct SQL 与 Forge JSON 都是待验证的候选格式。生成约束、确定性编译、运行时控制与证据各自承担责任，任何一层通过都不等于业务答案正确或生产安全认证。当前接口契约见[架构设计](/reference/architecture/)，已验证与未验证的范围见[验证边界](/reference/benchmarks/)。
 
 ## 四个核心信念
 

@@ -24,9 +24,9 @@ Forge 的产品主线是 **Evaluate → Enforce → Explain**：评估候选、�
 
 ### 工程测试不是准确率评测，也不是生产认证
 
-公开证据：[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)整理于 **2026-10-14**，记录的是 **2026-10-04** 含未提交修改的本地工作树评估：Python **1011 passed / 26 skipped**，Pi **212 passed**。这些是历史记录，**不是本轮复测**，也不是对公开提交、Release、远端 CI 或当前部署的认证。
+公开证据：[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md)记录了 **2026-10-22** 对公开 `main` 提交 `e50b0a0` 的验证：Python **1049 passed / 26 skipped**（仓库检出），Pi **226 passed**，远端 CI 五项通过，wheel 与 sdist 全新安装通过。它不是对之后的提交、Release 或当前部署的认证。
 
-报告同时保留两项未在其中关闭的 **P0 安全发布阻断**：Direct SQL 授权检查不完整、Pi 跨主体事件去重隔离缺口。合成环境通过项与安全反例必须一起阅读，不能以测试总数宣称生产就绪、真实客户采用或共享多租户安全。
+2026-10-04 评估所列两项 **P0 安全发布阻断**（Direct SQL 授权检查、Pi 跨主体事件去重隔离）已修复并有回归测试；[历史摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)保留当时的发现。真实数据库只读角色、真实身份与独立安全审核仍未验证，不能以测试总数宣称生产就绪、真实客户采用或共享多租户安全。
 
 ---
 

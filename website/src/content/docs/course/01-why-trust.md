@@ -6,7 +6,7 @@ summary: 历史快照 · 从错误分类开始理解 Forge 的设计靶心
 :::caution[历史说明 · 不是当前接入或生产承诺]
 本页保留早期架构、实验成绩与原文；正文中的“当前”“已解决”“生产就绪”仅指当时判断，不代表现行版本或安全认证。旧共享 API Key、pending/approve、v1 执行及原始 SQL 执行方式不得用作生产接入指南，也不要照此连接真实客户数据或公开服务。
 
-当前产品是 **Evaluate → Enforce → Explain** Trust Runtime；公开源码的普通 Quickstart 使用 v1 合成演示。本地未提交 v2 候选才引入独立主体与有界授权、退休旧执行入口；不能将这些变更当成公开版本已发布能力。[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)仍记录 Direct SQL 授权检查与 Pi 跨主体事件去重隔离两项 P0 发布阻断，不提供后续修复认证。请以[当前介绍](/guides/introduction/)、[Quickstart](/guides/quickstart/)和[验证边界](/reference/benchmarks/)为准；旧实验仅在隔离合成环境中作为历史学习材料阅读。
+当前产品是 **Evaluate → Enforce → Explain** Trust Runtime。公开 `main` 已包含 v2 有界授权（独立主体凭证、可撤销授权、指定审核人），旧 v1/原始 SQL 执行入口返回 410；[2026-10-22 公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md)记录了 2026-10-04 评估所列两项 P0 与各项 P1 的修复和回归验证。这些只是仓库测试与隔离合成环境验证，不是安全认证或生产承诺。请以[当前介绍](/guides/introduction/)、[Quickstart](/guides/quickstart/)和[验证边界](/reference/benchmarks/)为准；旧实验仅在隔离合成环境中作为历史学习材料阅读。
 :::
 
 # 为什么 AI 问数“不可信”

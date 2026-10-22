@@ -29,7 +29,7 @@ QueryRun：实际 SQL、执行状态与结果
 Explain：同一运行的证据、来源和限制
 ```
 
-公开源码的普通 Quickstart 会展示实际 SQL，等待批准。独立主体凭证、有界 Agent 自主子集与指定审核人流程已有维护者本地未提交候选版本的合成环境记录，**尚不能视为公开 `main` 可直接安装的能力**。公开 v1 演示与本地 v2 候选必须区分，两者都不代表生产安全验收。
+普通 Quickstart 会展示实际 SQL，等待批准；`forge quickstart --agent` 演示 v2 有界授权：独立主体凭证、有界 Agent 自主子集、指定审核人与授权撤销。两条演示都只用隔离合成数据，都不代表生产安全验收。
 
 ## 为什么不只优化 Prompt
 
@@ -46,7 +46,7 @@ Forge 将不同责任拆开处理，而不是把所有问题都交给模型：
 
 Forge 仍处于早期、持续开发阶段，适合先用隔离合成数据评估机制，不应当作已经通过生产安全验收或共享多租户验收的产品。
 
-[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)整理于 2026-10-14，记录的是 **2026-10-04 包含未提交修改的本地工作树评估**，不是本轮文档更新的复测，也不是公开提交、Release、远端 CI 或当前部署的认证。其中记录 Python **1011 passed / 26 skipped**、Pi **212 passed**，同时保留两项未在该报告中关闭的 **P0 安全发布阻断**：Direct SQL 授权检查不完整，以及 Pi 跨主体事件去重隔离缺口。没有证明真实客户数据泄露，测试通过也不能代替这些阻断的修复验收。
+[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md)记录了 2026-10-22 对公开 `main` 提交 `e50b0a0` 的验证：Python **1049 passed / 26 skipped**、Pi **226 passed**，远端 CI 通过。2026-10-04 评估所列两项 **P0 安全发布阻断**（Direct SQL 授权检查、Pi 跨主体事件去重隔离）已修复并有回归测试；真实数据库只读角色、真实身份与客户数据、独立安全审核仍未验证，这些测试结果不是安全认证，也不是当前部署的认证。
 
 公开 BIRD 500 题的历史同候选 Compiler replay 为 Forge **313/500**、Direct SQL **314/500**，未证明总体准确率优势；具体成本与实验边界见[基准测试](/reference/benchmarks/)。生产部署、真实客户数据库和外部采用证据也不能由本地合成演示外推。更多版本与状态说明见[仓库当前状态](https://github.com/shisuidata/Forge/blob/main/docs/current-project-state.md)。
 

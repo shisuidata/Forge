@@ -24,27 +24,27 @@ Evaluate 可以独立使用；评估通过不是执行授权。Direct SQL 不先
 - **Pi** 是集成路径中的主 Orchestrator 与 Task 真相源；Forge 保留校验、拒绝与失败关闭能力。
 - **DATA Skills** 提供专业方法，不持有任务主状态，也不因此获得数据库执行权。
 - **Web / 渠道** 是受信入口与投影，不创建第二套业务真相源。
-- **本地 v2 候选中的 Agent** 使用独立凭证；管理员授予单任务、单数据源及表范围的有界授权，并区分自主子集与指定人工审核资源。该实现尚未进入本站审阅的公开 `main`，不能作为公开安装能力承诺。
+- **Agent** 使用独立凭证；管理员授予单任务、单数据源及表范围的有界授权，并区分自主子集与指定人工审核资源，授权可随时撤销。
 - **数据库权限** 是独立强制边界。应用层校验、Registry 与审核不能替代数据库只读角色、资源治理和网络隔离。
 
 无需 Pi 或模型的[Quickstart](/guides/quickstart/)使用隔离合成身份和 SQLite，仅演示这条 Runtime 链路，不是完整自然语言 Agent 验收。
 
-## 公开源码与本地候选契约
+## 当前接口契约
 
-| 版本范围 | 入口 | 边界 |
+| 状态 | 入口 | 边界 |
 |---|---|---|
-| 公开源码 | `POST /api/v1/evaluate`、`forge evaluate` | 不执行 SQL，不授予执行权 |
-| 公开源码 | `/api/v1/enforce/query-runs`、`/api/v1/explain/query-runs/{id}` | v1 QueryRun 与审核、证据路径；不等于已验收企业身份隔离 |
-| 公开源码 | `forge quickstart` | 无模型、隔离合成数据的 v1 演示；没有 `--agent` |
-| 本地未提交候选 | `/api/v2/governance/*`、v2 Enforce / Explain | 独立主体、有界授权、撤销与指定审核人；不是已发布接口 |
+| 当前 | `POST /api/v1/evaluate`、`forge evaluate` | 不执行 SQL，不授予执行权 |
+| 当前 | `/api/v2/governance/*`、`/api/v2/enforce/query-runs`、`/api/v2/explain/query-runs/{id}` | 独立主体、有界授权、撤销与指定审核人；不等于已验收真实企业身份与权限 |
+| 当前 | `forge quickstart [--agent]` | 无模型、隔离合成数据；`--agent` 演示有界授权与撤销 |
+| 已退休 | v1 Enforce 执行入口、原始 SQL 执行入口 | 返回 410；历史 v1 QueryRun 只保留管理员只读审计 |
 
-v1 执行与原始 SQL 执行入口关闭（410）是**本地 v2 候选**的迁移行为，不是公开 `main` 的现状。无论哪个版本，都不要把旧共享 API Key、pending/approve 或原始 SQL 入口当作安全生产接入方案。Direct SQL **候选格式**与无门禁原始 SQL 执行是两回事。
+不要把旧共享 API Key、pending/approve 或原始 SQL 入口当作安全生产接入方案。Direct SQL **候选格式**与无门禁原始 SQL 执行是两回事。
 
 具体契约与版本迁移见[当前项目状态](https://github.com/shisuidata/Forge/blob/main/docs/current-project-state.md)、[治理契约](https://github.com/shisuidata/Forge/blob/main/docs/governance-contracts.md)及[仓库架构](https://github.com/shisuidata/Forge/blob/main/docs/architecture.md)。
 
 ## 证据与未关闭的边界
 
-有界 Agent 执行切片已有本地未提交候选工作树的隔离合成环境工程记录，但不代表公开代码已发布，更不代表生产或外部采用门禁关闭。[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)整理于 2026-10-14，记录 2026-10-04 含未提交修改工作树的评估，同时保留 Direct SQL 授权检查与 Pi 跨主体事件去重隔离两项 P0 发布阻断；没有提供后续修复验收。本页不宣称该快照可用于真实生产或共享多租户访问。
+有界 Agent 执行切片已在公开 `main` 发布，并在隔离合成环境中验证；这不代表生产或外部采用门禁关闭。[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md)记录了 2026-10-22 对提交 `e50b0a0` 的验证，2026-10-04 评估所列 Direct SQL 授权检查与 Pi 跨主体事件去重隔离两项 P0 发布阻断已修复并有回归测试。真实数据库只读角色、真实身份与独立安全审核仍未验证；本页不宣称可用于真实生产或共享多租户访问。
 
 Explain 的 `verified` 是证据完整性状态，不是业务语义正确、源数据不可变快照或任何 SQL 都安全的证明。数据库和 Provider 的编译、连接、smoke 与生产验证也必须分开表述，见[基准与验证边界](/reference/benchmarks/)。
 

@@ -13,10 +13,10 @@ Forge 接收 Direct SQL 或 Forge JSON **候选**，核心职责不是替上游 
      → QueryRun 受控执行 → Explain（同一运行的证据与限制）
 ```
 
-公开源码的 Golden Path 使用 v1 的合成 Quickstart；独立主体、可撤销有界授权及指定审核人的 v2 路径属于维护者本地未提交候选，不是公开 `main` 已发布能力。v1/原始 SQL 入口退休（410）也是该本地候选的变更，不能外推到公开版本。Direct SQL 是候选格式，不是绕过门禁的 fallback。详见[架构设计](/reference/architecture/)。
+公开 `main` 的 Enforce 与 Explain 使用 v2 路径：独立主体、可撤销有界授权及指定审核人，`forge quickstart --agent` 在合成数据上演示这条路径；v1 执行与原始 SQL 执行入口已退休（410）。Direct SQL 是候选格式，不是绕过门禁的 fallback。详见[架构设计](/reference/architecture/)。
 
 :::caution[机制不等于安全认证]
-[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)记录的是 2026-10-04 本地合成环境评估，仍保留 Direct SQL 授权检查与 Pi 跨主体事件去重隔离两项 P0 发布阻断。不要将该快照接入真实生产或共享多租户数据。编译成功、获得授权和 Evidence 完整性通过都不证明业务答案正确。
+[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md)记录了 2026-10-04 评估所列 Direct SQL 授权检查与 Pi 跨主体事件去重隔离两项 P0 发布阻断的修复与回归验证；真实数据库只读角色与独立安全审核仍未验证，不要接入真实生产或共享多租户数据。编译成功、获得授权和 Evidence 完整性通过都不证明业务答案正确。
 :::
 
 ## 可选生成路径：Forge JSON 示例
@@ -77,7 +77,7 @@ FROM user_orders
 
 ### Step 4 — 执行门禁、审核与解释
 
-编译产物仍是候选，不会因为生成了 SQL 就直接执行。Enforce 将实际 SQL、上下文与版本绑定到 QueryRun；公开 v1 合成演示等待终端批准，本地 v2 候选进一步引入独立主体与指定审核人。满足执行条件后才使用只读数据库连接执行，并施加超时和结果上限。Explain 回读同一运行的 SQL、结果和限制；任何候选修改或绑定漂移都不能复用旧批准。
+编译产物仍是候选，不会因为生成了 SQL 就直接执行。Enforce 将实际 SQL、上下文与版本绑定到 QueryRun；需要审核的资源由指定审核人批准，Agent 只能在授权的自主子集内直接执行。满足执行条件后才使用只读数据库连接执行，并施加超时和结果上限。Explain 回读同一运行的 SQL、结果和限制；任何候选修改或绑定漂移都不能复用旧批准。
 
 ---
 

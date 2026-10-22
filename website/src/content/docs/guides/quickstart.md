@@ -27,7 +27,7 @@ forge quickstart
 PYTHON_BIN=python3.11 bash scripts/bootstrap-dev.sh
 ```
 
-上面的命令以公开仓库当前源码为入口。本站审阅的公开 `main` 使用 **v1 合成 Quickstart**；它为隔离演示关闭入口认证，不代表真实身份或审核人分离已经在这条演示中验收。不要将其服务公开或替换为真实客户数据。本页引用的 2026-10-04 本地工作树验证与公开源码不是同一受测版本，不等于对新克隆的复测。
+上面的命令以公开仓库当前源码为入口。Quickstart 用合成身份凭证走 v2 授权链：Agent 准备查询，指定的合成审核人批准后执行；合成身份不代表真实身份或审核人分离已经验收。不要将其服务公开或替换为真实客户数据。本页引用的测试摘要对应提交 `e50b0a0`，不等于对之后提交或每次新克隆的复测。
 
 ## 2. 阅读 SQL，再决定是否批准
 
@@ -57,11 +57,15 @@ Dashboard 是同一 QueryRun 的只读投影，不是另一份执行真相源。
 forge quickstart --workdir .forge/quickstart-proof --serve
 ```
 
-## 4. 本地候选能力：有界 Agent 授权
+## 4. 有界 Agent 授权演示
 
-2026-10-04 评估记录中的有界 Agent、独立主体凭证、指定审核人和撤销链路属于**维护者本地未提交工作树**；不是公开 `main` 的已发布能力。公开 CLI 尚无 `--agent` 参数，不要将其追加到上面的克隆安装命令。
+```bash
+forge quickstart --agent
+```
 
-这部分候选设计用于演示自主表范围、需审核资源和撤销拒绝，既不证明模型理解能力，也不替代真实企业身份与数据库权限验收。公开版本的普通 Quickstart 不应被描述为 v2 授权演示。
+`--agent` 在同一套隔离合成数据上演示 v2 有界授权：Agent 是独立凭证主体，管理员签发限定任务、数据源和表范围的授权；自主子集内的查询由 Agent 直接执行，范围外的资源由指定的真人审核人批准；授权撤销后，新的准备请求返回 409 `mandate_inactive`。
+
+它演示的是授权边界，既不证明模型理解能力，也不替代真实企业身份与数据库权限验收。
 
 ## 可选：用于合成环境的自动化回执
 
@@ -77,8 +81,8 @@ forge quickstart --yes --json
 
 它让你观察本地合成数据上的受控 HTTP 查询链路，不证明任意 SQL 都安全、任意数据库都兼容、业务答案正确，或产品已经生产就绪。
 
-[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)整理于 **2026-10-14**，记录的是 **2026-10-04** 包含未提交修改的本地工作树评估，**不是本轮复测**。其中 Python **1011 passed / 26 skipped**、Pi **212 passed**，并记录普通与 `--agent` Quickstart、独立 wheel 安装等结果；Pi 的测试成绩不意味着这条 Quickstart 依赖 Pi。
+[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md)记录了 **2026-10-22** 对公开 `main` 提交 `e50b0a0` 的验证：Python **1049 passed / 26 skipped**（仓库检出）、Pi **226 passed**，远端 CI 五项通过，从 wheel 与 sdist 全新安装后普通与 `--agent` Quickstart 均通过；Pi 的测试成绩不意味着这条 Quickstart 依赖 Pi。
 
-同一报告保留了两项未关闭的 P0 安全发布阻断：Direct SQL 授权检查与 Pi 跨主体事件去重隔离。不要把这份历史记录当作公开 `main`、Release、当前部署或共享多租户安全的认证，也不要接入真实客户数据来替代安全验收。
+2026-10-04 评估所列两项 P0 安全发布阻断（Direct SQL 授权检查与 Pi 跨主体事件去重隔离）已在该版本修复并有回归测试。这些仍是仓库测试与合成环境验证：真实数据库只读角色、真实身份与客户数据、独立安全审核都未验证，不要把它当作生产或共享多租户安全的认证，也不要接入真实客户数据来替代安全验收。
 
 继续阅读：[Forge 介绍](/guides/introduction/) · [基准测试与实验边界](/reference/benchmarks/) · [仓库当前状态](https://github.com/shisuidata/Forge/blob/main/docs/current-project-state.md)。
