@@ -119,21 +119,29 @@ test("lost publish response is retryable and converges on the remote publication
   assert.equal(assertSinglePublishedBundle(state, taskRunId), remote.sent[0]);
 });
 
-test("timed-out publish resends the persisted bundle only after Forge confirms it is absent", async () => {
+test("timed-out publish resends the persisted bundle only after Forge confirms it is absent", async (context) => {
+  // The Stage deadline timer is unref'd for shutdown; a mocked clock drives it without relying on event-loop liveness.
+  context.mock.timers.enable({ apis: ["setTimeout"] });
   const state = new InMemoryOrchestratorState();
   const taskRunId = seedReadyForReport(state);
   const remote = remoteReports();
   const writer = { calls: 0 };
   let hang = true;
+  let sent!: () => void;
+  const dispatched = new Promise<void>(resolve => { sent = resolve; });
   const app = application(state, {
     async createReport(input, _key, signal) {
       if (!hang) return remote.publish(input);
       remote.sent.push(String(input.bundle_hash));
+      sent();
       return new Promise<never>((_, reject) => signal?.addEventListener("abort", () => reject(signal.reason), { once: true }));
     },
     getReport: remote.get,
   }, writer, 50);
-  await assert.rejects(app.renderReport(taskRunId, { audience: "业务负责人" }));
+  const timedOut = assert.rejects(app.renderReport(taskRunId, { audience: "业务负责人" }));
+  await dispatched;
+  context.mock.timers.tick(50);
+  await timedOut;
   assert.equal(app.getTask(taskRunId)?.status, "ready_for_report");
   hang = false;
   const completed = await app.renderReport(taskRunId, { audience: "业务负责人" });
