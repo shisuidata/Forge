@@ -1,17 +1,17 @@
 ---
 title: DSL 语义
-description: Forge DSL 的形式化定义、能力边界与不可能性保证
+description: Forge JSON 的查询语义、结构约束与不能据此推导的保证
 ---
 
 ## Forge DSL 是什么
 
-Forge DSL 是一种**机器生成、确定性编译**的查询中间表示（IR）。LLM 生成 Forge DSL（JSON），编译器将其翻译为 SQL。两步职责严格分离。
+Forge DSL 是一种**机器生成、确定性编译**的查询中间表示（IR）。编译器将支持范围内的 Forge JSON 翻译为 SQL；Direct SQL 是另一种候选格式，不必经过 DSL。两者都仍需评估与执行门禁，见[架构设计](/reference/architecture/)。
 
 ---
 
 ## 与 SQL 执行语义的对应
 
-Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写顺序）：
+Forge DSL 的字段对应 SQL 的**逻辑求值阶段**（不是数据库优化器的物理执行顺序；JSON 对象键的排列顺序也不决定执行顺序）：
 
 | 执行阶段 | SQL 子句 | Forge DSL 字段 |
 |---|---|---|
@@ -27,7 +27,7 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 | 10 | ORDER BY | `sort` |
 | 11 | LIMIT / OFFSET | `limit`, `offset` |
 
-这消除了 SQL 中书写顺序与执行顺序不一致导致的认知错误。
+这种组织方式有助于区分行过滤、聚合和窗口阶段，但不能消除模型的业务或算法错误。
 
 ---
 
@@ -70,18 +70,18 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 
 ---
 
-## 不可能性保证
+## 结构约束与边界（不是不可能性证明）
 
-以下保证只在**合法 DSL、动态 Schema 覆盖且 Provider 严格执行 Structured Output**的相应字段上成立；表达式透传、Provider 降级、业务口径和算法选择不在保证内：
+动态 Schema 与严格 Structured Output 可以约束相应字段的结构和枚举；表达式、Provider 兼容性、业务口径、源数据和算法不在此保证内。合法 JSON、可编译 SQL 都不证明安全或语义正确。
 
-| 错误类型 | SQL 中的问题 | Forge 如何消灭 |
+| 错误类型 | SQL 中的问题 | 约束如何帮助，仍有什么边界 |
 |---|---|---|
-| **无类型 JOIN** | 裸 `JOIN` 等价于 INNER，但意图可能是 LEFT | `type` 字段是必填枚举值 |
-| **NOT IN + NULL** | 子查询含 NULL 时结果集静默为空 | `anti` join 编译为 LEFT JOIN + IS NULL |
-| **受约束位置的幻觉列名/表名** | LLM 生成不存在的列名 | 严格 Provider 路径下，动态 Schema 对多数表列引用强制枚举 |
-| **WHERE vs HAVING 混淆** | 聚合条件放在 WHERE | `filter` 和 `having` 是独立字段 |
-| **GROUP BY 歧义** | MySQL/PG 跨方言行为不一致 | `_coerce` 自动补齐 GROUP BY |
-| **同层聚合别名引用** | 同层 SELECT 引用 agg alias 通常无效 | 仅对本层未限定列引用展开；不修复缺失的CTE输出 |
+| **无类型 JOIN** | 裸 JOIN 默认 INNER，意图可能是 LEFT | `type` 必填可要求显式选择，但仍可能选错类型 |
+| **NOT IN + NULL** | 子查询含 NULL 时可能静默空集 | `anti` 表达反连接语义，不能替代业务意图判断 |
+| **幻觉列名/表名** | 引用不存在的表列 | 严格动态 Schema 约束覆盖的位置；字符串表达式仍需检查 |
+| **WHERE vs HAVING** | 聚合条件误入 WHERE | `filter` 和 `having` 分字段，模型仍可能误填 |
+| **GROUP BY** | 方言与聚合粒度差异 | 部分确定性规范化可修正结构，但不能猜测正确业务粒度 |
+| **同层聚合别名引用** | 同层 SELECT 引用 alias 可能无效 | 仅展开本层未限定引用，不修复缺失的 CTE 输出 |
 
 `_expand_aliases()` 仅展开本层表达式中的未限定 agg/window 列引用。SQLGlot AST 定位原文后单次替换，保留限定源列、常量、函数/类型名和子查询内部作用域；CTE缺失输出不猜测补齐。
 
@@ -104,11 +104,11 @@ Forge DSL 的字段顺序直接对应 SQL 的**执行顺序**（而不是书写�
 |---|---|---|
 | 表达形式 | 树状 S-expression | JSON（LLM 友好） |
 | 约束方式 | 文法规则 | JSON Schema + Structured Output |
-| 容错机制 | 无 | 14 个 `_coerce` 修复 |
-| 方言支持 | 无 | SQLite / MySQL / PG / BQ / SF |
-| 目标场景 | 学术 benchmark | 企业私有化部署 |
+| 容错机制 | 无 | 部分确定性规范化；需行为回归验证 |
+| 方言支持 | 无 | SQLite / MySQL / PG，以及 BQ / SF 编译路径 |
+| 目标场景 | 学术 benchmark | 受控数据查询；不代表已有生产采用 |
 
-IRNet 在 Spider benchmark 上比直接生成 SQL 提升 19.5pp。Forge DSL 是同一理念的工程化实现。
+这是一项历史设计思路对照，不是同模型、同数据的性能比较，也不能据此推导 Forge 的准确率优势。实际成绩与安全发布阻断见[基准与验证边界](/reference/benchmarks/)。
 
 ---
 

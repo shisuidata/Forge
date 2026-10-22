@@ -1,0 +1,16 @@
+{
+  "name": "forge-website",
+  "account_id": "d8c100809bbb7677043b1391a51b7220",
+  "compatibility_date": "2026-10-16",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "routes": [
+    { "pattern": "forge.ss-data.cc", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

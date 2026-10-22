@@ -1,7 +1,13 @@
 ---
 title: Forge 架构教材
-summary: 从可信问数原理到生产落地的完整架构课程
+summary: 历史快照 · 从可信问数原理到生产落地的完整架构课程
 ---
+
+:::caution[历史说明 · 不是当前接入或生产承诺]
+本页保留早期架构、实验成绩与原文；正文中的“当前”“已解决”“生产就绪”仅指当时判断，不代表现行版本或安全认证。旧共享 API Key、pending/approve、v1 执行及原始 SQL 执行方式不得用作生产接入指南，也不要照此连接真实客户数据或公开服务。
+
+当前产品是 **Evaluate → Enforce → Explain** Trust Runtime；公开源码的普通 Quickstart 使用 v1 合成演示。本地未提交 v2 候选才引入独立主体与有界授权、退休旧执行入口；不能将这些变更当成公开版本已发布能力。[最新公开测试摘要](https://github.com/shisuidata/Forge/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md)仍记录 Direct SQL 授权检查与 Pi 跨主体事件去重隔离两项 P0 发布阻断，不提供后续修复认证。请以[当前介绍](/guides/introduction/)、[Quickstart](/guides/quickstart/)和[验证边界](/reference/benchmarks/)为准；旧实验仅在隔离合成环境中作为历史学习材料阅读。
+:::
 
 # Forge 完整架构教材
 
@@ -36,20 +42,20 @@ summary: 从可信问数原理到生产落地的完整架构课程
 
 ## 目录
 
-1. [为什么 AI 问数不可信](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/01-why-trust.md)
-2. [产品边界与总体架构](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/02-overview.md)
-3. [核心技术优势](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/03-core-advantages.md)
-4. [一次查询的完整生命周期](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/04-query-lifecycle.md)
-5. [Forge DSL 与确定性编译](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/05-dsl-compiler.md)
-6. [Registry：组织的数据知识系统](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/06-registry.md)
-7. [Schema 检索与上下文工程](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/07-retrieval-context.md)
-8. [Agent、记忆与 Pipeline](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/08-agent-memory-pipeline.md)
-9. [安全、权限与可信执行](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/09-security.md)
-10. [部署、适配与可运维性](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/10-deployment.md)
-11. [基准、证据与诚实边界](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/11-evidence.md)
-12. [完整实战课程](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/12-labs.md)
-13. [目标架构与演进路线](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/13-roadmap.md)
-14. [附录：术语、源码、测试与授课建议](https://github.com/shisuidata/Forge/blob/main/docs/architecture-course/appendix.md)
+1. [为什么 AI 问数不可信](/course/01-why-trust/)
+2. [产品边界与总体架构](/course/02-overview/)
+3. [核心技术优势](/course/03-core-advantages/)
+4. [一次查询的完整生命周期](/course/04-query-lifecycle/)
+5. [Forge DSL 与确定性编译](/course/05-dsl-compiler/)
+6. [Registry：组织的数据知识系统](/course/06-registry/)
+7. [Schema 检索与上下文工程](/course/07-retrieval-context/)
+8. [Agent、记忆与 Pipeline](/course/08-agent-memory-pipeline/)
+9. [安全、权限与可信执行](/course/09-security/)
+10. [部署、适配与可运维性](/course/10-deployment/)
+11. [基准、证据与诚实边界](/course/11-evidence/)
+12. [完整实战课程](/course/12-labs/)
+13. [目标架构与演进路线](/course/13-roadmap/)
+14. [附录：术语、源码、测试与授课建议](/course/appendix/)
 
 ## 贯穿案例
 

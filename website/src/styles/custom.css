@@ -1,52 +1,206 @@
-/* Forge custom Starlight theme */
+@import "./brand.css";
 
-:root {
-	--sl-font: 'Noto Sans SC', system-ui, sans-serif;
-	--sl-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-	--sl-color-accent-low: #1a1500;
-	--sl-color-accent: #f0a830;
-	--sl-color-accent-high: #fef3c7;
-	--sl-color-white: #e8ecf4;
-	--sl-color-gray-1: #c8cdd8;
-	--sl-color-gray-2: #8896b0;
-	--sl-color-gray-3: #5a6a88;
-	--sl-color-gray-4: #2a3550;
-	--sl-color-gray-5: #1e2740;
-	--sl-color-gray-6: #151b2b;
-	--sl-color-black: #0a0e17;
+/* Starlight-only tokens; the standalone landing page owns its own layout. */
+:root[data-theme] {
+	--sl-font: var(--forge-sans);
+	--sl-font-mono: var(--forge-mono);
+	--sl-nav-height: 4.5rem;
+	--sl-content-width: 48rem;
+	--sl-line-height: 1.85;
+	--sl-line-height-headings: 1.3;
+
+	--sl-color-white: #f3f4ee;
+	--sl-color-gray-1: #e1e5da;
+	--sl-color-gray-2: #c2c9ba;
+	--sl-color-gray-3: #939e8c;
+	--sl-color-gray-4: #66715e;
+	--sl-color-gray-5: #353d30;
+	--sl-color-gray-6: #242a21;
+	--sl-color-gray-7: #1c211a;
+	--sl-color-black: #171b16;
+	--sl-color-accent-low: #42291d;
+	--sl-color-accent: var(--forge-orange-bright);
+	--sl-color-accent-high: #ffac83;
+	--sl-color-text: var(--sl-color-gray-1);
+	--sl-color-text-accent: var(--sl-color-accent-high);
+	--sl-color-text-invert: #171b16;
+	--sl-color-bg: var(--sl-color-black);
+	--sl-color-bg-nav: #1c211a;
+	--sl-color-bg-sidebar: #1c211a;
+	--sl-color-bg-inline-code: var(--sl-color-gray-6);
+	--sl-color-bg-accent: var(--sl-color-accent-low);
+	--sl-color-hairline-light: var(--sl-color-gray-5);
+	--sl-color-hairline: var(--sl-color-gray-5);
+	--sl-color-hairline-shade: var(--sl-color-black);
 }
 
-/* Logo sizing */
-[data-type="logo"] img {
-	height: 1.75rem;
+:root[data-theme='light'] {
+	--sl-color-white: var(--forge-ink);
+	--sl-color-gray-1: #343c30;
+	--sl-color-gray-2: #4c5646;
+	--sl-color-gray-3: var(--forge-muted);
+	--sl-color-gray-4: #909987;
+	--sl-color-gray-5: var(--forge-border);
+	--sl-color-gray-6: #edf0e8;
+	--sl-color-gray-7: var(--forge-bg);
+	--sl-color-black: var(--forge-surface);
+	--sl-color-accent-low: #f9e8df;
+	--sl-color-accent: var(--forge-orange);
+	--sl-color-accent-high: #a73b17;
+	--sl-color-text: var(--forge-ink);
+	--sl-color-text-invert: var(--forge-surface);
+	--sl-color-bg: var(--forge-bg);
+	--sl-color-bg-nav: var(--forge-bg);
+	--sl-color-bg-sidebar: var(--forge-bg);
+	--sl-color-hairline-shade: var(--forge-bg);
+}
+
+:root[data-theme] .site-title {
+	color: var(--sl-color-white);
+	font-weight: 800;
+	letter-spacing: -0.04em;
+}
+
+:root[data-theme] .site-title img {
+	height: 2.5rem;
 	width: auto;
 }
 
-/* Hero section styling */
-.hero {
-	padding-block: 3rem !important;
+:root[data-theme] .sidebar-content {
+	padding-block: 1.5rem;
 }
 
-/* Metric highlights */
-.metric-value {
-	font-family: var(--sl-font-mono);
-	font-size: 2rem;
+:root[data-theme] .sidebar-content .top-level > li + li {
+	margin-top: 1.25rem;
+}
+
+:root[data-theme] .sidebar-content summary {
+	padding-block: 0.45rem;
+}
+
+:root[data-theme] .sidebar-content .large {
+	font-size: 0.8125rem;
+	font-weight: 750;
+	letter-spacing: 0.035em;
+}
+
+:root[data-theme] .sidebar-content a {
+	border-radius: 0.25rem;
+	padding-block: 0.5rem;
+	line-height: 1.55;
+}
+
+:root[data-theme] .sidebar-content a:hover {
+	color: var(--sl-color-text-accent);
+	background: var(--sl-color-gray-6);
+}
+
+:root[data-theme] .sidebar-content a[aria-current='page'] {
+	color: var(--sl-color-text-accent);
+	background: var(--sl-color-accent-low);
+	box-shadow: inset 2px 0 0 var(--sl-color-accent);
+	font-weight: 650;
+}
+
+:root[data-theme] .right-sidebar-panel h2 {
+	font-size: 0.8125rem;
+	letter-spacing: 0.025em;
+}
+
+:root[data-theme] .right-sidebar-panel a {
+	padding-block: 0.35rem;
+	line-height: 1.6;
+}
+
+:root[data-theme] .right-sidebar-panel a[aria-current='true'] {
+	color: var(--sl-color-text-accent);
+}
+
+:root[data-theme] #_top {
+	font-size: clamp(2rem, 4vw, 3rem);
+	font-weight: 750;
+	letter-spacing: -0.045em;
+}
+
+.sl-markdown-content :is(h2, h3, h4):not(:where(.not-content *)) {
+	letter-spacing: -0.025em;
+}
+
+.sl-markdown-content h2:not(:where(.not-content *)) {
+	padding-bottom: 0.55rem;
+	border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+	text-underline-offset: 0.2em;
+	text-decoration-thickness: 1px;
+}
+
+.sl-markdown-content a:hover:not(:where(.not-content *)) {
+	text-decoration-thickness: 2px;
+}
+
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+	padding: 0.18em 0.4em;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.25rem;
+	font-size: 0.85em;
+}
+
+/* Keep syntax highlighting and copy controls under Expressive Code's control. */
+.sl-markdown-content .expressive-code {
+	margin-block: 1.75rem;
+}
+
+.sl-markdown-content .expressive-code .frame {
+	box-shadow: none;
+}
+
+.sl-markdown-content pre:not(.expressive-code pre) {
+	padding: 1.2rem 1.35rem;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.4rem;
+	line-height: 1.7;
+}
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.4rem;
+	font-size: 0.875rem;
+	line-height: 1.7;
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+	padding: 0.8rem 1rem;
+	border-color: var(--sl-color-hairline);
+	vertical-align: top;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+	background: var(--sl-color-gray-6);
+	color: var(--sl-color-white);
 	font-weight: 700;
-	color: var(--sl-color-accent);
 }
 
-.metric-label {
-	font-size: 0.75rem;
+.sl-markdown-content tr:nth-child(even):not(:where(.not-content *)) {
+	background: color-mix(in srgb, var(--sl-color-gray-6) 45%, transparent);
+}
+
+.sl-markdown-content blockquote:not(:where(.not-content *)) {
+	border-inline-start-color: var(--sl-color-accent);
 	color: var(--sl-color-gray-2);
-	margin-top: 0.25rem;
 }
 
-/* Custom card accents */
-.sl-card {
-	border-color: var(--sl-color-gray-4) !important;
+:root[data-theme] .pagination-links a {
+	border-color: var(--sl-color-hairline);
+	border-radius: 0.4rem;
+	box-shadow: none;
 }
 
-/* Code block enhancements */
-pre {
-	border: 1px solid var(--sl-color-gray-4) !important;
+:root[data-theme] .pagination-links a:hover {
+	border-color: var(--sl-color-accent);
+	background: var(--sl-color-bg-accent);
 }

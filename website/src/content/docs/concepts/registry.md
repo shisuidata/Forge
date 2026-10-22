@@ -3,17 +3,21 @@ title: Registry 语义层
 description: Registry 的两层设计（结构层 + 语义层）与从零构建指南
 ---
 
-Registry 是 Forge 的知识库，分为**结构层**和**语义层**。结构层自动生成，语义层需要业务人员参与维护。
+Registry 是 Forge 的知识库，分为**结构层**和**语义层**。结构层自动生成，语义层需要业务人员参与维护。它提供上下文与版本化语义，不是执行授权，也不证明业务定义天然正确。
+
+:::caution[数据与使用边界]
+先使用[Quickstart](/guides/quickstart/)的隔离合成数据。结构同步会读取 Schema 并可能采样字段值；Registry、样本、反馈和审计都可能含敏感信息，不应未经审查上传到模型或公开 Git。当前安全发布阻断见[验证边界](/reference/benchmarks/)，本页不是接入真实客户数据的安全批准。
+:::
 
 ## 结构层（自动）
 
-连接数据库，一条命令生成：
+在已获准的隔离测试数据源上同步结构。通过安全配置提供只读连接，命令示意如下，不要把真实密码写进命令历史：
 
 ```bash
-forge sync --db postgresql://user:pass@host/db
+forge sync --db "$DATABASE_URL"
 ```
 
-产出 `schema.registry.json`，记录所有表名、列名、低基数列的枚举值：
+公开源码的 `forge sync` 默认只输出 drift proposal，不修改 Registry；审阅后才可显式使用 `--apply` 应用同步。输出路径以当前配置与参数为准，结构文件包含表列与可选的低基数枚举值。以下为合成示意：
 
 ```json
 {
@@ -29,7 +33,7 @@ forge sync --db postgresql://user:pass@host/db
 }
 ```
 
-`status` 的枚举值让 LLM 知道正确的拼写（不会幻觉出 `"finished"`）。数据库加表/改列后重跑 `forge sync` 即可。
+`status` 的枚举值提供已知拼写提示，但不会保证所有表达式位置都无法产生错误值。数据库加表/改列后，应重新同步、审阅差异并回归，而不是自动覆盖后立即执行。
 
 ---
 
@@ -70,7 +74,7 @@ repurchase_definition:
   requires_clarification: true   # 首次使用时向用户确认
 ```
 
-当 `requires_clarification: true` 时，Forge 不会直接生成 SQL，而是先确认定义是否正确。
+`requires_clarification: true` 表达需要先确认的规则；实际是否触发取决于上游编排和规则匹配路径，不能把这个字段当作适用于所有 Direct SQL/Agent 接入的强制授权门禁。
 
 ### 字段使用约定 — `field_conventions.registry.yaml`
 
@@ -119,15 +123,15 @@ registry:
 
 回顾团队常问的问题，找出「每次都需要确认含义」的词。
 
-### Step 5：让反馈机制自动丰富语义库
+### Step 5：审阅反馈后再丰富语义库
 
 ```bash
 forge sync-staging
 ```
 
-用户的每次歧义澄清会记录到 `.forge/staging/`，运行上述命令合并回语义层文件。
+旧对话流程可将歧义澄清暂存在 `.forge/staging/`。合并前应审查候选、来源、作用域与敏感值，合并后检查差异和回归结果，不要将任意用户的一次确认自动提升为组织事实。
 
-**正向飞轮**：用得越多 -> 语义库越准确 -> 需要澄清的次数越少。
+经审阅的反馈可能改善语义库；更多使用并不自动保证错误率下降。
 
 ---
 
@@ -144,7 +148,7 @@ registry/data/
 └── *.json
 ```
 
-所有 registry 文件建议提交到 git，团队共享数据结构和业务语义契约。
+可将经脱敏、获准共享的 Registry 定义纳入团队的私有版本控制；不要将生产结构、采样枚举、个人信息、凭证或客户业务口径直接提交到公开仓库。
 
 ---
 
