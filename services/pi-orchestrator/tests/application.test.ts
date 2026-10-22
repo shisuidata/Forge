@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { OrchestratorApplication, type ForgeQueryRunPort, type TrustedRequestPrincipal } from "../src/application.js";
 import { loadConfig } from "../src/config.js";
+import { ForgeClientError } from "../src/forge/client.js";
 import type { QueryRunReview } from "../src/forge/query-run-client.js";
 import { InMemoryOrchestratorState } from "../src/orchestrator-state.js";
 
@@ -123,6 +124,18 @@ test("designated independent reviewer alone can claim; token never enters persis
   assert.equal(calls.filter(call => call.startsWith("approve:")).length, 1);
   assert.equal(JSON.stringify(application.getEvents(task.task_run_id)).includes("one-use-secret"), false);
   await application.finishQueryExecution(task.task_run_id, "qr_demo");
+  assert.equal(application.getQueryReviewProjection(task.task_run_id, principal("bob", "reviewer")), undefined);
+});
+
+test("approving after the review window closes settles the Task as expired without executing", async () => {
+  const { application, task, calls, forge } = fixture("human_review");
+  await application.attachMandate(task.task_run_id, { mandateId: "md_demo", expectedMandateId: null }, principal("alice", "admin"));
+  await application.prepareQuery(task.task_run_id, { question: "Seven", candidate });
+  forge.approveQueryRun = async () => { calls.push("approve:late"); throw new ForgeClientError("Forge returned HTTP 409", 409, "review_expired"); };
+  await assert.rejects(application.approveQuery(task.task_run_id, { queryRunId: "qr_demo", sqlHash, assuranceReportHash: assuranceHash,
+    enforcementContextHash: contextHash, idempotencyKey: "approve-late", controlToken: "one-use-secret" }, principal("bob", "reviewer")));
+  assert.equal(application.getTask(task.task_run_id)?.status, "expired");
+  assert.equal(calls.filter(call => call === "observe").length, 0);
   assert.equal(application.getQueryReviewProjection(task.task_run_id, principal("bob", "reviewer")), undefined);
 });
 

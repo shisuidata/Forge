@@ -10,7 +10,7 @@ export interface QueryRunReview {
   schema_version: 2;
   query_run_id: string;
   task_run_id: string;
-  status: "ready" | "review_required" | "denied" | "executing" | "completed" | "failed" | "cancelled";
+  status: "ready" | "review_required" | "denied" | "executing" | "completed" | "failed" | "cancelled" | "expired";
   decision: { verdict: string; review_required: boolean; execution_authorized: boolean; execution_mode: "autonomous" | "human_review" | null };
   context: { principal_context: Record<string, unknown>; delegated_mandate: Record<string, unknown>; purpose: string; resource_scope: unknown[] };
   candidate: { input_kind: QueryCandidateInput["kind"]; candidate_revision: string; producer_revision: string; candidate_hash: string };
@@ -91,7 +91,7 @@ function run(value: unknown): QueryRunReview {
   const decision = record(body.decision);
   const review = record(body.review);
   if (body.schema_version !== 2 || typeof body.query_run_id !== "string" || typeof body.task_run_id !== "string" ||
-    !["ready", "review_required", "denied", "executing", "completed", "failed", "cancelled"].includes(String(body.status)) ||
+    !["ready", "review_required", "denied", "executing", "completed", "failed", "cancelled", "expired"].includes(String(body.status)) ||
     !["autonomous", "human_review", null].includes(decision.execution_mode as string | null) ||
     typeof decision.execution_authorized !== "boolean" || typeof review.enforcement_context_hash !== "string" ||
     !body.candidate || !body.lineage || (body.status === "completed" && !body.result) ||

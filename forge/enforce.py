@@ -699,7 +699,7 @@ def _failure_for_run(run: dict[str, Any]) -> dict[str, Any] | None:
         return {"stage": "approval", "code": "review_cancelled", "retryable": True}
     if status != "failed":
         return None
-    if run.get("approved_at"):
+    if run.get("approved_at") or run.get("authorization_record"):
         return {"stage": "execution", "code": "execution_failed", "retryable": True}
     report = run.get("assurance_report") or {}
     gates = report.get("gates") or []

@@ -193,3 +193,53 @@ async def test_governed_http_never_classifies_hidden_statements_as_autonomous(
     assert body["decision"]["execution_mode"] is None
     assert body["failure"] == {"stage": "assurance", "code": "assurance_denied", "retryable": False}
     assert body["review"]["sql_hash"] is None
+
+
+def _age_query_run(column: str, query_run_id: str) -> None:
+    from config import cfg
+    past = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    with sqlite3.connect(cfg.QUERY_RUN_DB_PATH) as conn:
+        conn.execute(f"UPDATE query_runs SET {column}=? WHERE query_run_id=?", (past, query_run_id))
+
+
+@pytest.mark.asyncio
+async def test_expired_review_is_persisted_and_leaves_the_reviewer_inbox(client, governed_api):
+    keys, mandate_id = governed_api
+    root = "/api/v2/enforce/query-runs"
+    prepared = await client.post(root, headers=_headers(keys, "worker_api", "expiring-secret"),
+                                 json=_request(mandate_id, "SELECT value FROM secrets"))
+    assert prepared.json()["status"] == "review_required"
+    run_id = prepared.json()["query_run_id"]
+    _age_query_run("expires_at", run_id)
+    inbox = await client.get("/api/v2/governance/reviews", headers={"X-API-Key": keys["reviewer_api"]})
+    assert inbox.json()["reviews"] == []
+    current = await client.get(f"{root}/{run_id}", headers={"X-API-Key": keys["worker_api"]})
+    assert current.json()["status"] == "expired"
+    assert current.json()["failure"] == {"stage": "approval", "code": "review_expired", "retryable": True}
+    approved = await client.post(f"{root}/{run_id}/approve", json=_action(prepared.json()["review"]),
+                                 headers=_headers(keys, "reviewer_api", "late-approval"))
+    assert approved.status_code == 409
+    assert approved.json()["failure"]["code"] == "review_expired"
+
+
+@pytest.mark.asyncio
+async def test_lost_worker_with_expired_lease_is_failed_on_read_without_replay(client, governed_api, monkeypatch):
+    import forge.query_runs as query_runs
+
+    async def lost_worker(query_run_id, claim_id):
+        return None
+
+    monkeypatch.setattr(query_runs, "_run_governed_worker", lost_worker)
+    keys, mandate_id = governed_api
+    root = "/api/v2/enforce/query-runs"
+    prepared = await client.post(root, headers=_headers(keys, "worker_api", "lost-number"),
+                                 json=_request(mandate_id, "SELECT n FROM numbers"))
+    run_id = prepared.json()["query_run_id"]
+    started = await client.post(f"{root}/{run_id}/execute", json=_action(prepared.json()["review"]),
+                                headers=_headers(keys, "worker_api", "lost-execute"))
+    assert started.json()["status"] == "executing"
+    _age_query_run("execution_lease_expires_at", run_id)
+    current = await client.get(f"{root}/{run_id}", headers={"X-API-Key": keys["worker_api"]})
+    assert current.json()["status"] == "failed"
+    assert current.json()["failure"] == {"stage": "execution", "code": "execution_failed", "retryable": True}
+    assert current.json()["result"] is None

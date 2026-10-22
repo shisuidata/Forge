@@ -160,6 +160,7 @@ test("crash between Forge claim and local event recovers by GET without approvin
 for (const [localStatus, remoteStatus] of [
   ["waiting_for_query_approval", "failed"], ["waiting_for_query_approval", "cancelled"],
   ["ready_for_query", "failed"], ["ready_for_query", "cancelled"],
+  ["waiting_for_query_approval", "expired"], ["ready_for_query", "expired"],
 ] as const) {
   test(`restart converges ${localStatus} when Forge QueryRun is already ${remoteStatus}`, async () => {
     const directory = await mkdtemp(join(tmpdir(), "forge-pi-terminal-"));
@@ -191,7 +192,7 @@ for (const [localStatus, remoteStatus] of [
         },
       } });
     application.observePendingQueryExecutions();
-    const expected = remoteStatus === "failed" ? "failed" : "cancelled";
+    const expected = remoteStatus;
     for (let attempt = 0; attempt < 50 && application.getTask(task.task_run_id)?.status !== expected; attempt += 1)
       await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(application.getTask(task.task_run_id)?.status, expected);
@@ -201,8 +202,8 @@ for (const [localStatus, remoteStatus] of [
       assert.deepEqual(failure?.payload, { query_run_id: "qr_terminal", error: "execution_interrupted_or_lease_expired" });
     } else {
       const change = events.filter(event => event.event_type === "task.status_changed").at(-1);
-      assert.deepEqual(change?.payload, { from: localStatus, to: "cancelled", current_stage: null,
-        reason: "query_run_cancelled", query_run_id: "qr_terminal" });
+      assert.deepEqual(change?.payload, { from: localStatus, to: remoteStatus, current_stage: null,
+        reason: remoteStatus === "expired" ? "query_review_expired" : "query_run_cancelled", query_run_id: "qr_terminal" });
     }
     assert.equal(events.filter(event => event.event_type === "query.execution_authorized").length, 0);
     second.close();

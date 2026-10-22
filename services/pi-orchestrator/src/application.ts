@@ -1281,9 +1281,17 @@ export class OrchestratorApplication {
       assuranceReportHash: input.assuranceReportHash, enforcementContextHash: input.enforcementContextHash,
       idempotencyKey: input.idempotencyKey };
     // The remote claim commits before any local approval or execution event and before the HTTP 202.
-    const claimed = action === "approve"
-      ? await this.#forge.approveQueryRun({ ...claimInput, controlToken: input.controlToken! }, signal)
-      : await this.#forge.executeQueryRun(claimInput, signal);
+    let claimed: QueryRunReview;
+    try {
+      claimed = action === "approve"
+        ? await this.#forge.approveQueryRun({ ...claimInput, controlToken: input.controlToken! }, signal)
+        : await this.#forge.executeQueryRun(claimInput, signal);
+    } catch (error) {
+      // Forge closed the review window: nothing ran, so the Task ends instead of waiting forever.
+      if (error instanceof ForgeClientError && error.code === "review_expired")
+        this.#settleTerminalQueryRun(task, "expired", input.queryRunId);
+      throw error;
+    }
     if (claimed.status !== "executing" && claimed.status !== "completed")
       throw new TaskStateError("Forge did not commit execution authorization");
     const running = this.#transactions.run(() => {
@@ -1393,8 +1401,8 @@ export class OrchestratorApplication {
       // Crash after Forge claim but before local commit: recover by GET, never by a new approval/execute POST.
       this.#recoveringQueryRuns.add(task.task_run_id);
       void this.#forge.getQueryRun(event.payload.query_run_id).then(run => {
-        if (run.status === "failed" || run.status === "cancelled") {
-          this.#settleTerminalQueryRun(task, run);
+        if (run.status === "failed" || run.status === "cancelled" || run.status === "expired") {
+          this.#settleTerminalQueryRun(task, run.status, run.query_run_id, run.failure?.code);
           return;
         }
         if ((run.status !== "executing" && run.status !== "completed") || !run.decision.execution_authorized) return;
@@ -1415,25 +1423,26 @@ export class OrchestratorApplication {
   }
 
   // Forge already holds the terminal outcome: record it locally without retrying any remote side effect.
-  #settleTerminalQueryRun(task: TaskRun, run: QueryRunReview): void {
+  #settleTerminalQueryRun(task: TaskRun, status: "failed" | "cancelled" | "expired", queryRunId: string,
+    failureCode?: string): void {
     this.#transactions.run(() => {
       const current = this.#tasks.get(task.task_run_id);
       if (!current || current.status !== task.status) return;
-      if (run.status === "failed") {
+      if (status === "failed") {
         this.#transition(current, "failed", "query_execution");
         this.#events.append(task.task_run_id, "query.execution_failed", {
-          query_run_id: run.query_run_id, error: run.failure?.code ?? run.status,
+          query_run_id: queryRunId, error: failureCode ?? status,
         });
         return;
       }
-      const cancelled = this.#tasks.transition({
-        taskRunId: task.task_run_id, expectedStatus: current.status, status: "cancelled", currentStage: null,
+      const settled = this.#tasks.transition({
+        taskRunId: task.task_run_id, expectedStatus: current.status, status, currentStage: null,
       });
       this.#events.append(task.task_run_id, "task.status_changed", {
-        from: current.status, to: "cancelled", current_stage: null,
-        reason: "query_run_cancelled", query_run_id: run.query_run_id,
+        from: current.status, to: status, current_stage: null,
+        reason: status === "expired" ? "query_review_expired" : "query_run_cancelled", query_run_id: queryRunId,
       });
-      settleExecutionPlan(this.state, cancelled);
+      settleExecutionPlan(this.state, settled);
     });
   }
 

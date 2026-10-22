@@ -237,10 +237,29 @@ def _decode_row(row: aiosqlite.Row) -> dict[str, Any]:
     return result
 
 
+async def _settle_time_decided_query_runs(db, query_run_id: str | None = None) -> None:
+    """Persist outcomes that only the clock decides, so reads never report a stale live state or inbox item."""
+    now = _now().isoformat()
+    scope, args = ("", ()) if query_run_id is None else (" AND query_run_id = ?", (query_run_id,))
+    await db.execute(
+        "UPDATE query_runs SET status='failed', error='execution_interrupted_or_lease_expired', updated_at=?, "
+        "execution_owner=NULL, execution_lease_expires_at=NULL WHERE status='executing' "
+        "AND execution_lease_expires_at IS NOT NULL AND execution_lease_expires_at <= ?" + scope,
+        (now, now, *args),
+    )
+    await db.execute(
+        "UPDATE query_runs SET status='expired', updated_at=? WHERE enforce_schema_version=2 "
+        "AND status IN ('ready','review_required') AND expires_at <= ?" + scope,
+        (now, now, *args),
+    )
+    await db.commit()
+
+
 async def get_query_run(query_run_id: str) -> dict[str, Any] | None:
     await _ensure_schema()
     async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
+        await _settle_time_decided_query_runs(db, query_run_id)
         cursor = await db.execute(
             "SELECT * FROM query_runs WHERE query_run_id = ?",
             (query_run_id,),
@@ -254,6 +273,7 @@ async def list_governed_query_runs(actor, limit: int = 8) -> list[dict[str, Any]
     await _ensure_schema()
     async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
+        await _settle_time_decided_query_runs(db)
         cursor = await db.execute(
             "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND org_id=? AND workspace_id=? "
             "ORDER BY created_at DESC, query_run_id DESC LIMIT ?",
@@ -569,6 +589,8 @@ def _claim_governed_sync(query_run_id: str, actor, action: str, hashes: dict,
             if (record.get("action") != action or record.get("authorizing_principal_id") != authorizer.principal_id):
                 raise QueryRunError("Execution key belongs to another authorization", code="idempotency_key_conflict")
             return "replay", run
+        if run["status"] == "expired":
+            raise QueryRunError("QueryRun expired", code="review_expired")
         if run["status"] != ("ready" if action == "execute" else "review_required"):
             raise QueryRunError("QueryRun cannot be claimed", code="query_run_status_conflict")
         if datetime.fromisoformat(run["expires_at"]) <= _now():
@@ -751,6 +773,7 @@ async def list_reviewer_query_runs(actor, limit: int = 50) -> list[dict[str, Any
     await _ensure_schema()
     async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
+        await _settle_time_decided_query_runs(db)
         cursor = await db.execute(
             "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND status='review_required' "
             "AND reviewer_principal_id=? AND org_id=? AND workspace_id=? "
