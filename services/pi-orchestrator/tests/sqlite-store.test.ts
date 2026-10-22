@@ -157,6 +157,58 @@ test("crash between Forge claim and local event recovers by GET without approvin
   second.close();
 });
 
+for (const [localStatus, remoteStatus] of [
+  ["waiting_for_query_approval", "failed"], ["waiting_for_query_approval", "cancelled"],
+  ["ready_for_query", "failed"], ["ready_for_query", "cancelled"],
+] as const) {
+  test(`restart converges ${localStatus} when Forge QueryRun is already ${remoteStatus}`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "forge-pi-terminal-"));
+    const databasePath = join(directory, "orchestrator.sqlite3");
+    const first = new SqliteOrchestratorState(databasePath);
+    const task = first.tasks.create(taskInput);
+    first.tasks.transition({ taskRunId: task.task_run_id, expectedStatus: "created", status: localStatus, currentStage: "query_review" });
+    first.events.append(task.task_run_id, "query.review_requested", { query_run_id: "qr_terminal", review_required: localStatus !== "ready_for_query" });
+    first.close();
+    const second = new SqliteOrchestratorState(databasePath);
+    const application = new OrchestratorApplication({ config: loadConfig({ PI_EXECUTION_PRINCIPAL_ID: "pi_service" }), state: second,
+      forgeClient: {
+        async createQueryRun() { throw new Error("prepare must not repeat"); },
+        async getMandate() { throw new Error("mandate must not be reissued"); },
+        async approveQueryRun() { throw new Error("approval must not repeat"); },
+        async executeQueryRun() { throw new Error("execution must not repeat"); },
+        async getQueryRun(queryRunId) {
+          return { schema_version: 2, query_run_id: queryRunId, task_run_id: task.task_run_id, status: remoteStatus,
+            decision: { verdict: "allow", review_required: true, execution_authorized: remoteStatus === "failed", execution_mode: "human_review" },
+            context: { principal_context: {}, delegated_mandate: {}, purpose: "bounded", resource_scope: [] },
+            candidate: { input_kind: "direct_sql", candidate_revision: "query-candidate-v1", producer_revision: "test", candidate_hash: "sha256:" + "a".repeat(64) },
+            review: { sql: "SELECT 1 AS n", sql_hash: "sha256:" + "a".repeat(64), assurance_report_hash: "sha256:" + "b".repeat(64),
+              enforcement_context_hash: "sha256:" + "c".repeat(64), expires_at: "2099-01-01T00:00:00Z" },
+            assurance: {}, lineage: { assurance_revision: "v2", policy_revision: "v1", registry_revision: "registry",
+              assurance_report_hash: "sha256:" + "b".repeat(64), enforcement_context_hash: "sha256:" + "c".repeat(64) },
+            result: null, authorization: null,
+            failure: remoteStatus === "failed" ? { stage: "execution", code: "execution_interrupted_or_lease_expired", retryable: false } : null,
+          };
+        },
+      } });
+    application.observePendingQueryExecutions();
+    const expected = remoteStatus === "failed" ? "failed" : "cancelled";
+    for (let attempt = 0; attempt < 50 && application.getTask(task.task_run_id)?.status !== expected; attempt += 1)
+      await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(application.getTask(task.task_run_id)?.status, expected);
+    const events = second.events.list(task.task_run_id);
+    if (remoteStatus === "failed") {
+      const failure = events.find(event => event.event_type === "query.execution_failed");
+      assert.deepEqual(failure?.payload, { query_run_id: "qr_terminal", error: "execution_interrupted_or_lease_expired" });
+    } else {
+      const change = events.filter(event => event.event_type === "task.status_changed").at(-1);
+      assert.deepEqual(change?.payload, { from: localStatus, to: "cancelled", current_stage: null,
+        reason: "query_run_cancelled", query_run_id: "qr_terminal" });
+    }
+    assert.equal(events.filter(event => event.event_type === "query.execution_authorized").length, 0);
+    second.close();
+  });
+}
+
 test("SQLite Task transitions preserve cross-connection compare-and-set semantics", async () => {
   const directory = await mkdtemp(join(tmpdir(), "forge-pi-cas-"));
   const databasePath = join(directory, "orchestrator.sqlite3");

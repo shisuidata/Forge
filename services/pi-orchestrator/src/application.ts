@@ -1389,6 +1389,10 @@ export class OrchestratorApplication {
       // Crash after Forge claim but before local commit: recover by GET, never by a new approval/execute POST.
       this.#recoveringQueryRuns.add(task.task_run_id);
       void this.#forge.getQueryRun(event.payload.query_run_id).then(run => {
+        if (run.status === "failed" || run.status === "cancelled") {
+          this.#settleTerminalQueryRun(task, run);
+          return;
+        }
         if ((run.status !== "executing" && run.status !== "completed") || !run.decision.execution_authorized) return;
         this.#transactions.run(() => {
           const current = this.#tasks.get(task.task_run_id);
@@ -1404,6 +1408,29 @@ export class OrchestratorApplication {
           this.#observeQueryRun(task.task_run_id, run.query_run_id);
       }).catch(() => undefined).finally(() => this.#recoveringQueryRuns.delete(task.task_run_id));
     }
+  }
+
+  // Forge already holds the terminal outcome: record it locally without retrying any remote side effect.
+  #settleTerminalQueryRun(task: TaskRun, run: QueryRunReview): void {
+    this.#transactions.run(() => {
+      const current = this.#tasks.get(task.task_run_id);
+      if (!current || current.status !== task.status) return;
+      if (run.status === "failed") {
+        this.#transition(current, "failed", "query_execution");
+        this.#events.append(task.task_run_id, "query.execution_failed", {
+          query_run_id: run.query_run_id, error: run.failure?.code ?? run.status,
+        });
+        return;
+      }
+      const cancelled = this.#tasks.transition({
+        taskRunId: task.task_run_id, expectedStatus: current.status, status: "cancelled", currentStage: null,
+      });
+      this.#events.append(task.task_run_id, "task.status_changed", {
+        from: current.status, to: "cancelled", current_stage: null,
+        reason: "query_run_cancelled", query_run_id: run.query_run_id,
+      });
+      settleExecutionPlan(this.state, cancelled);
+    });
   }
 
   createSupplementTask(
