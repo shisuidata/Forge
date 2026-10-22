@@ -237,29 +237,40 @@ def _decode_row(row: aiosqlite.Row) -> dict[str, Any]:
     return result
 
 
-async def _settle_time_decided_query_runs(db, query_run_id: str | None = None) -> None:
-    """Persist outcomes that only the clock decides, so reads never report a stale live state or inbox item."""
+_LEASE_EXPIRED = ("status='executing' AND execution_lease_expires_at IS NOT NULL "
+                  "AND execution_lease_expires_at <= ?")
+_REVIEW_EXPIRED = "enforce_schema_version=2 AND status IN ('ready','review_required') AND expires_at <= ?"
+
+
+async def _settle_time_decided_query_runs(query_run_id: str | None = None) -> None:
+    """Persist outcomes that only the clock decides, so reads never report a stale live state or inbox item.
+
+    Reads must not hold a write lock: a read-only probe skips the common case, and autocommit makes each
+    UPDATE finish on the aiosqlite thread, so no lock spans an await while a governance transaction waits.
+    """
     now = _now().isoformat()
     scope, args = ("", ()) if query_run_id is None else (" AND query_run_id = ?", (query_run_id,))
-    await db.execute(
-        "UPDATE query_runs SET status='failed', error='execution_interrupted_or_lease_expired', updated_at=?, "
-        "execution_owner=NULL, execution_lease_expires_at=NULL WHERE status='executing' "
-        "AND execution_lease_expires_at IS NOT NULL AND execution_lease_expires_at <= ?" + scope,
-        (now, now, *args),
-    )
-    await db.execute(
-        "UPDATE query_runs SET status='expired', updated_at=? WHERE enforce_schema_version=2 "
-        "AND status IN ('ready','review_required') AND expires_at <= ?" + scope,
-        (now, now, *args),
-    )
-    await db.commit()
+    async with aiosqlite.connect(_db_path(), isolation_level=None) as db:
+        cursor = await db.execute(
+            f"SELECT 1 FROM query_runs WHERE (({_LEASE_EXPIRED}) OR ({_REVIEW_EXPIRED})){scope} LIMIT 1",
+            (now, now, *args),
+        )
+        if await cursor.fetchone() is None:
+            return
+        await db.execute(
+            "UPDATE query_runs SET status='failed', error='execution_interrupted_or_lease_expired', updated_at=?, "
+            f"execution_owner=NULL, execution_lease_expires_at=NULL WHERE {_LEASE_EXPIRED}{scope}",
+            (now, now, *args),
+        )
+        await db.execute(f"UPDATE query_runs SET status='expired', updated_at=? WHERE {_REVIEW_EXPIRED}{scope}",
+                         (now, now, *args))
 
 
 async def get_query_run(query_run_id: str) -> dict[str, Any] | None:
     await _ensure_schema()
+    await _settle_time_decided_query_runs(query_run_id)
     async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        await _settle_time_decided_query_runs(db, query_run_id)
         cursor = await db.execute(
             "SELECT * FROM query_runs WHERE query_run_id = ?",
             (query_run_id,),
@@ -271,9 +282,9 @@ async def list_governed_query_runs(actor, limit: int = 8) -> list[dict[str, Any]
     if actor.principal_type != "human" or actor.role != "admin":
         raise QueryRunError("Admin required", status_code=403, code="admin_principal_required")
     await _ensure_schema()
+    await _settle_time_decided_query_runs()
     async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        await _settle_time_decided_query_runs(db)
         cursor = await db.execute(
             "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND org_id=? AND workspace_id=? "
             "ORDER BY created_at DESC, query_run_id DESC LIMIT ?",
@@ -771,9 +782,9 @@ async def list_reviewer_query_runs(actor, limit: int = 50) -> list[dict[str, Any
     if actor.principal_type != "human" or actor.role not in {"reviewer", "admin"}:
         raise QueryRunError("Reviewer required", status_code=403, code="reviewer_not_authorized")
     await _ensure_schema()
+    await _settle_time_decided_query_runs()
     async with aiosqlite.connect(_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        await _settle_time_decided_query_runs(db)
         cursor = await db.execute(
             "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND status='review_required' "
             "AND reviewer_principal_id=? AND org_id=? AND workspace_id=? "

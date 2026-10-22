@@ -243,3 +243,26 @@ async def test_lost_worker_with_expired_lease_is_failed_on_read_without_replay(c
     assert current.json()["status"] == "failed"
     assert current.json()["failure"] == {"stage": "execution", "code": "execution_failed", "retryable": True}
     assert current.json()["result"] is None
+
+
+@pytest.mark.asyncio
+async def test_reading_a_live_query_run_takes_no_write_lock(client, governed_api):
+    from config import cfg
+    from forge.query_runs import get_query_run, list_reviewer_query_runs
+    from forge.governance_credentials import authenticate_credential
+
+    keys, mandate_id = governed_api
+    prepared = await client.post("/api/v2/enforce/query-runs", headers=_headers(keys, "worker_api", "locked-read"),
+                                 json=_request(mandate_id, "SELECT value FROM secrets"))
+    run_id = prepared.json()["query_run_id"]
+    reviewer = authenticate_credential(keys["reviewer_api"])
+    writer = sqlite3.connect(cfg.QUERY_RUN_DB_PATH, timeout=0)
+    try:
+        writer.execute("BEGIN IMMEDIATE")  # A governance transaction holding the write lock.
+        run = await asyncio.wait_for(get_query_run(run_id), timeout=2)
+        inbox = await asyncio.wait_for(list_reviewer_query_runs(reviewer), timeout=2)
+    finally:
+        writer.rollback()
+        writer.close()
+    assert run["status"] == "review_required"
+    assert [item["query_run_id"] for item in inbox] == [run_id]
