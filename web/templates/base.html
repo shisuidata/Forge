@@ -6,6 +6,7 @@
   <title>{% block title %}Forge{% endblock %}</title>
   <link rel="stylesheet" href="/static/vendor/tailwind.css?v=1">
   <script src="/static/vendor/marked.umd.js?v=18.0.14"></script>
+  <script src="/static/safe-markdown.js?v=1"></script>
   <style>
     #ai-panel { transition: width 0.2s ease, opacity 0.15s ease; }
     #ai-panel.collapsed { width: 0; opacity: 0; overflow: hidden; padding: 0; border: none; }
@@ -291,7 +292,7 @@ function addAiMsg(role, content) {
     div.textContent = content;
   } else {
     div.className = 'ai-msg-bot rounded-lg px-3 py-2 text-xs ai-md';
-    div.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : content;
+    div.replaceChildren(renderSafeMarkdown(content));
   }
   aiMessages.appendChild(div);
   aiMessages.scrollTop = aiMessages.scrollHeight;
@@ -341,7 +342,7 @@ async function aiSend(text) {
   const welcome = aiMessages.querySelector('.text-center');
   if (welcome) welcome.remove();
 
-  addAiMsg('user', escHtml(text));
+  addAiMsg('user', text);
 
   // loading
   const loading = document.createElement('div');
