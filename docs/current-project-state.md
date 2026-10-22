@@ -1,6 +1,6 @@
 # Forge 当前项目状态
 
-> 状态：当前事实投影 · Last updated: 2026-09-09
+> 状态：当前事实投影 · Last updated: 2026-10-16
 >
 > 本页是人和 Coding Agent 进入仓库后的第一入口。它只投影当前有效状态，不替代需求历史、主动计划或架构文档。
 
@@ -25,6 +25,10 @@ Forge 当前验证的是：
 ## 3. 当前需求与计划
 
 - 当前有效产品需求：`REQ-2026-09-03-025`；`REQ-2026-08-25-023` 已吸收为历史短期切口，`REQ-2026-08-26-024` Benchmark 工作包已验证完成。
+- `REQ-2026-09-23-070` 有界 Agent 治理执行切片已在隔离合成环境完成工程验收；Agent 是独立凭证主体，管理员签发并可撤销单任务/单数据源/总表范围及自主子集授权，非自主表只由指定真人审核。Pi 仍拥有 Task，Forge 同库线性化 Mandate 与 QueryRun v2 claim；Web/渠道只作受信入口与投影。历史 v1 QueryRun 保留只读审计，公开 v1 执行及原始 SQL 入口已关闭（410），旧凭证与未验证历史身份不自动升级。此工程验收不改变 R0.6 外部采用与 H 独立审核门禁。
+- `REQ-2026-09-23-071` 产品工作台实用型视觉优化已在本地完成：产品 Shell 改为无衬线/冷中性界面，待办与阻断前置，SQL 审核和授权先于计划；隔离合成投影的桌面/手机浏览器目视检查与产品页/BFF 聚焦测试通过。未部署 NAS、未提交真实审批，也不改变 R0.6 外部采用门禁。
+- `REQ-2026-10-16-072` 官网重设计已在本地完成：独立 Astro 首页、暖白/墨黑/锻造橙品牌与 Starlight 文档主题，当前介绍/Quickstart/Benchmark 入口、合成示意和显式验证边界；28页构建及真实产物桌面/手机、交互/搜索/链接/自动无障碍检查通过。未提交、部署、重启 NAS 或关闭 Runtime P0/R0.6/H；详细验证见 `website/README.md`。
+- `REQ-2026-10-16-073` 已完成确认的生成式蚊子品牌接入、全部 26 篇官网文档审核及 Cloudflare 静态发布：`https://forge.ss-data.cc/`，独立 Worker `forge-website`。HTTPS、134 项线上资产与本地构建一致、桌面/手机、搜索和导航已验证；只发布官网，不部署 Runtime、不重启 NAS、不提交/推送 Git，P0/R0.6/H 不变。版本、hash 和回退边界见 `website/README.md`。
 - 唯一主动计划：`forge-enterprise-evolution-plan.md`。
 - 当前产品主线：**R0 Open-source Trust Runtime Product Cut / Adoption Baseline**；R0.1–R0.5 已完成，当前实施切片为 **R0.6 External Adoption Evidence**。
 - R0.1 Unified Input Contract 已完成：`query-candidate-v1` 将 Direct SQL 与 Forge JSON 建模为互斥候选；两者进入同一 QueryRun 审批/执行链并绑定 `input_kind`、candidate/assurance/policy/registry revision 与 SQL hash。Direct SQL 在服务端执行只读、语法、Registry/ACL 和字段校验，不经 Forge JSON 转换。
@@ -32,6 +36,8 @@ Forge 当前验证的是：
 - R0.3 Enforce 已完成：版本化 `POST /api/v1/enforce/query-runs`、`GET /api/v1/enforce/query-runs/{query_run_id}`、`POST /api/v1/enforce/query-runs/{query_run_id}/approve` 与 `forge enforce` 将 Principal、Purpose、Task、可选 DelegatedMandate、Resource Scope、Policy、Assurance、Registry 和只读凭证绑定进 QueryRun；回读绑定创建凭证，只有独立 reviewer credential 提交匹配 SQL/Assurance/Enforcement hashes 后才能执行。上下文、Policy、Registry、权限或只读条件漂移均失败关闭。
 - R0.4 Explain 已完成：版本化 `GET /api/v1/explain/query-runs/{query_run_id}`、`forge explain` 与 `explain-query-response-v1` 从同一 QueryRun 投影结果、实际 SQL、Registry 语义/来源、Principal/Policy/Approval、Assurance、Evidence、lineage、版本和显式限制。来源上下文、审批与结果在写入时 hash-bound；篡改失败关闭，历史未锚定 QueryRun 只返回 `integrity=partial`，不伪造证据。
 - R0.5 Public Golden Path 已完成：`forge quickstart` 使用隔离 SQLite 与真实本地服务串联公开 Evaluate → Enforce → Explain API，无需 API Key、LLM、Embedding、Pi、Forge JSON、已有数据库或 `.env`；默认展示实际 SQL 并等待批准，`--serve` 保持 Dashboard 可浏览，`--yes --json` 提供合成数据 CI 证明。Dashboard 只读投影同一 QueryRun 的执行状态与 Evidence integrity，不复制真相源。
+- 当前执行接入以 `/api/v2/governance/*`、`/api/v2/enforce/query-runs`、`/api/v2/explain/query-runs/{id}` 和 `forge quickstart [--agent]` 为准；上文 R0.3–R0.5 的 v1 路径与免凭证描述仅为历史阶段记录。隔离真实 HTTP Forge↔Pi 自主/指定审核人两链、撤销拒绝与浏览器工作台已验证；Python 1011 passed / 26 skipped、Pi 212 passed/typecheck、非 editable wheel Quickstart 通过。NAS 初次曾以合成 SQLite 独立预览，浏览器两条任务完成；随后按下一条用户决策收敛为唯一运行实例。
+- **NAS 单服务原则（2026-09-23）**：用户明确要求 NAS 永远只运行最新 Forge/Pi，一套服务，无旧版与新版并行部署。已停用、禁用并删除旧 M4.1 与 product-spine 两组 user-systemd 服务定义及其运行程序；当前仅 forge-api.service 与 forge-pi.service 启用并运行，入口为内网 18009（Pi 18010）。当前 wheel SHA256 7f5abf7dd40babc96d98bb3b2ebe11ee43d287dba85ecf2295cb559f1a19e596，Pi 包 SHA256 3835dc2974b2eb63d5b3cb33532e33ce69971fa35ea169371da0a30002e9e001；新版仍仅合成 numbers/secrets、合成身份，不具备旧数据/模型能力，readiness 因无模型和内网 HTTP cookie 检查为 fail。旧状态库/敏感配置/备份与源码内数据独立保留、不可由新服务读取；旧代码和 venv 已删除。真实身份/数据迁移未获单独授权，不能将此切换当作生产门禁通过。
 - 当前已完成工程证据：Accuracy Lab 已完成三轮 500 题、1000-call 公共双臂运行。最新 Structured GPT-5.6 Run `pbr_6778bf9d34ae42fba0b070a5f9c154ba` 的运行时封存为 Forge 57.40%、Direct SQL 62.80%；修复确定性 Compiler 后对相同 Forge 候选重评为 62.60% vs 62.80%、Delta -0.20pp。此前文本 GPT-5.6 Run `pbr_76da9a18d96c4e13b2b810ba111bd599` 为 53.20% vs 62.20%，`openai/deepseek-v4-flash` Run `pbr_1f735d433a284366bfe6526146511792` 为 45.40% vs 56.40%。R0.6 采用入口聚焦回归 `14 passed`，Python 全套 `704 passed / 26 skipped`，Pi `118 passed`，TypeScript typecheck 与 Python compileall 通过；实际人工批准与 `--yes --json` 两条 `forge quickstart` 均完成失败关闭、Evaluate、Enforce、Explain 与 Dashboard 链路。另从公开 HTTPS 远端全新克隆 `main@5bbdabe5ceca10fd7128a825d277e5e4534d69e7`，在空工作目录完成 bootstrap + Quickstart 共 36 秒并重算回执 checksum 一致；该维护者 smoke 只证明公开路径可运行，不计入外部采用。
 - `REQ-2026-09-04-032` DeepSeek 完整复验当前失败关闭，不构成第四轮有效 500 题运行：火山 Coding Plan canary 返回 `429 AccountQuotaExceeded`；官方入口 nominal full Run `pbr_9d5e4263afdb46cd8636d4b6599f0708` 虽有 500 个 case 终态，实际每臂仅 78 个候选、422 个候选缺失，运行后独立探针返回 `402 Insufficient Balance`。原始 48/500 vs 54/500 不进入当前得分，也不与历史 DeepSeek 或 GPT-5.6 比较；当前仍只有三轮有效 500 题、1000-call 双臂证据。
 - `REQ-2026-09-03-028` 已验证：GPT-5.6 完整配对运行中 Forge only 22、Direct only 67（双侧 exact p=1.90e-6）；两臂均执行成功的 471 题仍为 22 vs 50。Forge 使用的 tokens 多 52.99%，平均生成时延高 39.37%。这直接否定当前实现和该固定模型下的广义 Forge JSON 准确率优势，不改变 Forge 作为生成后可信运行时的产品边界。

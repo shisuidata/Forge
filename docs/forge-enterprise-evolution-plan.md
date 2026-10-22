@@ -1446,3 +1446,28 @@ Official EA沿用官方tuple-set语义，另报版本化Contract Accuracy（列�
 - 已明确授权审查后在独立候选分支commit、push并创建PR，验证远端CI；不合并main、不tag、不Release、不部署，不新增被测模型调用。
 - 本轮交付REQ-060/061/062已验收成果，并维护现行公共API接入说明，不新增#8外部Agent适配器。分支为`review/forge-engineering-evidence-2026-09-08`，阶段证据见[候选交付记录](candidate-delivery-2026-09-08.json)。
 - 公开范围审查未发现本次新增凭证／私有运行资产；历史84份归档hash匹配。63项相关契约／文档检查和隔离Quickstart通过。[PR #10](https://github.com/shisuidata/Forge/pull/10)已创建：首轮CI的pytest收集失败已复现并修复，代码修订`c5a3954`的五项远端检查通过；失败与成功run均留在候选记录。证据回写提交的最终CI以PR检查与完成评论为准。CI、本会话PR与维护者回执均不是外部采用证据，R0.6/H不晋级。
+## 20. 有界 Agent 治理执行切片（REQ-2026-09-23-070，隔离工程验收完成）
+
+- **授权决策**：Agent 为一等执行主体，人类管理员限定任务/表/有效期、指定责任人和 reviewer；总范围外拒绝，自主子集由同一 QueryRun claim 执行，其余总范围内查询仅指定真人审批。同步迁移 Pi/Web/渠道，不保留并行旧执行入口。
+- **顺序与门禁**：版本化 contract → 同库身份/ACL/Mandate 与认证 → Assurance 物理表引用/确定性 Policy → 单一 QueryRun 原子 claim/证据 → 公开 v2 API/CLI → Pi/Web/渠道统一身份、Task scope、可信控制票据 → 管理界面/隔离 Quickstart → Python/Pi/真实 HTTP/浏览器/非 editable 分发验收。每段新增行为先验证，再继续下一段；跨端切换不得留下旧入口。
+- **稳定边界**：Pi 独占 Task/Stage/Artifact，Forge 独占可撤销授权与可信只读 SQL 执行；权限变更与执行 claim 使用同一 SQLite 事务。Evaluate 保持诊断、不授予执行许可；外部 Agent 可不启动 Pi。首轮单数据源，无外部 IdP、多数据源或完整企业平台。
+- **验收重点**：自主 numbers、人审 secrets、外表与写 SQL 拒绝；撤销/ACL/身份与 claim 先后次序、哈希/凭证绑定、审计历史不重写、lease 过期不重发；Pi 无授权任务 needs_input，attach 后共用 Artifact，渠道未知身份拒绝；UI 真正操作者与 Explain 一致。合成隔离环境，不读取真实凭证或迁移真实库，不调用模型。
+- **退出边界**：内部验收不代替 R0.6 外部开发者使用证据，H 门禁和历史模型结果不因本切片晋级；未完成的跨端切换不可被标记为 verified。
+- **验收记录（2026-09-23）**：合成 SQLite 上受管凭证/Session/ACL/Mandate/QueryRun v2、Pi Task 控制票据与服务 Task scope、Web 工作台与渠道回归贯通；真实 Forge↔Pi HTTP 自主/指定审核人 SQL 执行、撤销拒绝和 Explain 责任链通过。浏览器中人审任务不显示自主执行提示，自主任务仍显示策略授权。Python 全套 1011 passed、26 skipped；Pi typecheck、212 tests passed；wheel 离线构建并非 editable 安装后从仓库外启动 Agent Quickstart 通过。仅隔离合成数据，R0.6/H、真实身份迁移与生产部署均未授权或验收。
+- **NAS 独立预览（2026-09-23）**：用户授权查看效果；选择隔离合成预览而非覆盖生产身份库。新版 Forge/Pi 两个持久 user-systemd 单元仅使用合成授权与独立数据库；真实浏览器自主 numbers、reviewer 审核 secrets 两链完成，Explain 显示 reviewer 身份。原生产 Forge/Pi 和数据库未改，版本 `dee4f82`；未做真实身份迁移、模型生成或 R0.6 晋级。预览 readiness 因无模型和内网 HTTP cookie 条件为 fail，不得当作交付生产门禁通过。
+- **NAS 单实例修正（2026-09-23）**：用户明确只保留最新服务；移除 M4.1/product-spine 两组旧运行单元及代码，新版改为唯一 forge-api.service/forge-pi.service，不保留并行旧版。新 Pi 依赖已从旧源码独立；保留旧数据库、凭证、日志与备份离线待有授权的迁移/处置。当前仍只支持合成身份和 Direct SQL 演示，无模型，不因完成服务收敛而改变真实身份迁移、生产 readiness 或 R0.6/H 门禁。
+
+## 21. 官网重设计（REQ-2026-10-16-072，已授权）
+
+- **范围**：参考 Langfuse、Supabase、dbt 的信息结构与视觉方法，原创首页及文档品牌层，沿用 Astro/Starlight 和既有文档路由；校准 Trust Runtime、当前接入方式、历史成绩与已知限制。
+- **实施顺序**：实站研究 → 需求及内容边界 → 独立首页/本地字体/文档主题与关键指南 → 构建及桌面/手机真实浏览器交互验收。
+- **退出门禁**：仅本地官网交付；示意不是实时 Runtime；不虚构采用或安全认证，不因此关闭 P0、R0.6/H，不自动 commit/push/部署。
+- **本地验收（2026-10-16）**：独立首页、共享品牌/明暗文档、当前介绍/Quickstart/历史证据分层完成；28页构建、搜索及真实产物桌面/手机、交互/键盘、链接与自动无障碍检查通过。无 Runtime 或生产操作，当前仍为 R0.6；验收范围及保留警告见 [website/README](../website/README.md)。
+
+## 22. Cloudflare 静态官网发布（REQ-2026-10-16-073，已授权）
+
+- **目标**：采用确认的生成式蚊子标记，校准公开文案，在 Cloudflare 发布到 `forge.ss-data.cc`。
+- **顺序**：Logo 派生/接入 → 全站当前与历史叙事及素材审核 → DNS/账户/站点占用核对 → 仅静态产物部署 → HTTPS/资源/导航/手机验证及版本回执。
+- **边界**：不部署运行时，不启动 NAS，不改客户身份/数据或其它站点；不自动 git commit/push，不绕过 Cloudflare 交互授权；P0/R0.6/H 不因官网发布晋级。
+- **发布验收（2026-10-16）**：品牌深浅/图标派生与 26 篇文档审核完成，区分公开 v1 合成演示、本地未发布 v2 与历史叙事。独立 Worker `forge-website` 已发布 `https://forge.ss-data.cc/`，版本 `82162d84-1a2e-4c19-b158-ceb6f88a885f`；HTTPS、134 项资产逐项 hash、搜索跳转、导航与手机显示通过。无 Runtime/API、NAS、其它站点或 Git 推送操作，不关闭产品门禁；完整回执及回退边界见 [website/README](../website/README.md#cloudflare-上线回执2026-10-16)。
+

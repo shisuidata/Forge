@@ -7,8 +7,7 @@
 - Pi Orchestrator 拥有流程调度权。
 - Forge Python 服务拥有查询规划、编译、审批验证和数据库执行权。
 - 本服务不持有数据库凭证，不启用 Pi 内置 `bash/read/write/edit` 工具。
-- 当前显式授权拾穗 DATA 固定版本中实际存在的 20 个生产 Skills 和 `forge_prepare_query`；个人全局 Skills、Extensions 和 AGENTS.md 不加载。每个 Stage 仍只注入一个 Skill。
-- `forge_prepare_query` 只能返回待审核 SQL，不能批准或执行。
+- 生产 Skills 的 Stage 只能返回候选；SQL 必须经过已签发任务授权、Forge Assurance、QueryRun v2 claim 后由 Forge 执行。
 
 详细设计见：
 
@@ -30,7 +29,7 @@ npm start
 curl http://127.0.0.1:4310/health/readiness
 ```
 
-Integration Spike Task API：
+受管 Task API（`/v1/tasks` 写请求须 Forge 签发的短时控制票据，且 Pi 从 Forge 回查主体、scope 与权限；`/v1/internal/task-scopes/{id}` 仅受信 Channel Service 可读取）：
 
 ```text
 POST /v1/tasks
@@ -50,9 +49,7 @@ POST /v1/tasks/{task_run_id}/resume-analysis
 POST /v1/tasks/{task_run_id}/render-report
 ```
 
-所有长耗时 POST Stage 都支持请求体 `{"async": true}`。异步模式返回 `202 Accepted` 以及 Task/Event/Artifact/Attempt polling URL；不传时保留同步响应作为迁移期兼容。渠道应优先使用异步模式，不要依赖长 HTTP 连接。
-
-`prepare-query` 创建持久化 Forge QueryRun；`approve-query` 只能提交与 ReviewRequest 完全匹配的 `query_run_id + sql_hash`。实际安全校验和只读执行仍由 Forge 完成。`incomplete` 分析最多允许从最新 `suggested_queries` 选择一次补查；补查创建 child TaskRun，仍需独立 SQL 审批，完成后父任务合并两个 QueryResult 重新分析。
+耗时 Stage 推荐 `{"async": true}` 与 polling；Pi 只转送 Forge QueryRun v2 的审批与结果，不创建第二套执行授权。`prepare-query` 需要已绑定且仍有效的 Mandate，非自主表进入指定真人审核；`approve-query` 必须由指定审核人以完整 hashes 确认。补查 child TaskRun 须独立授权，不继承执行权。
 
 环境变量：
 
@@ -63,17 +60,13 @@ POST /v1/tasks/{task_run_id}/render-report
 | `SHISUI_DATA_SKILLS_DIR` | Forge 同级的 `拾穗 DATA` | 固定版本 Skills 包路径 |
 | `PI_ORCHESTRATOR_AGENT_DIR` | 服务目录 `.runtime` | 隔离的 Pi 配置目录 |
 | `PI_ORCHESTRATOR_STATE_DB` | `<agentDir>/state/orchestrator.sqlite3` | Task/Event/Artifact/StageAttempt/ChannelEvent SQLite 真相源；生产环境挂载持久卷 |
-| `PI_CHANNEL_IDENTITY_MAP` | `<agentDir>/channel-identities.json` | 飞书/钉钉外部用户到组织身份的只读映射；修改后重启加载 |
-| `PI_CHANNEL_SERVICE_KEYS` | 空 | Channel Adapter 调用 `/v1/channel-events` 的服务端密钥列表 |
-| `PI_CHANNEL_AUTO_BIND_FIRST_FEISHU` | `false` | 个人部署的一次性首用户绑定；仅首个通过 Adapter 鉴权的飞书 message 可原子写入 Identity Map |
-| `PI_CHANNEL_BOOTSTRAP_ORG_ID` / `TEAM_ID` / `USER_ID` | `org_default` / `team_default` / `feishu_owner` | 一次性绑定使用的组织身份；绑定后未知用户继续失败关闭 |
-| `PI_ADMIN_SERVICE_KEYS` | 空 | 组织管理员配置 Team Skill Policy 的服务端密钥列表；未配置时管理 API 失败关闭 |
+| `PI_CHANNEL_SERVICE_KEYS` | 空 | Channel Adapter 与 Forge Task-scope lookup 的受信通道密钥；未知渠道用户必须先由管理员显式登记绑定 |
 | `PI_STAGE_TIMEOUT_MS` | `240000` | 单个模型或 Forge Stage 的执行超时 |
 | `PI_STAGE_LEASE_MS` | `300000` | StageAttempt lease；必须大于 Stage timeout |
 | `PI_RECONCILIATION_INTERVAL_MS` | `30000` | 回收过期 StageAttempt 的扫描间隔 |
 | `FORGE_BASE_URL` | `http://127.0.0.1:8000` | Forge 可信执行层地址 |
-| `FORGE_API_KEY` | 空 | 仅旧 `/api/prepare-query` 使用的普通 Forge API Key |
-| `FORGE_PI_SERVICE_KEY` | 空 | 内部 QueryRun API 专用服务密钥；必须匹配 Forge `PI_SERVICE_API_KEYS` |
+| `FORGE_PI_SERVICE_KEY` | 空 | Forge 中注册的 `pi_service` 凭证；仅用于服务间请求，不是人类管理员密钥 |
+| `PI_EXECUTION_PRINCIPAL_ID` | 空 | Forge 中注册的 Pi service principal，必须与凭证身份及任务授权执行者一致 |
 | `FORGE_REQUEST_TIMEOUT_MS` | `220000` | Forge 请求超时 |
 | `PI_MODEL_PROVIDER` | 空 | 专用 Pi Runtime 的模型 Provider；必须和 `PI_MODEL_ID` 同时配置 |
 | `PI_MODEL_ID` | 空 | 专用 Pi Runtime 的模型 ID；模型目录只从 `PI_ORCHESTRATOR_AGENT_DIR` 加载 |
@@ -87,16 +80,14 @@ cp models.coding-plan.example.json .runtime/models.json
 
 PI_MODEL_PROVIDER=volcengine-coding-plan \
 PI_MODEL_ID=ark-code-latest \
-node --env-file=../../.env --import tsx src/server.ts
+node --import tsx src/server.ts
 ```
 
-模板只引用 `$ARK_API_KEY`，不保存或回显 Key。生产环境应由服务编排器单独注入该变量，不要挂载包含其他业务凭证的完整 `.env`。`/health/readiness` 只有在专用模型可用时返回 `status: ok`，否则返回 `degraded`。
+模板只引用 `$ARK_API_KEY`，不保存或回显 Key。本地单独注入模型凭证，或用受限 `PI_MODEL_SECRET_REF` 指向只包含该变量的 0600 文件；Pi→Forge 另需注册 `pi_service` 凭证和执行身份。不要挂载完整业务 `.env`。`/health/readiness` 的运行时/治理降级不能当作已具备授权查询能力。
 
 当前服务提供健康检查、Runtime 能力检查、SQLite Task/Event/Artifact/StageAttempt/ChannelEvent Store 和 Task API；内存 Store 仅用于单元测试和显式注入。正式状态库启用 WAL、foreign keys 和 5 秒 busy timeout，当前 schema version 为 4；遇到更高版本会拒绝启动，禁止用旧服务降级打开新数据库。备份应使用 SQLite 在线备份能力，或停服后复制数据库文件；不要只复制运行中的主文件而遗漏 WAL。等待审批、`incomplete`、`ready_for_analysis` 和 `ready_for_report` 等安全暂停状态可跨进程恢复。Analysis、Report、Advisory Skill 和 QueryRun approval 已绑定持久化 Attempt/Lease；过期 lease 只恢复到可重试状态并写审计事件，不自动重放模型或 SQL。
 
-20 个生产 Skills 都使用隔离 Pi Session，并且只能通过终止型 Structured Output Tool 提交 Artifact。四个核心流程 Skill 使用专用 Artifact；其余 16 个 Skill 使用有界 `AdvisoryArtifact`。漏斗、留存、EDA 和 A/B 若要标记 complete，必须引用实际 QueryRun 行；其他数据结论也不得引用输入范围外的 evidence。团队可通过带 Admin Service Key 的版本化 CAS Policy 启停 Skill，变更持久化审计。Pi 模型目录生成非密 `model_revision` 并固定到新 StageAttempt，在途 Attempt 不随目录变更漂移。报告只能复用 AnalysisArtifact finding 和证据，Markdown 由服务端确定性渲染。Pi 只负责调度批准动作；QueryRun、审批记录和查询结果由 Forge 持久化。
-
-Forge Web 可在设置 `PI_ORCHESTRATOR_ENABLED=true` 后访问 `/tasks`，审核 hash 绑定的 SQL 并查看只读执行结果。
+Skills 以隔离 Pi Session 生成结构化 Artifact；只有已绑定任务授权的查询可进入 Forge 的 QueryRun v2。团队 Skill Policy 由真实管理员的受信控制票据管理；Pi 模型修订绑定 StageAttempt，报告仅复用已有 Evidence。Forge Web 的 `/tasks` 提供任务授权和指定真人审核，渠道是投影，不自行批准查询。
 
 ### State 与阶段恢复契约
 
@@ -115,8 +106,6 @@ Forge Web 可在设置 `PI_ORCHESTRATOR_ENABLED=true` 后访问 `/tasks`，审�
 
 ## Channel Adapter
 
-复制 `channel-identities.example.json` 到 `PI_CHANNEL_IDENTITY_MAP` 指定位置，并为 Bot 单独注入与 `PI_CHANNEL_SERVICE_KEYS` 匹配的 `PI_CHANNEL_SERVICE_KEY`。`POST /v1/channel-events` 必须携带 `X-Channel-Service-Key`；未知飞书 `open_id` 或钉钉 `user_id` 会失败关闭。`(channel,event_id)` 在 SQLite 中唯一，平台重试不会创建第二个 TaskRun 或重复批准。
+飞书与钉钉用户须在 Forge 管理界面显式登记外部身份绑定。Adapter 使用 `PI_CHANNEL_SERVICE_KEY` 调用受信 ChannelEvent API；未知或撤销绑定失败关闭，不能首用户自动认领。渠道事件去重不创建第二个 TaskRun，不代替真实人的 QueryRun 审批。
 
-飞书迁移由 `FEISHU_PI_ENABLED=true` 开启。设置页保存 App 凭证时会先调用飞书官方接口验证，再由受管 Runtime 热启动 `python -m web.feishu_pi` WebSocket 进程；无需重启 API。新消息和新 Pi 卡片只走 ChannelEvent → Pi Task API，旧卡片会提示失效。HTTP webhook 与 WebSocket 不能同时消费同一应用事件。个人部署可显式开启一次性首用户绑定；它只在飞书 Identity Map 为空、Adapter Service Key 已通过且收到 message 时生效一次，不是 wildcard 授权。
-
-飞书的投递 receipt 位于 `QUERY_RUN_DB_PATH` 同目录的 `channel_delivery.db`，独立于 Task 真相。`GET /api/pi/tasks/{task_run_id}/deliveries` 按授权 scope 查看状态，`POST /api/pi/deliveries/{delivery_id}/retry` 仅重读原 presentation 并重送，不重提 ChannelEvent 或执行 SQL。未知投递与用量不补为成功/零；进程存活与 WebSocket 连接证据分开。公共诊断只读联查既有 Store，任何来源不可用显示 partial。
+渠道投递 receipt 独立于 Pi Task 真相。`GET /api/pi/tasks/{task_run_id}/deliveries` 按登录主体 scope 查看，`POST /api/pi/deliveries/{delivery_id}/retry` 只重送原 presentation，不重新执行 SQL。投递未知不冒充成功。

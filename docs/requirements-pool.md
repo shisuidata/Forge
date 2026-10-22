@@ -6,7 +6,7 @@
 
 ## 0. 当前有效需求
 
-- 当前有效产品需求：`REQ-2026-09-03-025`；`REQ-2026-08-25-023` 已吸收为历史短期切口，`REQ-2026-08-26-024` 已作为 Benchmark 证据验证完成。
+- 当前有效产品需求：`REQ-2026-09-03-025` 与 `REQ-2026-09-23-070`；`REQ-2026-08-25-023` 已吸收为历史短期切口，`REQ-2026-08-26-024` 已作为 Benchmark 证据验证完成。
 - 当前阶段：R0 Open-source Trust Runtime Product Cut / Adoption Baseline。
 - 当前产品身份：面向企业 Data Agent 的开源可信数据运行时；近期以 Evaluate、Enforce、Explain 三条路径建立开发者采用证据。
 - Direct SQL、Forge JSON 和后续 Semantic Query 都是可替换输入；Forge 的产品边界位于生成后的验证、运行时约束、可信执行、Evidence 与 Audit，不再把 Forge JSON 准确率作为产品身份。
@@ -2472,3 +2472,46 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 - **本轮验证**：基线与各 Phase 门禁 pytest 均 1012 passed / 26 skipped（FORGE_BASE_URL 指向空端口固定浏览器 e2e 跳过；本机 8000 端口被其他项目占用，否则会误测并挂起）；seed_large.py 再生 large_demo.db 字节大小一致（26669056）；uvicorn 烟测 /health=200、/=302、/login=200；`forge quickstart --workdir /tmp/gov-quickstart --yes --json` 总体 passed（fail_closed 按预期拒绝 readonly_violation、Evaluate passed、Enforce completed、Explain integrity=verified、Dashboard passed）；Pi typecheck 通过、226 passed；website build 28 页退出码 0；卫生门禁 4 项通过。
 - **证据**：`docs/file-structure-governance-2026-09-21.json` 登记全部移出/删除文件的 SHA-256、router 拆分模块映射与偏差说明。
 - **边界**：不重写 git 历史；不删 feat/deepseek-strict-mode 分支及其 2 个非 main 祖先提交；不读取/清理 .forge/ 数据内容与 docs/conversation-logs/；不动 CI 矩阵；agent↔forge 包级双向 import 保留为 known_debt；不 commit/push/部署/调模型，提交授权另行给出。
+## REQ-2026-09-23-070：有界 Agent 执行闭环与 Pi 工作台统一治理
+
+- **状态**：implementation verified；NAS 仅运行最新一套合成 Forge/Pi，真实数据/身份和模型尚未迁移，外部采用仍未验证。真实存量身份迁移仍需来源与单独授权。
+- **原始表达**：将 Agent 作为一等执行主体，人类负责授权、监督、例外审批和责任；优化并重构 Forge 现有执行链。用户明确选择按表划分任务可查询总范围及可自主查询子集，并同步迁移 Pi/Web 工作台，而非另外部署一个关闭存量入口的模式。
+- **目标用户与结果**：管理员签发绑定真实 Agent、任务、期限、数据源、表集合、责任人与指定审批人的可撤销授权；范围外拒绝，范围内自主表由 Agent 经同一 QueryRun claim 执行，非自主表由指定真人审批。外部 Agent 不依赖 Pi；Pi/Web/渠道使用同一身份、授权、执行及 Evidence 链。
+- **价值与职责**：在保持 Pi 独占 Task 状态、Forge 独占可信 SQL 执行与权限失败关闭的前提下，降低逐次人审的负担，同时保留真实授权人、执行者和审计链。权限/ACL/Mandate 与 QueryRun claim 共用 SQLite 事务，不复制授权状态到 Pi。
+- **边界**：首轮单数据源、SQLite、只读 SQL；不接外部 IdP、多数据源或完整企业权限平台；Evaluate 是诊断而非执行许可。旧未执行 QueryRun 不回填虚假身份，旧执行入口一次性关闭。真实存量身份迁移须另有明确来源授权；本轮只在合成库证明离线迁移工具。
+- **风险和缓解**：旧 cookie/key 失效及 Pi/Web 集成范围大；切换必须覆盖所有调用方，不能用开关保留绕过路径。撤销与 claim 必须同库线性化，claim 后已发 SQL 不能被撤销伪称终止；过期 lease 不重发高风险查询。权限空集合明确拒绝，旧主体不可自动归入 default。
+- **替代与机会成本**：保留逐次审批较小改动却不满足 Agent 自主目标；另起 Pi 外部执行部署会让旧入口继续绕过治理。选择同步迁移，代价是合同、存储、API、Pi、渠道、UI 和 Quickstart 必须共同验收，延后非核心平台扩张。
+- **决定与可证伪条件**：用户批准有界授权、按表自主范围和同步 Pi 工作台。测试必须证明外部 Agent 自主与人审链、抢先撤销、独立审批、Pi 端到端和无旧入口逃逸；外部使用者回执仍是 R0.6 独立门禁。实施切片见唯一主动计划“有界 Agent 治理执行切片”。
+- **隔离验收（2026-09-23）**：同库注册 human/agent/service 身份、可撤销凭证与 Session、ACL/单数据源 Mandate、QueryRun v2 的自主/指定真人审核两链已贯穿 Forge、Pi、Web 和渠道；过期、撤销、竞态、SQL 物理表和只读约束失败关闭。公开 v1 执行与原始 SQL 入口返回 410。真实 HTTP 以合成 numbers 在 Pi 完成自主与人审查询，审核人实际凭证出现在 Explain；撤销后新 prepare 返回 409。实际浏览器核对工作台区分人审与策略执行；Python 1011 passed / 26 skipped、Pi 212 passed/typecheck、隔离 wheel 非 editable 安装的 Agent Quickstart 通过。没有外部开发者回执、不晋级 R0.6；未用客户凭证、未部署或发起模型调用。
+- **后续 NAS 预览（2026-09-23）**：用户要求在 NAS 查看新代码效果；为避免未授权的存量身份迁移，新版 Forge/Pi 使用独立 user-systemd 单元、端口、虚拟环境、0600 合成凭证与 SQLite，仅连接合成 numbers/secrets，不读/写现网配置和数据。浏览器实测管理员签发绑定后自主任务完成，指定 reviewer 审批后任务完成、Explain 验证实际审核人；修复 reviewer 已 claim 后仍显示旧批准动作及非 owner 的受限审核页，Python 1011 passed/26 skipped、Pi 212 passed/typecheck。正式两服务 active、原 main 工作树 clean 且版本保持 `dee4f82`；预览因未配置模型及 LAN HTTP 的安全 cookie 检查而 readiness=fail，不开放模型生成或宣称生产可用。回滚只需停用预览单元并删除独立目录。
+- **NAS 单服务切换（2026-09-23）**：用户明确否定 NAS 上并行旧版与新版两套的做法，要求永远仅运行最新一套。核对发现原有 M4.1、product-spine 候选与新版三组均在运行；先把新版 Pi 的 node_modules 从旧源码链接复制为独立目录并重启验证，再停用/删除旧两组 unit 和代码/venv，把嵌在旧源码中的 .forge、审计库、forge.yaml 迁至隔离保留目录；旧 state/config/backups 原地保留，均不接入新版。现仅 forge-api.service/forge-pi.service 启用运行，旧 18001/18007 与 Pi 14310/14311 已无监听，新版内网 18009/18010 可用；admin 授权任务 200、reviewer 审核任务 200、旧执行 POST 410。此是单实例切换而非真实身份/数据迁移；readiness 仍 fail，模型能力未恢复。
+
+## REQ-2026-09-23-071：产品工作台实用型视觉优化
+
+- **用户原始表达**：“感觉我们这个整体的 webUI 人文气息太重了，字体和排版都是如此，我需要以实用为主，你看看是不是应该优化一下”；评估建议后用户确认：“好的，那就去做吧”。
+- **状态**：completed locally；产品工作台视觉层级、字体与排版已改，未部署或发布。
+- **价值**：让任务状态、阻断、指定审批、精确 SQL 与 Evidence 更易扫描，减少装饰性标题和重复说明占用首屏。
+- **边界与复用**：沿用 product_base.html 与 product.css 的现有组件/响应式规则；优先工作台、任务列表和任务详情，不重绘独立的旧管理后台，不更改数据、权限、审批动作或文案事实。
+- **风险和替代**：一味压缩会让已较小的辅助文字更难读、误点审批；保持正文可读、操作命中面积和状态/证据区分。仅换颜色或字体不解决信息优先级；全面重建 Shell 会扩大 R0.6 之外的产品范围。
+- **机会成本和验收**：这轮投入视觉优化而非外部采用采集；以桌面/窄屏实际页面检查首屏待办、状态与审核信息的扫描性、可读性和无横向溢出，保留现有流程行为。没有外部试跑回执，R0.6 门禁不变。
+- **实施与验证**：统一产品 Shell 为无衬线字与冷中性底色，减小装饰标题/留白，增强表格、审核哈希及授权文字可读性；工作台按待办/阻断优先、手机统计为双列；任务页移除重复标题，详情将 SQL 审核与授权置于计划前。隔离 Jinja 预览使用合成 API 投影，浏览器检查桌面 1440px、手机 390px/320px，无横向溢出，审核按钮和任务顺序可见；真实 FastAPI 产品路由及 BFF 聚焦测试 8 passed。未检查 NAS 实际登录页或真实审批提交，不改变 R0.6/H。
+
+## REQ-2026-10-16-072：参考同类优质产品重做 Forge 官网
+
+- **用户原始表达**：“看到了，但我们我网站还是太差了，需要优化，请你找到同类产品的优质网站，帮我模仿其做一个新的”。
+- **状态**：completed and verified locally；官网重设计和浏览器验收已完成，未提交、发布、绑定域名或部署。
+- **价值与参考**：借鉴 Langfuse 的克制布局与开发者导航、Supabase 的产品分区与接入入口、dbt 的品牌节奏和产品叙事；重新表达 Trust Runtime 的价值、证据与独立接入路径，不复制品牌素材、虚构客户或采用数据。
+- **边界与复用**：沿用 Astro + Starlight；独立官网首页，保留已有文档路由，统一文档主题并校准介绍、Quickstart 和 Benchmark 入口；不修改 Forge/Pi Runtime、治理门禁、NAS 或真实数据。
+- **风险与替代**：旧首页的 100%/已解决/生产就绪表述与当前证据不符，重设计须移除泛化宣传，示意面板必须标注合成/非实时。只换主题不足以解决产品叙事；更换框架或扩建商业后台会扩大范围。
+- **机会成本与验收**：官网投入不能替代 P0 安全修复、R0.6 外部采用或 H 独立审核。以实际构建、桌面与手机浏览器、导航/复制/示意切换/键盘/无障碍和无外部字体依赖验收；参考与最终验证写入 website/README.md。
+- **实施与验证（2026-10-16）**：独立 Astro 首页与 Starlight 文档主题完成；本地字体、原创标记、三阶段示意、手机导航、复制/拒绝反馈、FAQ 和首要指南/基准入口已落地。构建 28 页及搜索索引通过；实际产物浏览器验证 1440/390/320px、主题/搜索/键盘/内部 38 URL 与锚点、限制外网仍加载及无障碍（所检页面 0 条确认违规，保留人工项）。未重跑 Python/Pi、未修复 Runtime P0、未commit/push/部署或重启 NAS；R0.6/H 不变。参考、文件职责与警告详见 [官网说明](../website/README.md)。
+
+## REQ-2026-10-16-073：采用生成式蚊子标记并发布 Cloudflare 官网
+
+- **用户原始表达与决定**：对 GPT Image 2 生成的蚊子图形确认“这个可以，就按这个来”；随后要求“确认官网文案什么的没有问题但话，就可以直接部署了”，域名最终纠正为“forge.ss-data.cc”，并指定“cf”。此前 forge.elazer.wang 不作为发布目标。
+- **状态**：accepted / completed（静态官网）；已完成品牌接入、公开内容审核和 Cloudflare 静态官网部署，不包含提交/推送未知代码或公开 Forge Runtime。
+- **价值与边界**：保持用户选定的图形，派生透明/深浅背景与图标资产；核对全站当前与历史文案、公开资源和接入说明；只上传 website 静态构建，不读取客户数据、不重启/公开 NAS API/Pi，不触碰其它 ss-data 子站。
+- **风险与替代**：生成图为栅格，不伪称 SVG/矢量；小尺寸与深色需实测，派生处理保留原图。Cloudflare 账户、域名占用、DNS/TLS 和权限须现场核对，未知站点不覆盖，额外 OAuth/账户授权由用户完成。可保留本地预览，但不能把预览地址或构建成功当作域名已上线。
+- **机会成本与验收**：公开站点不等于生产 Runtime 安全/采用验收，P0/R0.6/H不改变；以实际静态产物、素材/文案检查、HTTPS域名、导航/资源/搜索/手机、版本hash与回退记录验收；明确未完成项。
+- **实施与验证（2026-10-16）**：确认图形已用于首页、文档深浅主题及浏览器图标；逐路由审核 26 篇文档，纠正公开命令与未发布候选混用，历史安全/成绩叙事显式加注。Cloudflare 独立 Worker `forge-website` 首次上线 `https://forge.ss-data.cc/`，134 项静态资产线上/本地逐文件一致；HTTPS、27 页/48 目标本地链接、线上桌面/手机、搜索跳转及导航通过。版本、hash 和首次部署回退边界见 [官网上线回执](../website/README.md#cloudflare-上线回执2026-10-16)。不部署 Runtime、不动 NAS/其它站点、不扩大权限、不提交/推送 Git；P0/R0.6/H 不变。
+
