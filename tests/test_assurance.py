@@ -359,6 +359,28 @@ def test_direct_sql_assurance_rejects_mutation(assurance_registry):
     assert caught.value.report.gates[-1].gate == "sql_safety"
 
 
+@pytest.mark.parametrize("sql", [
+    "SELECT '/*'; SELECT secret FROM vault; SELECT '*/' AS x",
+    "SELECT id INTO copied_orders FROM orders",
+])
+def test_direct_sql_assurance_checks_the_statements_the_database_runs(sql):
+    registry = {"tables": {"orders": {"columns": {"id": {}}}, "vault": {"columns": {"secret": {}}}}}
+
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql(sql, dialect="sqlite", allowed_tables=["orders"],
+                          registry_snapshot=registry, registry_revision="snapshot-r1")
+
+    assert caught.value.report.status == "failed"
+    assert caught.value.report.gates[-1].gate == "sql_safety"
+
+
+def test_direct_sql_parse_failure_stays_a_parse_gate(assurance_registry):
+    with pytest.raises(QueryAssuranceError) as caught:
+        assure_direct_sql("SELECT FROM", dialect="sqlite")
+
+    assert [gate.gate for gate in caught.value.report.gates] == ["sql_parse"]
+
+
 @pytest.mark.parametrize(
     "sql",
     [

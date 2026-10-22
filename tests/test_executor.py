@@ -5,13 +5,17 @@ import sqlite3
 import pytest
 from sqlalchemy import create_engine
 
+from sqlglot import exp
+
 from forge import executor
-from forge.executor import validate_readonly_sql
+from forge.executor import SqlParseError, validate_readonly_sql
 
 
 @pytest.mark.parametrize("sql", [
     "SELECT 1", "WITH recent AS (SELECT 1 AS n) SELECT n FROM recent;",
     "SELECT 'drop table users' AS harmless",
+    "SELECT '/*' AS a, '*/' AS b", "SELECT 1 /* ; DELETE */ -- ; DROP",
+    'SELECT "delete" FROM orders', "SELECT n FROM orders UNION SELECT n FROM archive",
 ])
 def test_validate_readonly_sql_accepts_read_queries(sql):
     validate_readonly_sql(sql)
@@ -21,10 +25,37 @@ def test_validate_readonly_sql_accepts_read_queries(sql):
     "DELETE FROM orders", "UPDATE orders SET status = 'x'",
     "SELECT 1; DROP TABLE users", "PRAGMA table_info(users)",
     "WITH doomed AS (SELECT 1) DELETE FROM users",
+    # A string that looks like a comment opener must not hide the following statements.
+    "SELECT '/*'; SELECT n FROM private_data; SELECT '*/' AS x",
+    "SELECT '/*'; DELETE FROM numbers; SELECT '*/' AS x",
+    "SELECT n INTO created_table FROM numbers",
+    "SELECT nextval('synthetic_sequence')",
+    "SELECT pg_catalog.pg_sleep(10)",
+    "SELECT query_to_xml('DELETE FROM numbers', true, true, '')",
+    "SELECT n FROM numbers FOR UPDATE",
 ])
 def test_validate_readonly_sql_rejects_mutating_queries(sql):
     with pytest.raises(ValueError):
-        validate_readonly_sql(sql)
+        validate_readonly_sql(sql, "postgres")
+
+
+@pytest.mark.parametrize(("sql", "dialect"), [
+    ("SELECT n FROM numbers FOR SHARE", "postgres"),
+    ("WITH gone AS (DELETE FROM numbers RETURNING n) SELECT n FROM gone", "postgres"),
+    ("SELECT 'a\\'; DELETE FROM numbers; SELECT 1'", "postgres"),
+])
+def test_validate_readonly_sql_uses_target_dialect_ast(sql, dialect):
+    with pytest.raises(ValueError):
+        validate_readonly_sql(sql, dialect)
+
+
+def test_validate_readonly_sql_returns_checked_ast_and_separates_parse_errors():
+    expression = validate_readonly_sql("SELECT n FROM numbers;", "sqlite")
+    assert [table.name for table in expression.find_all(exp.Table)] == ["numbers"]
+    with pytest.raises(SqlParseError):
+        validate_readonly_sql("SELECT 'unterminated", "sqlite")
+    with pytest.raises(SqlParseError):
+        validate_readonly_sql("SELECT FROM", "sqlite")
 
 
 @pytest.fixture
@@ -61,6 +92,7 @@ def test_row_cap_and_display_cap_have_distinct_semantics(sqlite_executor):
 
 @pytest.mark.parametrize(("sql", "code"), [
     ("DELETE FROM orders", "sql_not_readonly"),
+    ("SELECT '/*'; DELETE FROM orders; SELECT '*/'", "sql_not_readonly"),
     ("SELECT FROM", "execution_syntax_invalid"),
     ("SELECT missing FROM missing_table", "execution_reference_invalid"),
 ])

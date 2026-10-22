@@ -420,3 +420,92 @@ test("channel endpoint rejects missing service credential before identity lookup
   });
   assert.equal(response.status, 401);
 });
+
+test("channel message idempotency is scoped to the trusted principal and bound to its input", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-scope-"));
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3") });
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  const application = new OrchestratorApplication({ config, state });
+  const message = (external: string, text = "你好") => ({
+    event_id: "evt_shared", channel: "feishu" as const, event_type: "message" as const,
+    external_user_id: external, conversation_id: "oc_" + external, message_id: "om_shared",
+    task_run_id: null, payload: { text, chat_type: "p2p" },
+  });
+  const userA = channelPrincipal("user_a", "team_a", "ou_a");
+  const userB = { ...channelPrincipal("user_b", "team_b", "ou_b"), organization_id: "org_other" };
+
+  const first = await application.ingestChannelMessage(message("ou_a"), userA);
+  const other = await application.ingestChannelMessage(message("ou_b"), userB);
+  assert.equal(other.duplicate, false);
+  assert.notEqual(other.task.task_run_id, first.task.task_run_id);
+  assert.deepEqual([other.task.org_id, other.task.team_id, other.task.user_id], ["org_other", "team_b", "user_b"]);
+
+  const replay = await application.ingestChannelMessage(message("ou_a"), userA);
+  assert.equal(replay.duplicate, true);
+  assert.equal(replay.task.task_run_id, first.task.task_run_id);
+  await assert.rejects(application.ingestChannelMessage(message("ou_a", "你好呀"), userA),
+    /reused with different input/);
+  assert.equal(application.getTaskRunIdForChannelEvent("feishu", "evt_shared", userB), other.task.task_run_id);
+  state.close();
+});
+
+test("channel action replay never returns another principal's recorded task", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-action-scope-"));
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: join(directory, "state.sqlite3") });
+  const state = new SqliteOrchestratorState(config.stateDbPath);
+  const application = new OrchestratorApplication({ config, state });
+  const owned = (user: string, team: string, external: string) => {
+    const principal = channelPrincipal(user, team, external);
+    const created = application.createTask({ org_id: "org_demo", team_id: team, user_id: user,
+      channel: "feishu", channel_conversation_id: "oc_" + user, intent: "business_root_cause_analysis",
+      message: "待取消任务" }, principal).task;
+    const input = { event_id: "evt_cancel_shared", channel: "feishu" as const, event_type: "action" as const,
+      external_user_id: external, conversation_id: "oc_" + user, message_id: "om_cancel",
+      task_run_id: created.task_run_id, payload: { action: "cancel_task" } };
+    return { principal, created, input };
+  };
+  const a = owned("user_a", "team_a", "ou_a");
+  const b = owned("user_b", "team_b", "ou_b");
+
+  await application.ingestChannelAction(a.input, a.principal);
+  const result = await application.ingestChannelAction(b.input, b.principal);
+  assert.equal(result.duplicate, false);
+  assert.equal(result.task.task_run_id, b.created.task_run_id);
+  assert.equal(result.task.status, "cancelled");
+  state.close();
+});
+
+test("v4 channel events migrate into owner scopes and a legacy scope for reviewer approvals", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "forge-channel-migrate-"));
+  const path = join(directory, "state.sqlite3");
+  const config = loadConfig({ PI_ORCHESTRATOR_STATE_DB: path });
+  const principal = channelPrincipal("user_a", "team_a", "ou_a");
+  let state = new SqliteOrchestratorState(path);
+  const created = new OrchestratorApplication({ config, state }).createTask({ org_id: "org_demo",
+    team_id: "team_a", user_id: "user_a", channel: "feishu", channel_conversation_id: "oc_a",
+    intent: "business_root_cause_analysis", message: "迁移" }, principal).task;
+  const row = (eventId: string, action: string) => JSON.stringify({ channel: "feishu", event_id: eventId,
+    event_type: "action", status: "completed", task_run_id: created.task_run_id, received_at: "t", updated_at: "t",
+    error: null, input: { event_id: eventId, channel: "feishu", event_type: "action", external_user_id: "ou_a",
+      conversation_id: "oc_a", message_id: "om", task_run_id: created.task_run_id, payload: { action } } });
+  state.database.exec(`
+    DROP TABLE channel_events;
+    CREATE TABLE channel_events (channel TEXT NOT NULL, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
+      status TEXT NOT NULL, task_run_id TEXT REFERENCES task_runs(task_run_id), received_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL, data_json TEXT NOT NULL, PRIMARY KEY(channel, event_id)) STRICT;
+    PRAGMA user_version = 4;
+  `);
+  const insert = state.database.prepare(`INSERT INTO channel_events VALUES ('feishu', ?, 'action', 'completed', ?, 't', 't', ?)`);
+  insert.run("evt_owner", created.task_run_id, row("evt_owner", "cancel_task"));
+  insert.run("evt_review", created.task_run_id, row("evt_review", "approve_query"));
+  state.close();
+
+  state = new SqliteOrchestratorState(path);
+  const ownerScope = JSON.stringify(["org_demo", "team_a", "user_a"]);
+  assert.equal(state.channelEvents.get("feishu", ownerScope, "evt_owner")?.task_run_id, created.task_run_id);
+  assert.equal(state.channelEvents.get("feishu", ownerScope, "evt_owner")?.scope, ownerScope);
+  assert.equal(state.channelEvents.get("feishu", ownerScope, "evt_review"), undefined);
+  assert.equal(state.channelEvents.get("feishu", "legacy", "evt_review")?.task_run_id, created.task_run_id);
+  assert.equal((state.database.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 5);
+  state.close();
+});

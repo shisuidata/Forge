@@ -452,7 +452,7 @@ export function createOrchestratorServer(
           throw new ControlAuthenticationError("Approval scope mismatch");
         }
         const operation = application.ingestChannelEvent(event, control.principal, request.headers["x-forge-control-token"] as string);
-        const taskRunId = application.getTaskRunIdForChannelEvent(event.channel, event.event_id);
+        const taskRunId = application.getTaskRunIdForChannelEvent(event.channel, event.event_id, control.principal);
         if (channelAction === "query.approve") {
           const result = await operation;
           sendJson(response, result.duplicate ? 200 : 202, result);

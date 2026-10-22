@@ -115,14 +115,14 @@ for (const [name, createState] of [
         state.attempts.start({ taskRunId: task.task_run_id, stage: "requirement_clarification", runningStatus: "clarifying", retryStatus: "created", idempotencyKey: "rollback", leaseMs: 100 });
         state.events.append(task.task_run_id, "artifact.created", {});
         state.channelEvents.claim({ event_id: "rollback-event", channel: "web", event_type: "message",
-          external_user_id: "synthetic_user", conversation_id: "synthetic_conversation", message_id: "synthetic_message", task_run_id: null, payload: { text: "synthetic" } });
+          external_user_id: "synthetic_user", conversation_id: "synthetic_conversation", message_id: "synthetic_message", task_run_id: null, payload: { text: "synthetic" } }, "synthetic_scope");
         state.skillPolicies.configure({ orgId: task.org_id, teamId: task.team_id, enabledSkills: [], expectedVersion: 0, actor: task.user_id });
         state.artifacts.create({ artifactType: "clarification", taskRunId: task.task_run_id, producer: "skill", payload: {} });
       }));
       assert.equal(state.tasks.get(task.task_run_id)?.status, "created");
       assert.deepEqual(state.attempts.list(task.task_run_id), []);
       assert.deepEqual(state.artifacts.list(task.task_run_id), []);
-      assert.equal(state.channelEvents.get("web", "rollback-event"), undefined);
+      assert.equal(state.channelEvents.get("web", "synthetic_scope", "rollback-event"), undefined);
       assert.equal(state.skillPolicies.get(task.org_id, task.team_id), undefined);
     });
     assert.deepEqual(state.events.list(task.task_run_id).map((event) => event.event_type), ["task.created", "skill.started"]);

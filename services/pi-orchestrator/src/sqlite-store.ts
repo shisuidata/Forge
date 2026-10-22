@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import { DatabaseSync, type StatementResultingChanges } from "node:sqlite";
 
 import {
+  LEGACY_CHANNEL_EVENT_SCOPE,
   type ChannelEventRecord,
   type ChannelEventStore,
 } from "./channels/event-store.js";
@@ -520,15 +521,70 @@ class SqliteTaskEventStore implements TaskEventStore {
   }
 }
 
+const CHANNEL_EVENTS_TABLE = `
+  CREATE TABLE channel_events (
+    channel TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    task_run_id TEXT REFERENCES task_runs(task_run_id),
+    received_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    data_json TEXT NOT NULL,
+    PRIMARY KEY(channel, scope, event_id)
+  ) STRICT;
+  CREATE INDEX idx_channel_events_task ON channel_events(task_run_id);
+`;
+
+/**
+ * v4 keyed channel events by (channel, event_id) only, so one principal could
+ * replay another's event ID. v5 adds the trusted principal scope. Rows whose
+ * actor equals the task owner (messages and owner actions) keep their scope;
+ * reviewer approvals and unbound rows move to a legacy scope no request matches.
+ */
+function migrateChannelEventScope(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(channel_events)").all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === "scope")) return;
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    if (columns.length === 0) {
+      database.exec(CHANNEL_EVENTS_TABLE);
+    } else {
+      database.exec(`
+        DROP INDEX IF EXISTS idx_channel_events_task;
+        ALTER TABLE channel_events RENAME TO channel_events_v4;
+        ${CHANNEL_EVENTS_TABLE}
+        INSERT INTO channel_events
+          (channel, scope, event_id, event_type, status, task_run_id, received_at, updated_at, data_json)
+        SELECT e.channel,
+          CASE WHEN t.task_run_id IS NOT NULL
+                 AND COALESCE(json_extract(e.data_json, '$.input.payload.action'), '') <> 'approve_query'
+               THEN json_array(json_extract(t.data_json, '$.org_id'), json_extract(t.data_json, '$.team_id'),
+                               json_extract(t.data_json, '$.user_id'))
+               ELSE '${LEGACY_CHANNEL_EVENT_SCOPE}' END,
+          e.event_id, e.event_type, e.status, e.task_run_id, e.received_at, e.updated_at, e.data_json
+        FROM channel_events_v4 e LEFT JOIN task_runs t ON t.task_run_id = e.task_run_id;
+        DROP TABLE channel_events_v4;
+      `);
+    }
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 class SqliteChannelEventStore implements ChannelEventStore {
   constructor(private readonly database: DatabaseSync) {}
 
-  claim(input: ChannelEventInput): { record: ChannelEventRecord; created: boolean } {
-    const existing = this.get(input.channel, input.event_id);
+  claim(input: ChannelEventInput, scope: string): { record: ChannelEventRecord; created: boolean } {
+    const existing = this.get(input.channel, scope, input.event_id);
     if (existing !== undefined) return { record: existing, created: false };
     const now = new Date().toISOString();
     const record: ChannelEventRecord = {
       channel: input.channel,
+      scope,
       event_id: input.event_id,
       event_type: input.event_type,
       status: "processing",
@@ -542,11 +598,12 @@ class SqliteChannelEventStore implements ChannelEventStore {
       this.database
         .prepare(
           `INSERT INTO channel_events
-            (channel, event_id, event_type, status, task_run_id, received_at, updated_at, data_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            (channel, scope, event_id, event_type, status, task_run_id, received_at, updated_at, data_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           record.channel,
+          record.scope,
           record.event_id,
           record.event_type,
           record.status,
@@ -557,37 +614,39 @@ class SqliteChannelEventStore implements ChannelEventStore {
         );
       return { record: structuredClone(record), created: true };
     } catch (error) {
-      const raced = this.get(input.channel, input.event_id);
+      const raced = this.get(input.channel, scope, input.event_id);
       if (raced !== undefined) return { record: raced, created: false };
       throw error;
     }
   }
 
-  complete(channel: ChannelEventInput["channel"], eventId: string, taskRunId: string): ChannelEventRecord {
-    return this.#finish(channel, eventId, "completed", taskRunId, null);
+  complete(channel: ChannelEventInput["channel"], scope: string, eventId: string, taskRunId: string): ChannelEventRecord {
+    return this.#finish(channel, scope, eventId, "completed", taskRunId, null);
   }
 
-  fail(channel: ChannelEventInput["channel"], eventId: string, error: string): ChannelEventRecord {
-    return this.#finish(channel, eventId, "failed", null, error.slice(0, 2_000));
+  fail(channel: ChannelEventInput["channel"], scope: string, eventId: string, error: string): ChannelEventRecord {
+    return this.#finish(channel, scope, eventId, "failed", null, error.slice(0, 2_000));
   }
 
-  get(channel: ChannelEventInput["channel"], eventId: string): ChannelEventRecord | undefined {
+  get(channel: ChannelEventInput["channel"], scope: string, eventId: string): ChannelEventRecord | undefined {
     const row = this.database
-      .prepare("SELECT data_json FROM channel_events WHERE channel = ? AND event_id = ?")
-      .get(channel, eventId) as { data_json: string } | undefined;
+      .prepare("SELECT scope, data_json FROM channel_events WHERE channel = ? AND scope = ? AND event_id = ?")
+      .get(channel, scope, eventId) as { scope: string; data_json: string } | undefined;
+    // Migrated v4 rows carry their scope only in the column.
     return row === undefined
       ? undefined
-      : structuredClone(parseJson<ChannelEventRecord>(row.data_json, "ChannelEvent"));
+      : { ...structuredClone(parseJson<ChannelEventRecord>(row.data_json, "ChannelEvent")), scope: row.scope };
   }
 
   #finish(
     channel: ChannelEventInput["channel"],
+    scope: string,
     eventId: string,
     status: "completed" | "failed",
     taskRunId: string | null,
     error: string | null,
   ): ChannelEventRecord {
-    const current = this.get(channel, eventId);
+    const current = this.get(channel, scope, eventId);
     if (current === undefined) throw new TaskStateError(`ChannelEvent not found: ${channel}/${eventId}`);
     if (current.status === status) return current;
     if (current.status !== "processing") {
@@ -604,7 +663,7 @@ class SqliteChannelEventStore implements ChannelEventStore {
       .prepare(
         `UPDATE channel_events
          SET status = ?, task_run_id = ?, updated_at = ?, data_json = ?
-         WHERE channel = ? AND event_id = ? AND status = 'processing'`,
+         WHERE channel = ? AND scope = ? AND event_id = ? AND status = 'processing'`,
       )
       .run(
         status,
@@ -612,6 +671,7 @@ class SqliteChannelEventStore implements ChannelEventStore {
         updated.updated_at,
         JSON.stringify(updated),
         channel,
+        scope,
         eventId,
       );
     if (changed(result) !== 1) throw new TaskStateError("ChannelEvent status conflict");
@@ -958,7 +1018,7 @@ export class SqliteOrchestratorState extends OrchestratorState {
     const version = this.#database.prepare("PRAGMA user_version").get() as {
       user_version: number | bigint;
     };
-    if (Number(version.user_version) > 4) {
+    if (Number(version.user_version) > 5) {
       this.#database.close();
       throw new Error(`Unsupported Pi state schema version: ${String(version.user_version)}`);
     }
@@ -1013,18 +1073,6 @@ export class SqliteOrchestratorState extends OrchestratorState {
         ON stage_attempts(task_run_id) WHERE status = 'running';
       CREATE INDEX IF NOT EXISTS idx_stage_attempts_expired
         ON stage_attempts(status, lease_expires_at);
-      CREATE TABLE IF NOT EXISTS channel_events (
-        channel TEXT NOT NULL,
-        event_id TEXT NOT NULL,
-        event_type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        task_run_id TEXT REFERENCES task_runs(task_run_id),
-        received_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        data_json TEXT NOT NULL,
-        PRIMARY KEY(channel, event_id)
-      ) STRICT;
-      CREATE INDEX IF NOT EXISTS idx_channel_events_task ON channel_events(task_run_id);
       CREATE TABLE IF NOT EXISTS team_skill_policies (
         org_id TEXT NOT NULL,
         team_id TEXT NOT NULL,
@@ -1043,8 +1091,9 @@ export class SqliteOrchestratorState extends OrchestratorState {
       ) STRICT;
       CREATE INDEX IF NOT EXISTS idx_skill_policy_audit_scope
         ON team_skill_policy_audit(org_id, team_id, version);
-      PRAGMA user_version = 4;
     `);
+    migrateChannelEventScope(this.#database);
+    this.#database.exec("PRAGMA user_version = 5");
     this.tasks = new SqliteTaskStore(this.#database);
     this.events = new SqliteTaskEventStore(this.#database);
     this.artifacts = new SqliteArtifactStore(this.#database);

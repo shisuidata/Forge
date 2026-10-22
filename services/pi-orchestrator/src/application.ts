@@ -4,7 +4,7 @@ import { OrchestratorState, type StateTransactionPort } from "./orchestrator-sta
 import { SqliteOrchestratorState } from "./sqlite-store.js";
 import { currentRequestId } from "./request-context.js";
 
-import type { ChannelEventStore } from "./channels/event-store.js";
+import { assertSameChannelEvent, channelEventScope, type ChannelEventStore } from "./channels/event-store.js";
 import type { ChannelEventInput, ChannelPresentation } from "./channels/contracts.js";
 import { renderChannelPresentation } from "./channels/renderer.js";
 import { routeChannelMessage } from "./channels/intent.js";
@@ -499,8 +499,17 @@ export class OrchestratorApplication {
   getTaskRunIdForChannelEvent(
     channel: ChannelEventInput["channel"],
     eventId: string,
+    principal: TrustedRequestPrincipal,
   ): string | null {
-    return this.#channelEvents.get(channel, eventId)?.task_run_id ?? null;
+    return this.#channelEvents.get(channel, channelEventScope(principal), eventId)?.task_run_id ?? null;
+  }
+
+  /** A replayed event may only return a TaskRun in the caller's own tenant scope. */
+  #assertChannelReplayAccess(task: TaskRun, principal: TrustedRequestPrincipal, requireOwner: boolean): void {
+    if (task.org_id !== principal.organization_id || task.team_id !== principal.workspace_id ||
+      (requireOwner && task.user_id !== principal.principal_id)) {
+      throw new TaskStateError("Channel event cannot access this TaskRun");
+    }
   }
 
   getChannelPresentation(taskRunId: string, principal?: TrustedRequestPrincipal): ChannelPresentation {
@@ -539,8 +548,9 @@ export class OrchestratorApplication {
     }
 
     const route = routeChannelMessage(text);
+    const scope = channelEventScope(principal);
     const claimed = this.#transactions.run(() => {
-      const claim = this.#channelEvents.claim(event);
+      const claim = this.#channelEvents.claim(event, scope);
       if (!claim.created) return { record: claim.record, task: undefined };
       const created = this.createTask({
         org_id: principal.organization_id,
@@ -572,17 +582,19 @@ export class OrchestratorApplication {
         plan_revision: 1,
         route_kind: route.kind,
       });
-      this.#channelEvents.complete(event.channel, event.event_id, created.task.task_run_id);
+      this.#channelEvents.complete(event.channel, scope, event.event_id, created.task.task_run_id);
       return { record: claim.record, task: created.task };
     });
 
     if (claimed.task === undefined) {
+      assertSameChannelEvent(claimed.record, event);
       const taskRunId = claimed.record.task_run_id;
       if (taskRunId === null) {
         throw new TaskStateError("ChannelEvent is already being processed");
       }
       const task = this.#tasks.get(taskRunId);
       if (task === undefined) throw new TaskStateError(`TaskRun not found: ${taskRunId}`);
+      this.#assertChannelReplayAccess(task, principal, true);
       return {
         task,
         presentation: this.getChannelPresentation(task.task_run_id, principal),
@@ -788,14 +800,17 @@ export class OrchestratorApplication {
       throw new TaskStateError("suggested_query_index must be a non-negative integer");
     }
 
+    const scope = channelEventScope(principal);
     const claim = this.#transactions.run(() => {
-      const claimed = this.#channelEvents.claim(event);
+      const claimed = this.#channelEvents.claim(event, scope);
       return claimed;
     });
     if (!claim.created) {
+      assertSameChannelEvent(claim.record, event);
       const recordedTask = claim.record.task_run_id === null
         ? task
         : this.#tasks.get(claim.record.task_run_id) ?? task;
+      this.#assertChannelReplayAccess(recordedTask, principal, actionType !== "approve_query");
       if (actionType === "approve_query" && recordedTask.user_id !== principal.principal_id)
         return this.#channelReviewResponse(recordedTask, principal, true);
       return {
@@ -906,7 +921,7 @@ export class OrchestratorApplication {
       ? this.#tasks.get(task.task_run_id)
       : responseTask;
     if (updated === undefined) throw new TaskStateError(`TaskRun not found: ${task.task_run_id}`);
-    this.#channelEvents.complete(event.channel, event.event_id, updated.task_run_id);
+    this.#channelEvents.complete(event.channel, scope, event.event_id, updated.task_run_id);
     if (actionType === "approve_query" && updated.user_id !== principal.principal_id)
       return this.#channelReviewResponse(updated, principal, false);
     return {
@@ -917,6 +932,7 @@ export class OrchestratorApplication {
     } catch (error) {
       this.#channelEvents.fail(
         event.channel,
+        scope,
         event.event_id,
         error instanceof Error ? error.message : "Channel action failed",
       );

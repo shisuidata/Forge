@@ -174,3 +174,22 @@ async def test_reviewer_inbox_exposes_only_designated_pending_sql(client, govern
     assert (await client.get("/api/v2/governance/reviews", headers={"X-API-Key": keys["issuer_api"]})).json() == {"reviews": []}
     assert (await client.get("/api/v2/governance/reviews", headers={"X-API-Key": keys["other_api"]})).status_code == 403
     assert (await client.get("/api/v2/governance/reviews", headers={"X-API-Key": keys["worker_api"]})).status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sql", [
+    "SELECT '/*'; SELECT value FROM secrets; SELECT '*/' AS x",
+    "SELECT n INTO copied_numbers FROM numbers",
+])
+async def test_governed_http_never_classifies_hidden_statements_as_autonomous(
+        client, governed_api, sql):
+    keys, mandate_id = governed_api
+    prepared = await client.post("/api/v2/enforce/query-runs",
+                                 headers=_headers(keys, "worker_api", "create-hidden"),
+                                 json=_request(mandate_id, sql))
+    assert prepared.status_code == 200, prepared.text
+    body = prepared.json()
+    assert body["status"] == "denied"
+    assert body["decision"]["execution_mode"] is None
+    assert body["failure"] == {"stage": "assurance", "code": "assurance_denied", "retryable": False}
+    assert body["review"]["sql_hash"] is None

@@ -11,11 +11,16 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 import logging
-import re
 import time
 
+import sqlglot
+from sqlglot import exp
+from sqlglot.dialects.dialect import Dialect
+from sqlglot.errors import SqlglotError
+from sqlglot.tokens import TokenType
 
 from config import cfg
+from forge.dialects import DialectResolutionError, resolve_dialect, sqlglot_dialect
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +45,43 @@ _FORBIDDEN_SQL_KEYWORDS = {
     "truncate",
     "update",
     "vacuum",
+    "into",
 }
+
+# Read-only syntax can still mutate state, sleep, lock, touch files or run nested SQL
+# through these functions. This list is defence in depth; a read-only database role
+# remains the final boundary.
+_SIDE_EFFECT_FUNCTIONS = frozenset({
+    "nextval", "setval", "set_config", "pg_notify",
+    "pg_sleep", "pg_sleep_for", "pg_sleep_until", "sleep", "benchmark",
+    "pg_advisory_lock", "pg_advisory_lock_shared", "pg_advisory_xact_lock",
+    "pg_advisory_xact_lock_shared", "pg_try_advisory_lock", "pg_try_advisory_lock_shared",
+    "pg_try_advisory_xact_lock", "pg_try_advisory_xact_lock_shared",
+    "get_lock", "release_lock", "release_all_locks",
+    "lo_import", "lo_export", "lo_unlink", "lo_create", "lo_from_bytea", "lo_put",
+    "pg_read_file", "pg_read_binary_file", "pg_ls_dir", "pg_stat_file", "load_file",
+    "pg_terminate_backend", "pg_cancel_backend", "pg_reload_conf", "pg_rotate_logfile",
+    "query_to_xml", "query_to_xml_and_xmlschema", "query_to_xmlschema",
+    "cursor_to_xml", "cursor_to_xmlschema",
+    "dblink", "dblink_exec", "dblink_connect", "dblink_send_query",
+    "load_extension", "sys_exec", "sys_eval",
+})
+
+_NON_KEYWORD_TOKENS = frozenset({
+    TokenType.STRING, TokenType.NATIONAL_STRING, TokenType.RAW_STRING,
+    TokenType.BIT_STRING, TokenType.HEX_STRING, TokenType.BYTE_STRING,
+    TokenType.HEREDOC_STRING, TokenType.UNICODE_STRING, TokenType.IDENTIFIER,
+})
+
+_MUTATING_NODES = tuple(getattr(exp, name) for name in (
+    "Into", "Lock", "Insert", "Update", "Delete", "Merge", "Create", "Drop", "Alter",
+    "Command", "TruncateTable", "Copy", "Pragma", "Grant", "Revoke", "Transaction",
+    "Commit", "Rollback", "LoadData", "Attach", "Detach", "Use",
+))
+
+
+class SqlParseError(ValueError):
+    """SQL cannot be tokenized or parsed for the target dialect."""
 
 
 def _get_engine():
@@ -83,41 +124,54 @@ def _sqlite_timeout_guard(conn, timeout_seconds: int):
         raw.set_progress_handler(None, 0)
 
 
-def _strip_sql_literals_and_comments(sql: str) -> str:
-    """Remove strings and comments so keyword checks do not scan user values."""
-    without_block_comments = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
-    without_line_comments = re.sub(r"--[^\n\r]*", " ", without_block_comments)
-    without_single_quotes = re.sub(r"'(?:''|[^'])*'", "''", without_line_comments)
-    without_double_quotes = re.sub(r'"(?:""|[^"])*"', '""', without_single_quotes)
-    return without_double_quotes
-
-
-def validate_readonly_sql(sql: str) -> None:
+def validate_readonly_sql(sql: str, dialect: str | None = None) -> exp.Expression:
     """
-    Reject SQL that is not a single read-only SELECT/WITH query.
+    Reject SQL that is not a single read-only SELECT/WITH query; return its AST.
 
-    The executor is intended for reviewed analytics queries. This guard is not a
-    substitute for a database read-only role, but it prevents obvious mutating
-    statements from the web API and Feishu approval path.
+    Strings, comments and statement boundaries come from the dialect's own
+    tokenizer, so the checked text is the text the database will run. Callers
+    that inspect resources must use the returned AST. ``dialect`` is a SQLGlot
+    dialect name; ``None`` uses the generic parser. This guard is not a
+    substitute for a database read-only role.
     """
-    normalized = _strip_sql_literals_and_comments(sql).strip()
-    if not normalized:
+    if not sql.strip():
         raise ValueError("SQL 为空。")
+    try:
+        tokens = Dialect.get_or_raise(dialect).tokenize(sql)
+    except SqlglotError as exc:
+        raise SqlParseError("SQL 无法按所选 dialect 解析。") from exc
 
-    # Allow one trailing semicolon, reject stacked statements.
-    body = normalized[:-1].strip() if normalized.endswith(";") else normalized
-    if ";" in body:
+    while tokens and tokens[-1].token_type == TokenType.SEMICOLON:
+        tokens = tokens[:-1]
+    if not tokens:
+        raise ValueError("SQL 为空。")
+    if any(token.token_type == TokenType.SEMICOLON for token in tokens):
         raise ValueError("只允许执行单条 SQL 查询。")
-
-    first = re.match(r"([A-Za-z_]\w*)", body)
-    first_token = first.group(1).lower() if first else ""
-    if first_token not in {"select", "with"}:
+    if tokens[0].text.lower() not in {"select", "with"}:
         raise ValueError("只允许执行只读 SELECT/WITH 查询。")
-
-    keywords = {m.group(1).lower() for m in re.finditer(r"\b([A-Za-z_]\w*)\b", body)}
+    keywords = {
+        token.text.lower() for token in tokens if token.token_type not in _NON_KEYWORD_TOKENS
+    }
     forbidden = sorted(keywords & _FORBIDDEN_SQL_KEYWORDS)
     if forbidden:
         raise ValueError(f"SQL 包含非只读关键字：{', '.join(forbidden)}。")
+
+    try:
+        statements = [s for s in sqlglot.parse(sql, read=dialect) if s is not None]
+    except SqlglotError as exc:
+        raise SqlParseError("SQL 无法按所选 dialect 解析。") from exc
+    if len(statements) != 1:
+        raise ValueError("只允许执行单条 SQL 查询。")
+    expression = statements[0]
+    if not isinstance(expression, exp.Query):
+        raise ValueError("只允许执行只读 SELECT/WITH 查询。")
+    if expression.find(*_MUTATING_NODES) is not None:
+        raise ValueError("SQL 包含写入、锁定或非查询语句。")
+    for function in expression.find_all(exp.Func):
+        name = function.name if isinstance(function, exp.Anonymous) else function.sql_name()
+        if name.lower() in _SIDE_EFFECT_FUNCTIONS:
+            raise ValueError(f"SQL 调用了有副作用的函数：{name.lower()}。")
+    return expression
 
 
 @dataclass(frozen=True)
@@ -149,7 +203,14 @@ def execute(sql: str, max_rows: int = 200) -> ExecutionResult:
         return _failure("execution_dependency_missing", "缺少数据库执行依赖。")
 
     try:
-        validate_readonly_sql(sql)
+        target = resolve_dialect(configured_dialect=cfg.SQL_DIALECT,
+                                 database_url=cfg.DATABASE_URL, allow_generic=True)
+    except DialectResolutionError:
+        return _failure("dialect_unsupported", "数据源方言不受支持，无法安全校验 SQL。")
+    try:
+        validate_readonly_sql(sql, sqlglot_dialect(target.resolved))
+    except SqlParseError:
+        return _failure("execution_syntax_invalid", "SQL 语法错误，请重新生成。")
     except ValueError as exc:
         return _failure("sql_not_readonly", str(exc))
 

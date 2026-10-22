@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from sqlglot import exp, parse_one
+from sqlglot import exp
 from sqlglot.errors import OptimizeError, SqlglotError
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import Scope, build_scope
@@ -16,7 +16,8 @@ from sqlglot.schema import MappingSchema
 
 from config import cfg
 from forge.compiler import compile_query, validate_query_contract
-from forge.executor import validate_readonly_sql
+from forge.dialects import sqlglot_dialect
+from forge.executor import SqlParseError, validate_readonly_sql
 from forge.lint import lint_conventions, validate_profile
 from registry.relationships import (
     RegistryRelationship,
@@ -24,7 +25,7 @@ from registry.relationships import (
     load_relationships,
 )
 
-ASSURANCE_REVISION = "query-assurance-v12"
+ASSURANCE_REVISION = "query-assurance-v13"
 POLICY_REVISION = "scoped-policy-v1"
 INTENT_CONTRACT_REVISION = "intent-fulfillment-v3"
 QUERY_CANDIDATE_REVISION = "query-candidate-v1"
@@ -210,26 +211,21 @@ def assure_compiled_sql(
             _failed_report(gates, "unavailable", producer_revision, input_kind=input_kind)
         ) from exc
 
+    read_dialect = sqlglot_dialect(dialect)
     try:
-        validate_readonly_sql(sql)
+        # The safety gate parses once with the target tokenizer; ACL checks reuse that AST.
+        expression = validate_readonly_sql(sql, read_dialect)
         gates.append(GateResult("sql_safety", "passed", ASSURANCE_REVISION))
-    except ValueError as exc:
-        gates.append(GateResult("sql_safety", "failed", ASSURANCE_REVISION, (str(exc),)))
+        gates.append(GateResult("sql_parse", "passed", ASSURANCE_REVISION))
+    except SqlParseError as exc:
+        gates.append(GateResult("sql_parse", "failed", ASSURANCE_REVISION, (str(exc),)))
         raise QueryAssuranceError(
             _failed_report(
                 gates, resolved_registry_revision, producer_revision, input_kind=input_kind
             )
         ) from exc
-
-    read_dialect = _sqlglot_dialect(dialect)
-    try:
-        expression = parse_one(sql, read=read_dialect)
-        gates.append(GateResult("sql_parse", "passed", ASSURANCE_REVISION))
-    except SqlglotError as exc:
-        gates.append(GateResult(
-            "sql_parse", "failed", ASSURANCE_REVISION,
-            ("SQL 无法按所选 dialect 解析。",),
-        ))
+    except ValueError as exc:
+        gates.append(GateResult("sql_safety", "failed", ASSURANCE_REVISION, (str(exc),)))
         raise QueryAssuranceError(
             _failed_report(
                 gates, resolved_registry_revision, producer_revision, input_kind=input_kind
@@ -303,13 +299,6 @@ def assure_direct_sql(
         registry_revision=registry_revision,
     )
 
-
-def _sqlglot_dialect(dialect: str) -> str | None:
-    if dialect == "auto":
-        return None
-    if dialect == "postgresql":
-        return "postgres"
-    return dialect
 
 def _query_nodes(query: dict) -> list[dict]:
     nodes = [query]

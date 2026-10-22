@@ -55,3 +55,12 @@ def resolve_dialect(
     if allow_generic:
         return DialectResolution(requested, "auto", "generic_sql_parser")
     raise DialectResolutionError("dialect_required")
+
+
+def sqlglot_dialect(dialect: str) -> str | None:
+    """Map a Forge dialect name to SQLGlot's; ``auto`` uses the generic parser."""
+    if dialect == "auto":
+        return None
+    if dialect == "postgresql":
+        return "postgres"
+    return dialect
