@@ -282,3 +282,57 @@ async def test_creator_can_recover_a_run_by_its_create_key_and_no_one_else_can(c
                       ("worker_api", "never-created")):
         hidden = await client.get(root, params={"create_idempotency_key": key}, headers={"X-API-Key": keys[name]})
         assert hidden.status_code == 404, (name, key)
+
+
+@pytest.mark.asyncio
+async def test_query_run_storage_holds_no_sqlite_lock_between_awaits(client, governed_api, monkeypatch):
+    """CI deadlock: a lock held across an await blocks a synchronous write on the event-loop thread."""
+    import aiosqlite
+    import forge.query_runs as query_runs
+    from config import cfg
+    from forge.governance_credentials import authenticate_credential
+
+    async def lost_worker(query_run_id, claim_id):
+        return None
+
+    monkeypatch.setattr(query_runs, "_run_governed_worker", lost_worker)
+    keys, mandate_id = governed_api
+    root = "/api/v2/enforce/query-runs"
+    pending = await client.post(root, headers=_headers(keys, "worker_api", "lock-window"),
+                                json=_request(mandate_id, "SELECT value FROM secrets"))
+    ready = await client.post(root, headers=_headers(keys, "worker_api", "lock-window-ready"),
+                              json=_request(mandate_id, "SELECT n FROM numbers"))
+    claimed = await client.post(f"{root}/{ready.json()['query_run_id']}/execute", json=_action(ready.json()["review"]),
+                                headers=_headers(keys, "worker_api", "lock-window-execute"))
+    pending_id, executing_id = pending.json()["query_run_id"], claimed.json()["query_run_id"]
+    claim_id = (await query_runs.get_query_run(executing_id))["execution_claim_id"]
+    blocked = []
+
+    def write_from_loop_thread():
+        conn = sqlite3.connect(cfg.QUERY_RUN_DB_PATH, timeout=0)
+        try:
+            conn.execute("BEGIN EXCLUSIVE")
+            conn.rollback()
+        except sqlite3.OperationalError as exc:
+            blocked.append(str(exc))
+        finally:
+            conn.close()
+
+    original = aiosqlite.Connection.execute
+
+    async def execute_then_yield_to_writer(self, *args, **kwargs):
+        cursor = await original(self, *args, **kwargs)
+        write_from_loop_thread()
+        return cursor
+
+    monkeypatch.setattr(aiosqlite.Connection, "execute", execute_then_yield_to_writer)
+    reviewer = authenticate_credential(keys["reviewer_api"])
+    assert (await query_runs.get_query_run(pending_id))["status"] == "review_required"
+    assert (await query_runs._get_by_create_key("lock-window"))["query_run_id"] == pending_id
+    assert [run["query_run_id"] for run in await query_runs.list_reviewer_query_runs(reviewer)] == [pending_id]
+    completed = await query_runs.complete_query_run(executing_id, columns=["n"], rows=[[1]], row_count=1,
+                                                    truncated=False, execution_ms=1, claim_id=claim_id)
+    assert completed["status"] == "completed"
+    _age_query_run("expires_at", pending_id)
+    assert (await query_runs.get_query_run(pending_id))["status"] == "expired"
+    assert blocked == []

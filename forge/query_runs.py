@@ -245,17 +245,16 @@ _REVIEW_EXPIRED = "enforce_schema_version=2 AND status IN ('ready','review_requi
 async def _settle_time_decided_query_runs(query_run_id: str | None = None) -> None:
     """Persist outcomes that only the clock decides, so reads never report a stale live state or inbox item.
 
-    Reads must not hold a write lock: a read-only probe skips the common case, and autocommit makes each
-    UPDATE finish on the aiosqlite thread, so no lock spans an await while a governance transaction waits.
+    A read-only probe skips the common case, and autocommit makes each UPDATE finish on the aiosqlite
+    thread, so no lock spans an await (see ``_read_rows``).
     """
     now = _now().isoformat()
     scope, args = ("", ()) if query_run_id is None else (" AND query_run_id = ?", (query_run_id,))
     async with aiosqlite.connect(_db_path(), isolation_level=None) as db:
-        cursor = await db.execute(
+        if not await db.execute_fetchall(
             f"SELECT 1 FROM query_runs WHERE (({_LEASE_EXPIRED}) OR ({_REVIEW_EXPIRED})){scope} LIMIT 1",
             (now, now, *args),
-        )
-        if await cursor.fetchone() is None:
+        ):
             return
         await db.execute(
             "UPDATE query_runs SET status='failed', error='execution_interrupted_or_lease_expired', updated_at=?, "
@@ -266,31 +265,34 @@ async def _settle_time_decided_query_runs(query_run_id: str | None = None) -> No
                          (now, now, *args))
 
 
+async def _read_rows(sql: str, parameters: tuple) -> list[dict[str, Any]]:
+    """Run a read in one aiosqlite call.
+
+    Splitting execute and fetch across awaits leaves the statement holding SQLite's shared lock while the
+    coroutine waits for the event loop; a synchronous governance write on that loop then deadlocks until the
+    busy timeout. One call steps the statement to completion on the aiosqlite thread.
+    """
+    async with aiosqlite.connect(_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        return [_decode_row(row) for row in await db.execute_fetchall(sql, parameters)]
+
+
 async def get_query_run(query_run_id: str) -> dict[str, Any] | None:
     await _ensure_schema()
     await _settle_time_decided_query_runs(query_run_id)
-    async with aiosqlite.connect(_db_path()) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM query_runs WHERE query_run_id = ?",
-            (query_run_id,),
-        )
-        row = await cursor.fetchone()
-        return _decode_row(row) if row else None
+    rows = await _read_rows("SELECT * FROM query_runs WHERE query_run_id = ?", (query_run_id,))
+    return rows[0] if rows else None
 async def list_governed_query_runs(actor, limit: int = 8) -> list[dict[str, Any]]:
     """Return recent v2 QueryRuns in one authenticated admin workspace."""
     if actor.principal_type != "human" or actor.role != "admin":
         raise QueryRunError("Admin required", status_code=403, code="admin_principal_required")
     await _ensure_schema()
     await _settle_time_decided_query_runs()
-    async with aiosqlite.connect(_db_path()) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND org_id=? AND workspace_id=? "
-            "ORDER BY created_at DESC, query_run_id DESC LIMIT ?",
-            (actor.organization_id, actor.workspace_id, min(max(int(limit), 1), 50)),
-        )
-        runs = [_decode_row(row) for row in await cursor.fetchall()]
+    runs = await _read_rows(
+        "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND org_id=? AND workspace_id=? "
+        "ORDER BY created_at DESC, query_run_id DESC LIMIT ?",
+        (actor.organization_id, actor.workspace_id, min(max(int(limit), 1), 50)),
+    )
     for run in runs:
         await asyncio.to_thread(_validate_run_access, run, actor)
     return runs
@@ -298,14 +300,8 @@ async def list_governed_query_runs(actor, limit: int = 8) -> list[dict[str, Any]
 
 async def _get_by_create_key(key: str) -> dict[str, Any] | None:
     await _ensure_schema()
-    async with aiosqlite.connect(_db_path()) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM query_runs WHERE create_idempotency_key = ?",
-            (key,),
-        )
-        row = await cursor.fetchone()
-        return _decode_row(row) if row else None
+    rows = await _read_rows("SELECT * FROM query_runs WHERE create_idempotency_key = ?", (key,))
+    return rows[0] if rows else None
 
 
 
@@ -506,7 +502,8 @@ async def complete_query_run(
     result_hash = _artifact_hash({"columns": normalized_columns, "rows": normalized_rows,
                                   "row_count": row_count, "truncated": bool(truncated),
                                   "execution_ms": execution_ms, "executed_at": now})
-    async with aiosqlite.connect(_db_path()) as db:
+    # Autocommit: the write lock must not span an await before commit (see ``_read_rows``).
+    async with aiosqlite.connect(_db_path(), isolation_level=None) as db:
         cursor = await db.execute(
             """UPDATE query_runs SET status='completed',result_columns=?,result_rows=?,
                result_hash=?,row_count=?,truncated=?,execution_ms=?,updated_at=?,executed_at=?,
@@ -517,7 +514,6 @@ async def complete_query_run(
              result_hash, row_count, int(truncated), execution_ms, now, now,
              query_run_id, _PROCESS_OWNER, claim_id, claim_id),
         )
-        await db.commit()
         if cursor.rowcount != 1:
             raise QueryRunError("QueryRun execution ownership expired; result was not persisted")
     run = await get_query_run(query_run_id)
@@ -528,7 +524,7 @@ async def complete_query_run(
 
 async def fail_query_run(query_run_id: str, error: str, *, claim_id: str | None = None) -> None:
     await _ensure_schema()
-    async with aiosqlite.connect(_db_path()) as db:
+    async with aiosqlite.connect(_db_path(), isolation_level=None) as db:
         await db.execute(
             """
             UPDATE query_runs SET status = 'failed', error = ?, updated_at = ?,
@@ -538,14 +534,13 @@ async def fail_query_run(query_run_id: str, error: str, *, claim_id: str | None 
             """,
             (error, _now().isoformat(), query_run_id, _PROCESS_OWNER, claim_id, claim_id),
         )
-        await db.commit()
 
 
 async def reconcile_expired_query_run_executions() -> int:
     """Fail only expired execution leases; never replay SQL after restart."""
     await _ensure_schema()
     now = _now().isoformat()
-    async with aiosqlite.connect(_db_path()) as db:
+    async with aiosqlite.connect(_db_path(), isolation_level=None) as db:
         cursor = await db.execute(
             """
             UPDATE query_runs
@@ -558,7 +553,6 @@ async def reconcile_expired_query_run_executions() -> int:
             """,
             (now, now),
         )
-        await db.commit()
         return cursor.rowcount
 
 
@@ -792,15 +786,12 @@ async def list_reviewer_query_runs(actor, limit: int = 50) -> list[dict[str, Any
         raise QueryRunError("Reviewer required", status_code=403, code="reviewer_not_authorized")
     await _ensure_schema()
     await _settle_time_decided_query_runs()
-    async with aiosqlite.connect(_db_path()) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND status='review_required' "
-            "AND reviewer_principal_id=? AND org_id=? AND workspace_id=? "
-            "ORDER BY created_at DESC LIMIT ?",
-            (actor.principal_id, actor.organization_id, actor.workspace_id, min(max(limit, 1), 50)),
-        )
-        rows = [_decode_row(row) for row in await cursor.fetchall()]
+    rows = await _read_rows(
+        "SELECT * FROM query_runs WHERE enforce_schema_version=2 AND status='review_required' "
+        "AND reviewer_principal_id=? AND org_id=? AND workspace_id=? "
+        "ORDER BY created_at DESC LIMIT ?",
+        (actor.principal_id, actor.organization_id, actor.workspace_id, min(max(limit, 1), 50)),
+    )
     for row in rows:
         await asyncio.to_thread(_validate_run_access, row, actor)
     return rows
