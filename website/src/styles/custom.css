@@ -1,206 +1,238 @@
-@import "./brand.css";
+@import './brand.css';
 
-/* Starlight-only tokens; the standalone landing page owns its own layout. */
+/* Starlight theme for the docs. Same checkpoint language as the landing page:
+   graphite + one signal colour in dark mode, cool paper + deep amber in light mode. */
+
 :root[data-theme] {
 	--sl-font: var(--forge-sans);
 	--sl-font-mono: var(--forge-mono);
-	--sl-nav-height: 4.5rem;
+	--sl-nav-height: 4rem;
 	--sl-content-width: 48rem;
 	--sl-line-height: 1.85;
-	--sl-line-height-headings: 1.3;
+	--sl-line-height-headings: 1.28;
+}
 
-	--sl-color-white: #f3f4ee;
-	--sl-color-gray-1: #e1e5da;
-	--sl-color-gray-2: #c2c9ba;
-	--sl-color-gray-3: #939e8c;
-	--sl-color-gray-4: #66715e;
-	--sl-color-gray-5: #353d30;
-	--sl-color-gray-6: #242a21;
-	--sl-color-gray-7: #1c211a;
-	--sl-color-black: #171b16;
-	--sl-color-accent-low: #42291d;
-	--sl-color-accent: var(--forge-orange-bright);
-	--sl-color-accent-high: #ffac83;
-	--sl-color-text: var(--sl-color-gray-1);
-	--sl-color-text-accent: var(--sl-color-accent-high);
-	--sl-color-text-invert: #171b16;
-	--sl-color-bg: var(--sl-color-black);
-	--sl-color-bg-nav: #1c211a;
-	--sl-color-bg-sidebar: #1c211a;
-	--sl-color-bg-inline-code: var(--sl-color-gray-6);
-	--sl-color-bg-accent: var(--sl-color-accent-low);
-	--sl-color-hairline-light: var(--sl-color-gray-5);
-	--sl-color-hairline: var(--sl-color-gray-5);
-	--sl-color-hairline-shade: var(--sl-color-black);
+:root[data-theme='dark'] {
+	--sl-color-white: var(--forge-paper);
+	--sl-color-gray-1: #e2e1da;
+	--sl-color-gray-2: #c1c5cb;
+	--sl-color-gray-3: var(--forge-fog);
+	--sl-color-gray-4: var(--forge-fog-2);
+	--sl-color-gray-5: var(--forge-line-strong);
+	--sl-color-gray-6: var(--forge-graphite-3);
+	--sl-color-gray-7: var(--forge-graphite-2);
+	--sl-color-black: var(--forge-graphite);
+	--sl-color-accent-low: #3a3006;
+	--sl-color-accent: var(--forge-signal);
+	--sl-color-accent-high: #ffe270;
+	--sl-color-text: #d9dadb;
+	--sl-color-text-accent: var(--forge-signal);
+	--sl-color-text-invert: var(--forge-graphite);
+	--sl-color-bg: var(--forge-graphite);
+	--sl-color-bg-nav: var(--forge-graphite);
+	--sl-color-bg-sidebar: var(--forge-graphite);
+	--sl-color-bg-inline-code: var(--forge-graphite-3);
+	--sl-color-bg-accent: var(--forge-signal);
+	--sl-color-hairline-light: var(--forge-line-strong);
+	--sl-color-hairline: var(--forge-line);
+	--sl-color-hairline-shade: #08090b;
+	--forge-doc-link: var(--forge-signal);
+	--forge-doc-rule: var(--forge-signal);
+	/* Aside palettes follow the stamp colours. */
+	--sl-color-orange-low: #221d08;
+	--sl-color-orange: var(--forge-signal);
+	--sl-color-orange-high: #ffe9a0;
+	--sl-color-red-low: #2a120c;
+	--sl-color-red: var(--forge-deny);
+	--sl-color-red-high: #ffc4b5;
+	--sl-color-green-low: #0d2418;
+	--sl-color-green: var(--forge-pass);
+	--sl-color-green-high: #b9f1cf;
+	--sl-color-blue-low: #101c2e;
+	--sl-color-blue: var(--forge-wait);
+	--sl-color-blue-high: #cfe2ff;
 }
 
 :root[data-theme='light'] {
-	--sl-color-white: var(--forge-ink);
-	--sl-color-gray-1: #343c30;
-	--sl-color-gray-2: #4c5646;
-	--sl-color-gray-3: var(--forge-muted);
-	--sl-color-gray-4: #909987;
-	--sl-color-gray-5: var(--forge-border);
-	--sl-color-gray-6: #edf0e8;
-	--sl-color-gray-7: var(--forge-bg);
-	--sl-color-black: var(--forge-surface);
-	--sl-color-accent-low: #f9e8df;
-	--sl-color-accent: var(--forge-orange);
-	--sl-color-accent-high: #a73b17;
-	--sl-color-text: var(--forge-ink);
-	--sl-color-text-invert: var(--forge-surface);
-	--sl-color-bg: var(--forge-bg);
-	--sl-color-bg-nav: var(--forge-bg);
-	--sl-color-bg-sidebar: var(--forge-bg);
-	--sl-color-hairline-shade: var(--forge-bg);
+	--sl-color-white: #111317;
+	--sl-color-gray-1: #23272e;
+	--sl-color-gray-2: #3a3f47;
+	--sl-color-gray-3: #555b64;
+	--sl-color-gray-4: #5f656e;
+	--sl-color-gray-5: #c9ccd0;
+	--sl-color-gray-6: #e6e7e3;
+	--sl-color-gray-7: #f0f0ec;
+	--sl-color-black: #f8f8f5;
+	--sl-color-accent-low: #fbefb0;
+	--sl-color-accent: #7a6000;
+	--sl-color-accent-high: #4d3c00;
+	--sl-color-text: #23272e;
+	--sl-color-text-accent: #6b5400;
+	--sl-color-text-invert: #f8f8f5;
+	--sl-color-bg: #f8f8f5;
+	--sl-color-bg-nav: #f8f8f5;
+	--sl-color-bg-sidebar: #f8f8f5;
+	--sl-color-bg-inline-code: #eceee9;
+	--sl-color-bg-accent: #111317;
+	--sl-color-hairline-light: #dcdedb;
+	--sl-color-hairline: #e3e4e0;
+	--sl-color-hairline-shade: #c9ccd0;
+	--forge-doc-link: #6b5400;
+	--forge-doc-rule: #d4a800;
+	--sl-color-orange-low: #fbf3cf;
+	--sl-color-orange: #b08a00;
+	--sl-color-orange-high: #4d3c00;
+	--sl-color-red-low: #fde8e2;
+	--sl-color-red: #c23a1b;
+	--sl-color-red-high: #6e1f0c;
+	--sl-color-green-low: #e2f5ea;
+	--sl-color-green: #1d8a4b;
+	--sl-color-green-high: #0f4a28;
+	--sl-color-blue-low: #e5effd;
+	--sl-color-blue: #2f6fcf;
+	--sl-color-blue-high: #163a70;
 }
 
-:root[data-theme] .site-title {
-	color: var(--sl-color-white);
-	font-weight: 800;
-	letter-spacing: -0.04em;
-}
-
-:root[data-theme] .site-title img {
-	height: 2.5rem;
-	width: auto;
-}
-
-:root[data-theme] .sidebar-content {
-	padding-block: 1.5rem;
-}
-
-:root[data-theme] .sidebar-content .top-level > li + li {
-	margin-top: 1.25rem;
-}
-
-:root[data-theme] .sidebar-content summary {
-	padding-block: 0.45rem;
-}
-
-:root[data-theme] .sidebar-content .large {
-	font-size: 0.8125rem;
-	font-weight: 750;
-	letter-spacing: 0.035em;
-}
-
-:root[data-theme] .sidebar-content a {
-	border-radius: 0.25rem;
-	padding-block: 0.5rem;
-	line-height: 1.55;
-}
-
-:root[data-theme] .sidebar-content a:hover {
-	color: var(--sl-color-text-accent);
-	background: var(--sl-color-gray-6);
-}
-
-:root[data-theme] .sidebar-content a[aria-current='page'] {
-	color: var(--sl-color-text-accent);
-	background: var(--sl-color-accent-low);
-	box-shadow: inset 2px 0 0 var(--sl-color-accent);
-	font-weight: 650;
-}
-
-:root[data-theme] .right-sidebar-panel h2 {
-	font-size: 0.8125rem;
-	letter-spacing: 0.025em;
-}
-
-:root[data-theme] .right-sidebar-panel a {
-	padding-block: 0.35rem;
-	line-height: 1.6;
-}
-
-:root[data-theme] .right-sidebar-panel a[aria-current='true'] {
-	color: var(--sl-color-text-accent);
-}
-
-:root[data-theme] #_top {
-	font-size: clamp(2rem, 4vw, 3rem);
-	font-weight: 750;
-	letter-spacing: -0.045em;
-}
-
-.sl-markdown-content :is(h2, h3, h4):not(:where(.not-content *)) {
-	letter-spacing: -0.025em;
-}
-
-.sl-markdown-content h2:not(:where(.not-content *)) {
-	padding-bottom: 0.55rem;
+/* Header: thin hazard rule under the bar, wordmark set like the landing page. */
+:root[data-theme] header.header {
 	border-bottom: 1px solid var(--sl-color-hairline);
+	box-shadow: 0 3px 0 -1px transparent;
 }
+:root[data-theme] header.header::after {
+	content: '';
+	position: absolute; left: 0; right: 0; bottom: -4px; height: 3px;
+	background: repeating-linear-gradient(-45deg, var(--forge-signal) 0 8px, transparent 8px 16px);
+	opacity: .55;
+}
+:root[data-theme] .site-title {
+	gap: .65rem;
+	font-family: var(--forge-display);
+	font-weight: 800;
+	font-stretch: 125%;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	font-size: 1rem;
+	color: var(--sl-color-white);
+}
+:root[data-theme] .site-title img { width: 28px; height: 28px; }
 
+/* Sidebar: active page marked like a passed gate. */
+:root[data-theme] .sidebar-content summary .large,
+:root[data-theme] .sidebar-content .large {
+	font-family: var(--forge-mono);
+	font-stretch: 92%;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .06em;
+	color: var(--sl-color-gray-4);
+}
+:root[data-theme] .sidebar-content a {
+	border-radius: 0;
+	padding-inline: .9rem .6rem;
+	color: var(--sl-color-gray-2);
+	font-size: .92rem;
+	border-left: 2px solid transparent;
+}
+:root[data-theme] .sidebar-content a:hover { color: var(--sl-color-white); background: var(--sl-color-gray-7); }
+:root[data-theme] .sidebar-content a[aria-current='page'] {
+	color: var(--sl-color-white);
+	background: var(--sl-color-gray-7);
+	border-left-color: var(--forge-doc-rule);
+	font-weight: 600;
+}
+:root[data-theme] .sidebar-content a[aria-current='page'] span { color: inherit; }
+
+/* Table of contents */
+:root[data-theme] .right-sidebar-panel h2 {
+	font-family: var(--forge-mono);
+	font-stretch: 92%;
+	font-size: .7rem;
+	letter-spacing: .08em;
+	color: var(--sl-color-gray-4);
+}
+:root[data-theme] .right-sidebar-panel a { color: var(--sl-color-gray-3); }
+:root[data-theme] .right-sidebar-panel a[aria-current='true'] { color: var(--forge-doc-link); }
+
+/* Page title */
+:root[data-theme] #_top {
+	font-family: var(--forge-display);
+	font-weight: 800;
+	font-stretch: 112%;
+	letter-spacing: -.01em;
+	text-wrap: balance;
+}
+:root[data-theme] .content-panel:first-of-type { border-bottom: 0; }
+
+/* Prose */
+.sl-markdown-content :is(h2, h3, h4):not(:where(.not-content *)) {
+	font-family: var(--forge-display);
+	font-weight: 800;
+	text-wrap: balance;
+}
+.sl-markdown-content h2:not(:where(.not-content *)) { font-stretch: 108%; }
+.sl-markdown-content h2:not(:where(.not-content *))::before {
+	content: '';
+	display: block; width: 2.25rem; height: 3px; margin-bottom: 1rem;
+	background: var(--forge-doc-rule);
+}
 .sl-markdown-content a:not(:where(.not-content *)) {
-	text-underline-offset: 0.2em;
-	text-decoration-thickness: 1px;
+	color: var(--sl-color-white);
+	text-decoration: underline;
+	text-decoration-color: var(--forge-doc-rule);
+	text-decoration-thickness: 1.5px;
+	text-underline-offset: .22em;
 }
-
-.sl-markdown-content a:hover:not(:where(.not-content *)) {
-	text-decoration-thickness: 2px;
-}
-
+.sl-markdown-content a:hover:not(:where(.not-content *)) { color: var(--forge-doc-link); }
 .sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
-	padding: 0.18em 0.4em;
+	padding: .12em .38em;
 	border: 1px solid var(--sl-color-hairline);
-	border-radius: 0.25rem;
-	font-size: 0.85em;
+	border-radius: 4px;
+	font-size: .84em;
 }
-
-/* Keep syntax highlighting and copy controls under Expressive Code's control. */
-.sl-markdown-content .expressive-code {
-	margin-block: 1.75rem;
-}
-
-.sl-markdown-content .expressive-code .frame {
-	box-shadow: none;
-}
-
-.sl-markdown-content pre:not(.expressive-code pre) {
-	padding: 1.2rem 1.35rem;
-	border: 1px solid var(--sl-color-hairline);
-	border-radius: 0.4rem;
-	line-height: 1.7;
-}
-
+.sl-markdown-content .expressive-code .frame { border-radius: 10px; }
 .sl-markdown-content table:not(:where(.not-content *)) {
-	display: block;
-	max-width: 100%;
-	overflow-x: auto;
-	border: 1px solid var(--sl-color-hairline);
-	border-radius: 0.4rem;
-	font-size: 0.875rem;
-	line-height: 1.7;
+	display: table;
+	width: 100%;
+	border-collapse: collapse;
+	font-size: .92rem;
+	border-top: 2px solid var(--sl-color-white);
 }
-
 .sl-markdown-content :is(th, td):not(:where(.not-content *)) {
-	padding: 0.8rem 1rem;
-	border-color: var(--sl-color-hairline);
+	padding: .7rem .8rem;
+	border: 0;
+	border-bottom: 1px solid var(--sl-color-hairline);
 	vertical-align: top;
 }
-
 .sl-markdown-content th:not(:where(.not-content *)) {
-	background: var(--sl-color-gray-6);
-	color: var(--sl-color-white);
-	font-weight: 700;
+	font-family: var(--forge-mono);
+	font-stretch: 92%;
+	font-size: .72rem;
+	letter-spacing: .05em;
+	color: var(--sl-color-gray-3);
+	background: transparent;
+	text-align: left;
 }
-
-.sl-markdown-content tr:nth-child(even):not(:where(.not-content *)) {
-	background: color-mix(in srgb, var(--sl-color-gray-6) 45%, transparent);
-}
-
 .sl-markdown-content blockquote:not(:where(.not-content *)) {
-	border-inline-start-color: var(--sl-color-accent);
+	border-left: 3px solid var(--forge-doc-rule);
 	color: var(--sl-color-gray-2);
 }
 
-:root[data-theme] .pagination-links a {
-	border-color: var(--sl-color-hairline);
-	border-radius: 0.4rem;
-	box-shadow: none;
+/* Callouts read as dashed notices, matching the landing page's "does not prove" boxes. */
+:root[data-theme] .starlight-aside {
+	border: 1px dashed var(--sl-color-gray-5);
+	border-left: 3px solid var(--sl-color-asides-border);
+	border-radius: 8px;
 }
 
-:root[data-theme] .pagination-links a:hover {
-	border-color: var(--sl-color-accent);
-	background: var(--sl-color-bg-accent);
+/* Previous / next */
+:root[data-theme] .pagination-links a {
+	border-radius: 10px;
+	border-color: var(--sl-color-hairline-light);
+	box-shadow: none;
 }
+:root[data-theme] .pagination-links a:hover { border-color: var(--forge-doc-rule); }
+
+/* Search trigger */
+:root[data-theme] site-search button[data-open-modal] { border-radius: 8px; }
+
+:root[data-theme] ::selection { background: var(--forge-signal); color: var(--forge-graphite); }

@@ -3,186 +3,361 @@ import Mark from '../components/Mark.astro';
 import '../styles/landing.css';
 
 const github = 'https://github.com/shisuidata/Forge';
-const report = `${github}/blob/main/docs/archive/engineering/latest-test-report-2026-10-14.md`;
-const steps = [
-  { id: 'evaluate', number: '01', name: 'Evaluate', label: '先评测，再迭代', description: '比较模型、Prompt 与候选版本。保留失败分类和原始结果，让每次变化都有可复核的基线。', detail: '评测不授予执行权', link: '/reference/benchmarks/' },
-  { id: 'enforce', number: '02', name: 'Enforce', label: '把边界放进执行路径', description: '将身份、任务、资源范围与策略绑定到 QueryRun。需要审核时，批准的是实际要执行的查询。', detail: '授权与审批绑定查询', link: '/concepts/how-it-works/' },
-  { id: 'explain', number: '03', name: 'Explain', label: '交付结果，也交付依据', description: '把实际 SQL、语义来源、版本和审批链交给消费者。证据不足、实时数据与截断，都应明确可见。', detail: '证据不等于语义正确', link: '/guides/introduction/' },
+const report = `${github}/blob/main/docs/archive/engineering/latest-test-report-2026-10-22.md`;
+const install = 'git clone https://github.com/shisuidata/Forge\ncd Forge\nbash scripts/bootstrap-dev.sh\nsource .venv/bin/activate\nforge quickstart --agent';
+
+// Synthetic walkthrough of the same scenario `forge quickstart --agent` runs. Not live data.
+type Cell = { state: 'pass' | 'deny' | 'wait' | 'skip'; text: string };
+const gates = ['只读', '解析', '表权限', '授权范围'];
+const lanes: { sql: string; note: string; cells: Cell[]; outcome: Cell }[] = [
+	{
+		sql: 'SELECT n FROM numbers', note: '自主子集内的表',
+		cells: [{ state: 'pass', text: '通过' }, { state: 'pass', text: '通过' }, { state: 'pass', text: '通过' }, { state: 'pass', text: '自主子集' }],
+		outcome: { state: 'pass', text: 'Agent 直接执行' },
+	},
+	{
+		sql: 'SELECT value FROM secrets', note: '范围内，但不在自主子集',
+		cells: [{ state: 'pass', text: '通过' }, { state: 'pass', text: '通过' }, { state: 'pass', text: '通过' }, { state: 'wait', text: '需审核' }],
+		outcome: { state: 'wait', text: '指定审核人批准后执行' },
+	},
+	{
+		sql: 'DELETE FROM numbers', note: '写入请求',
+		cells: [{ state: 'deny', text: 'readonly_violation' }, { state: 'skip', text: '—' }, { state: 'skip', text: '—' }, { state: 'skip', text: '—' }],
+		outcome: { state: 'deny', text: '拒绝，不执行' },
+	},
+	{
+		sql: 'SELECT n FROM numbers', note: '管理员撤销授权之后',
+		cells: [{ state: 'skip', text: '—' }, { state: 'skip', text: '—' }, { state: 'skip', text: '—' }, { state: 'deny', text: '已撤销' }],
+		outcome: { state: 'deny', text: '409 mandate_inactive' },
+	},
 ];
-const command = 'git clone https://github.com/shisuidata/Forge\ncd Forge\nbash scripts/bootstrap-dev.sh\nsource .venv/bin/activate\nforge quickstart';
+
+const stages = [
+	{
+		n: '01', name: 'Evaluate', title: '先检查候选，不执行',
+		does: ['只读、语法、Registry 与表权限检查', '失败按阶段分类，可回放、可做回归门禁', 'Direct SQL 与 Forge JSON 走同一条检查链'],
+		not: '评估通过不授予执行权。', href: '/reference/benchmarks/',
+	},
+	{
+		n: '02', name: 'Enforce', title: '按授权放行、等待或拒绝',
+		does: ['主体、任务、授权范围与 SQL 绑定到同一个 QueryRun', '检查与执行使用同一份解析结果', '越界、漂移、撤销一律失败关闭'],
+		not: '获得授权不等于查询表达了正确的业务意图。', href: '/concepts/how-it-works/',
+	},
+	{
+		n: '03', name: 'Explain', title: '交付结果，也交付依据',
+		does: ['回读实际 SQL、结果、语义来源与审批链', '证据在写入时绑定 hash，篡改即失败', '把没有证明的部分写进限制'],
+		not: '证据完整不等于语义正确。', href: '/guides/introduction/',
+	},
+];
+
+const permit = [
+	['委托主体', 'agent · worker'],
+	['签发人', 'human · admin'],
+	['任务', 'tr_quickstart'],
+	['数据源', 'demo'],
+	['允许的表', 'numbers, secrets'],
+	['自主子集', 'numbers'],
+	['指定审核人', 'human · reviewer'],
+	['有效期', '≤ 24 小时'],
+];
+
+const record = [
+	{ figure: '1049', unit: 'passed', label: 'Python 全套测试', note: '26 skipped · 仓库检出' },
+	{ figure: '226', unit: 'passed', label: 'Pi Orchestrator', note: 'Node 22 与 24 · typecheck 通过' },
+	{ figure: '5/5', unit: 'CI', label: '远端 CI 任务', note: 'test · wheel · sdist · 兼容 · Pi' },
+	{ figure: '2/2', unit: '安装方式', label: 'wheel 与 sdist 全新安装', note: '安装后 package smoke 与 Quickstart 通过' },
+];
+const limitations = ['semantic_correctness_unproven', 'live_data_no_snapshot', 'authorization_is_not_semantic_correctness', 'result_truncated'];
+const unverified = ['真实 PostgreSQL / MySQL 只读角色', '真实身份与客户数据', '独立安全审核与渗透测试', '非维护者的外部采用'];
+
 const faqs = [
-  ['Forge 是另一个聊天机器人吗？', '不是。Forge 位于既有 Agent 与数据库之间，提供生成后的评测、受控执行和证据。Web 工作台与 Pi 是消费者；外部 Agent 也可以独立接入 Forge。'],
-  ['必须让模型生成 Forge JSON 吗？', '不必。Direct SQL 和 Forge JSON 是可替换的候选输入，共用 QueryRun 治理链路。Forge JSON 是可选的 Planner Adapter，不是产品边界；不同输入的语义校验强度也不完全相同。'],
-  ['Quickstart 会访问我的数据库或调用模型吗？', '不会。公开 Quickstart 使用隔离的合成 SQLite 数据和真实本地 HTTP API，不需要 LLM、API Key、Pi 或已有数据库。默认会展示实际 SQL，等待你明确批准。'],
-  ['现在能直接接入生产吗？', '不建议。当前仍是开发验证阶段，最新公开评估记录有两项未关闭的 P0 安全发布阻断；真实企业权限、共享多租户、独立安全审核与外部采用尚未验收。先阅读验证报告，再做隔离评估。'],
+	['Forge 是另一个问数聊天机器人吗？', '不是。Forge 位于你已有的 Agent 与数据库之间，负责生成之后的检查、受控执行与证据。外部 Agent 可以直接调用 Forge 的 HTTP API，不需要使用我们的工作台或编排器。'],
+	['必须让模型生成 Forge JSON 吗？', '不必。Direct SQL 与 Forge JSON 都是候选格式，进入同一条 QueryRun 治理链路。Forge JSON 能提供更强的结构约束，但它不是接入的前提。'],
+	['Quickstart 会连接我的数据库或调用模型吗？', '不会。它在本地创建隔离的合成 SQLite 数据与合成身份，启动真实的本地服务，不需要模型、API Key 或你的数据库。'],
+	['现在可以接入生产吗？', '不建议。2026-10-04 评估列出的发布阻断已经修复并有回归测试，但真实数据库只读角色、真实身份与独立安全审核都还没有验证；数据库只读角色始终是最后一道边界。请先在隔离环境评估。'],
 ];
 ---
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f7f8f5" />
-    <title>Forge — 为 Data Agent 建立可信数据边界</title>
-    <meta name="description" content="面向企业 Data Agent 的开源可信数据运行时。通过 Evaluate、Enforce、Explain，让数据访问可验证、可约束、可追溯。" />
-    <meta property="og:title" content="Forge — 为 Data Agent 建立可信数据边界" />
-    <meta property="og:description" content="让 Agent 查询数据，不必交出控制权。探索开源 Trust Runtime 的评测、受控执行与证据链。" />
-    <meta property="og:type" content="website" />
-    <link rel="canonical" href="https://forge.ss-data.cc/" />
-    <meta property="og:url" content="https://forge.ss-data.cc/" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  </head>
-  <body>
-    <a class="skip-link" href="#main">跳至内容</a>
-    <header class="site-header">
-      <div class="header-inner container">
-        <a class="wordmark" href="/" aria-label="Forge 首页"><span class="brand-mark"><Mark /></span>forge<span class="wordmark-period">.</span></a>
-        <button class="menu-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航"><span></span><span></span></button>
-        <nav id="site-nav" aria-label="主导航">
-          <a href="#runtime">产品</a>
-          <a href="#evidence">验证与边界</a>
-          <a href="/guides/introduction/">文档 <span aria-hidden="true">↗</span></a>
-          <a class="nav-github" href={github}>GitHub <span aria-hidden="true">↗</span></a>
-          <a class="button button-small" href="/guides/quickstart/">开始构建 <span aria-hidden="true">→</span></a>
-        </nav>
-      </div>
-    </header>
-    <main id="main">
-      <section class="hero container" aria-labelledby="hero-heading">
-        <div class="hero-heading">
-          <a class="release-note" href={report}><span class="status-dot"></span>开源 · 开发验证阶段 <span class="release-divider"></span> 查看最新验证记录 <span aria-hidden="true">↗</span></a>
-          <p class="eyebrow">THE TRUST LAYER FOR DATA AGENTS</p>
-          <h1 id="hero-heading">让 Agent 查询数据，<br />不必交出<span class="accent-word">控制权<svg viewBox="0 0 220 12" fill="none" aria-hidden="true"><path d="M2 8c57-7 139-8 214-4M16 11c55-4 112-6 174-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg></span>。</h1>
-          <p class="hero-description">模型负责提出候选。<strong>Forge 让访问有边界、执行可审核、结果有依据。</strong><br class="desktop-break" />接入既有 Agent，而不是再迁移一套聊天工具。</p>
-          <div class="hero-actions">
-            <a class="button" href="/guides/quickstart/">运行第一个受控查询 <span aria-hidden="true">↗</span></a>
-            <a class="text-link" href="#runtime">看看它如何工作 <span aria-hidden="true">↓</span></a>
-          </div>
-          <div class="hero-meta"><span>Apache 2.0</span><span>本地优先</span><span>无需模型即可试跑</span></div>
-        </div>
-        <div class="runtime-window" aria-label="Forge 执行链路示意">
-          <div class="window-top"><span class="window-title"><Mark size={20} /> FORGE / QUERY INSPECTOR</span><span class="demo-label">示意 · 非实时服务</span></div>
-          <div class="inspector-grid">
-            <div class="inspector-sidebar">
-              <span class="tiny-label">DATA REQUEST</span>
-              <p class="request-question">按地区汇总销售额</p>
-              <div class="context-line"><span class="context-icon" aria-hidden="true">↳</span><span>source <strong>demo.sales</strong></span></div>
-              <div class="context-line"><span class="context-icon" aria-hidden="true">↳</span><span>scope <strong>read only</strong></span></div>
-              <div class="context-line"><span class="context-icon" aria-hidden="true">↳</span><span>purpose <strong>sales analysis</strong></span></div>
-              <div class="sidebar-divider"></div>
-              <span class="tiny-label">TRUST PIPELINE</span>
-              <div class="stage-tabs" role="tablist" aria-label="查看执行链路阶段" aria-orientation="vertical">
-                {steps.map((step, index) => <button id={`tab-${step.id}`} role="tab" aria-selected={index === 0 ? 'true' : 'false'} aria-controls={`panel-${step.id}`} tabindex={index === 0 ? 0 : -1}><span class="stage-number">{step.number}</span><span>{step.name}</span><span class="stage-arrow" aria-hidden="true">↗</span></button>)}
-              </div>
-              <a class="inspector-docs" href="/concepts/how-it-works/">探索完整生命周期 <span aria-hidden="true">↗</span></a>
-            </div>
-            <div class="inspector-main">
-              <section id="panel-evaluate" class="stage-panel" role="tabpanel" aria-labelledby="tab-evaluate" tabindex="0">
-                <div class="panel-heading"><div><span class="tiny-label">01 / EVALUATE</span><h2>从可复核的候选开始。</h2></div><span class="sample-tag">合成样例</span></div>
-                <div class="code-view"><div class="code-label">candidate.sql <span>SQL</span></div><pre><code><span class="code-line"><i>1</i><b>SELECT</b> region,</span><span class="code-line"><i>2</i>       <em>SUM</em>(revenue) <b>AS</b> revenue</span><span class="code-line"><i>3</i><b>FROM</b> demo.sales</span><span class="code-line"><i>4</i><b>GROUP BY</b> region;</span></code></pre></div>
-                <div class="review-row"><span><span class="row-symbol" aria-hidden="true">◇</span>候选、版本与预期结果</span><span>可比较</span></div>
-                <div class="review-row"><span><span class="row-symbol" aria-hidden="true">◇</span>Policy / Failure taxonomy</span><span>可诊断</span></div>
-                <div class="panel-note"><span aria-hidden="true">↳</span>评测与执行分离。评测通过，不等于获得数据库执行权。</div>
-              </section>
-              <section id="panel-enforce" class="stage-panel" role="tabpanel" aria-labelledby="tab-enforce" tabindex="0" hidden>
-                <div class="panel-heading"><div><span class="tiny-label">02 / ENFORCE</span><h2>允许执行，是另一个决定。</h2></div><span class="sample-tag">合成样例</span></div>
-                <div class="authorization-card"><div class="authorization-icon" aria-hidden="true">⌘</div><div><span class="tiny-label">GOVERNED QUERYRUN</span><h3>身份、范围、策略，绑定在一起。</h3></div></div>
-                <dl class="binding-list"><div><dt>Principal</dt><dd>demo-agent</dd></div><div><dt>Resource scope</dt><dd>demo.sales</dd></div><div><dt>SQL / Policy revisions</dt><dd>hash-bound</dd></div><div><dt>Review</dt><dd>按授权范围决策</dd></div></dl>
-                <div class="panel-note"><span aria-hidden="true">↳</span>范围外拒绝；需要人审时，审批绑定实际查询。本示意不执行授权。</div>
-              </section>
-              <section id="panel-explain" class="stage-panel" role="tabpanel" aria-labelledby="tab-explain" tabindex="0" hidden>
-                <div class="panel-heading"><div><span class="tiny-label">03 / EXPLAIN</span><h2>一个结果，一条证据链。</h2></div><span class="sample-tag">合成样例</span></div>
-                <div class="sample-result"><div class="result-row result-header"><span>region</span><span>revenue</span></div><div class="result-row"><span>East</span><span>128,400</span></div><div class="result-row"><span>West</span><span>96,200</span></div></div>
-                <div class="evidence-chips"><span>实际 SQL</span><span>Registry 版本</span><span>审批链</span><span>显式限制</span></div>
-                <div class="panel-note"><span aria-hidden="true">↳</span>合成结果，仅展示结构。完整 Evidence 也不证明业务语义正确。</div>
-              </section>
-            </div>
-          </div>
-          <div class="window-bottom"><span><span class="status-dot"></span>候选 → 受控执行 → Evidence</span><span>确定性校验 ≠ 开放世界正确性</span></div>
-        </div>
-        <div class="integration-strip"><span class="tiny-label">WORKS WITH YOUR STACK</span><div><span>Direct SQL</span><span class="integration-plus">+</span><span>Forge JSON</span><span class="integration-arrow" aria-hidden="true">→</span><strong>One governed path.</strong><span class="integration-separator"></span><span>你的 Agent</span><span>你的数据库</span></div></div>
-      </section>
-      <section id="runtime" class="runtime-section" aria-labelledby="runtime-heading">
-        <div class="container">
-          <div class="section-heading"><div><p class="eyebrow">LESS GUESSWORK. MORE ACCOUNTABILITY.</p><h2 id="runtime-heading">从“生成了答案”，<br />到“知道答案如何产生”。</h2></div><p>不替模型承诺正确。<br />让每一次访问，都能被检查、约束和追溯。</p></div>
-          <div class="feature-grid">{steps.map(step => <article class="feature"><div class="feature-index"><span>{step.number}</span><span aria-hidden="true">↗</span></div><p class="feature-name">{step.name}<span class="feature-dot">.</span></p><h3>{step.label}</h3><p class="feature-description">{step.description}</p><a href={step.link}>{step.detail}<span aria-hidden="true">→</span></a></article>)}</div>
-          <div class="boundary-strip"><span class="boundary-icon" aria-hidden="true">⊞</span><p><strong>不是替换你的 Agent，而是给它一个可信数据边界。</strong><br />Pi 负责任务编排，Forge 保留对数据执行的独立校验与否决能力。</p><a class="text-link" href="/reference/architecture/">查看架构 <span aria-hidden="true">↗</span></a></div>
-        </div>
-      </section>
-      <section id="evidence" class="evidence-section container" aria-labelledby="evidence-heading">
-        <div class="evidence-intro"><p class="eyebrow">BUILT IN THE OPEN</p><h2 id="evidence-heading">信任，不靠<br />一个漂亮数字。</h2><p>我们公开通过的测试，也保留失败、未知与限制。<br />测试通过，不等于生产安全。</p><a class="text-link" href={report}>阅读最新验证报告 <span aria-hidden="true">↗</span></a></div>
-        <div class="evidence-ledger"><div class="ledger-heading"><span class="tiny-label">VERIFICATION RECORD</span><span>本地评估 · 2026.10.04</span></div><div class="ledger-row"><span>Python 回归</span><strong>1,011 <small>passed</small></strong><span class="ledger-note">另有 26 项 skipped</span></div><div class="ledger-row"><span>Pi Orchestrator</span><strong>212 <small>passed</small></strong><span class="ledger-note">TypeScript 检查通过</span></div><div class="ledger-row"><span>公开 Golden Path</span><strong class="ledger-text">实际链路跑通 <span aria-hidden="true">↗</span></strong><span class="ledger-note">隔离合成数据</span></div><p class="ledger-footnote">以上来自含未提交修改的本地工作树，不是当前公开提交、远端 CI 或部署认证。本轮官网改版未重跑上述测试。</p><div class="open-boundary"><span class="boundary-status">尚未关闭</span><p>两项 P0 安全发布阻断、独立安全审核与外部采用门禁。当前不建议用于真实生产或共享多租户数据访问。</p></div><a class="ledger-link" href="/reference/benchmarks/">查看基准、历史结果与可比性边界 <span aria-hidden="true">→</span></a></div>
-      </section>
-      <section id="quickstart" class="quickstart-section" aria-labelledby="quickstart-heading">
-        <div class="container quickstart-grid"><div><p class="eyebrow">LOCAL FIRST. OPEN SOURCE.</p><h2 id="quickstart-heading">先跑通一次。<br /><span>再决定是否接入。</span></h2><p>不填模型 Key，不连客户数据库。<br />用隔离的合成数据，亲手走过一次评测、批准与解释。</p><a class="button" href="/guides/quickstart/">打开快速开始 <span aria-hidden="true">↗</span></a><span class="quickstart-caption">需要 Git、Python 与本地开发环境</span></div><div class="terminal"><div class="terminal-header"><span><i></i><i></i><i></i></span><span>YOUR TERMINAL</span><button id="copy-command" class="copy-button" aria-label="复制快速开始命令">复制 <span aria-hidden="true">⧉</span></button></div><pre id="quickstart-command"><code>{command}</code></pre><div class="terminal-footer"><span aria-hidden="true">↳</span>展示 SQL → 等待你批准 → 执行 → Explain</div><p id="copy-feedback" class="copy-feedback" role="status" aria-live="polite"></p></div></div>
-      </section>
-      <section class="faq-section container" aria-labelledby="faq-heading"><div><p class="eyebrow">A FEW GOOD QUESTIONS</p><h2 id="faq-heading">开始之前，<br />把边界说清楚。</h2></div><div class="faq-list">{faqs.map(([question, answer]) => <details><summary>{question}<span aria-hidden="true">+</span></summary><p>{answer}</p></details>)}</div></section>
-      <section class="closing-section container"><div><span class="closing-symbol" aria-hidden="true"><Mark size={58} /></span><h2>把数据能力交给 Agent。<br /><span>把决定权留在边界之内。</span></h2></div><a class="button" href={github}>在 GitHub 探索 Forge <span aria-hidden="true">↗</span></a></section>
-    </main>
-    <footer class="site-footer"><div class="container footer-inner"><a class="wordmark" href="/" aria-label="Forge 首页"><span class="brand-mark"><Mark size={24} /></span>forge<span class="wordmark-period">.</span></a><p>Open source. Explicit boundaries.<br /><span>由拾穗数据维护 · Apache 2.0</span></p><nav aria-label="页脚导航"><a href="/guides/introduction/">文档</a><a href={report}>验证报告</a><a href={`${github}/issues`}>反馈问题 ↗</a><a href={`${github}/blob/main/LICENSE`}>许可证 ↗</a></nav><a class="back-top" href="#main" aria-label="返回顶部">↑</a></div></footer>
-    <script>
-      const menuButton = document.querySelector<HTMLButtonElement>('.menu-toggle');
-      const navigation = document.querySelector<HTMLElement>('#site-nav');
-      const closeMenu = () => {
-        menuButton?.setAttribute('aria-expanded', 'false');
-        menuButton?.setAttribute('aria-label', '打开导航');
-        navigation?.classList.remove('is-open');
-      };
-      menuButton?.addEventListener('click', () => {
-        const expanded = menuButton.getAttribute('aria-expanded') !== 'true';
-        menuButton.setAttribute('aria-expanded', String(expanded));
-        menuButton.setAttribute('aria-label', expanded ? '关闭导航' : '打开导航');
-        navigation?.classList.toggle('is-open', expanded);
-      });
-      navigation?.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
-      document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && menuButton?.getAttribute('aria-expanded') === 'true') {
-          closeMenu();
-          menuButton.focus();
-        }
-      });
-      const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-      const tabList = document.querySelector('[role="tablist"]');
-      const compactLayout = window.matchMedia('(max-width: 760px)');
-      const syncLayout = () => {
-        tabList?.setAttribute('aria-orientation', compactLayout.matches ? 'horizontal' : 'vertical');
-        if (!compactLayout.matches) closeMenu();
-      };
-      compactLayout.addEventListener('change', syncLayout);
-      syncLayout();
-      function selectTab(tab: HTMLButtonElement) {
-        for (const item of tabs) {
-          const selected = item === tab;
-          item.setAttribute('aria-selected', String(selected));
-          item.tabIndex = selected ? 0 : -1;
-          const panel = document.getElementById(item.getAttribute('aria-controls') ?? '');
-          if (panel) panel.hidden = !selected;
-        }
-      }
-      tabs.forEach((tab, index) => {
-        tab.addEventListener('click', () => selectTab(tab));
-        tab.addEventListener('keydown', event => {
-          const direction = ['ArrowDown', 'ArrowRight'].includes(event.key) ? 1 : ['ArrowUp', 'ArrowLeft'].includes(event.key) ? -1 : 0;
-          if (!direction && !['Home', 'End'].includes(event.key)) return;
-          event.preventDefault();
-          const target = tabs[event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + direction + tabs.length) % tabs.length];
-          selectTab(target);
-          target.focus();
-        });
-      });
-      const copyButton = document.querySelector<HTMLButtonElement>('#copy-command');
-      const copyFeedback = document.getElementById('copy-feedback');
-      copyButton?.addEventListener('click', async () => {
-        const command = document.querySelector('#quickstart-command code')?.textContent;
-        if (!command || !copyFeedback) return;
-        try {
-          await navigator.clipboard.writeText(command);
-          copyFeedback.textContent = '已复制命令。请在自己的终端中运行。';
-        } catch {
-          copyFeedback.textContent = '浏览器未允许复制，请选中上方命令手动复制。';
-        }
-      });
-    </script>
-  </body>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#0f1114" />
+		<title>Forge — Agent 写的每条 SQL，先过关，再执行</title>
+		<meta name="description" content="Forge 是开源的 Data Agent 可信数据运行时：评估候选 SQL，按授权放行、等待审核或拒绝，并为每次执行留下可校验的证据。" />
+		<meta property="og:title" content="Forge — Agent 写的每条 SQL，先过关，再执行" />
+		<meta property="og:description" content="开源 Trust Runtime：Evaluate → Enforce → Explain。有界授权、指定审核人、可撤销，执行后交付证据与限制。" />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://forge.ss-data.cc/" />
+		<link rel="canonical" href="https://forge.ss-data.cc/" />
+		<link rel="icon" href="/favicon.ico" sizes="any" />
+		<link rel="icon" type="image/svg+xml" href="/brand/forge-mark.svg" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+	</head>
+	<body>
+		<a class="skip-link" href="#main">跳至内容</a>
+		<header class="bar">
+			<div class="bar-inner wrap">
+				<a class="brand" href="/" aria-label="Forge 首页"><Mark size={30} /><span>FORGE</span></a>
+				<button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+					<span class="menu-toggle-label">菜单</span><span class="menu-toggle-icon" aria-hidden="true"></span>
+				</button>
+				<nav id="site-nav" class="nav" aria-label="主导航">
+					<a href="#gates">三道关口</a>
+					<a href="#mandate">有界授权</a>
+					<a href="#evidence">证据</a>
+					<a href="#record">验证记录</a>
+					<a href="/guides/introduction/">文档</a>
+					<a href={github} rel="noopener">GitHub</a>
+					<a class="nav-cta" href="/guides/quickstart/">五分钟上手</a>
+				</nav>
+			</div>
+		</header>
+
+		<main id="main">
+			<section class="hero wrap" aria-labelledby="hero-title">
+				<div class="hero-copy">
+					<p class="kicker"><span class="kicker-dot" aria-hidden="true"></span>开源 · Apache-2.0 · Trust Runtime for Data Agents</p>
+					<h1 id="hero-title">Agent 写的每条 SQL，<br /><em>先过关，</em>再执行。</h1>
+					<p class="lede">Forge 是位于 Agent 与数据库之间的开源可信数据运行时。它检查候选 SQL，按授权决定放行、等待审核或拒绝，并为每次执行留下可校验的证据。</p>
+					<div class="hero-actions">
+						<a class="button button-signal" href="/guides/quickstart/">五分钟上手<span aria-hidden="true">→</span></a>
+						<div class="command-chip">
+							<code>forge quickstart --agent</code>
+							<button class="copy" type="button" data-copy="forge quickstart --agent" aria-label="复制命令">复制</button>
+						</div>
+					</div>
+					<p class="hero-meta">本地合成数据运行 · 不需要模型、API Key 或你的数据库</p>
+				</div>
+			</section>
+
+			<section class="board-wrap wrap" aria-labelledby="board-title">
+				<div class="board" data-board>
+					<div class="board-head">
+						<p id="board-title" class="board-title"><span class="mono">CHECKPOINT</span> 同一项授权下的四次请求</p>
+						<p class="board-note">合成示意 · 与 <code>forge quickstart --agent</code> 同一场景 · 非实时</p>
+						<button class="replay" type="button" data-replay>重放</button>
+					</div>
+					<table class="lanes">
+						<thead>
+							<tr>
+								<th scope="col">候选 SQL</th>
+								{gates.map((gate) => <th scope="col">{gate}</th>)}
+								<th scope="col">结果</th>
+							</tr>
+						</thead>
+						<tbody>
+							{lanes.map((lane, row) => (
+								<tr>
+									<th scope="row"><code>{lane.sql}</code><span>{lane.note}</span></th>
+									{lane.cells.map((cell, column) => (
+										<td data-label={gates[column]}><span class:list={['stamp', cell.state]} style={`--d:${row * 0.55 + column * 0.12 + 0.2}s`}>{cell.text}</span></td>
+									))}
+									<td class="outcome" data-label="结果"><span class:list={['stamp', 'stamp-outcome', lane.outcome.state]} style={`--d:${row * 0.55 + 0.75}s`}>{lane.outcome.text}</span></td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<div class="hazard" aria-hidden="true"></div>
+
+			<section id="gates" class="section wrap" aria-labelledby="gates-title">
+				<header class="section-head">
+					<p class="eyebrow">Evaluate → Enforce → Explain</p>
+					<h2 id="gates-title">三道关口，<br />每道都说清自己证明不了什么。</h2>
+				</header>
+				<ol class="stages">
+					{stages.map((stage) => (
+						<li class="stage">
+							<p class="stage-n mono">{stage.n}</p>
+							<h3><span class="stage-name">{stage.name}</span>{stage.title}</h3>
+							<ul>{stage.does.map((item) => <li>{item}</li>)}</ul>
+							<p class="stage-not"><span class="mono">不证明</span>{stage.not}</p>
+							<a class="stage-link" href={stage.href}>了解 {stage.name}<span aria-hidden="true">→</span></a>
+						</li>
+					))}
+				</ol>
+			</section>
+
+			<section id="mandate" class="section split wrap" aria-labelledby="mandate-title">
+				<div class="split-copy">
+					<p class="eyebrow">有界授权</p>
+					<h2 id="mandate-title">给 Agent 一张有边界的通行证，<br />不是一把万能钥匙。</h2>
+					<p>Agent 是独立的凭证主体。管理员为单个任务签发有期限、有范围的授权：允许哪些表、其中哪些可以自主执行、范围外由哪位真人审核。</p>
+					<p>授权的撤销与执行的领取在同一个数据库事务里按先后生效；撤销之后，新的请求一律拒绝。</p>
+					<dl class="rules">
+						<div><dt class="pass">自主子集内</dt><dd>Agent 直接执行</dd></div>
+						<div><dt class="wait">范围内、非自主</dt><dd>指定审核人批准后执行</dd></div>
+						<div><dt class="deny">范围外或写入</dt><dd>拒绝</dd></div>
+						<div><dt class="deny">撤销之后</dt><dd>新请求返回 409</dd></div>
+					</dl>
+				</div>
+				<figure class="permit" aria-labelledby="permit-caption">
+					<div class="permit-band" aria-hidden="true"></div>
+					<div class="permit-body">
+						<p class="permit-type mono">MANDATE · 合成示例</p>
+						<dl>
+							{permit.map(([key, value]) => (<div><dt>{key}</dt><dd class="mono">{value}</dd></div>))}
+						</dl>
+						<p class="permit-stamp mono" aria-label="状态：生效中">ACTIVE</p>
+					</div>
+					<figcaption id="permit-caption">每次执行都记录是谁、凭哪项授权、由谁批准。</figcaption>
+				</figure>
+			</section>
+
+			<section id="evidence" class="section split split-reverse wrap" aria-labelledby="evidence-title">
+				<figure class="receipt" aria-labelledby="receipt-caption">
+					<div class="receipt-paper mono">
+						<p class="receipt-head">EXPLAIN · QueryRun</p>
+						<dl>
+							<div><dt>integrity</dt><dd class="pass">verified</dd></div>
+							<div><dt>status</dt><dd>completed</dd></div>
+							<div><dt>approver</dt><dd>human · reviewer</dd></div>
+							<div><dt>sql_hash</dt><dd>sha256:9cf3…49e810</dd></div>
+						</dl>
+						<p class="receipt-sub">evidence</p>
+						<p class="receipt-list">candidate · policy · query · assurance · source · approval · result · mandate · authorization</p>
+						<p class="receipt-sub">limitations</p>
+						<ul class="receipt-limits">
+							{limitations.map((item) => <li set:html={item.replaceAll('_', '_<wbr>')} />)}
+						</ul>
+					</div>
+					<figcaption id="receipt-caption">字段取自合成 Quickstart 的 Explain 输出，hash 已截短。</figcaption>
+				</figure>
+				<div class="split-copy">
+					<p class="eyebrow">证据</p>
+					<h2 id="evidence-title">证据里也写着<br />没有证明的部分。</h2>
+					<p>Explain 从同一个 QueryRun 回读实际执行的 SQL、结果、语义来源、审批人与授权链。证据在写入时绑定 hash，事后被改动就会失败关闭。</p>
+					<p><code>verified</code> 只说明证据链完整。业务语义是否正确、实时数据有没有快照、结果是否被截断，Forge 会把这些限制一起交给你。</p>
+				</div>
+			</section>
+
+			<section id="record" class="section wrap" aria-labelledby="record-title">
+				<header class="section-head section-head-row">
+					<div>
+						<p class="eyebrow">验证记录 · 2026-10-22 · 提交 e50b0a0</p>
+						<h2 id="record-title">公开测过什么，<br />也公开没测过什么。</h2>
+					</div>
+					<a class="text-link" href={report} rel="noopener">阅读公开测试摘要<span aria-hidden="true">↗</span></a>
+				</header>
+				<ul class="figures">
+					{record.map((item) => (
+						<li>
+							<p class="figure"><span>{item.figure}</span><small class="mono">{item.unit}</small></p>
+							<p class="figure-label">{item.label}</p>
+							<p class="figure-note">{item.note}</p>
+						</li>
+					))}
+				</ul>
+				<div class="record-grid">
+					<div class="accuracy">
+						<p class="eyebrow">准确率</p>
+						<p class="accuracy-line"><span class="mono">BIRD 500 题</span>Forge <strong>313</strong> · Direct SQL <strong>314</strong></p>
+						<p>同一批候选经最终编译器重评，统计上持平（exact p = 1.0）。我们不宣称 Forge 提高了准确率；它解决的是生成之后的约束与证据。</p>
+						<a class="text-link" href="/reference/benchmarks/">基准测试与边界<span aria-hidden="true">→</span></a>
+					</div>
+					<div class="gaps">
+						<p class="eyebrow">尚未验证</p>
+						<ul>{unverified.map((item) => <li>{item}</li>)}</ul>
+					</div>
+				</div>
+			</section>
+
+			<section id="start" class="start" aria-labelledby="start-title">
+				<div class="wrap split">
+					<div class="split-copy">
+						<p class="eyebrow">本地试跑</p>
+						<h2 id="start-title">五分钟，<br />看一遍完整的关口。</h2>
+						<p>需要 Git、Bash 与 Python 3.11 或更新版本。Quickstart 在本地创建合成数据与合成身份，先演示写入被拒，再走一遍放行、审核、撤销与 Explain。</p>
+						<a class="button button-signal" href="/guides/quickstart/">阅读上手指南<span aria-hidden="true">→</span></a>
+					</div>
+					<div class="terminal">
+						<div class="terminal-head">
+							<span class="mono">shell</span>
+							<button class="copy" type="button" data-copy={install} aria-label="复制安装命令">复制</button>
+						</div>
+						<pre tabindex="0" aria-label="安装与运行命令"><code>{install.split('\n').map((line) => (<span class="line"><span class="prompt" aria-hidden="true">$</span>{line}</span>))}</code></pre>
+					</div>
+				</div>
+			</section>
+
+			<section class="section wrap faq" aria-labelledby="faq-title">
+				<header class="section-head">
+					<p class="eyebrow">常见问题</p>
+					<h2 id="faq-title">接入之前，先把边界说清楚。</h2>
+				</header>
+				<div class="faq-list">
+					{faqs.map(([q, a]) => (<details><summary>{q}</summary><p>{a}</p></details>))}
+				</div>
+			</section>
+		</main>
+
+		<footer class="footer">
+			<div class="hazard" aria-hidden="true"></div>
+			<div class="wrap footer-inner">
+				<a class="brand" href="/" aria-label="Forge 首页"><Mark size={26} /><span>FORGE</span></a>
+				<p class="footer-tag">开源的 Data Agent 可信数据运行时</p>
+				<nav aria-label="页脚">
+					<a href="/guides/introduction/">文档</a>
+					<a href={report} rel="noopener">公开测试摘要</a>
+					<a href={github} rel="noopener">GitHub</a>
+					<a href={`${github}/issues`} rel="noopener">反馈</a>
+					<a href={`${github}/blob/main/LICENSE`} rel="noopener">Apache-2.0</a>
+				</nav>
+			</div>
+		</footer>
+
+		<p class="toast" role="status" aria-live="polite" data-toast></p>
+
+		<script>
+			const toast = document.querySelector<HTMLElement>('[data-toast]');
+			let toastTimer: number | undefined;
+			const say = (message: string) => {
+				if (!toast) return;
+				toast.textContent = message;
+				toast.classList.add('is-visible');
+				window.clearTimeout(toastTimer);
+				toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 1800);
+			};
+			document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+				button.addEventListener('click', async () => {
+					try {
+						await navigator.clipboard.writeText(button.dataset.copy ?? '');
+						say('已复制到剪贴板');
+					} catch {
+						say('浏览器不允许自动复制，请手动选择文本');
+					}
+				});
+			});
+
+			const toggle = document.querySelector<HTMLButtonElement>('.menu-toggle');
+			const nav = document.getElementById('site-nav');
+			const setMenu = (open: boolean) => {
+				toggle?.setAttribute('aria-expanded', String(open));
+				document.body.classList.toggle('menu-open', open);
+			};
+			toggle?.addEventListener('click', () => setMenu(toggle.getAttribute('aria-expanded') !== 'true'));
+			nav?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setMenu(false)));
+			document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setMenu(false); });
+
+			const board = document.querySelector<HTMLElement>('[data-board]');
+			document.querySelector('[data-replay]')?.addEventListener('click', () => {
+				if (!board) return;
+				board.classList.remove('is-playing');
+				void board.offsetWidth;
+				board.classList.add('is-playing');
+			});
+			if (board) {
+				const observer = new IntersectionObserver((entries) => {
+					if (entries.some((entry) => entry.isIntersecting)) {
+						board.classList.add('is-playing');
+						observer.disconnect();
+					}
+				}, { threshold: 0.25 });
+				observer.observe(board);
+			}
+		</script>
+	</body>
 </html>

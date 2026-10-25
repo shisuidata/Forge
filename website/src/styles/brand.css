@@ -1,15 +1,26 @@
-@import '@fontsource-variable/manrope';
-@import '@fontsource/ibm-plex-mono/400.css';
-@import '@fontsource/ibm-plex-mono/500.css';
+/* Brand layer shared by the landing page and the docs theme. Fonts ship with the site; no CDN. */
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/martian-mono/wdth.css';
 
 :root {
-  --forge-bg: #f7f8f5;
-  --forge-surface: #fff;
-  --forge-ink: #20251f;
-  --forge-muted: #626b60;
-  --forge-border: #dce0d7;
-  --forge-orange: #bd481c;
-  --forge-orange-bright: #ef6b39;
-  --forge-mono: 'IBM Plex Mono', monospace;
-  --forge-sans: 'Manrope Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+	/* Checkpoint palette: graphite ground, one signal colour, stamps only for outcomes. */
+	--forge-graphite: #0f1114;
+	--forge-graphite-2: #15181c;
+	--forge-graphite-3: #1c2026;
+	--forge-line: #2a2f36;
+	--forge-line-strong: #3a4049;
+	--forge-paper: #f1efe7;
+	--forge-paper-2: #e6e3d8;
+	--forge-fog: #a7adb5;
+	--forge-fog-2: #8d949c;
+	--forge-signal: #f4cc12;
+	--forge-signal-deep: #8a6d00;
+	--forge-pass: #43d17f;
+	--forge-deny: #ff5a36;
+	--forge-wait: #7cb4ff;
+
+	--forge-display: 'Archivo Variable', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+	--forge-sans: 'Archivo Variable', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+	--forge-mono: 'Martian Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+	--forge-hazard: repeating-linear-gradient(-45deg, var(--forge-signal) 0 10px, var(--forge-graphite) 10px 20px);
 }

@@ -17,13 +17,14 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'Forge',
-			logo: {
-				light: './public/brand/forge-mark-light.webp',
-				dark: './public/brand/forge-mark-dark.webp',
-				alt: 'Forge',
-			},
-			favicon: '/favicon-32x32.png',
-			description: 'Forge 是开源的企业 Data Agent Trust Runtime，通过 Evaluate → Enforce → Explain，将评测、运行时约束与可追溯证据连接起来。',
+			logo: { src: './src/assets/forge-mark.svg', alt: 'Forge' },
+			favicon: '/brand/forge-mark.svg',
+			head: [
+				{ tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico', sizes: 'any' } },
+				{ tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
+				{ tag: 'meta', attrs: { name: 'theme-color', content: '#0f1114' } },
+			],
+			description: 'Forge 是开源的 Data Agent 可信数据运行时：评估候选 SQL，按授权放行、等待审核或拒绝，并为每次执行留下可校验的证据。',
 			defaultLocale: 'root',
 			locales: { root: { label: '简体中文', lang: 'zh-CN' } },
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/shisuidata/Forge' }],

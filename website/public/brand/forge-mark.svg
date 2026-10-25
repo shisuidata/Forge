@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Forge">
+  <rect width="32" height="32" rx="7" fill="#111317"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#2b2f36"/>
+  <rect x="8" y="7" width="4.75" height="18" fill="#f1efe7"/>
+  <rect x="8" y="14.75" width="9.25" height="4.25" fill="#f1efe7"/>
+  <path d="M12.75 7H25.5v4.75H12.75z" fill="#f4cc12"/>
+  <path d="M16.6 7h2.2l-2 4.75h-2.2zM21.4 7h2.2l-2 4.75h-2.2z" fill="#111317"/>
+</svg>
