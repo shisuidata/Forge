@@ -168,7 +168,9 @@ code, .mono { font-family: var(--forge-mono); font-stretch: 92%; }
 	font-family: var(--forge-mono); font-stretch: 92%; font-size: .74rem; letter-spacing: .08em;
 }
 .split-copy p.eyebrow, .accuracy p.eyebrow { color: var(--forge-signal); }
-h1, h2, h3 { text-wrap: balance; }
+h2, h3 { text-wrap: balance; }
+.hero h1 { text-wrap: wrap; }
+@media (max-width: 860px) { .hero h1 { text-wrap: balance; } }
 h2 {
 	margin: 0; font-family: var(--forge-display); font-weight: 800; font-stretch: 108%;
 	font-size: clamp(1.85rem, 3.7vw, 3.1rem); line-height: 1.16; letter-spacing: -.008em;
