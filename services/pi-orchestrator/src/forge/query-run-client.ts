@@ -147,6 +147,15 @@ export class ForgeQueryRunClient {
     if (claimed.status !== "executing" && claimed.status !== "completed") throw new ForgeClientError("Forge did not commit execution claim");
     return claimed;
   }
+  async findQueryRunByCreateKey(idempotencyKey: string, signal?: AbortSignal): Promise<QueryRunReview | undefined> {
+    try {
+      return run(await this.#request("GET", `/api/v2/enforce/query-runs?create_idempotency_key=${encodeURIComponent(idempotencyKey)}`,
+        undefined, undefined, signal));
+    } catch (error) {
+      if (error instanceof ForgeClientError && error.statusCode === 404) return undefined;
+      throw error;
+    }
+  }
   async cancelQueryRun(input: { queryRunId: string }, signal?: AbortSignal): Promise<QueryRunReview> {
     return run(await this.#request("POST", `/api/v2/enforce/query-runs/${encodeURIComponent(input.queryRunId)}/cancel`, {}, undefined, signal));
   }

@@ -93,6 +93,7 @@ export interface ForgeQueryRunPort {
   executeQueryRun(input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string }, signal?: AbortSignal): Promise<QueryRunReview>;
   approveQueryRun(input: { queryRunId: string; sqlHash: string; assuranceReportHash: string; enforcementContextHash: string; idempotencyKey: string; controlToken: string }, signal?: AbortSignal): Promise<QueryRunReview>;
   getMandate(mandateId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  findQueryRunByCreateKey?(idempotencyKey: string, signal?: AbortSignal): Promise<QueryRunReview | undefined>;
   cancelQueryRun?(input: { queryRunId: string }, signal?: AbortSignal): Promise<QueryRunReview>;
   createReport?(input: Record<string, unknown>, idempotencyKey: string, signal?: AbortSignal): Promise<ReportPublication>;
   getReport?(reportId: string, taskRunId: string, signal?: AbortSignal): Promise<ReportPublication>;
@@ -1175,6 +1176,7 @@ export class OrchestratorApplication {
       throw new TaskStateError("Task execution actor does not match registered Pi principal");
     if (task.status === "created" || task.status === "needs_input") task = this.#transition(task, "ready_for_query", "query_prepare");
     if (task.status !== "ready_for_query") throw new TaskStateError("Task cannot prepare query from current status");
+    await this.#settleUncertainPrepares(task, signal);
     let attempt!: StageAttempt;
     this.#transactions.run(() => { attempt = this.#startAttempt(task, "query_prepare", "ready_for_query", commandKey); });
     const stage = this.#stageSignal(attempt, signal);
@@ -1419,6 +1421,32 @@ export class OrchestratorApplication {
         if (this.#tasks.get(task.task_run_id)?.status === "querying")
           this.#observeQueryRun(task.task_run_id, run.query_run_id);
       }).catch(() => undefined).finally(() => this.#recoveringQueryRuns.delete(task.task_run_id));
+    }
+  }
+
+  /**
+   * A prepare that timed out or was interrupted after dispatch may have created a QueryRun whose response was
+   * lost. Nothing tracks it, yet it would sit in the reviewer inbox, so cancel it before preparing again.
+   */
+  async #settleUncertainPrepares(task: TaskRun, signal?: AbortSignal): Promise<void> {
+    const find = this.#forge.findQueryRunByCreateKey;
+    const cancel = this.#forge.cancelQueryRun;
+    if (find === undefined || cancel === undefined) return;
+    const settled = new Set(this.#events.list(task.task_run_id)
+      .filter((event) => event.event_type === "query.uncertain_prepare_settled")
+      .map((event) => event.payload.idempotency_key));
+    for (const attempt of this.#attempts.list(task.task_run_id)) {
+      if (attempt.stage !== "query_prepare" || (attempt.status !== "timed_out" && attempt.status !== "interrupted") ||
+        attempt.usage_status === "not_started" || settled.has(attempt.idempotency_key)) continue;
+      let run = await find.call(this.#forge, attempt.idempotency_key, signal);
+      let outcome: string = run === undefined ? "absent" : run.status;
+      if (run !== undefined && (run.status === "ready" || run.status === "review_required")) {
+        run = await cancel.call(this.#forge, { queryRunId: run.query_run_id }, signal);
+        outcome = "cancelled";
+      }
+      this.#events.append(task.task_run_id, "query.uncertain_prepare_settled", {
+        idempotency_key: attempt.idempotency_key, query_run_id: run?.query_run_id ?? null, outcome,
+      });
     }
   }
 

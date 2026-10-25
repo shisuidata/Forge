@@ -266,3 +266,19 @@ async def test_reading_a_live_query_run_takes_no_write_lock(client, governed_api
         writer.close()
     assert run["status"] == "review_required"
     assert [item["query_run_id"] for item in inbox] == [run_id]
+
+
+@pytest.mark.asyncio
+async def test_creator_can_recover_a_run_by_its_create_key_and_no_one_else_can(client, governed_api):
+    keys, mandate_id = governed_api
+    root = "/api/v2/enforce/query-runs"
+    prepared = await client.post(root, headers=_headers(keys, "worker_api", "lost-create-response"),
+                                 json=_request(mandate_id, "SELECT value FROM secrets"))
+    found = await client.get(root, params={"create_idempotency_key": "lost-create-response"},
+                             headers={"X-API-Key": keys["worker_api"]})
+    assert found.status_code == 200, found.text
+    assert found.json()["query_run_id"] == prepared.json()["query_run_id"]
+    for name, key in (("reviewer_api", "lost-create-response"), ("issuer_api", "lost-create-response"),
+                      ("worker_api", "never-created")):
+        hidden = await client.get(root, params={"create_idempotency_key": key}, headers={"X-API-Key": keys[name]})
+        assert hidden.status_code == 404, (name, key)

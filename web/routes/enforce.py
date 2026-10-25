@@ -17,6 +17,7 @@ from forge.query_runs import (
     create_governed_query_run,
     execute_authorized_query_run,
     get_governed_query_run,
+    get_governed_query_run_by_create_key,
     get_query_run,
 )
 from web.auth import require_admin_principal, require_runtime_principal
@@ -78,6 +79,21 @@ async def create_enforced_query_run(
             purpose=req.purpose, question=req.question, dialect=req.dialect,
             candidate=req.candidate, idempotency_key=idempotency_key,
         )
+        return project_enforce_query_run(run)
+    except ValidationError:
+        return _error(QueryRunError("Stored response contract invalid", code="enforcement_response_invalid"))
+    except (EnforceContextError, QueryRunError, GovernanceError) as exc:
+        return _error(exc)
+
+
+@router.get("/api/v2/enforce/query-runs")
+async def find_enforced_query_run_by_create_key(
+    create_idempotency_key: str,
+    actor: AuthenticatedPrincipal = Depends(require_runtime_principal),
+):
+    """Recover a run whose create response was lost; only its creator can see it."""
+    try:
+        run = await get_governed_query_run_by_create_key(create_idempotency_key, actor)
         return project_enforce_query_run(run)
     except ValidationError:
         return _error(QueryRunError("Stored response contract invalid", code="enforcement_response_invalid"))

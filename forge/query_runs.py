@@ -748,6 +748,15 @@ async def get_governed_query_run(query_run_id: str, actor) -> dict[str, Any]:
     return run
 
 
+async def get_governed_query_run_by_create_key(idempotency_key: str, actor) -> dict[str, Any]:
+    """Let only the creator recover the run behind a create response it never received."""
+    run = await _get_by_create_key(idempotency_key) if idempotency_key else None
+    if (run is None or run.get("enforce_schema_version") != 2
+            or run["principal_context"]["actor_principal"]["principal_id"] != actor.principal_id):
+        raise QueryRunError("QueryRun not found", status_code=404, code="query_run_not_found")
+    return await get_governed_query_run(run["query_run_id"], actor)
+
+
 async def cancel_governed_query_run(query_run_id: str, actor) -> dict[str, Any]:
     """Cancel only a still-unclaimed run with the same authenticated scope."""
     from forge.governance import governance_transaction

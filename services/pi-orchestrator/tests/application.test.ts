@@ -96,6 +96,34 @@ test("caller abort during query prepare is a retryable interruption like other S
   assert.equal(retried.task.status, "waiting_for_query_approval");
 });
 
+test("retrying an interrupted prepare first cancels the QueryRun its lost response created", async () => {
+  const { application, task, calls, forge } = fixture("human_review");
+  await application.attachMandate(task.task_run_id, { mandateId: "md_demo", expectedMandateId: null }, principal("alice", "admin"));
+  const created = new Map<string, string>();
+  forge.findQueryRunByCreateKey = async (key) => {
+    calls.push(`find:${key}`);
+    const id = created.get(key);
+    return id === undefined ? undefined : { ...(await forge.getQueryRun(id)), query_run_id: id, status: "review_required" };
+  };
+  forge.cancelQueryRun = async ({ queryRunId }) => { calls.push(`cancel:${queryRunId}`); return { ...(await forge.getQueryRun(queryRunId)), query_run_id: queryRunId, status: "cancelled" }; };
+  const controller = new AbortController();
+  const createQueryRun = forge.createQueryRun;
+  forge.createQueryRun = async (input) => {
+    created.set(input.idempotencyKey, "qr_orphan");  // Forge committed; the response is lost.
+    controller.abort(new Error("Synthetic caller disconnected"));
+    return new Promise<never>(() => undefined);
+  };
+  await assert.rejects(application.prepareQuery(task.task_run_id,
+    { question: "Seven", candidate, idempotencyKey: "prepare-lost" }, controller.signal));
+  forge.createQueryRun = createQueryRun;
+  const retried = await application.prepareQuery(task.task_run_id, { question: "Seven", candidate, idempotencyKey: "prepare-again" });
+  assert.equal(retried.task.status, "waiting_for_query_approval");
+  const lostKey = [...created.keys()][0]!;
+  assert.deepEqual(calls.filter(call => call.startsWith("find:") || call.startsWith("cancel:")), [`find:${lostKey}`, "cancel:qr_orphan"]);
+  const settled = application.getEvents(task.task_run_id).filter(event => event.event_type === "query.uncertain_prepare_settled");
+  assert.deepEqual(settled.map(event => event.payload), [{ idempotency_key: lostKey, query_run_id: "qr_orphan", outcome: "cancelled" }]);
+});
+
 test("autonomous query claims before response and shares result Artifact without human approval event", async () => {
   const { application, task, calls } = fixture("autonomous");
   await application.attachMandate(task.task_run_id, { mandateId: "md_demo", expectedMandateId: null }, principal("alice", "admin"));

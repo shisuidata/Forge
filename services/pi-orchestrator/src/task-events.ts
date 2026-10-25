@@ -16,6 +16,7 @@ export type TaskEventType =
   | "query.clarification_requested"
   | "query.prepare_failed"
   | "query.prepare_timed_out"
+  | "query.uncertain_prepare_settled"
   | "query.execution_authorized"
   | "query.completed"
   | "query.execution_failed"
