@@ -58,6 +58,16 @@ CI=true WRANGLER_SEND_METRICS=false wrangler --cwd /tmp \
 
 `wrangler.jsonc` 只绑定静态资产目录 `dist` 与 `forge.ss-data.cc`，关闭 workers.dev 与版本预览 URL；没有 API、数据库、模型、Secret 或 Runtime 绑定。从 `/tmp` 运行，避免仓库根目录的自动配置发现。只使用已有 Cloudflare 授权，不扩大 OAuth 权限。是否上线以部署回执和真实域名的逐文件比对为准。
 
+## Cloudflare 上线回执（2026-10-25，关口设计）
+
+- 正式地址：`https://forge.ss-data.cc/`；Worker Static Assets 项目 `forge-website`，只有静态资产。
+- 源码提交：`37303a6`（设计主体 `a852297`，加桌面首屏两行修正）。100% 流量版本 `46dd88ff-9979-43b2-814d-35422beb99da`，标签 `website-2026-10-25`；同日先部署过 `a852297` 对应的 `0bc1ce7b-0674-49b1-b0a9-551228972b47`，已被取代。
+- 产物：113 个文件、2,696,524 bytes；清单 SHA-256 `71895981af9acf74fbbeefc2458245dc15c333c480f0e37fc8b9be7c0f714d73`（算法同下方旧回执）；首页 `index.html` SHA-256 `14ff8b993e4ba31e9cb9f9901934898139b4a7c305a4a35c4b6444c20628a6e0`。
+- 发布后经公共 DoH 解析、保留证书校验直连下载全部 113 项，与本地构建逐字节一致；首页 HTTP 200、TLS verify 0；`/api/health`、`/openapi.json` 与旧标记 `/brand/forge-mark-light.webp` 均为 404。
+- 真实浏览器访问线上域名：1440px 与 390px 无横向溢出、无页面错误、无站外请求；文档搜索“五分钟上手”返回 4 项结果。
+- 部署前对同一构建：28 页、1819 个站内链接与锚点全部有效；axe-core 4.13 WCAG A/AA 在首页 1440/390、Quickstart 深浅主题、390px 介绍页、深色课程页、浅色 Benchmark 页均为 0 条违规（自动检查，不等于完整 WCAG 认证）；320px 无溢出，菜单、Escape、复制、重放、主题切换与搜索可用。
+- 回退到旧版官网（经用户确认后）：`wrangler ... rollback 82162d84-1a2e-4c19-b158-ceb6f88a885f`。未部署 Forge API、Pi、模型或数据库；R0.6 与 H 门禁不变。
+
 ## Cloudflare 上线回执（2026-10-16，旧版官网）
 
 - 正式地址：`https://forge.ss-data.cc/`；Cloudflare Worker Static Assets 项目 `forge-website`，不是 Pages，也不是 Forge Runtime。
