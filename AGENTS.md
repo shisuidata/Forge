@@ -69,3 +69,13 @@ npm --prefix services/pi-orchestrator test
 - 不主动修改生产配置、签名、外部服务或真实数据源。
 - 未经用户明确要求，不 commit、push、tag、发布或部署。
 - 高风险副作用不自动重放；真实客户数据、生产凭证和权限变更必须单独获得用户授权。
+
+<!-- omp-chatgpt-migration:begin -->
+## 本地 App 上下文入口
+
+- 在 ChatGPT App 的本地工作任务中使用本项目目录；默认中文回复。
+- 涉及该文件描述的模块时按需读取 `CLAUDE.md`；工具专属命令需要适配，当前 AGENTS.md 优先。
+- 当前代码、测试、项目既有规则和最新用户指令优先。迁移上下文不改变产品运行时的 Pi/OMP 依赖或职责，也不授权提交、推送、发布或生产操作。
+- 历史 `local://`、`skill://` 或 OMP 工具名不保证在本会话可用；Skill 可直接读本地文件，其他能力先核对真实接口，不伪造调用。
+- 涉及 OMP 历史计划或 `local://` 引用时读取 `.agents/omp-context/PLANS_INDEX.md`（仅维护者本机存在，含本机路径，不纳入版本控制）；保留的不同版本须结合当前正式计划核对，不按时间自动选主版本。
+<!-- omp-chatgpt-migration:end -->

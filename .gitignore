@@ -62,3 +62,6 @@ services/pi-orchestrator/**/*.sqlite3-shm
 
 # Local setuptools build output; wheels are produced with uv build.
 /build/
+
+# Local OMP plan archive: contains machine-local paths and session ids; never published
+.agents/omp-context/
