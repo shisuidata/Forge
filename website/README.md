@@ -58,6 +58,14 @@ CI=true WRANGLER_SEND_METRICS=false wrangler --cwd /tmp \
 
 `wrangler.jsonc` 只绑定静态资产目录 `dist` 与 `forge.ss-data.cc`，关闭 workers.dev 与版本预览 URL；没有 API、数据库、模型、Secret 或 Runtime 绑定。从 `/tmp` 运行，避免仓库根目录的自动配置发现。只使用已有 Cloudflare 授权，不扩大 OAuth 权限。是否上线以部署回执和真实域名的逐文件比对为准。
 
+## Cloudflare 上线回执（2026-10-28，MCP 接入指南）
+
+- 源码提交：`0825b49`（新增 `/guides/mcp/`“接入你的 Agent（MCP）”，首页 FAQ 与“本地试跑”加入口；其余页面与设计不变）。100% 流量版本 `b06dbed5-a468-4016-9fe4-ce0d31f324b2`，取代 `46dd88ff`。本次未打标签。
+- 产物：115 个文件、2,749,079 bytes；清单 SHA-256 `e822c24fe32f5d26b56cc2e8e49a4e13657e345c014f96b85cbc76510a4c8f46`（算法同下方旧回执）；首页 `index.html` SHA-256 `ca16fbda3449062f0463b69aa72f7bbf5932cda0743595fad15d84ab9c5bb0a9`。
+- 发布后从真实域名下载全部 115 项，与本地构建逐字节一致；首页与新指南 HTTP 200。真实浏览器访问线上 `/guides/mcp/`：1440px 与 390px 无横向溢出、无页面错误、无站外请求；站内搜索 “forge review” 命中新指南。
+- 部署前对同一构建：29 页、1902 个站内链接与锚点全部有效；axe-core 4.13 WCAG A/AA 在上次所检页面及新指南（浅色 1440、深色 1440、深色 390）均为 0 条违规（自动检查，不等于完整 WCAG 认证）。
+- 回退到上一版（经用户确认后）：`wrangler ... rollback 46dd88ff-9979-43b2-814d-35422beb99da`。未部署 Forge API、Pi、模型或数据库；R0.6 与 H 门禁不变。
+
 ## Cloudflare 上线回执（2026-10-25，关口设计）
 
 - 正式地址：`https://forge.ss-data.cc/`；Worker Static Assets 项目 `forge-website`，只有静态资产。
