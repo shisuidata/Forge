@@ -23,7 +23,7 @@ Forge sits between an upstream agent and a database. It accepts Direct SQL or co
 - constrained Forge JSON intermediate representation and deterministic SQL compilation;
 - a shared candidate, QueryRun review, and execution path for Direct SQL and Forge JSON;
 - versioned, non-executing Evaluate API/CLI with persistent suites, manifests, replay, and regression gates;
-- versioned Enforce API/CLI that binds Principal, Purpose, Task, Resource Scope, Policy, Assurance, Registry, and hash-bound human approval;
+- governed Enforce API/CLI (v2) where an admin-issued, revocable Mandate bounds one agent to a task, datasource, and table set; the agent runs only its autonomous tables, a designated human approves the rest, and every authorization is hash-bound;
 - versioned Explain API/CLI that projects actual SQL/results, persisted Registry semantics, governance, Evidence, lineage, integrity, and explicit limitations from the same QueryRun;
 - Registry-backed schema and semantic constraints, relationship checks, and grain checks;
 - read-only SQL, table/column scope, approval hashes, timeouts, and result limits;
@@ -411,7 +411,7 @@ forge quickstart
 
 That command is the complete public Trust Runtime path: it starts an isolated local Forge server and SQLite datasource, submits a **Direct SQL** candidate to `Evaluate`, stops at `Enforce` review, executes only after you approve the displayed SQL, reads the same QueryRun through `Explain`, and verifies its Dashboard projection. No API key, LLM, embedding service, Pi knowledge, Forge JSON, existing database, or `.env` file is required.
 
-Expected proof: the first `Evaluate` request rejects write SQL with `assurance/readonly_violation`; the read-only request passes exact-result comparison; `Enforce` returns two rows and reports row-limit truncation; `Explain` reports `integrity=verified` with seven Evidence types and explicit limitations; Dashboard contains the same QueryRun ID; and `run_receipt.receipt_hash` provides a stable checksum for the sanitized receipt.
+Expected proof: the first `Evaluate` request rejects write SQL with `assurance/readonly_violation`; the read-only request passes exact-result comparison; `Enforce` returns two rows and reports row-limit truncation; `Explain` reports `integrity=verified` with candidate, policy, query, assurance, source, approval, result, mandate, and authorization Evidence plus explicit limitations; Dashboard contains the same QueryRun ID; and `run_receipt.receipt_hash` provides a stable checksum for the sanitized receipt.
 
 ```bash
 # Keep the isolated server open and print its Dashboard URL.
@@ -510,39 +510,105 @@ forge evaluate --run-id "evr_<run-id>"
 
 The `evaluation-suite-v1` manifest records dataset, producer/model, prompt, retrieval, retry, and timeout revisions. The persisted `evaluation-run-manifest-v1` adds evaluator, metric, candidate contract, Assurance, Policy, Registry, dialect, raw case outcomes, and recomputable aggregates. The default release gate allows no new failed cases and no pass-rate drop. A changed dataset, case selection, expected evaluation basis, policy, evaluator, Registry, or dialect is marked `not_comparable` and fails closed; producer/model/prompt revisions may differ because those are the intended comparison variables.
 
-### Enforce a reviewed query
+### Connect your own agent (governed API v2)
 
-`POST /api/v1/enforce/query-runs` prepares a governed QueryRun; it never executes during creation. The request follows [`enforce-query-request-v1`](agent/contracts/enforce-query-request-v1.schema.json) and binds the candidate to a Principal, Purpose, Task, Resource Scope, Policy, Assurance report, Registry revision, and read-only datasource. A direct human principal is accountable for the request. An Agent or Service principal must provide one active [Delegated Mandate](agent/contracts/delegated-mandate-v1.schema.json) matching its actor, accountable human, task, purpose, capabilities, and scope.
+Execution goes through the governed v2 API. Every caller is a registered principal with its own database-backed credential: an **admin** issues a bounded Mandate, the **agent** prepares and (only for autonomous tables) executes, and a designated human **reviewer** approves everything else. The v1 Enforce write endpoints return `410 governed_api_v2_required`; `/api/v1/evaluate` remains the public, non-executing Evaluate entry.
+
+The fastest way to try this against a real local server is the Quickstart sandbox. It bootstraps three synthetic principals (`quickstart-admin`, `quickstart-reviewer`, `quickstart-agent`) and leaves their keys as 0600 files in the work directory:
 
 ```bash
-# Prepare only. Returns status=review_required plus immutable review hashes.
-forge enforce enforce-request.json --idempotency-key prepare-001
-
-# Read the same governed QueryRun with the creator credential.
-forge enforce --run-id "qr_<query-run-id>"
-
-# A separate reviewer credential submits the reviewed hashes and executes once.
-FORGE_API_KEY="$FORGE_REVIEWER_API_KEY" forge enforce approval.json \
-  --approve "qr_<query-run-id>" \
-  --idempotency-key approve-001
+forge quickstart --agent --yes --serve --workdir .forge/sandbox
+# In another terminal with the same virtualenv activated, use the printed address:
+export FORGE_BASE_URL=http://127.0.0.1:<port>
+SANDBOX=.forge/sandbox
 ```
 
-`approval.json` follows [`enforce-query-approval-v1`](agent/contracts/enforce-query-approval-v1.schema.json): copy `sql_hash`, `assurance_report_hash`, and `enforcement_context_hash` from the prepare response and identify the accountable human reviewer. With API authentication enabled, configure ordinary create/read credentials in `AUTH_API_KEYS` and separate approval credentials in `ENFORCE_REVIEWER_API_KEYS`. Policy, Registry, candidate, authorization context, scope, approval, or read-only drift fails closed. Responses follow [`enforce-query-response-v1`](agent/contracts/enforce-query-response-v1.schema.json) and expose bounded failure codes instead of raw database errors.
+**1. Admin issues a Mandate.** It binds one agent, one task, one datasource, the tables it may query (`allowed_tables`), the subset it may run without review (`autonomous_tables`), the accountable human, the designated reviewer, and an expiry of at most 24 hours. `task_run_id` must start with `tr_`.
 
-This v1 path governs Direct SQL and Forge JSON query preparation, approval, and execution. It does not claim a complete IAM system, production deployment, or governance coverage for non-query actions.
+```json
+{
+  "schema_version": 1,
+  "task_run_id": "tr_demo_001",
+  "delegate_principal_id": "quickstart-agent",
+  "accountable_principal_id": "quickstart-admin",
+  "reviewer_principal_id": "quickstart-reviewer",
+  "purpose": "Try governed queries from my agent",
+  "datasource_id": "quickstart",
+  "allowed_tables": ["numbers", "secrets"],
+  "autonomous_tables": ["numbers"],
+  "expires_at": "<set below>"
+}
+```
+
+`expires_at` must be in the future and at most 24 hours away, so set it just before issuing:
+
+```bash
+EXPIRES=$(python -c "from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc) + timedelta(hours=8)).isoformat(timespec='seconds'))")
+jq --arg exp "$EXPIRES" '.expires_at = $exp' mandate.json > mandate.tmp && mv mandate.tmp mandate.json
+
+FORGE_API_KEY=$(cat $SANDBOX/admin.key) \
+  forge governance mandate issue --input mandate.json --idempotency-key mandate-001
+```
+
+The response returns `mandate_id` and `state_revision`.
+
+**2. Agent prepares a QueryRun.** The request follows [`enforce-query-request-v2`](agent/contracts/enforce-query-request-v2.schema.json). Creation never executes. A query touching only autonomous tables returns `status: "ready"`; anything else returns `review_required`. Out-of-scope tables, write SQL, an expired or revoked Mandate, or any Registry/Policy mismatch fail closed.
+
+```json
+{
+  "schema_version": 2,
+  "mandate_id": "md_<from step 1>",
+  "task_run_id": "tr_demo_001",
+  "purpose": "Try governed queries from my agent",
+  "question": "List synthetic numbers",
+  "dialect": "sqlite",
+  "candidate": {
+    "kind": "direct_sql",
+    "sql": "SELECT numbers.n FROM numbers ORDER BY numbers.n",
+    "producer_revision": "my-agent-v1"
+  }
+}
+```
+
+```bash
+FORGE_API_KEY=$(cat $SANDBOX/agent.key) \
+  forge enforce request.json --idempotency-key create-001 > run.json
+```
+
+**3. Execute or approve with the reviewed hashes.** Both actions take [`enforce-query-action-v2`](agent/contracts/enforce-query-action-v2.schema.json): the three hashes from the prepare response, so the authorizer commits to exactly the SQL, Assurance report, and enforcement context that were shown.
+
+```bash
+jq '{schema_version: 2} + (.review | {sql_hash, assurance_report_hash, enforcement_context_hash})' run.json > action.json
+
+# status=ready: the agent itself may execute, once.
+FORGE_API_KEY=$(cat $SANDBOX/agent.key) \
+  forge enforce action.json --execute "qr_<query-run-id>" --idempotency-key exec-001
+
+# status=review_required: only the designated human reviewer may approve.
+FORGE_API_KEY=$(cat $SANDBOX/reviewer.key) \
+  forge enforce action.json --approve "qr_<query-run-id>" --idempotency-key approve-001
+```
+
+The agent cannot approve (`reviewer_not_authorized`) and cannot execute a review-only run (`query_run_status_conflict`). After the admin revokes the Mandate (`forge governance mandate revoke --id md_… --revision <state_revision> --reason …`), new prepares fail with `mandate_inactive`.
+
+**Idempotency and recovery.** Every create and action carries a stable `Idempotency-Key`. If a create response is lost, recover the run instead of creating another one: `GET /api/v2/enforce/query-runs?create_idempotency_key=create-001` (creator only). Replaying an action with the same key returns the original claim; it never executes twice.
+
+The equivalent HTTP calls are `POST /api/v2/enforce/query-runs`, `GET /api/v2/enforce/query-runs/{id}`, `POST /api/v2/enforce/query-runs/{id}/execute`, `POST /api/v2/enforce/query-runs/{id}/approve`, and `POST /api/v2/enforce/query-runs/{id}/cancel`, each with `X-API-Key`. Responses follow [`enforce-query-response-v2`](agent/contracts/enforce-query-response-v2.schema.json) and expose bounded failure codes instead of raw database errors. Outside the sandbox, principals come from `forge governance bootstrap --input <manifest>` and keys from `forge governance credential create --principal <id> --kind api_key --out <file>`; execution additionally requires `AUTH_ENABLED=true`, `EXECUTION_ENABLED=true`, and a datasource you have confirmed read-only (`DATABASE_READONLY_CONFIRMED=true`). The legacy `AUTH_API_KEYS` and `ENFORCE_REVIEWER_API_KEYS` settings do not grant v2 access.
+
+This path governs read-only Direct SQL and Forge JSON queries for one datasource. It does not claim a complete IAM system, production deployment, or governance coverage for non-query actions.
 
 ### Explain a governed QueryRun
 
-`GET /api/v1/explain/query-runs/{query_run_id}` returns the stable [`explain-query-response-v1`](agent/contracts/explain-query-response-v1.schema.json) projection for any governed QueryRun. It uses the creator credential and reads the same QueryRun truth source as Enforce:
+`GET /api/v2/explain/query-runs/{query_run_id}` returns the [`explain-query-response-v2`](agent/contracts/explain-query-response-v2.schema.json) projection of the same QueryRun. The creating agent (while its Mandate is active), the accountable human, the designated reviewer, and workspace admins can read it; anyone else gets `404`.
 
 ```bash
-# FORGE_API_KEY must be the credential that created the QueryRun when auth is enabled.
-forge explain "qr_<query-run-id>"
+FORGE_API_KEY=$(cat $SANDBOX/agent.key) forge explain "qr_<query-run-id>"
 
-curl --fail-with-body -sS   -H "X-API-Key: $FORGE_API_KEY"   "$FORGE_BASE_URL/api/v1/explain/query-runs/qr_<query-run-id>"
+curl --fail-with-body -sS -H "X-API-Key: $(cat $SANDBOX/agent.key)" \
+  "$FORGE_BASE_URL/api/v2/explain/query-runs/qr_<query-run-id>"
 ```
 
-The response includes the candidate, actual reviewed SQL, bounded result or failure, persisted table/column descriptions, datasource and resource scope, Principal/Policy/Approval, Assurance gates, version/hash lineage, deterministic Evidence references, and limitations. Source context, approval, and completed results are hash-bound. Tampering fails closed with a bounded Explain error; older QueryRuns without those anchors return `integrity.status: "partial"` and name each unverified component instead of fabricating proof.
+The response includes the candidate, actual reviewed SQL, bounded result or failure, persisted table/column descriptions, datasource and resource scope, the Mandate and authorization (autonomous execution or the named human approver), Assurance gates, version/hash lineage, deterministic Evidence references, and limitations. Source context, authorization, and completed results are hash-bound. Tampering fails closed with a bounded Explain error; older QueryRuns without those anchors return `integrity.status: "partial"` and name each unverified component instead of fabricating proof. `/api/v1/explain/...` remains readable only by admins for historical v1 records.
 
 Every explanation states applicable epistemic and runtime limits, including that live execution has no captured database snapshot and that Registry bindings plus deterministic gates do not prove open-world business correctness. Explain does not expose credential hashes, storage layout, or raw database errors.
 

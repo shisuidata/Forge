@@ -2524,3 +2524,34 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 - **边界与复用**：保留 Astro + Starlight、既有文档路由、搜索、站点域名与 Cloudflare Worker `forge-website`；首页与文档主题、Logo、图标、字体全部重做，字体随包本地加载，不依赖 Google Fonts/CDN。文案只用已验证事实：当前公开 `main` 的 v2 有界授权、2026-10-22 公开测试摘要、BIRD 313/500 vs 314/500 统计持平；不虚构客户、采用量或收益，不宣称生产就绪或安全认证。首页示意必须标注合成、非实时。
 - **风险与替代**：只换配色不能解决“看不出产品是什么”的问题；完全换框架或引入 CMS 会扩大范围并丢失文档搜索与路由。旧品牌资产从站点移除但保留 Git 历史，便于回溯。新设计需在浅色/深色、桌面/手机、键盘与对比度上验收。
 - **机会成本与验收**：官网重做不推进 R0.6 外部采用或 H 独立审核。以实际构建产物、1440/390/320px 浏览器检查、导航/复制/搜索/主题切换、站内链接、无外部字体与脚本依赖、自动无障碍检查验收，再部署到 `https://forge.ss-data.cc/` 并核对线上与本地产物一致；结果写入 website/README.md。
+
+## REQ-2026-10-28-075：以 MCP Server 作为既有 Agent 的接入方式，并转向点对点外部采用
+
+- **原始表达与决定**：用户问“关于这个项目，你觉得接下来的方向是什么？”。助手建议停止新增功能、集中取得首批外部采用：先做一个很薄的 Forge MCP Server 让 Claude Code/Cursor/Codex 等既有 Agent 直接接入，改为点对点邀请并设止损点，其余方向冻结为维护。用户回复“好的，继续”，授权写入需求池完成评估；不等于批准实施。
+- **状态**：assessed（2026-10-28），等待用户 accept / amend / defer / reject。
+- **问题证据（2026-10-28 核对）**：招募入口 [#9](https://github.com/shisuidata/Forge/issues/9) 自 2026-09-03 发布至今 0 条回复；仓库 13 stars / 1 fork，仍无外部 Golden Path 回执或外部贡献。[#8](https://github.com/shisuidata/Forge/issues/8) 框架中立接入示例未完成。三轮 500 题 Benchmark 显示 Forge 与 Direct SQL 统计持平（313 vs 314），可主张的价值是授权、审批、失败关闭与 Evidence，不是准确率。Quickstart 证明 Forge 可运行，但没有回答“我已有的 Agent 如何接上”。
+- **前置缺陷（独立于本需求，属文档 Bug）**：`README.md` 的 Enforce/Explain 章节与 `docs/agent-integration.md` 的“当前推荐接入路径”仍指向 `POST /api/v1/enforce/query-runs` 与 `/approve`，二者现返回 410 `governed_api_v2_required`；`GET /api/v1/explain/...` 仅对管理员开放历史 v1 记录。文档要求配置的 `ENFORCE_REVIEWER_API_KEYS` 在运行时已无读取方，v2 审核由数据库中的真人凭证承担。外部开发者照文档接入会在第一次写请求失败。按需求门禁“普通 Bug 可直接修复”，应先改为 v2 路径（governance credential/mandate → `/api/v2/enforce` create/execute/approve/cancel → `/api/v2/explain`），不依赖本需求是否被接受。
+- **价值**：MCP 是当前 Agent 客户端接入外部工具的通用方式，一个适配器即可覆盖多种客户端，直接对应产品定义“让既有 Agent 的数据访问可验证、可约束、可追溯”，也是 #8 的具体落地；外部开发者可在自己熟悉的 Agent 中体验“Agent 只能提出与在授权内执行，审批由人完成”，比阅读 HTTP 契约更容易形成采用回执。
+- **方案边界**：
+  - 新增 `forge mcp`（stdio 传输），作为 v2 HTTP API 的无状态客户端，以 Agent 主体运行；凭证只经环境变量传入，不出现在工具参数、工具结果或日志中。依赖放入可选 extra（如 `forge[mcp]`），核心安装不新增依赖；实施时核对官方 Python MCP SDK 的当前版本与 API。
+  - 工具限于：Evaluate（不执行）、prepare（创建 v2 QueryRun，绑定 mandate/task/purpose）、读取状态、execute（仅当服务端判定为授权内自主表且状态允许）、cancel、explain。**不提供 approve 工具**：需真人审核的 QueryRun 只返回审核所需信息与 Dashboard/CLI 入口，由持有人类凭证的人完成。
+  - 幂等与恢复复用现有 `Idempotency-Key` 与 `GET /api/v2/enforce/query-runs?create_idempotency_key=`；MCP 进程不保存 QueryRun 状态，不复制审批/执行状态机，不依赖 Pi。
+  - 部署形态（用户 2026-10-28 确认）：MCP Server 由用户自部署，随 `forge` 包安装并在用户本机运行，连接用户自己部署的 Forge 服务与数据库；维护者不托管服务、不经手用户数据。托管版仅作为取得采用证据后的商业化候选，不在本需求范围内。
+  - 演示模式：`forge mcp` 提供一条命令拉起本地合成数据沙箱（复用 `forge quickstart --agent --serve` 的隔离服务、合成主体与凭证），使用户安装后即可在自己的 Agent 客户端中体验自主执行、人审与撤销；接入真实数据库时再正式部署 Forge 服务。演示模式只用隔离合成数据，不读取 `.env`、调用者数据库或应用凭证，审核人凭证仍不暴露给 Agent。
+  - 首轮不做：远程/HTTP MCP 传输与托管服务、新数据源 Connector、Forge 侧 LLM 生成、非 SQL Action、approve 能力、多租户。
+- **风险和缓解**：
+  - Prompt 注入诱导 Agent 调用 execute：权限判定全部在服务端，Agent 凭证的上限就是 mandate 范围；范围外、非自主表、撤销、过期均失败关闭，MCP 层不做任何放行判断。
+  - 查询结果行进入模型上下文：沿用现有结果截断与字段边界，在文档中明确“结果会进入 Agent 上下文”，敏感表应设为非自主或不纳入 mandate。
+  - MCP SDK 与客户端行为变化快：可选 extra、锁定版本、以官方测试客户端做契约测试，客户端兼容性只声明实测过的。
+  - 维护面增加：适配器只调用公开 v2 API，不触碰内部存储，若 API 变化由同一 CI 覆盖。
+- **替代方案**：
+  - 只修文档并提供 curl/Python 片段：成本最低，但外部开发者仍需自己实现多步协议与凭证处理，无法回答“接到我的 Agent 上是什么样”。作为前置缺陷修复必须做，但不足以替代接入方式。
+  - 逐个框架适配（LangChain、LlamaIndex 等）：覆盖面碎片化，维护成本随框架数增长。
+  - 只发 OpenAPI 让 Agent 自行调用：已可行，但审批与幂等语义易被误用，体验最差。
+  - 不做接入、只做招募：保留当前低转化路径，与 #9 的结果一致。
+- **机会成本**：投入期间不推进 Benchmark、Product Shell、Pi 新能力、官网或 NAS；这些方向按本建议冻结为 Bug 维护。H 独立审核、只读拒绝清单及 3/14 治理覆盖等技术债只在外部使用者实际触及时处理。
+- **验收与可证伪条件**：
+  - 工程：隔离合成数据上，用官方 MCP 测试客户端跑通自主表 prepare→execute→explain 与非自主表 prepare→（真人 CLI 批准）→explain 两条链；撤销 mandate 后 prepare 被拒；工具列表不含 approve；凭证不出现在任何工具 schema、结果或日志；wheel 非 editable 安装可启动 `forge mcp`。至少一个真实客户端（如 Claude Code）手工冒烟并记录版本。
+  - 采用（建议的止损点，需用户确认）：点对点邀请 3–5 名未参与实现的开发者用自己的 Agent 接入并提交回执（录屏或“卡在第 X 步”均算有效反馈）；助手曾建议以 2026-11-30 为止损复盘点；用户 2026-10-28 决定“暂时不设期限”，因此不设止损日期，仍以外部回执作为方向判断依据。内部冒烟与维护者提交不关闭 R0.6。
+- **建议顺序**：① 修复 v1→v2 文档缺陷（Bug，可直接做）；② 用户接受后按上方边界实现 MCP Server；③ 邀请名单与文案由用户确定，可由助手起草。
+- **前置缺陷修复（2026-10-28）**：README 新增 “Connect your own agent (governed API v2)” 替换 v1 Enforce/Explain 章节；`docs/agent-integration.md` 按 v2 重写（角色与凭证、接口权限表、沙箱演练、幂等/恢复、prepare-query 与 Pi 现状）；`.env.example` 注明共享密钥不授予 v2 访问。全新 `forge quickstart --agent --serve` 沙箱中按 README 原文执行签发 → prepare → execute → explain（CLI 与 curl）通过，另验证审核人批准、Agent 自批被拒（`reviewer_not_authorized`）、Agent 执行待审运行被拒（`query_run_status_conflict`）、按创建键找回、撤销后 `mandate_inactive` 与 v1 写入口 410。核对中另发现并写明两项此前未文档化的约束：`task_run_id` 须以 `tr_` 开头、Mandate 有效期不超过 24 小时；README 的 Golden Path Evidence 描述由“7 类”改为实际 9 类。MCP 部分仍待用户决定。

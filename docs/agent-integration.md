@@ -1,131 +1,77 @@
 # 外部 Agent 集成边界
 
-Forge 是既有 Agent 的可信数据执行层。已有 Direct SQL 或 Forge JSON 候选时，使用公共、版本化的 **Evaluate → Enforce → Explain** API；不要求先转成自然语言、Forge JSON 或接入 Pi。下方 `prepare-query` 是只生成待审核 SQL 的兼容入口，不代表当前公共 API 的全部能力。
+Forge 是既有 Agent 的可信数据执行层。已有 Direct SQL 或 Forge JSON 候选时，使用 **Evaluate → Enforce → Explain**：Evaluate 是 `/api/v1/evaluate`（不执行），Enforce 与 Explain 是受治理的 v2 API。不要求先转成自然语言、Forge JSON 或接入 Pi。v1 Enforce 写入口（`POST /api/v1/enforce/query-runs` 及 `/approve`）已关闭，返回 `410 governed_api_v2_required`。
+
+## 角色与凭证
+
+v2 中每个调用方都是已登记的主体（principal），持有自己在数据库中签发、可撤销的凭证，请求头统一使用 `X-API-Key`。
+
+| 角色 | 主体类型 | 能做什么 |
+|---|---|---|
+| 管理员 | human，`role=admin` | 签发、查看、撤销 Mandate；读取本工作区全部 QueryRun 与 Explain |
+| Agent | agent | 在有效 Mandate 内 prepare；仅对自主表执行；读取自己创建的 QueryRun |
+| 审核人 | human，`role=reviewer` 或 `admin`，且被 Mandate 指定 | 批准需人审的 QueryRun；读取其 Explain |
+
+Mandate 把一个 Agent 绑定到一个任务（`task_run_id` 须以 `tr_` 开头）、一个数据源、可查询表集合 `allowed_tables`、其中可免审执行的 `autonomous_tables`、责任人、指定审核人和到期时间（必须在未来 24 小时之内）。管理员撤销后，新的 prepare 返回 `mandate_inactive`。
+
+主体通过 `forge governance bootstrap --input <manifest>` 登记，凭证通过 `forge governance credential create --principal <id> --kind api_key --out <file>` 签发（文件权限 0600，终端不打印密钥）。旧的 `AUTH_API_KEYS`、`ENFORCE_REVIEWER_API_KEYS` 共享密钥不授予 v2 访问权。
 
 ## 当前推荐接入路径
 
-| 步骤 | 公共接口 | 执行与权限边界 |
-|---|---|---|
-| Evaluate | `POST /api/v1/evaluate` | 校验候选、Policy/Assurance及可选的预期／实际结果对；不执行SQL，`execution_authorized`恒为false。 |
-| 创建受控运行 | `POST /api/v1/enforce/query-runs` | 校验Principal、Purpose、Resource Scope与可选Mandate，创建待审核QueryRun；不是执行许可。 |
-| 回读审核材料 | `GET /api/v1/enforce/query-runs/{query_run_id}` | 使用创建凭证回读实际SQL、状态及绑定hash，不创建第二份运行状态。 |
-| 人工批准 | `POST /api/v1/enforce/query-runs/{query_run_id}/approve` | 提交审核过的SQL、Assurance和Enforcement Context hashes及人工责任主体；服务端重新校验后才执行。 |
-| Explain | `GET /api/v1/explain/query-runs/{query_run_id}` | 使用创建凭证读取同一QueryRun的Evidence、lineage、完整性与限制；只读，不新增执行权。 |
+| 步骤 | 接口 | 调用方 | 执行与权限边界 |
+|---|---|---|---|
+| Evaluate | `POST /api/v1/evaluate` | 任意已认证主体 | 校验候选、Policy/Assurance 及可选结果对；不执行 SQL，`execution_authorized` 恒为 false。 |
+| 签发授权 | `POST /api/v2/governance/mandates`（CLI：`forge governance mandate issue`） | 管理员 | 契约见 [mandate-issue-v1](../agent/contracts/mandate-issue-v1.schema.json)；撤销需带当前 `state_revision`。 |
+| 创建受控运行 | `POST /api/v2/enforce/query-runs` | Agent | 契约见 [enforce-query-request-v2](../agent/contracts/enforce-query-request-v2.schema.json)；创建不执行。仅涉及自主表返回 `ready`，否则 `review_required`；越界、写 SQL、Mandate 失效或 Registry/Policy 不符均失败关闭。 |
+| 回读 | `GET /api/v2/enforce/query-runs/{id}` | 创建者、责任人、审核人、管理员 | 回读实际 SQL、状态和三项审核 hash，不创建第二份运行状态。 |
+| 自主执行 | `POST /api/v2/enforce/query-runs/{id}/execute` | 创建该运行的 Agent | 仅 `ready` 可用；提交 [enforce-query-action-v2](../agent/contracts/enforce-query-action-v2.schema.json) 的三项 hash。 |
+| 人工批准 | `POST /api/v2/enforce/query-runs/{id}/approve` | 指定审核人 | 仅 `review_required` 可用；同一 action 契约。Agent 调用返回 `reviewer_not_authorized`。 |
+| 取消 | `POST /api/v2/enforce/query-runs/{id}/cancel` | 创建者、责任人、指定审核人、管理员 | 只能取消仍为 `ready` / `review_required` 的运行。 |
+| Explain | `GET /api/v2/explain/query-runs/{id}` | 同回读（Agent 须 Mandate 仍有效） | 契约见 [explain-query-response-v2](../agent/contracts/explain-query-response-v2.schema.json)；只读，不新增执行权；无权读取一律返回 404。 |
 
-候选使用[query-candidate-v1](../agent/contracts/query-candidate-v1.schema.json)，Direct SQL与Forge JSON互斥。Enforce的完整输入、批准和返回形状分别见[请求契约](../agent/contracts/enforce-query-request-v1.schema.json)、[批准契约](../agent/contracts/enforce-query-approval-v1.schema.json)、[运行投影](../agent/contracts/enforce-query-response-v1.schema.json)；Explain见[证据响应](../agent/contracts/explain-query-response-v1.schema.json)。运行服务的`/docs`列出实际HTTP输入及响应。
+运行投影见 [enforce-query-response-v2](../agent/contracts/enforce-query-response-v2.schema.json)。运行服务的 `/docs` 列出实际 HTTP 输入及响应。
 
-- 对外部署应启用认证，调用端使用`X-API-Key`。创建／回读凭证与配置在`ENFORCE_REVIEWER_API_KEYS`中的reviewer凭证分开；普通调用凭证不能自批。Reviewer凭证由可信人工审核端持有，不交给模型生成步骤。
-- Principal的认证上下文由服务端绑定到当前凭证。客户端填写Principal字段不等于完成企业身份认证；QueryRun回读和Explain继续校验创建凭证绑定。
-- 创建和批准均携带稳定的`Idempotency-Key`。遇到结果未知先回读运行，不换新key盲目重放审批／执行；`retryable`也不等于副作用重放授权。
-- 只读身份、执行开关、Registry/Policy/Assurance、SQL与审核有效期仍由Forge校验；任一适用条件不满足则失败关闭。Evaluate通过不能跳过Enforce，Evidence verified也不证明业务语义必然正确。
-- 外部Agent保留自身任务编排；Forge只持有受控QueryRun。不要使用内部Pi服务凭证，也不要在外部适配器中复制Forge的审批／执行状态机。
-
-## 无模型的本地入口验证
-
-在全新克隆中，按[README](../README.md)安装后运行：
+## 本地沙箱演练
 
 ```bash
-forge quickstart --workdir .forge/independent-run
+forge quickstart --agent --yes --serve --workdir .forge/sandbox
 ```
 
-Quickstart使用隔离合成SQLite，先证明写候选被拒绝，再完成只读候选的Evaluate、SQL人工审核、受控执行和Explain；不需要模型Key、Pi或已有数据库。其本地演示关闭认证，不能把该配置用于共享部署。自动化检查可显式使用`--yes --json`，但不把自动批准当作生产人工审核。
+沙箱用隔离合成 SQLite 登记 `quickstart-admin`、`quickstart-reviewer`、`quickstart-agent` 三个主体，并把它们的凭证留在工作目录（0600）。服务保持运行后，可用这三份凭证依次完成签发 Mandate → Agent prepare → 自主执行 / 审核人批准 → Explain → 撤销。逐条命令与请求样例见 [README 的 “Connect your own agent (governed API v2)”](../README.md#connect-your-own-agent-governed-api-v2)；这些命令已在本地沙箱实测。
 
-这验证的是现有公共API，不是某个外部Agent框架的适配器或外部采用证明。[#8](https://github.com/shisuidata/Forge/issues/8)的独立适配器仍未完成；未参与实现者的试跑／失败回执按[#9](https://github.com/shisuidata/Forge/issues/9)收集。维护者自己的烟测不关闭R0.6。
+不使用沙箱时，执行还需要 `AUTH_ENABLED=true`、`EXECUTION_ENABLED=true`，以及已确认只读的数据源（`DATABASE_READONLY_CONFIRMED=true`）。数据库只读角色是最终边界；Forge 的只读校验对副作用函数采用拒绝清单，不能替代数据库权限。
+
+## 调用约束
+
+- 创建与 execute/approve 都必须携带稳定的 `Idempotency-Key`。同一 key 重放 action 返回原 claim，不会执行第二次。
+- 创建响应丢失时，用 `GET /api/v2/enforce/query-runs?create_idempotency_key=<key>` 找回（仅创建者可见），不要换新 key 盲目重建。结果未知时先回读，`retryable` 也不等于副作用重放授权。
+- execute/approve 提交的是 prepare 响应中的 `sql_hash`、`assurance_report_hash`、`enforcement_context_hash`；授权人承诺的正是展示过的 SQL 与上下文，任一漂移失败关闭。
+- 审核等待有有效期（`QUERY_RUN_REVIEW_TTL_SECONDS`），过期的运行变为 `expired`，需重新 prepare。
+- 执行结果会回到调用方，进入 Agent 的上下文。敏感表应不设为自主表，或不纳入 Mandate。
+- 审核人凭证由可信的人工审核端持有，不交给模型生成步骤。外部 Agent 保留自身任务编排，Forge 只持有受控 QueryRun；不要使用 Pi 服务凭证，也不要在适配器中复制 Forge 的审批/执行状态机。
+- Evaluate 通过不能跳过 Enforce；Explain 的 `integrity=verified` 证明证据未被篡改，不证明业务语义必然正确。
+
+外部开发者的试跑与失败回执按 [#9](https://github.com/shisuidata/Forge/issues/9) 收集；框架中立的接入示例见 [#8](https://github.com/shisuidata/Forge/issues/8)，尚未完成。维护者自己的烟测不关闭 R0.6。
 
 ## 兼容入口：prepare-query
 
-以下约束只适用于`/api/prepare-query`：它接收自然语言，生成可审核SQL而不创建公共Enforce运行或直接执行数据库。需要从生成结果继续执行时，应作为新候选显式进入上面的公共Enforce审核链，不能直接送旧`/api/approve`。
-
-### prepare-query 设计原则
-
-- 外部 Agent 只能提交自然语言问题和可选上下文。
-- Forge 返回 Forge JSON、编译后的 SQL、方言、Registry 版本和需要人工确认的状态。
-- 数据库执行默认关闭；执行必须来自 Forge 内部审核流，并有审计记录。
-- 外部 Agent 不接收数据库账号、API Key、Cookie 或完整客户敏感结果集。
-
-### prepare-query HTTP 契约
-
-Endpoint：
-
-```text
-POST /api/prepare-query
-```
-
-使用现有 API 认证机制。认证开启后需要 `X-API-Key`、`?api_key=` 或有效 Web session。
+`POST /api/prepare-query` 接收自然语言，用服务端配置的模型生成可审核 SQL；它不创建 QueryRun，也不执行数据库。调用方身份取自 `X-API-Key` 对应的主体，表范围取自该主体所在团队。
 
 最小输入：
 
 ```json
 {
   "question": "本月各渠道支付 GMV 是多少？",
-  "user_id": "external-agent",
   "dialect": "postgresql"
 }
 ```
 
-最小输出：
+返回 `status`（`needs_review` / `needs_clarification` / `error`）、`forge_json`、`sql`、`dialect`、`review_required: true` 与 `can_execute: false`。`dialect` 只允许 `auto / sqlite / postgresql / mysql / bigquery / snowflake`，省略时沿用 Forge 配置。成功记录在审计中标为 `needs_external_review`。
 
-```json
-{
-  "status": "needs_review",
-  "question": "本月各渠道支付 GMV 是多少？",
-  "user_id": "external-agent",
-  "forge_json": {},
-  "sql": "SELECT ...",
-  "dialect": "postgresql",
-  "review_required": true,
-  "can_execute": false,
-  "retry_count": 0,
-  "text": "",
-  "error": ""
-}
-```
+需要执行时，把生成结果作为新候选显式提交到上面的 v2 Enforce 链。旧的 `/api/approve`、`/api/chat`、`/api/cancel` 已关闭（410），不存在通过 prepare-query 直接执行的路径。该入口依赖模型配置，不属于无模型的公开 Golden Path。
 
-状态说明：
+## 内部 Pi Control Plane
 
-| status | 含义 |
-|---|---|
-| `needs_review` | 已生成 Forge JSON 和 SQL，必须由宿主系统或 Forge App 审核 |
-| `needs_clarification` | 缺少必要口径、时间范围或权限上下文 |
-| `error` | LLM、lint、compile、Registry 或 dialect 校验失败 |
+Pi Orchestrator 不使用单独的内部执行 API，而以 `pi_service` 凭证（`forge governance credential create --kind pi_service`）调用同一组 `/api/v2/enforce/query-runs` 接口，并以 `create_idempotency_key` 找回中断的 prepare。渠道（飞书/钉钉）中的真人审批经 Forge 签发的控制令牌（`X-Forge-Control-Token`）提交；令牌绑定请求方法、路径、三项 hash 与幂等键并会过期，仍由 Forge 校验审核人身份与渠道绑定。
 
-`review_required` 在 v1 恒为 `true`，`can_execute` 在 v1 恒为 `false`。`dialect` 只允许 `auto / sqlite / postgresql / mysql / bigquery / snowflake`，省略时沿用 Forge 配置。
-
-`prepare_query` 不会创建可由 `/api/approve` 消费的 pending SQL。即使返回了 SQL，也不能借旧 approve 接口直接执行；公共 Enforce 是独立的显式请求，仍要求完整 Principal、Resource Scope、审核 hash 和部署级权限条件。
-
-审计日志中，成功的 prepare-query 记录使用 `needs_external_review` 状态，而不是内部审核流的 `pending`。只有 Forge Web/飞书内部生成、可由 `/api/approve` 消费的 SQL 才能进入 `pending`。
-
-### prepare-query 适用入口
-
-- MCP / Claude Desktop：作为只生成 SQL 的工具。
-- OpenAI Agents / ChatGPT Apps：作为企业内网 Action，默认只返回待审核 SQL。
-- Slack / 企业微信 / 钉钉：先走消息入口适配层，再接同一个 prepare-query 内核。
-
-这些入口未产品化前，不对外宣称“已支持”。当前交付状态以 `docs/compatibility-matrix.md` 为准。
-
-## 内部 Pi Control Plane 契约
-
-`/api/prepare-query` 的外部安全语义保持不变。Forge 另为同一私有化部署内的 Pi Orchestrator 提供内部 QueryRun API：
-
-```text
-POST /api/internal/query-runs
-GET  /api/internal/query-runs/{query_run_id}
-POST /api/internal/query-runs/{query_run_id}/approve
-POST /api/internal/query-runs/{query_run_id}/cancel
-GET  /api/internal/query-runs/{query_run_id}/result
-```
-
-这不是通用外部 Agent 执行接口。它使用独立的 `X-Pi-Service-Key`，对应 `PI_SERVICE_API_KEYS`，与普通 `AUTH_API_KEYS` 分离。
-
-批准执行必须同时满足：
-
-- QueryRun 仍处于 `needs_review`。
-- 批准人与 QueryRun 用户一致。
-- `sql_hash` 与审核 SQL 一致。
-- Registry 内容版本没有漂移。
-- 审核没有过期。
-- `EXECUTION_ENABLED=true`。
-- `DATABASE_READONLY_CONFIRMED=true`。
-- 创建和批准操作带幂等键。
-
-批准前 Forge 原子地将状态切换为 `executing`，避免重复渠道事件执行两次查询。完整结果只在 `completed` 后通过 QueryRun result 契约返回。
+旧的 `/api/internal/query-runs` 系列接口已关闭（410）；`/api/internal/query-candidates` 只为 Pi 生成候选，不创建 QueryRun、不执行。这些内部接口只服务同一私有化部署内的 Pi，不是外部 Agent 的接入面。
