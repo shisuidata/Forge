@@ -37,6 +37,7 @@ export default defineConfig({
 						{ label: '介绍 · Trust Runtime', slug: 'guides/introduction' },
 						{ label: '安装部署', slug: 'guides/installation' },
 						{ label: '五分钟上手', slug: 'guides/quickstart' },
+						{ label: '接入你的 Agent（MCP）', slug: 'guides/mcp' },
 					],
 				},
 				{

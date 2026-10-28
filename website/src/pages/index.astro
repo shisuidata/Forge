@@ -71,7 +71,7 @@ const limitations = ['semantic_correctness_unproven', 'live_data_no_snapshot', '
 const unverified = ['真实 PostgreSQL / MySQL 只读角色', '真实身份与客户数据', '独立安全审核与渗透测试', '非维护者的外部采用'];
 
 const faqs = [
-	['Forge 是另一个问数聊天机器人吗？', '不是。Forge 位于你已有的 Agent 与数据库之间，负责生成之后的检查、受控执行与证据。外部 Agent 可以直接调用 Forge 的 HTTP API，不需要使用我们的工作台或编排器。'],
+	['Forge 是另一个问数聊天机器人吗？', '不是。Forge 位于你已有的 Agent 与数据库之间，负责生成之后的检查、受控执行与证据。外部 Agent 可以直接调用 Forge 的 HTTP API，或用 forge mcp 从 Claude Code 等 MCP 客户端接入，不需要使用我们的工作台或编排器。'],
 	['必须让模型生成 Forge JSON 吗？', '不必。Direct SQL 与 Forge JSON 都是候选格式，进入同一条 QueryRun 治理链路。Forge JSON 能提供更强的结构约束，但它不是接入的前提。'],
 	['Quickstart 会连接我的数据库或调用模型吗？', '不会。它在本地创建隔离的合成 SQLite 数据与合成身份，启动真实的本地服务，不需要模型、API Key 或你的数据库。'],
 	['现在可以接入生产吗？', '不建议。2026-10-04 评估列出的发布阻断已经修复并有回归测试，但真实数据库只读角色、真实身份与独立安全审核都还没有验证；数据库只读角色始终是最后一道边界。请先在隔离环境评估。'],
@@ -272,6 +272,7 @@ const faqs = [
 						<h2 id="start-title">五分钟，<br />看一遍完整的关口。</h2>
 						<p>需要 Git、Bash 与 Python 3.11 或更新版本。Quickstart 在本地创建合成数据与合成身份，先演示写入被拒，再走一遍放行、审核、撤销与 Explain。</p>
 						<a class="button button-signal" href="/guides/quickstart/">阅读上手指南<span aria-hidden="true">→</span></a>
+						<a class="text-link start-mcp" href="/guides/mcp/">已经有 Agent？用 MCP 接入<span aria-hidden="true"> →</span></a>
 					</div>
 					<div class="terminal">
 						<div class="terminal-head">

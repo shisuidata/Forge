@@ -283,6 +283,7 @@ h2 {
 .accuracy-line .mono { color: var(--forge-fog-2); font-size: .76rem; }
 .accuracy-line strong { font-family: var(--forge-display); font-stretch: 118%; font-weight: 800; font-size: 1.9rem; }
 .accuracy .text-link { margin-top: .5rem; }
+.start .start-mcp { display: flex; width: fit-content; margin-top: 1.25rem; }
 .gaps { padding: 1.5rem 1.6rem; border: 1px dashed var(--forge-line-strong); border-radius: 12px; }
 .gaps ul { margin: 0; padding: 0; list-style: none; }
 .gaps li { padding: .55rem 0 .55rem 1.6rem; position: relative; border-bottom: 1px solid var(--forge-line); }
