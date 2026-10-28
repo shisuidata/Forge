@@ -1,5 +1,6 @@
 """Exercise an installed distribution outside the checkout, using synthetic data only."""
 from importlib.resources import files
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -73,6 +74,11 @@ print("core dependency boundary passed")
             return subprocess.run([cli, *args], cwd=root, env=environment, input=input, text=True,
                                   check=True, capture_output=True, timeout=90)
         run("--help")
+        if importlib.util.find_spec("mcp") is None:
+            # Without the optional extra, the MCP entry explains itself instead of starting a demo server.
+            missing = subprocess.run([cli, "mcp", "--demo"], cwd=root, env=environment, text=True,
+                                     capture_output=True, timeout=30)
+            assert missing.returncode == 2 and "[mcp] extra" in missing.stderr, missing
         compiled = run("compile", "-", input=json.dumps({"scan": "numbers", "select": ["numbers.n"]}))
         assert "SELECT" in compiled.stdout
         initialized = json.loads(run("poc", "init", "synthetic-poc", "--json").stdout)

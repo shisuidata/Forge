@@ -262,6 +262,76 @@ def _cmd_explain(args: argparse.Namespace) -> None:
     print(output)
 
 
+def _cmd_review(args: argparse.Namespace) -> None:
+    """Human approval in a terminal: show the exact SQL and scope, then approve it once."""
+    import httpx
+
+    if args.demo:
+        from .mcp_server import default_demo_dir, demo_state
+
+        try:
+            state = demo_state(Path(args.workdir) if args.workdir else default_demo_dir())
+            key = Path(state["reviewer_key_file"]).read_text(encoding="utf-8").strip()
+        except (RuntimeError, OSError) as exc:
+            print(exc, file=sys.stderr)
+            raise SystemExit(2) from exc
+        base_url = state["base_url"]
+    else:
+        base_url, key = args.url.rstrip("/"), os.environ.get(args.api_key_env, "")
+        if not key:
+            print(f"Set {args.api_key_env} to the reviewer's credential", file=sys.stderr)
+            raise SystemExit(2)
+    headers = {"X-API-Key": key, "Accept": "application/json"}
+    run_url = f"{base_url}/api/v2/enforce/query-runs/{quote(args.query_run_id, safe='')}"
+
+    def read(response: httpx.Response) -> dict:
+        body = response.json()
+        if response.is_error or not isinstance(body, dict) or body.get("status") == "error":
+            print(json.dumps(body, ensure_ascii=False, indent=2), file=sys.stderr)
+            raise SystemExit(1)
+        return body
+
+    try:
+        run = read(httpx.get(run_url, headers=headers, timeout=args.timeout))
+        if run["status"] != "review_required":
+            print(f"{args.query_run_id} is {run['status']}; there is nothing to approve.", file=sys.stderr)
+            raise SystemExit(1)
+        context = run["context"]
+        tables = [item["resource_id"] for item in context["resource_scope"] if item["resource_type"] == "table"]
+        print(f"QueryRun:   {run['query_run_id']}  (task {run['task_run_id']})")
+        print(f"Requested:  {context['principal_context']['actor_principal']['principal_id']}")
+        print(f"Purpose:    {context['purpose']}")
+        print(f"Scope:      {', '.join(tables)}")
+        print(f"Expires:    {run['review']['expires_at']}")
+        print(f"\n{run['review']['sql']}\n")
+        if not sys.stdin.isatty():
+            print("forge review needs an interactive terminal. For scripted approval submit the reviewed hashes "
+                  "with `forge enforce --approve`.", file=sys.stderr)
+            raise SystemExit(2)
+        if input("Approve this SQL for one read-only execution? [y/N] ").strip().lower() not in {"y", "yes"}:
+            print("Not approved; nothing was executed.")
+            raise SystemExit(1)
+        action = {"schema_version": 2, **{field: run["review"][field] for field in (
+            "sql_hash", "assurance_report_hash", "enforcement_context_hash")}}
+        run = read(httpx.post(f"{run_url}/approve", json=action, timeout=args.timeout,
+                              headers={**headers, "Idempotency-Key": "review-" + args.query_run_id}))
+        deadline = time.monotonic() + args.timeout
+        while run["status"] not in {"completed", "failed", "cancelled", "expired", "denied"}:
+            if time.monotonic() >= deadline:
+                print(f"{args.query_run_id}: approved; result not known yet. Read it with "
+                      f"`forge enforce --run-id {args.query_run_id}`.", file=sys.stderr)
+                raise SystemExit(2)
+            time.sleep(0.3)
+            run = read(httpx.get(run_url, headers=headers, timeout=args.timeout))
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"Review request failed: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    result = run.get("result") or {}
+    print(f"{args.query_run_id}: {run['status']}" + (f", {result['row_count']} row(s)" if result else ""))
+    if run["status"] != "completed":
+        raise SystemExit(1)
+
+
 def _cmd_governance_mandate(args: argparse.Namespace) -> None:
     import httpx
 
@@ -687,6 +757,23 @@ def main() -> None:
     explain_parser.add_argument("--api-key-env", default="FORGE_API_KEY", help="Environment variable containing the API key")
     explain_parser.add_argument("--timeout", type=float, default=30.0)
 
+    # ── review subcommand ─────────────────────────────────────────────────────
+    review_parser = subparsers.add_parser(
+        "review", help="Approve a review-required QueryRun after reading its SQL (interactive)", allow_abbrev=False)
+    review_parser.add_argument("query_run_id")
+    review_parser.add_argument("--demo", action="store_true", help="Use the running `forge mcp --demo` server")
+    review_parser.add_argument("--workdir", help="Demo directory when it is not the default")
+    review_parser.add_argument("--url", default=os.environ.get("FORGE_BASE_URL", "http://127.0.0.1:8000"))
+    review_parser.add_argument("--api-key-env", default="FORGE_API_KEY", help="Environment variable containing the reviewer key")
+    review_parser.add_argument("--timeout", type=float, default=30.0)
+
+    # ── mcp subcommand ────────────────────────────────────────────────────────
+    mcp_parser = subparsers.add_parser(
+        "mcp", help="Serve the governed API to an MCP client over stdio as the agent principal", allow_abbrev=False)
+    mcp_parser.add_argument("--demo", action="store_true",
+                            help="Start a fresh synthetic Forge server and Mandate instead of using FORGE_* settings")
+    mcp_parser.add_argument("--workdir", help="Demo directory (default ~/.forge/mcp-demo; recreated on each start)")
+
     # ── quickstart subcommand ─────────────────────────────────────────────────
     quickstart_parser = subparsers.add_parser(
         "quickstart",
@@ -878,6 +965,16 @@ def main() -> None:
         _cmd_explain(args)
     elif args.command == "quickstart":
         _cmd_quickstart(args)
+    elif args.command == "review":
+        _cmd_review(args)
+    elif args.command == "mcp":
+        from .mcp_server import serve
+
+        try:
+            serve(demo=args.demo, workdir=Path(args.workdir).expanduser().resolve() if args.workdir else None)
+        except RuntimeError as exc:
+            print(exc, file=sys.stderr)
+            raise SystemExit(2) from exc
     elif args.command == "governance":
         if args.governance_command == "mandate":
             _cmd_governance_mandate(args)

@@ -2528,7 +2528,7 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
 ## REQ-2026-10-28-075：以 MCP Server 作为既有 Agent 的接入方式，并转向点对点外部采用
 
 - **原始表达与决定**：用户问“关于这个项目，你觉得接下来的方向是什么？”。助手建议停止新增功能、集中取得首批外部采用：先做一个很薄的 Forge MCP Server 让 Claude Code/Cursor/Codex 等既有 Agent 直接接入，改为点对点邀请并设止损点，其余方向冻结为维护。用户回复“好的，继续”，授权写入需求池完成评估；不等于批准实施。
-- **状态**：assessed（2026-10-28），等待用户 accept / amend / defer / reject。
+- **状态**：accepted（用户 2026-10-28：“实现吧”）→ implementation verified（本地与合成环境）；外部采用仍未验证，R0.6 不变。
 - **问题证据（2026-10-28 核对）**：招募入口 [#9](https://github.com/shisuidata/Forge/issues/9) 自 2026-09-03 发布至今 0 条回复；仓库 13 stars / 1 fork，仍无外部 Golden Path 回执或外部贡献。[#8](https://github.com/shisuidata/Forge/issues/8) 框架中立接入示例未完成。三轮 500 题 Benchmark 显示 Forge 与 Direct SQL 统计持平（313 vs 314），可主张的价值是授权、审批、失败关闭与 Evidence，不是准确率。Quickstart 证明 Forge 可运行，但没有回答“我已有的 Agent 如何接上”。
 - **前置缺陷（独立于本需求，属文档 Bug）**：`README.md` 的 Enforce/Explain 章节与 `docs/agent-integration.md` 的“当前推荐接入路径”仍指向 `POST /api/v1/enforce/query-runs` 与 `/approve`，二者现返回 410 `governed_api_v2_required`；`GET /api/v1/explain/...` 仅对管理员开放历史 v1 记录。文档要求配置的 `ENFORCE_REVIEWER_API_KEYS` 在运行时已无读取方，v2 审核由数据库中的真人凭证承担。外部开发者照文档接入会在第一次写请求失败。按需求门禁“普通 Bug 可直接修复”，应先改为 v2 路径（governance credential/mandate → `/api/v2/enforce` create/execute/approve/cancel → `/api/v2/explain`），不依赖本需求是否被接受。
 - **价值**：MCP 是当前 Agent 客户端接入外部工具的通用方式，一个适配器即可覆盖多种客户端，直接对应产品定义“让既有 Agent 的数据访问可验证、可约束、可追溯”，也是 #8 的具体落地；外部开发者可在自己熟悉的 Agent 中体验“Agent 只能提出与在授权内执行，审批由人完成”，比阅读 HTTP 契约更容易形成采用回执。
@@ -2555,3 +2555,42 @@ Forge 的公开定位面向国际开源开发者，但 GitHub 仓库首页默认
   - 采用（建议的止损点，需用户确认）：点对点邀请 3–5 名未参与实现的开发者用自己的 Agent 接入并提交回执（录屏或“卡在第 X 步”均算有效反馈）；助手曾建议以 2026-11-30 为止损复盘点；用户 2026-10-28 决定“暂时不设期限”，因此不设止损日期，仍以外部回执作为方向判断依据。内部冒烟与维护者提交不关闭 R0.6。
 - **建议顺序**：① 修复 v1→v2 文档缺陷（Bug，可直接做）；② 用户接受后按上方边界实现 MCP Server；③ 邀请名单与文案由用户确定，可由助手起草。
 - **前置缺陷修复（2026-10-28）**：README 新增 “Connect your own agent (governed API v2)” 替换 v1 Enforce/Explain 章节；`docs/agent-integration.md` 按 v2 重写（角色与凭证、接口权限表、沙箱演练、幂等/恢复、prepare-query 与 Pi 现状）；`.env.example` 注明共享密钥不授予 v2 访问。全新 `forge quickstart --agent --serve` 沙箱中按 README 原文执行签发 → prepare → execute → explain（CLI 与 curl）通过，另验证审核人批准、Agent 自批被拒（`reviewer_not_authorized`）、Agent 执行待审运行被拒（`query_run_status_conflict`）、按创建键找回、撤销后 `mandate_inactive` 与 v1 写入口 410。核对中另发现并写明两项此前未文档化的约束：`task_run_id` 须以 `tr_` 开头、Mandate 有效期不超过 24 小时；README 的 Golden Path Evidence 描述由“7 类”改为实际 9 类。MCP 部分仍待用户决定。
+- **实施与验证（2026-10-28）**：
+  - 新增 `forge/mcp_server.py` 与 `forge mcp`（stdio，可选 `[mcp]` extra，`mcp>=2.3,<3`）。工具为 `forge_scope`、`forge_prepare_query`、`forge_execute_query`、`forge_get_query_run`、`forge_explain_query`、`forge_cancel_query`，没有审批工具；task/purpose 取自 Mandate，`dialect=auto`，`denied` 返回失败 gate 与诊断，execute 每个 QueryRun 固定幂等键，创建响应丢失时按创建键找回。Evaluate 未做成工具：prepare 已执行同一组 Assurance 且不执行，期望结果对比对 Agent 场景无用，少一个工具更利于模型选择。
+  - 新增 `forge review <id>`：展示实际 SQL、请求者、目的、范围与到期时间，交互确认后以审核人凭证批准一次；无交互终端时拒绝。原因：Web 审核收件箱与批准按钮经 Pi，外部 Agent 的运行此前只能手写 hash 文件经 `forge enforce --approve` 批准。
+  - `forge mcp --demo` 复用 Quickstart 新抽出的 `isolated_runtime`，在 `~/.forge/mcp-demo`（仅删除带标记的目录）拉起合成服务并签发 12 小时 Mandate（`numbers` 自主、`secrets` 需审核）。
+  - 验证中发现并修复：客户端以 SIGTERM 结束 MCP 进程时演示 Forge 服务成为孤儿进程（`forge quickstart --serve` 同样受影响，属既有缺陷）。现在 `isolated_runtime` 把 SIGTERM/SIGHUP 转为 SystemExit 以停止本地服务，演示模式清理后 `os._exit` 避免被阻塞的 stdin 读取线程拖住退出；关闭 stdin 与 SIGTERM 两种退出方式均有回归测试。另纠正安装提示：PyPI 上的 `forge` 是无关的 Django 项目，提示改为在检出目录或发行包安装 `[mcp]` extra。
+  - 测试：`tests/test_mcp_server.py` 11 项，经官方 MCP 客户端（内存与 stdio 子进程）连接真实隔离 Forge，覆盖工具清单无审批且不含凭证、自主执行与重试回放、人审等待与外部批准、拒绝/越界/取消、撤销后 `mandate_inactive`、丢失响应找回、外来目录不删除、`forge review` 非交互拒绝与交互批准、stdio 端到端及两种退出清理。Python 3.14 全套 1062 passed / 26 skipped；Python 3.11 隔离环境全套 1060 passed / 26 skipped（MCP 测试未被跳过）。wheel 不带 extra 的 package smoke 通过并验证安装提示；wheel 带 `[mcp]` 在检出目录外 stdio 端到端通过。
+  - 真实客户端：Claude Code 2.1.312 以临时 `--mcp-config` 加载 `forge mcp --demo`（未改用户配置），6 轮完成 scope → `numbers` 自主执行 → `secrets` 停在 `review_required` 并原样转告 `forge review` 命令，未尝试审批；花费约 $0.19。
+  - CI：测试 job 安装 `.[dev,mcp]`；`constraints/ci-python311.txt` 新增 mcp 2.3.0 及其 7 个传递依赖的锁定版本。`uv.lock` 为 gitignore 的本地文件，已本地更新。
+  - 边界：演示模式的合成审核人密钥与 Agent 在同一台机器，具备文件访问的 Agent 仍可能读取；正式接入时客户端配置保存 Agent 凭证；查询结果进入模型上下文。未实测 Cursor 等其他客户端，未部署、未发布到 PyPI，R0.6 仍以外部回执为准。
+
+## REQ-2026-10-28-076：以即舟人效系统作为首个真实部署场景（PostgreSQL 只读角色、免审批视图、服务型 Agent）
+
+- **原始表达与决定**：在即舟人效系统（`10_Business/jizhou`）讨论“飞书智能问答”时，用户问“那我们用自己的 Forge？”。助手建议：Forge 不做管理层机器人的整体编排，只承担其中“临时查询”这一层——即舟 assistant（Node/TypeScript，按提问人权限调用自身只读工具）答不了的问题，经 Forge 执行受约束的只读 SQL。用户回复“可以”，授权在 jizhou 写设计文档并在此登记需求；**不等于批准实施**。jizhou 侧设计见其 `docs/12_飞书智能问答设计.md` 第 6 节（M21）。
+- **状态**：captured → assessed（待用户决定）。
+- **场景**：即舟云仓内部管理层通过飞书提问；jizhou 在自己的 PostgreSQL 里建 `ai` schema（整理好的只读视图，不含身份证、手机号、照片等敏感字段）与只读角色；Forge 自部署在即舟正式服务器，Registry 登记这些视图的语义，视图在 Mandate 内设为自主表；jizhou assistant 作为长期运行的服务型 Agent 调用 prepare → execute → explain，并在回答里引用 Explain 的实际 SQL 与口径。
+- **价值**：
+  - 首个真实 PostgreSQL、真实业务语义、真实用户问题的运行场景，可直接验证当前文档中仍标“未验证”的项目：真实 PostgreSQL 只读角色作为最终边界、真实 schema 的 Registry 建模成本、Assurance 对真实问题的拒绝/放行质量。
+  - 产生真实 failure case 与 Registry 样例（可脱敏后作为 Dataset/Rule 回流）。
+  - **边界声明**：这是维护者本人的部署，按 R0.6 规则**不计为外部采用证据**，不关闭 R0.6。
+- **暴露的缺口（需评估，非承诺实现）**：
+  1. **服务型 Agent 的 Mandate 续期**：Mandate 有效期不超过 24 小时，而 jizhou assistant 常驻运行。需要明确的续期方式（例如由管理员签发长期“续期授权”、到期前由真人一键续签，或允许受限的自动续签），且不能让 Agent 自批。
+  2. **调用方式**：`forge mcp` 是 stdio 且为 Python；jizhou 是 Node 服务，直接调用 v2 governed HTTP API 更自然。需确认 v2 HTTP 作为服务端集成方式的稳定性承诺（版本、错误码、幂等键约定），MCP 不是唯一入口。
+  3. **终端用户归属**：Forge Principal 是 Agent；实际提问的管理者需记入 Purpose/Task 元数据以便审计关联，但权限仍由 jizhou 判定（jizhou 只把 `ad_hoc_query` 给能看全部数据的角色）。需确认 Evidence/Audit 中如何携带上游用户标识而不变成第二套权限系统。
+  4. **部署形态**：Forge 以单服务运行在一台 4C/8G 的生产机上（与 jizhou 同机，Docker），状态库与备份方式、内存占用、升级与回滚需形成可复用的部署说明；当前只有 NAS 上的 user-systemd 形态。
+  5. **Pi 不参与**：此场景不使用 Pi 编排（jizhou assistant 自有会话与对话循环）；需确认与“Pi 是唯一主 Orchestrator”边界的关系——按 REQ-075 已有“外部 Agent 经 v2/MCP 接入、不依赖 Pi”的先例，应属于外部 Agent 接入，而非新增第二套任务真相源。
+- **风险和缓解**：
+  - 生产数据进入模型上下文：视图层去掉敏感字段；结果截断沿用现有边界；jizhou 侧对 `ad_hoc_query` 单独授权。
+  - Forge 早期阶段进入生产链路：jizhou 一期不依赖 Forge；`ad_hoc_query` 失败或 Forge 不可用时 assistant 明确告知“临时查询暂不可用”，不影响其它工具；只读角色是最终边界。
+  - 维护面扩大：只用公开 v2 API，不触碰 Forge 内部存储。
+- **替代方案**：
+  - jizhou 自己实现只读 SQL 校验与审计：重复 Forge 已有职责，且绕开了 Forge 最需要的真实场景。
+  - jizhou 不做临时查询，只靠固定工具：最安全，但“什么都能问”的目标只能部分达成。
+  - 直接给 Agent 只读数据库账号、不经 Forge：无语义约束、无证据与审计，不可接受。
+- **机会成本**：与 REQ-075 的“冻结其余方向、集中外部采用”有张力：本需求若接受，应限定为“部署与验证”，只修复真实场景中暴露的 Bug 与上面第 1–4 项中被确认必要的最小改动，不借机扩展 Product Shell、Connector 或 Pi 能力。
+- **验收与可证伪条件（若接受）**：
+  - 真实 PostgreSQL（jizhou 正式库的 `ai` schema）只读角色下：写语句、越权 schema/表、超时查询均失败关闭并有 Evidence；自主表查询 prepare → execute → explain 走通。
+  - jizhou 一期工具答不了的问题样本中，经临时查询答对的比例与被 Forge 拒绝的样例分别留档（不以此声明准确率优势）。
+  - 服务型 Agent 连续运行 7 天，Mandate 续期不需要 Agent 自批、无中断或中断可解释。
+- **建议顺序**：jizhou 一期（M20，不依赖 Forge）先上线并收集“答不了的问题”；据此决定是否接受本需求；接受后先做 jizhou `ai` 视图与只读角色，再部署 Forge 与 Registry。

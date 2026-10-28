@@ -41,6 +41,25 @@ forge quickstart --agent --yes --serve --workdir .forge/sandbox
 
 不使用沙箱时，执行还需要 `AUTH_ENABLED=true`、`EXECUTION_ENABLED=true`，以及已确认只读的数据源（`DATABASE_READONLY_CONFIRMED=true`）。数据库只读角色是最终边界；Forge 的只读校验对副作用函数采用拒绝清单，不能替代数据库权限。
 
+## MCP 接入（`forge mcp`）
+
+`forge mcp` 让 Claude Code、Cursor 等 MCP 客户端以 Agent 主体使用上面的 v2 链路。它在用户本机以 stdio 运行，是 v2 HTTP API 的无状态客户端：不保存 QueryRun 状态、不做授权判断，维护者不托管任何服务。依赖为可选 extra（在 Forge 检出目录 `pip install -e ".[mcp]"`；PyPI 上同名的 `forge` 是无关项目）。
+
+| 工具 | 对应接口 | 说明 |
+|---|---|---|
+| `forge_scope` | `GET /api/v2/governance/mandates/{id}` | 只读：任务、目的、数据源、可查询表、自主表、审核人、到期时间 |
+| `forge_prepare_query` | `POST /api/v2/enforce/query-runs` | 以 Mandate 的 task/purpose 创建 QueryRun，不执行；`denied` 时返回失败的 gate 与诊断，供模型修正 |
+| `forge_execute_query` | `POST .../{id}/execute` | 仅 `ready`；每个 QueryRun 固定幂等键，重试只回放原 claim |
+| `forge_get_query_run` | `GET .../{id}` | 只读：状态、SQL、有界结果 |
+| `forge_explain_query` | `GET /api/v2/explain/query-runs/{id}` | 只读：完整性、实际 SQL、授权来源、Evidence 类型与限制 |
+| `forge_cancel_query` | `POST .../{id}/cancel` | 取消尚未 claim 的运行 |
+
+没有审批工具。`review_required` 的结果只告诉模型请用户在自己的终端运行 `forge review <query_run_id>`：它展示实际 SQL、请求者、目的与范围，交互确认后提交一次批准；没有交互式终端时拒绝运行，因此 Agent 的非交互 shell 不能代为批准。创建响应丢失时按幂等键找回同一运行，不重复创建。
+
+- 正式接入：环境变量 `FORGE_BASE_URL`、`FORGE_API_KEY`（Agent 凭证）、`FORGE_MANDATE_ID`。客户端配置文件会保存这些值，应按密钥管理；凭证不出现在工具参数、工具结果或日志中。
+- 演示：`forge mcp --demo` 在 `~/.forge/mcp-demo`（每次启动重建，仅删除带演示标记的目录）拉起合成 Forge 服务并签发 12 小时 Mandate：`numbers` 自主、`secrets` 需审核；人审用 `forge review --demo <id>`。合成审核人密钥与 Agent 在同一台机器上，具备文件访问能力的 Agent 仍可能读取，仅因数据为合成才可接受。MCP 进程退出（关闭 stdin 或 SIGTERM）时演示服务随之停止。
+- 结果会进入模型上下文；敏感表不应设为自主表或不纳入 Mandate。
+
 ## 调用约束
 
 - 创建与 execute/approve 都必须携带稳定的 `Idempotency-Key`。同一 key 重放 action 返回原 claim，不会执行第二次。
@@ -51,7 +70,7 @@ forge quickstart --agent --yes --serve --workdir .forge/sandbox
 - 审核人凭证由可信的人工审核端持有，不交给模型生成步骤。外部 Agent 保留自身任务编排，Forge 只持有受控 QueryRun；不要使用 Pi 服务凭证，也不要在适配器中复制 Forge 的审批/执行状态机。
 - Evaluate 通过不能跳过 Enforce；Explain 的 `integrity=verified` 证明证据未被篡改，不证明业务语义必然正确。
 
-外部开发者的试跑与失败回执按 [#9](https://github.com/shisuidata/Forge/issues/9) 收集；框架中立的接入示例见 [#8](https://github.com/shisuidata/Forge/issues/8)，尚未完成。维护者自己的烟测不关闭 R0.6。
+外部开发者的试跑与失败回执按 [#9](https://github.com/shisuidata/Forge/issues/9) 收集；[#8](https://github.com/shisuidata/Forge/issues/8) 的框架中立接入现以 `forge mcp` 提供，尚无外部使用者验证。维护者自己的烟测不关闭 R0.6。
 
 ## 兼容入口：prepare-query
 

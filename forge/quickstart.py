@@ -9,11 +9,13 @@ import json
 import os
 import platform
 from pathlib import Path
+import signal
 import socket
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, Callable, Iterator
 import uuid
@@ -179,6 +181,33 @@ def _local_server(workdir: Path) -> Iterator[str]:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
+
+
+
+@contextmanager
+def _exit_on_termination() -> Iterator[None]:
+    """Turn SIGTERM/SIGHUP into SystemExit so a terminated parent still stops its local server."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    def stop(signum: int, _frame: Any) -> None:
+        raise SystemExit(128 + signum)
+    names = [name for name in ("SIGTERM", "SIGHUP") if hasattr(signal, name)]
+    previous = {name: signal.signal(getattr(signal, name), stop) for name in names}
+    try:
+        yield
+    finally:
+        for name, handler in previous.items():
+            signal.signal(getattr(signal, name), handler)
+
+
+@contextmanager
+def isolated_runtime(workdir: Path) -> Iterator[str]:
+    """Synthetic data, admin/reviewer/agent principals with 0600 key files, and a local server."""
+    _write_demo_inputs(workdir)
+    _bootstrap_demo(workdir)
+    with _exit_on_termination(), _local_server(workdir) as base_url:
+        yield base_url
 
 
 def _response_json(response: httpx.Response, operation: str) -> dict[str, Any]:
@@ -454,9 +483,6 @@ def run_quickstart(
                 f"Quickstart workdir must not contain: {', '.join(occupied)}"
             )
     try:
-        _write_demo_inputs(root)
-        _bootstrap_demo(root)
-
         def approve(_sql: str) -> bool:
             if auto_approve:
                 progress("Demo approval accepted by --yes (local synthetic data only)")
@@ -467,7 +493,7 @@ def run_quickstart(
                 return False
             return answer.strip().lower() in {"y", "yes"}
 
-        with _local_server(root) as base_url:
+        with isolated_runtime(root) as base_url:
             summary = _run_public_path(base_url, root, agent_mode=agent_mode,
                                        approve=approve, progress=progress)
             summary["run_receipt"] = _run_receipt(

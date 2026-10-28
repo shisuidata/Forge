@@ -35,7 +35,9 @@ SQLite、PostgreSQL 16、MySQL 8 共用 `tests/test_database_compatibility.py`�
 | 飞书 Bot | implemented | 适合国内团队协同场景，真实交付前需重跑 smoke |
 | Pipeline API | implemented | 支持分析、可视化、报告类流程，仍需客户域验收 |
 | 钉钉 / 企业微信 / Slack | planned | 建议抽象消息入口适配层后再做 |
-| MCP / OpenAI Agents / Claude Desktop | planned | 中期项；第一版只接 `prepare_query`，返回待审核 SQL，不执行数据库 |
+| v2 受治理 API（`/api/v2/enforce`、`/api/v2/explain`） | implemented | 外部 Agent 以自身凭证在 Mandate 内 prepare/自主执行，其余由指定真人审核；见 [外部 Agent 集成](agent-integration.md) |
+| MCP（`forge mcp`，stdio） | smoke_verified | 2026-10-28 以 Claude Code 2.1.312 + MCP Python SDK 2.3.0 在合成 `--demo` 上冒烟；无审批工具，人审用 `forge review`。Cursor 等其他客户端未实测 |
+| OpenAI Agents / ChatGPT Apps | planned | 未实现；可经 MCP 或 v2 HTTP 接入，未实测前不宣称支持 |
 
 ## LLM / AI 服务
 

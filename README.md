@@ -427,6 +427,32 @@ forge quickstart --yes --workdir .forge/quickstart-proof
 `--yes` is a demo-only convenience. Real Enforce deployments still require authenticated creator/reviewer separation and matching immutable review hashes.
 Ran this independently? Submit the sanitized `run_receipt`, fresh-clone setup time, first failure or confusing step, and your interpretation through the [Quickstart adoption report](https://github.com/shisuidata/Forge/issues/new?template=quickstart-adoption.yml). Forge sends no telemetry. The checksum detects receipt drift and supports deduplication; it is not an identity attestation—the GitHub-authored report provides public provenance.
 
+### Try it from your own agent (MCP)
+
+`forge mcp` lets an MCP client such as Claude Code or Cursor use Forge as the agent's own principal. It runs on your machine over stdio and only calls the governed v2 API: the agent can read its scope, prepare SQL, execute runs that Forge marks `ready`, read results and Evidence, and cancel. **There is no approval tool**: anything outside the agent's autonomous tables waits for a human reviewer working outside the agent session. Nothing is hosted by this project and no data leaves your environment.
+
+```bash
+pip install -e ".[mcp]"          # in your Forge checkout; the MCP SDK is an optional extra
+claude mcp add forge-demo -- forge mcp --demo
+```
+
+`--demo` starts a fresh synthetic Forge server and Mandate for the session (in `~/.forge/mcp-demo`, recreated on every start): table `numbers` runs autonomously, table `secrets` needs review. Ask your agent to list the numbers and to count the secrets. The second query comes back `review_required` with the command to run in **your own** terminal:
+
+```bash
+forge review --demo qr_<query-run-id>   # shows the exact SQL and scope, asks y/N, approves once
+```
+
+`forge review` refuses to run without an interactive terminal, so an agent's non-interactive shell cannot approve on your behalf. In demo mode the synthetic reviewer key sits on the same machine; an agent with file access could still read it, which is acceptable only because the data is synthetic. Keep real reviewer credentials away from the agent's host.
+
+Against your own Forge server, give the MCP process the agent's credential and Mandate (client configs store these values; treat the file as a secret):
+
+```bash
+claude mcp add forge -e FORGE_BASE_URL=https://forge.internal -e FORGE_API_KEY=<agent key> \
+  -e FORGE_MANDATE_ID=md_<mandate> -- forge mcp
+```
+
+The reviewer then approves with `FORGE_BASE_URL=… FORGE_API_KEY=<reviewer key> forge review qr_<id>`. Query results are returned to the agent and enter its model context; keep sensitive tables out of `autonomous_tables` or out of the Mandate. Verified with Claude Code 2.1.312 and MCP Python SDK 2.3.0.
+
 ### Full natural-language development demo (optional)
 
 The broader NLQ demo requires LLM and embedding configuration and is not part of the Trust Runtime Golden Path:

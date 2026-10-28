@@ -17,7 +17,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -c constraints/ci-python311.txt -e ".[dev]"
+        run: pip install -c constraints/ci-python311.txt -e ".[dev,mcp]"
 
       - name: Run tests
         run: pytest -q

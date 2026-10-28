@@ -37,6 +37,9 @@ dev = [
     "pytest-playwright>=0.5",
     "tqdm>=4.66",
 ]
+mcp = [
+    "mcp>=2.3,<3",
+]
 
 [project.scripts]
 forge = "forge.cli:main"
